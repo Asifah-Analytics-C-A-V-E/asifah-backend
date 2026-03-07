@@ -934,21 +934,28 @@ def scan_security_situation(days=7):
         'IDF operation southern Lebanon',
         'ceasefire Lebanon Israel',
         'UNIFIL Lebanon',
-        'UNIFIL attacked',
+        'UNIFIL attacked OR wounded peacekeepers Lebanon',
         'Hezbollah leadership',
         'Naim Qassem',
         'Lebanon border Israel military',
         'IDF buffer zone Lebanon',
         'Lebanon ceasefire violated OR collapsed OR broken',
+        'IDF evacuation warning Lebanon OR Beirut',
+        'Avichay Adraee Lebanon warning',
+        'Israel strikes Beirut OR Bekaa OR southern Lebanon',
+        'Ron Arad Lebanon',
+        'Israel warns residents evacuate Lebanon',
     ]
 
     all_articles = []
     for query in search_queries:
         try:
+            time.sleep(2)  # Rate limit courtesy — avoid Google News blocking
             q = query.replace(' ', '+')
             url = f"https://news.google.com/rss/search?q={q}&hl=en&gl=US&ceid=US:en"
-            response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-
+            response = requests.get(url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
             if response.status_code == 200:
                 root = ET.fromstring(response.content)
                 items = root.findall('.//item')
@@ -1591,13 +1598,31 @@ def _background_lebanon_refresh():
             gold_data = calculate_lebanon_gold_reserves()
         except Exception:
             gold_data = None
-        # v3.0.0: Security situation scan
+        # v3.0.0: Security situation scan (with empty-result protection)
         try:
             security_data = scan_security_situation(days=7)
-            print(f"[Lebanon BG] ✅ Security: Israeli presence={security_data['israeli_presence']['label']}, Ceasefire={security_data['ceasefire']['label']}")
+            if security_data and security_data.get('total_articles_scanned', 0) == 0:
+                print(f"[Lebanon] ⚠️ Security scan returned 0 articles — checking Redis for previous data")
+                cached = _redis_get(REDIS_CACHE_KEY)
+                if cached and cached.get('security_situation') and cached['security_situation'].get('total_articles_scanned', 0) > 0:
+                    security_data = cached['security_situation']
+                    print(f"[Lebanon] ✅ Using cached security data ({security_data['total_articles_scanned']} articles)")
+                else:
+                    print(f"[Lebanon] ⚠️ No cached security data either — using empty scan")
+            else:
+                print(f"[Lebanon] ✅ Security: Israeli presence={security_data['israeli_presence']['label']}, Ceasefire={security_data['ceasefire']['label']}")
         except Exception as e:
-            print(f"[Lebanon BG] ❌ Security scan failed: {str(e)}")
-            security_data = None
+            print(f"[Lebanon] ❌ Security scan failed: {str(e)}")
+            # Try to recover from cache
+            try:
+                cached = _redis_get(REDIS_CACHE_KEY)
+                if cached and cached.get('security_situation'):
+                    security_data = cached['security_situation']
+                    print(f"[Lebanon] ✅ Recovered security data from cache")
+                else:
+                    security_data = None
+            except:
+                security_data = None
         stability = calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, security_data)
         update_lebanon_cache(currency_data, bond_data, hezbollah_data, stability.get('score', 0), gold_data)
 
@@ -1680,13 +1705,30 @@ def scan_lebanon_stability():
             print(f"[Lebanon] ❌ Gold failed: {str(e)}")
             gold_data = None
         
-        # v3.0.0: Security situation scan
+        # v3.0.0: Security situation scan (with empty-result protection)
         try:
             security_data = scan_security_situation(days=7)
-            print(f"[Lebanon] ✅ Security: Israeli presence={security_data['israeli_presence']['label']}, Ceasefire={security_data['ceasefire']['label']}")
+            if security_data and security_data.get('total_articles_scanned', 0) == 0:
+                print(f"[Lebanon BG] ⚠️ Security scan returned 0 articles — checking Redis for previous data")
+                cached = _redis_get(REDIS_CACHE_KEY)
+                if cached and cached.get('security_situation') and cached['security_situation'].get('total_articles_scanned', 0) > 0:
+                    security_data = cached['security_situation']
+                    print(f"[Lebanon BG] ✅ Using cached security data ({security_data['total_articles_scanned']} articles)")
+                else:
+                    print(f"[Lebanon BG] ⚠️ No cached security data either — using empty scan")
+            else:
+                print(f"[Lebanon BG] ✅ Security: Israeli presence={security_data['israeli_presence']['label']}, Ceasefire={security_data['ceasefire']['label']}")
         except Exception as e:
-            print(f"[Lebanon] ❌ Security scan failed: {str(e)}")
-            security_data = None
+            print(f"[Lebanon BG] ❌ Security scan failed: {str(e)}")
+            try:
+                cached = _redis_get(REDIS_CACHE_KEY)
+                if cached and cached.get('security_situation'):
+                    security_data = cached['security_situation']
+                    print(f"[Lebanon BG] ✅ Recovered security data from cache")
+                else:
+                    security_data = None
+            except:
+                security_data = None
         
         stability = calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, security_data)
         
