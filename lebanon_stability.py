@@ -707,6 +707,21 @@ ISRAEL_PRESENCE_TIERS = {
             'tank lebanon border', 'idf patrol inside lebanon',
             'idf engineering lebanon', 'tunnel operation lebanon',
             'limited ground operation lebanon', 'ground maneuver lebanon',
+            'israeli soldiers killed lebanon', 'idf casualties lebanon',
+            'idf forces inside lebanon', 'israeli military inside lebanon',
+            'ground forces southern lebanon', 'troops inside lebanon',
+            'search in lebanon', 'israel search lebanon',
+            'idf operating in southern lebanon', 'israeli military operation southern lebanon',
+            'remains of long-lost weapons officer', 'shootout lebanon',
+            'deadly shootout lebanon', 'idf raid lebanon', 
+            'ron arad', 'ron arad remains', 'ron arad lebanon',
+            # Hebrew
+            'כוחות צה״ל בלבנון', 'פעולה קרקעית בלבנון',
+            'חיילים בדרום לבנון', 'כוחות יבשתיים לבנון',
+            'רון ארד', 'שרידי רון ארד',
+            # Arabic
+            'قوات إسرائيلية في لبنان', 'عملية برية جنوب لبنان',
+            'جنود إسرائيليون في لبنان', 'رون آراد',
         ],
         'level': 3,
         'label': 'Active Ground Operations',
@@ -747,6 +762,26 @@ CEASEFIRE_KEYWORDS = {
         'war resumes lebanon', 'full scale war lebanon israel',
         'israel breaks ceasefire lebanon', 'ceasefire dead',
         'ceasefire in tatters', 'ceasefire crumbled',
+        'strikes beirut', 'bombing beirut', 'airstrikes beirut',
+        'strikes lebanon', 'bombing lebanon', 'airstrikes lebanon',
+        'israel strikes beirut', 'israel bombs beirut',
+        'israel strikes lebanon', 'israel bombs lebanon',
+        'beirut evacuation warning', 'beirut evacuation order',
+        'heavy price lebanon', 'death toll lebanon',
+        'killed in israeli', 'killed in air attacks lebanon',
+        'killed in strikes lebanon', 'bekaa strikes',
+        'bekaa air attacks', 'bekaa bombing',
+        'southern lebanon strikes', 'southern lebanon bombardment',
+        'idf operation lebanon resumed', 'israel resumes operations lebanon',
+        'warns lebanon heavy price',
+        # Hebrew
+        'הפסקת אש קרסה', 'הפסקת האש הופרה',
+        'חידוש לחימה בלבנון', 'תקיפות בביירות',
+        'הפצצות בלבנון',
+        # Arabic
+        'انهيار وقف إطلاق النار', 'انتهاك وقف النار',
+        'قصف بيروت', 'غارات على لبنان',
+        'ضربات إسرائيلية لبنان',
     ],
     'deteriorating': [
         'ceasefire violations', 'ceasefire under strain',
@@ -755,6 +790,10 @@ CEASEFIRE_KEYWORDS = {
         'ceasefire breaches', 'repeated violations',
         'ceasefire hanging by thread', 'despite ceasefire',
         'ceasefire increasingly fragile',
+        'violations on all sides', 'concerned over ceasefire',
+        'ceasefire violations on all sides',
+        'both sides violating', 'ceasefire not holding',
+        'ceasefire undermined', 'erosion of ceasefire',
     ],
     'holding': [
         'ceasefire holds', 'ceasefire holding', 'ceasefire intact',
@@ -786,6 +825,18 @@ UNIFIL_KEYWORDS = {
         'unifil convoy attacked', 'fired on unifil',
         'unifil position struck', 'attack on peacekeepers',
         'unifil targeted', 'unifil under fire',
+        'peacekeepers wounded', 'peacekeepers hurt',
+        'peacekeepers injured', 'peacekeepers critically',
+        'un peacekeepers wounded', 'un peacekeepers hurt',
+        'un peacekeepers injured', 'missile attack peacekeepers',
+        'strike wounds unifil', 'strike wounds peacekeepers',
+        'israeli strike unifil', 'israeli strike peacekeepers',
+        'condemns attack peacekeepers', 'condemns attack unifil',
+        # Hebrew
+        'כוח יוניפיל הותקף', 'שומרי שלום נפצעו',
+        # Arabic
+        'هجوم على يونيفيل', 'إصابة جنود حفظ السلام',
+        'قصف مواقع يونيفيل',
     ],
     'operational': [
         'unifil patrol', 'unifil operational', 'unifil monitoring',
@@ -805,9 +856,19 @@ HEZBOLLAH_LEADERSHIP = {
         'keywords_alive': ['naim qassem speech', 'qassem statement', 'qassem addresses',
                            'qassem says', 'qassem warns', 'qassem vows',
                            'hezbollah leader says', 'hezbollah chief'],
+                            # Arabic
+                            'نعيم قاسم يخطب', 'كلمة نعيم قاسم', 'الأمين العام لحزب الله',
+                            # Hebrew
+                            'נעים קאסם נאום', 'נעים קאסם הצהרה',
         'keywords_killed': ['naim qassem killed', 'qassem assassinated', 'qassem dead',
                             'qassem eliminated', 'hezbollah leader killed',
                             'hezbollah secretary general killed'],
+                            # Arabic
+                            'مقتل نعيم قاسم', 'اغتيال نعيم قاسم', 'نعيم قاسم قتل',
+                            'مقتل أمين عام حزب الله',
+                            # Hebrew
+                            'נעים קאסם חוסל', 'נעים קאסם נהרג',
+                            'מנהיג חיזבאללה חוסל', 'מנהיג חיזבאללה נהרג',
         'keywords_unknown': ['qassem whereabouts', 'qassem missing', 'qassem unconfirmed'],
     },
     'hashem_safieddine': {
