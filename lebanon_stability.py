@@ -1287,7 +1287,6 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
     elif currency_data and currency_data.get('change_24h', 0) > 2:
         trend = "worsening"
     elif days_until_election <= 90 and days_with_president > 180:
-        trend = "improving"<= 90 and days_with_president > 180:
         trend = "improving"
     
     print(f"[Lebanon Stability] ✅ Score: {stability_score}/100 ({risk_level})")
@@ -1609,7 +1608,6 @@ def scan_lebanon_stability():
                     pass  # Age check failed — fall through to live scan
 
         print("[Lebanon] No fresh cache — running live scan...")
-
         currency_data = fetch_lebanon_currency()
         bond_data = scrape_lebanon_bonds()
         hezbollah_data = track_hezbollah_activity(days=30)
@@ -1621,7 +1619,15 @@ def scan_lebanon_stability():
             print(f"[Lebanon] ❌ Gold failed: {str(e)}")
             gold_data = None
         
-        stability = calculate_lebanon_stability(currency_data, bond_data, hezbollah_data)
+        # v3.0.0: Security situation scan
+        try:
+            security_data = scan_security_situation(days=7)
+            print(f"[Lebanon] ✅ Security: Israeli presence={security_data['israeli_presence']['label']}, Ceasefire={security_data['ceasefire']['label']}")
+        except Exception as e:
+            print(f"[Lebanon] ❌ Security scan failed: {str(e)}")
+            security_data = None
+        
+        stability = calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, security_data)
         
         update_lebanon_cache(
             currency_data, 
@@ -1643,6 +1649,7 @@ def scan_lebanon_stability():
             'bonds': bond_data,
             'hezbollah': hezbollah_data,
             'gold_reserves': gold_data,
+            'security_situation': security_data,
             'government': {
                 'has_president': True,
                 'president': 'Joseph Aoun',
@@ -1656,7 +1663,7 @@ def scan_lebanon_stability():
                 'days_collected': cache_days,
                 'persistent': cache_storage == 'redis'
             },
-            'version': '2.9.0-lebanon'
+            'version': '3.0.0-lebanon'
         })
         
     except Exception as e:
