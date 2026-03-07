@@ -855,20 +855,20 @@ HEZBOLLAH_LEADERSHIP = {
         'note': 'Replaced Hassan Nasrallah after assassination Sep 27, 2024',
         'keywords_alive': ['naim qassem speech', 'qassem statement', 'qassem addresses',
                            'qassem says', 'qassem warns', 'qassem vows',
-                           'hezbollah leader says', 'hezbollah chief'],
-                            # Arabic
-                            'نعيم قاسم يخطب', 'كلمة نعيم قاسم', 'الأمين العام لحزب الله',
-                            # Hebrew
-                            'נעים קאסם נאום', 'נעים קאסם הצהרה',
+                           'hezbollah leader says', 'hezbollah chief',
+                           # Arabic
+                           'نعيم قاسم يخطب', 'كلمة نعيم قاسم', 'الأمين العام لحزب الله',
+                           # Hebrew
+                           'נעים קאסם נאום', 'נעים קאסם הצהרה'],
         'keywords_killed': ['naim qassem killed', 'qassem assassinated', 'qassem dead',
                             'qassem eliminated', 'hezbollah leader killed',
-                            'hezbollah secretary general killed'],
+                            'hezbollah secretary general killed',
                             # Arabic
                             'مقتل نعيم قاسم', 'اغتيال نعيم قاسم', 'نعيم قاسم قتل',
                             'مقتل أمين عام حزب الله',
                             # Hebrew
                             'נעים קאסם חוסל', 'נעים קאסם נהרג',
-                            'מנהיג חיזבאללה חוסל', 'מנהיג חיזבאללה נהרג',
+                            'מנהיג חיזבאללה חוסל', 'מנהיג חיזבאללה נהרג'],
         'keywords_unknown': ['qassem whereabouts', 'qassem missing', 'qassem unconfirmed'],
     },
     'hashem_safieddine': {
