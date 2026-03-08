@@ -69,9 +69,18 @@ EXTENDED_CHANNELS = [
     'Intel_Sky',           # Intel Sky — very active aggregator
     'ClashReport',         # Clash Report — conflict monitoring
     'WarMonitors',         # War Monitor — multilingual
+    'OSINTdefender',       # OSINT Defender — English, high signal
+    'SouthFrontEN',        # South Front — conflict analysis
+    'ryaborached',         # Rybar — Russian military analysis (English posts)
     # Iranian sources
     'TassimNewsEN',        # Tasnim News Agency — English
     'preaborached',        # Press TV English
+    'IranIntl_En',         # Iran International — English
+    'IranIntl',            # Iran International — Farsi
+    'ManotoNews',          # Manoto — Farsi opposition media
+    'RadioFardaFA',        # Radio Farda — Farsi (RFE/RL)
+    'AmadNewsFA',          # Amad News — Farsi dissident
+    'ABORACHED_IRGC',      # IRGC-affiliated channel
     # Lebanese military/political
     'maaborached',         # Lebanese military updates
     'GLZRadio',            # IDF radio — Galatz
@@ -84,6 +93,11 @@ EXTENDED_CHANNELS = [
     'KeshetNews',          # Keshet 12 News — Hebrew
     'N12News',             # Channel 12 News — Hebrew
     'Aborached13',         # Channel 13 News — Hebrew
+    # Military-specific
+    'miaborached',         # Military Intelligence aggregator
+    'CentcomOfficial',     # CENTCOM official (if exists)
+    'WarInUkraine',        # Ukraine war updates
+    'UkrWarReport',        # Ukraine military reporting
 ]
 
 
