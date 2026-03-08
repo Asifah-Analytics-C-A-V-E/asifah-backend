@@ -4256,11 +4256,31 @@ def parse_rss_date(pub_date):
 # ========================================
 @app.route('/api/threat/<target>', methods=['GET'])
 def api_threat(target):
-    """API endpoint compatible with frontend"""
+    """API endpoint compatible with frontend — with Redis caching for new countries"""
     try:
         days = int(request.args.get('days', 7))
+        refresh = request.args.get('refresh', 'false').lower() == 'true'
+        
+        if target not in TARGET_KEYWORDS:
+            return jsonify({
+                'success': False,
+                'error': f"Invalid target"
+            }), 400
+        
+        # Check cache first (skip if user clicked Scan OSINT with refresh=true)
+        if not refresh:
+            cached = get_cached_result(target)
+            if cached:
+                print(f"[{target}] Returning cached data")
+                cached['cached'] = True
+                return jsonify(cached)
         
         if not check_rate_limit():
+            # Try to return stale cache on rate limit
+            cached = get_cached_result(target)
+            if cached:
+                cached['stale_cache'] = True
+                return jsonify(cached)
             return jsonify({
                 'success': False,
                 'error': 'Rate limit reached',
@@ -4404,7 +4424,7 @@ def api_threat(target):
                 
                 top_articles.append(article_data)
         
-        return jsonify({
+        result = {
             'success': True,
             'target': target,
             'probability': probability,
@@ -4417,14 +4437,26 @@ def api_threat(target):
             'deescalation_count': breakdown['deescalation_count'],
             'scoring_breakdown': breakdown,
             'top_scoring_articles': top_articles,
-            'recent_headlines': recent_headlines,  # ← NEW: Added headlines
+            'recent_headlines': recent_headlines,
             'escalation_keywords': ESCALATION_KEYWORDS,
             'target_keywords': TARGET_KEYWORDS[target]['keywords'],
+            'last_updated': datetime.now(timezone.utc).isoformat(),
             'cached': False,
             'version': '2.8.0'
-        })
+        }
+        
+        # Save to cache
+        update_cache(target, result)
+        print(f"[{target}] Fresh scan complete: {probability}% — cached")
+        
+        return jsonify(result)
         
     except Exception as e:
+        # Try to return cached data on error
+        cached = get_cached_result(target)
+        if cached:
+            cached['error_fallback'] = True
+            return jsonify(cached)
         return jsonify({
             'success': False,
             'error': str(e),
