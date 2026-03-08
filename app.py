@@ -1044,33 +1044,61 @@ DEESCALATION_KEYWORDS = [
 # ========================================
 TARGET_BASELINES = {
     'hezbollah': {
-        'base_adjustment': +10,
-        'description': 'Ongoing Israeli operations in Lebanon'
+        'base_adjustment': +15,
+        'description': 'Active Israeli ground operations and airstrikes in Lebanon; ceasefire collapsed'
     },
     'iran': {
-        'base_adjustment': +5,
-        'description': 'Elevated regional tensions'
+        'base_adjustment': +20,
+        'description': 'Active US-Israel combat operations; Supreme Leader killed; regime severely degraded'
     },
     'iraq': {
-        'base_adjustment': +5,
-        'description': 'PMF militia activity, US base/consulate threats, ISIS remnants'
+        'base_adjustment': +8,
+        'description': 'PMF militia activity, US base threats, Iraqi airspace used for Iran strikes'
     },
     'israel': {
         'base_adjustment': +22,
         'description': 'Active war with Iran — daily missile barrages, multi-front conflict, authorized departure'
     },
     'houthis': {
-        'base_adjustment': 0,
-        'description': 'Red Sea shipping disruptions ongoing'
+        'base_adjustment': +5,
+        'description': 'Active Red Sea shipping attacks; Houthi missile strikes on Israel and Saudi Arabia'
     },
     'syria': {
         'base_adjustment': +8,
-        'description': 'Post-Assad volatility, opportunistic strikes'
+        'description': 'Post-Assad volatility, opportunistic strikes, refugee flows'
     },
     'jordan': {
-        'base_adjustment': +3,
-        'description': 'Stable US ally, elevated due to regional spillover risk'
-    }
+        'base_adjustment': +5,
+        'description': 'Intercepting Iranian missiles/drones; regional spillover; Tower 22 threat'
+    },
+    'bahrain': {
+        'base_adjustment': +10,
+        'description': 'US 5th Fleet HQ; within Iranian missile range; Gulf tensions elevated'
+    },
+    'kuwait': {
+        'base_adjustment': +12,
+        'description': 'US embassy closed; Camp Arifjan under Iranian missile threat; troops at risk'
+    },
+    'saudi_arabia': {
+        'base_adjustment': +10,
+        'description': 'Iranian and Houthi missile/drone threat; Aramco targeted; air defense activated'
+    },
+    'uae': {
+        'base_adjustment': +8,
+        'description': 'Al Dhafra base targeted; Iranian and Houthi threat; Fujairah port risk'
+    },
+    'oman': {
+        'base_adjustment': +5,
+        'description': 'Strait of Hormuz proximity; traditional mediator but at geographic risk'
+    },
+    'qatar': {
+        'base_adjustment': +10,
+        'description': 'Al Udeid CENTCOM forward HQ; within Iranian missile range'
+    },
+    'egypt': {
+        'base_adjustment': +5,
+        'description': 'Suez Canal disruption risk; Sinai border tensions; regional spillover'
+    },
 }
 
 REDDIT_SUBREDDITS = {
@@ -1096,7 +1124,35 @@ REDDIT_SUBREDDITS = {
         "Israel", "geopolitics", "CredibleDefense",
         "anime_titties", "ForbiddenBromance", "IsraelPalestine",
         "IronDome", "worldnews"
-    ]
+    ],
+    "bahrain": [
+        "Bahrain", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
+    "kuwait": [
+        "Kuwait", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
+    "saudi_arabia": [
+        "SaudiArabia", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews", "worldnews"
+    ],
+    "uae": [
+        "UAE", "dubai", "geopolitics",
+        "CredibleDefense", "anime_titties", "MiddleEastNews"
+    ],
+    "oman": [
+        "Oman", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
+    "qatar": [
+        "qatar", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
+    "egypt": [
+        "Egypt", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews", "worldnews"
+    ],
 }
 
 # ========================================
@@ -1152,7 +1208,6 @@ TARGET_KEYWORDS = {
             'ben gurion', 'negev', 'dimona', 'israel reserves',
             'israel mobilization', 'gaza operation', 'rafah',
             'hamas tunnel', 'hostage', 'hostages gaza',
-            # Active Iran-Israel war keywords (v3.2.0)
             'iran strikes israel', 'iran missile israel', 'iran attack israel',
             'iranian ballistic missile israel', 'iranian cruise missile israel',
             'iranian drone israel', 'iran retaliates israel',
@@ -1182,11 +1237,9 @@ TARGET_KEYWORDS = {
             'טילים', 'רקטות', 'כוננות', 'מילואים', 'פיגוע',
             'עזה', 'לבנון', 'איראן', 'תימן', 'חות׳ים',
             'יהודה ושומרון', 'ג׳נין', 'שכם', 'גדר הביטחון',
-            # Hebrew active war
             'פיקוד העורף', 'צבע אדום', 'מקלט', 'חדר ביטחון',
             'טיל בליסטי', 'יירוט', 'חץ', 'שלט דוד',
             'מלחמה', 'מצב חירום', 'פינוי', 'נפגעים',
-            # Arabic active war
             'صواريخ على إسرائيل', 'هجوم إيراني على إسرائيل',
             'القبة الحديدية', 'صافرات الإنذار', 'قصف تل أبيب',
             'حرب إسرائيل إيران', 'عملية إيبك فيوري'
@@ -1234,7 +1287,108 @@ TARGET_KEYWORDS = {
             'Tower 22', 'Captagon', 'Jordan border', 'Jordan airspace',
             'Jordan protest', 'Palestinian', 'ISIS Jordan'
         ]
-    }
+    },
+    'bahrain': {
+        'keywords': [
+            'bahrain', 'bahraini', 'manama', 'fifth fleet', '5th fleet',
+            'navcent', 'nsa bahrain', 'juffair', 'sheikh isa',
+            'bahrain defense force', 'bahrain military',
+            'bahrain protest', 'bahrain unrest', 'bahrain iran',
+            'bahrain missile', 'bahrain attack', 'bahrain drone',
+            'bahrain intercept', 'bahrain air defense',
+            'bahrain shelter', 'bahrain war',
+            'us navy bahrain', 'combined maritime forces',
+            'ctf 150', 'ctf 152', 'ctf 153',
+            'البحرين', 'المنامة', 'الأسطول الخامس',
+            'قوة دفاع البحرين', 'القاعدة البحرية',
+        ],
+        'reddit_keywords': ['Bahrain', 'Fifth Fleet', 'NAVCENT', 'Manama', 'Persian Gulf', 'Iran Bahrain']
+    },
+    'kuwait': {
+        'keywords': [
+            'kuwait', 'kuwaiti', 'kuwait city', 'camp arifjan',
+            'ali al salem', 'kuwait military', 'kuwait embassy',
+            'us embassy kuwait', 'kuwait attack', 'kuwait missile',
+            'kuwait iran', 'kuwait troops', 'kuwait evacuation',
+            'kuwait closed', 'kuwait drone', 'kuwait defense',
+            'kuwait base', 'kuwait port', 'kuwait casualties',
+            'kuwait shelter', 'kuwait war',
+            'الكويت', 'معسكر عريفجان', 'قاعدة علي السالم',
+            'السفارة الأمريكية الكويت',
+        ],
+        'reddit_keywords': ['Kuwait', 'Camp Arifjan', 'US troops Kuwait', 'Iran Kuwait', 'Persian Gulf', 'US embassy Kuwait']
+    },
+    'saudi_arabia': {
+        'keywords': [
+            'saudi arabia', 'saudi', 'riyadh', 'jeddah', 'mecca', 'medina',
+            'aramco', 'saudi military', 'saudi air defense', 'saudi intercept',
+            'prince sultan air base', 'king abdulaziz air base', 'king fahd air base',
+            'saudi attack', 'saudi missile', 'saudi drone',
+            'saudi iran', 'saudi houthi', 'mbs', 'mohammed bin salman',
+            'eastern province', 'dhahran', 'ras tanura', 'jubail',
+            'saudi oil', 'saudi oil attack', 'saudi war',
+            'saudi shelter', 'riyadh attack', 'riyadh missile',
+            'السعودية', 'الرياض', 'أرامكو',
+            'الدفاع الجوي السعودي', 'قاعدة الأمير سلطان',
+        ],
+        'reddit_keywords': ['Saudi Arabia', 'Riyadh', 'Aramco', 'MBS', 'Saudi military', 'Iran Saudi', 'Houthi Saudi']
+    },
+    'uae': {
+        'keywords': [
+            'uae', 'emirates', 'dubai', 'abu dhabi', 'emirati',
+            'al dhafra', 'jebel ali', 'fujairah',
+            'uae military', 'uae attack', 'uae missile', 'uae drone',
+            'uae iran', 'uae houthi', 'uae defense',
+            'dubai attack', 'abu dhabi attack', 'dubai missile',
+            'uae air defense', 'uae intercept', 'uae shelter', 'uae war',
+            'uae port', 'fujairah port', 'fujairah attack',
+            'الإمارات', 'دبي', 'أبوظبي',
+            'قاعدة الظفرة', 'السفارة الأمريكية دبي',
+        ],
+        'reddit_keywords': ['UAE', 'Dubai', 'Abu Dhabi', 'Emirates', 'Al Dhafra', 'Iran UAE', 'Houthi UAE']
+    },
+    'oman': {
+        'keywords': [
+            'oman', 'omani', 'muscat', 'duqm', 'salalah',
+            'strait of hormuz', 'oman military', 'oman defense',
+            'oman iran', 'masirah', 'thumrait',
+            'oman mediation', 'oman diplomacy', 'oman port',
+            'oman airspace', 'oman intercept', 'oman shelter', 'oman war',
+            'gulf of oman', 'oman naval',
+            'عمان', 'مسقط', 'ميناء الدقم', 'مضيق هرمز',
+            'القوات المسلحة العمانية',
+        ],
+        'reddit_keywords': ['Oman', 'Muscat', 'Strait of Hormuz', 'Duqm', 'Iran Oman', 'Gulf of Oman']
+    },
+    'qatar': {
+        'keywords': [
+            'qatar', 'qatari', 'doha', 'al udeid', 'al jazeera',
+            'qatar military', 'qatar base', 'centcom qatar',
+            'qatar attack', 'qatar missile', 'qatar airspace',
+            'qatar flights', 'qatar airways', 'qatar iran',
+            'qatar defense', 'qatar shelter', 'qatar war',
+            'al udeid attack', 'al udeid hit', 'al udeid missile',
+            'doha attack', 'doha missile',
+            'قطر', 'الدوحة', 'قاعدة العديد',
+        ],
+        'reddit_keywords': ['Qatar', 'Doha', 'Al Udeid', 'CENTCOM', 'Qatar Airways', 'Iran Qatar']
+    },
+    'egypt': {
+        'keywords': [
+            'egypt', 'egyptian', 'cairo', 'suez canal', 'sinai',
+            'egypt military', 'egyptian army', 'egypt air defense',
+            'rafah crossing', 'egypt gaza', 'egypt israel',
+            'sharm el sheikh', 'egypt red sea',
+            'egypt iran', 'egypt attack', 'suez disruption',
+            'sisi', 'al-sisi', 'egypt mobilization',
+            'egypt intercept', 'egypt airspace', 'egypt war',
+            'suez canal closed', 'suez canal attack',
+            'egypt sinai', 'egypt border',
+            'مصر', 'القاهرة', 'قناة السويس', 'سيناء',
+            'الجيش المصري', 'معبر رفح',
+        ],
+        'reddit_keywords': ['Egypt', 'Cairo', 'Suez Canal', 'Sinai', 'Rafah', 'Sisi', 'Egyptian military']
+    },
 }
 
 # ========================================
