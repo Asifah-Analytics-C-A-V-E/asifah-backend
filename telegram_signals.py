@@ -205,15 +205,19 @@ def fetch_telegram_signals(hours_back=24, include_extended=True):
         # Check if there's already an event loop running
         try:
             loop = asyncio.get_running_loop()
-            # We're inside an async context — shouldn't happen in Flask but handle it
             print("[Telegram] ⚠️ Event loop already running — using thread")
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, _async_fetch_messages(channels, hours_back))
-                return future.result(timeout=60)
+                return future.result(timeout=120)
         except RuntimeError:
-            # No running loop — normal case for Flask
-            return asyncio.run(_async_fetch_messages(channels, hours_back))
+            # No running loop — create a new one explicitly for thread safety
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(_async_fetch_messages(channels, hours_back))
+            finally:
+                loop.close()
     except Exception as e:
         print(f"[Telegram] ❌ fetch_telegram_signals error: {str(e)[:200]}")
         return []
