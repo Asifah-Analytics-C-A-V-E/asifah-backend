@@ -1705,30 +1705,19 @@ def scan_lebanon_stability():
             print(f"[Lebanon] ❌ Gold failed: {str(e)}")
             gold_data = None
         
-        # v3.0.0: Security situation scan (with empty-result protection)
+        # v3.0.0: Security situation — serve from cache on live requests, scan in background only
+        security_data = None
         try:
-            security_data = scan_security_situation(days=7)
-            if security_data and security_data.get('total_articles_scanned', 0) == 0:
-                print(f"[Lebanon BG] ⚠️ Security scan returned 0 articles — checking Redis for previous data")
-                cached = _redis_get(REDIS_CACHE_KEY)
-                if cached and cached.get('security_situation') and cached['security_situation'].get('total_articles_scanned', 0) > 0:
-                    security_data = cached['security_situation']
-                    print(f"[Lebanon BG] ✅ Using cached security data ({security_data['total_articles_scanned']} articles)")
-                else:
-                    print(f"[Lebanon BG] ⚠️ No cached security data either — using empty scan")
+            cached = _redis_get(REDIS_CACHE_KEY)
+            if cached and cached.get('security_situation'):
+                security_data = cached['security_situation']
+                print(f"[Lebanon] ✅ Security data from cache ({security_data.get('total_articles_scanned', 0)} articles)")
             else:
-                print(f"[Lebanon BG] ✅ Security: Israeli presence={security_data['israeli_presence']['label']}, Ceasefire={security_data['ceasefire']['label']}")
+                print(f"[Lebanon] ⚠️ No cached security data — triggering background scan")
+                t = threading.Thread(target=lambda: scan_security_situation(days=7), daemon=True)
+                t.start()
         except Exception as e:
-            print(f"[Lebanon BG] ❌ Security scan failed: {str(e)}")
-            try:
-                cached = _redis_get(REDIS_CACHE_KEY)
-                if cached and cached.get('security_situation'):
-                    security_data = cached['security_situation']
-                    print(f"[Lebanon BG] ✅ Recovered security data from cache")
-                else:
-                    security_data = None
-            except:
-                security_data = None
+            print(f"[Lebanon] ❌ Security cache read failed: {str(e)}")
         
         stability = calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, security_data)
         
