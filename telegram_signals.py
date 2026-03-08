@@ -46,18 +46,35 @@ SESSION_NAME = 'asifah_session'
 
 # Channels to monitor for Lebanon security situation
 LEBANON_CHANNELS = [
+    # Israeli/IDF sources (Hebrew + Arabic)
     'AvichayAdraee',       # IDF Arabic spokesperson — evacuation warnings
     'IDFSpokesperson',     # IDF English spokesperson
-    'Lebanon_News',        # Lebanese news aggregator
-    'C_Military1',         # Conflict/military OSINT
+    'yaborached',          # Yair Altman — Hebrew, breaks IDF ops early
+    'AbuAliExpress',       # Abu Ali Express — bilingual Hebrew/Arabic OSINT
+    'kann_news',           # Kann News — Hebrew breaking alerts
+    'channel14news',       # Channel 14 — right-leaning, fast on military
+    'iaborached',          # i24 Hebrew news
+    # Lebanese sources (Arabic)
     'AlManarTV',           # Hezbollah-affiliated media (Al Manar)
+    'AlMayadeenNews',      # Al-Mayadeen — pro-resistance axis
+    'LBCILebanon',         # LBCI — Lebanese news
+    'MTVLebanonNews',      # MTV Lebanon — Christian perspective
+    'Lebanon_News',        # Lebanese news aggregator
 ]
 
-# Optional: additional channels (add as needed)
+# Extended channels — regional OSINT + Iranian sources
 EXTENDED_CHANNELS = [
+    # Regional conflict monitoring (English/multilingual)
+    'C_Military1',         # Conflict/military OSINT
+    'Intel_Sky',           # Intel Sky — very active aggregator
+    'ClashReport',         # Clash Report — conflict monitoring
+    'WarMonitors',         # War Monitor — multilingual
+    # Iranian sources
+    'TassimNewsEN',        # Tasnim News Agency — English
+    'preaborached',        # Press TV English
+    # Lebanese military/political
     'maaborached',         # Lebanese military updates
-    'GLZRadio',            # IDF radio
-    'haaborached',         # Lebanese political commentary
+    'GLZRadio',            # IDF radio — Galatz
 ]
 
 
@@ -163,7 +180,7 @@ async def _async_fetch_messages(channels, hours_back=24):
     return messages
 
 
-def fetch_telegram_signals(hours_back=24, include_extended=False):
+def fetch_telegram_signals(hours_back=24, include_extended=True):
     """
     Synchronous wrapper to fetch Telegram messages.
     Returns list of article-format dicts compatible with scan_security_situation().
