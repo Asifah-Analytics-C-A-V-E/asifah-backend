@@ -1838,6 +1838,23 @@ def home():
         }
     })
 
+@app.route('/debug/rhetoric-scan', methods=['GET'])
+def debug_rhetoric_scan():
+    """Run rhetoric scan directly in request thread (bypasses background thread issues)."""
+    try:
+        from rhetoric_tracker import run_rhetoric_scan, cache_get, RHETORIC_CACHE_KEY
+        print("[DEBUG] Running rhetoric scan in request thread...", flush=True)
+        result = run_rhetoric_scan(days=3)
+        return jsonify({
+            'total_articles': result.get('total_articles', 0),
+            'articles_classified': result.get('articles_classified', 0),
+            'rhetoric_score': result.get('rhetoric_score', 0),
+            'theatre_label': result.get('theatre_escalation_label', ''),
+            'actors_summary': {k: v.get('statement_count', 0) for k, v in result.get('actors', {}).items()},
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()})
 
 @app.route('/debug/telegram', methods=['GET'])
 def debug_telegram():
