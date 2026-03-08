@@ -1103,8 +1103,8 @@ TARGET_BASELINES = {
         'description': 'Al Udeid CENTCOM forward HQ; within Iranian missile range'
     },
     'egypt': {
-        'base_adjustment': +5,
-        'description': 'Suez Canal disruption risk; Sinai border tensions; regional spillover'
+        'base_adjustment': -5,
+        'description': 'Stable US ally; accepting evacuees; Suez disruption risk but not under direct attack'
     },
 }
 
@@ -1382,19 +1382,23 @@ TARGET_KEYWORDS = {
     },
     'egypt': {
         'keywords': [
-            'egypt', 'egyptian', 'cairo', 'suez canal', 'sinai',
-            'egypt military', 'egyptian army', 'egypt air defense',
-            'rafah crossing', 'egypt gaza', 'egypt israel',
-            'sharm el sheikh', 'egypt red sea',
-            'egypt iran', 'egypt attack', 'suez disruption',
-            'sisi', 'al-sisi', 'egypt mobilization',
-            'egypt intercept', 'egypt airspace', 'egypt war',
-            'suez canal closed', 'suez canal attack',
-            'egypt sinai', 'egypt border',
-            'مصر', 'القاهرة', 'قناة السويس', 'سيناء',
-            'الجيش المصري', 'معبر رفح',
+            'egypt attack', 'egypt attacked', 'egypt struck', 'egypt bombed',
+            'egypt military mobilization', 'egyptian army deployed',
+            'egypt air defense activated', 'egypt intercept missile',
+            'cairo attack', 'cairo bombing', 'cairo strike',
+            'suez canal closed', 'suez canal attack', 'suez canal blocked',
+            'suez disruption', 'suez canal military',
+            'sinai attack', 'sinai insurgency', 'sinai isis', 'sinai militant',
+            'rafah crossing closed', 'rafah crossing attack', 'rafah border clash',
+            'egypt gaza border', 'egypt border incident',
+            'egypt iran threat', 'iran threatens egypt',
+            'egypt red sea attack', 'egypt red sea mine',
+            'sisi emergency', 'egypt state of emergency',
+            'egypt evacuees', 'egypt evacuation',
+            'egypt protest', 'cairo protest', 'egypt unrest',
+            'هجوم على مصر', 'قناة السويس مغلقة', 'سيناء هجوم',
         ],
-        'reddit_keywords': ['Egypt', 'Cairo', 'Suez Canal', 'Sinai', 'Rafah', 'Sisi', 'Egyptian military']
+        'reddit_keywords': ['Egypt attack', 'Suez Canal closed', 'Sinai ISIS', 'Rafah crossing', 'Egypt military', 'Egypt Iran']
     },
 }
 
