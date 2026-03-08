@@ -1870,5 +1870,13 @@ def health():
 
 
 if __name__ == '__main__':
+    # Trigger initial background refresh on startup
+    print("[Lebanon] Scheduling initial background refresh in 30s...")
+    def _delayed_startup_refresh():
+        time.sleep(30)
+        _background_lebanon_refresh()
+    t = threading.Thread(target=_delayed_startup_refresh, daemon=True)
+    t.start()
+    
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=False)
