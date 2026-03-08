@@ -36,6 +36,14 @@ import threading
 from datetime import datetime, timezone, timedelta
 from flask import jsonify, request
 
+try:
+    from telegram_signals import fetch_telegram_signals
+    TELEGRAM_AVAILABLE = True
+    print("[Iran] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Iran] ⚠️ Telegram signals not available")
+
 # ============================================
 # CONFIGURATION
 # ============================================
@@ -1619,9 +1627,28 @@ def _run_iran_scan(days=7):
 
     print(f"[Iran] Google News war RSS: {len(google_war_articles)} articles")
 
+    telegram_articles = []
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_msgs = fetch_telegram_signals(hours_back=days*24, include_extended=True)
+            if telegram_msgs:
+                for msg in telegram_msgs:
+                    telegram_articles.append({
+                        'title': msg.get('title', '')[:200],
+                        'description': msg.get('title', '')[:500],
+                        'url': msg.get('url', ''),
+                        'publishedAt': msg.get('published', ''),
+                        'source': {'name': msg.get('source', 'Telegram')},
+                        'content': msg.get('title', '')[:500],
+                        'language': 'multi'
+                    })
+                print(f"[Iran] Telegram: {len(telegram_articles)} messages")
+        except Exception as e:
+            print(f"[Iran] Telegram error: {str(e)[:100]}")
+
     all_articles = (newsapi_articles + gdelt_en + gdelt_ar + gdelt_fa +
                     gdelt_he + reddit_posts + iranwire_articles + hrana_articles +
-                    google_war_articles)
+                    google_war_articles + telegram_articles)
     print(f"[Iran] Total articles: {len(all_articles)}")
 
     # Extract structured data
