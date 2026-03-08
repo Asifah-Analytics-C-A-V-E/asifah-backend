@@ -1965,7 +1965,7 @@ ASSET_TARGET_MAPPING = {
             'description': 'Armenian Air Force / former Russian aviation base near Yerevan.'
         },
     }
-}}
+}
 
 
 # ========================================
