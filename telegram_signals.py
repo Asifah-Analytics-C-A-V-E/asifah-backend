@@ -62,7 +62,7 @@ LEBANON_CHANNELS = [
     'Lebanon_News',        # Lebanese news aggregator
 ]
 
-# Extended channels — regional OSINT + Iranian sources
+# Extended channels — regional OSINT + Iranian sources + Israel-specific
 EXTENDED_CHANNELS = [
     # Regional conflict monitoring (English/multilingual)
     'C_Military1',         # Conflict/military OSINT
@@ -75,6 +75,15 @@ EXTENDED_CHANNELS = [
     # Lebanese military/political
     'maaborached',         # Lebanese military updates
     'GLZRadio',            # IDF radio — Galatz
+    # Israel-specific
+    'YnetNews',            # Ynet English breaking news
+    'TimesofIsrael',       # Times of Israel
+    'Aborached',           # Israeli security commentary
+    'IsraelHayomEng',      # Israel Hayom English
+    'haborached',          # Israeli political commentary
+    'KeshetNews',          # Keshet 12 News — Hebrew
+    'N12News',             # Channel 12 News — Hebrew
+    'Aborached13',         # Channel 13 News — Hebrew
 ]
 
 
