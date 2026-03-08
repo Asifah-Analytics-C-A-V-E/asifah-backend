@@ -77,6 +77,15 @@ import os
 import threading
 from collections import defaultdict
 
+# Telegram signal source
+try:
+    from telegram_signals import fetch_telegram_signals
+    TELEGRAM_AVAILABLE = True
+    print("[Rhetoric Tracker] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Rhetoric Tracker] ⚠️ Telegram signals not available")
+
 # ========================================
 # CONFIGURATION
 # ========================================
@@ -667,6 +676,28 @@ def fetch_lebanon_articles(days=3):
             time.sleep(0.3)
 
         print(f"[Rhetoric] NewsAPI: {newsapi_count} articles")
+
+    # --- Telegram Signals ---
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_msgs = fetch_telegram_signals(hours_back=72, include_extended=True)
+            if telegram_msgs:
+                for msg in telegram_msgs:
+                    all_articles.append({
+                        'title': msg.get('title', '')[:200],
+                        'description': msg.get('title', '')[:500],
+                        'url': msg.get('url', ''),
+                        'publishedAt': msg.get('published', ''),
+                        'source': msg.get('source', 'Telegram'),
+                        'content': msg.get('title', '')[:500],
+                    })
+                print(f"[Rhetoric] Telegram: {len(telegram_msgs)} messages")
+            else:
+                print(f"[Rhetoric] Telegram: 0 messages returned")
+        except Exception as e:
+            print(f"[Rhetoric] Telegram error: {str(e)[:100]}")
+    else:
+        print(f"[Rhetoric] Telegram not available — skipping")
 
     print(f"[Rhetoric] Total articles fetched: {len(all_articles)}")
     return all_articles
