@@ -168,8 +168,8 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus'],
-        'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Cyprus'
+        'actors': ['nato', 'russia', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia'],
+        'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Cyprus, Caucasus'
     },
     'middle_east': {
         'label': 'Middle East & North Africa',
@@ -637,35 +637,48 @@ MILITARY_ACTORS = {
             'uae arms deal', 'uae military buildup',
             'uae evacuation', 'uae departure',
             'emirates military', 'uae drone',
-            # War keywords (v2.7.0)
+            # Active conflict — Mar 2026
+            'uae shoots down', 'uae shot down', 'uae intercepts drone',
+            'uae intercepts missile', 'uae downs iranian drone',
+            'uae air defense fires', 'uae air defense activated',
+            'uae scrambles jets', 'uae scrambles fighters',
+            'uae retaliates', 'uae responds firmly',
+            'uae warns iran', 'uae threatens iran',
+            'uae mobilization', 'uae deploys', 'uae deployed',
+            'uae patriot', 'uae thaad', 'uae pantsir',
             'iran strike uae', 'iranian missile uae',
             'iranian attack uae', 'iran drone uae',
+            'iranian drone abu dhabi', 'iranian drone dubai',
+            'iran attacks emirates', 'iran bombards uae',
             'dubai attack', 'dubai missile', 'dubai drone',
-            'abu dhabi attack', 'abu dhabi missile',
+            'abu dhabi attack', 'abu dhabi missile', 'abu dhabi drone',
             'us embassy dubai', 'us embassy dubai hit',
-            'us embassy abu dhabi', 'uae intercept missile',
-            'uae air defense activated', 'uae shelter',
-            'al dhafra attack', 'al dhafra missile',
-            'jebel ali port attack', 'uae war',
-            'houthi attack uae', 'houthi missile uae',
+            'us embassy abu dhabi', 'uae shelter',
+            'al dhafra attack', 'al dhafra missile', 'al dhafra struck',
+            'jebel ali port attack', 'jebel ali struck', 'uae war',
+            'houthi attack uae', 'houthi missile uae', 'houthi drone uae',
             'fujairah attack', 'fujairah port', 'fujairah struck',
             'fujairah missile', 'fujairah drone',
-            'us embassy dubai hit', 'us embassy abu dhabi hit',
             'uae embassy attack', 'uae embassy struck',
             'iran strikes uae', 'ballistic missile dubai',
             'ballistic missile abu dhabi', 'iran drone dubai',
             'uae port struck', 'uae port attack',
+            'uae airspace closed', 'uae flights cancelled',
+            'dubai airport closed', 'abu dhabi airport closed',
+            'emirates flights cancelled', 'etihad flights cancelled',
+            'flydubai cancelled', 'uae siren', 'uae casualties',
             # Arabic keywords
             'القوات المسلحة الإماراتية',
             'هجوم على الإمارات', 'صاروخ إيراني الإمارات',
             'دبي هجوم', 'أبوظبي هجوم',
             'قاعدة الظفرة', 'السفارة الأمريكية دبي',
+            'الإمارات تسقط طائرة', 'الإمارات دفاع جوي',
+            'الإمارات إيران', 'الإمارات تعبئة',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=UAE+OR+dubai+OR+abu+dhabi+military+OR+missile+OR+attack&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=UAE+OR+dubai+OR+abu+dhabi+military+OR+missile+OR+attack+OR+iran+OR+intercept+OR+drone&hl=en&gl=US&ceid=US:en',
         ]
     },
-
     'jordan': {
         'name': 'Jordan',
         'flag': '🇯🇴',
@@ -743,30 +756,45 @@ MILITARY_ACTORS = {
             'us forces kuwait', 'kuwait defense',
             'ali al salem air base', 'kuwait evacuation',
             'kuwait military exercise',
-            # War keywords (v2.7.0)
-            'iran strike kuwait', 'iranian missile kuwait',
+            # Active conflict — Mar 2026
+            'kuwait mobilization', 'kuwait deploys', 'kuwait deployed',
+            'kuwait army deployed', 'kuwait forces deployed',
+            'kuwait iran', 'iran bombard kuwait', 'iran bombs kuwait',
+            'iran attacks kuwait', 'iranian bombardment kuwait',
+            'iranian strike kuwait', 'iranian missile kuwait',
             'iranian attack kuwait', 'iran drone kuwait',
+            'kuwait embassy closed', 'us embassy kuwait closed',
+            'us embassy kuwait evacuated', 'embassy closure kuwait',
+            'kuwait retaliates', 'kuwait strikes iran',
+            'kuwait scrambles jets', 'kuwait air force scramble',
+            'kuwait shoots down', 'kuwait intercepts',
+            'kuwait patriot', 'kuwait thaad', 'kuwait iron dome',
             'kuwait port attack', 'kuwait drone strike',
             'us soldiers killed kuwait', 'us troops killed kuwait',
             'kuwait intercept missile', 'kuwait air defense',
             'kuwait city attack', 'kuwait shrapnel',
-            'kuwait embassy closed', 'us embassy kuwait closed',
             'kuwait warplanes crashed', 'kuwait war',
             'camp arifjan attack', 'ali al salem attack',
-            'kuwait casualties', 'kuwait killed',
+            'camp arifjan struck', 'ali al salem struck',
+            'kuwait casualties', 'kuwait killed', 'kuwait wounded',
             'us embassy kuwait hit', 'us embassy kuwait drone',
             'us embassy kuwait attack', 'kuwait embassy strike',
             'kuwait troops dead', 'american soldiers kuwait',
             'soldiers died kuwait', 'troops died kuwait',
             'kuwait base struck', 'kuwait base hit',
             'iran strikes kuwait', 'ballistic missile kuwait',
+            'cruise missile kuwait', 'kuwait siren', 'kuwait shelter',
+            'kuwait airspace closed', 'kuwait flights cancelled',
+            'kuwait airport closed', 'kuwait martial law',
             # Arabic keywords
             'الكويت هجوم', 'صاروخ إيراني الكويت',
             'معسكر عريفجان', 'قاعدة علي السالم',
             'السفارة الأمريكية الكويت',
+            'الكويت تعبئة', 'الكويت حرب', 'الكويت قصف',
+            'الكويت إيران', 'الكويت دفاع جوي',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=kuwait+military+OR+missile+OR+attack+OR+troops&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=kuwait+military+OR+missile+OR+attack+OR+iran+OR+embassy+OR+mobilization&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -1114,6 +1142,70 @@ MILITARY_ACTORS = {
         ]
     },
 
+  'azerbaijan': {
+        'name': 'Azerbaijan',
+        'flag': '🇦🇿',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'azerbaijan military', 'azerbaijani army', 'azerbaijani forces',
+            'azerbaijan defense', 'azerbaijan defence',
+            'azerbaijan mobilization', 'azerbaijan mobilisation',
+            'aliyev military', 'azerbaijan drone', 'azerbaijan bayraktar',
+            'azerbaijan tb2', 'azerbaijan harop', 'azerbaijan orbiter',
+            'nakhchivan', 'nakhchivan attack', 'nakhchivan airport',
+            'nakhchivan drone', 'nakhchivan missile',
+            'azerbaijan iran', 'iran azerbaijan border',
+            'iran baku', 'iran attack azerbaijan',
+            'iranian drone azerbaijan', 'iranian missile azerbaijan',
+            'azerbaijan israel', 'israel azerbaijan base',
+            'baku tbilisi ceyhan', 'btc pipeline', 'btc pipeline attack',
+            'shah deniz', 'socar', 'azerbaijan oil',
+            'azerbaijan gas', 'sangachal terminal',
+            'karabakh', 'nagorno-karabakh', 'lachin corridor',
+            'zangezur corridor', 'azerbaijan armenia border',
+            'azerbaijan airspace', 'azerbaijan air force',
+            'azerbaijan navy', 'caspian flotilla',
+            'ganja military', 'baku military',
+            'Азербайджан военный', 'Баку армия',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=azerbaijan+military+OR+nakhchivan+OR+drone+OR+mobilization+OR+iran&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+    'armenia': {
+        'name': 'Armenia',
+        'flag': '🇦🇲',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'armenia military', 'armenian army', 'armenian forces',
+            'armenia defense', 'armenia defence',
+            'armenia mobilization', 'armenia mobilisation',
+            'pashinyan military', 'armenia border',
+            'armenia azerbaijan border', 'syunik',
+            'armenia iran border', 'armenia airspace',
+            'armenia air defense', 'armenia pvo',
+            'armenia russia base', 'gyumri base', 'russian base gyumri',
+            'armenia CSTO', 'CSTO withdrawal', 'CSTO armenia',
+            'armenia nato', 'armenia eu defense',
+            'armenia french weapons', 'france armenia military',
+            'india armenia weapons', 'india armenia defense',
+            'armenia drone', 'armenia missile',
+            'yerevan military', 'zvartnots',
+            'armenia evacuation', 'armenia corridor iran',
+            'lachin', 'artsakh military',
+            'Армения военный', 'Ереван армия',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=armenia+military+OR+yerevan+OR+defense+OR+CSTO+OR+border&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+  
     # ------------------------------------------------
     # TIER 4 — NATO / Alliance (Europe + Arctic expansion)
     # ------------------------------------------------
@@ -1852,8 +1944,28 @@ ASSET_TARGET_MAPPING = {
             'targets': ['cyprus'],
             'description': 'Cypriot/Greek Air Force. Eastern Med.'
         },
+        'Nakhchivan': {
+            'location': 'Azerbaijan (exclave)',
+            'targets': ['azerbaijan', 'iran'],
+            'description': 'Azeri exclave bordering Iran/Turkey. Iranian drone strikes Mar 2026.'
+        },
+        'Ganja Air Base': {
+            'location': 'Azerbaijan',
+            'targets': ['azerbaijan'],
+            'description': 'Azerbaijani Air Force. Second city military hub.'
+        },
+        'Gyumri (Russian 102nd Base)': {
+            'location': 'Armenia',
+            'targets': ['armenia', 'russia'],
+            'description': 'Russian military base in Armenia. Status uncertain post-CSTO strain.'
+        },
+        'Erebuni Air Base': {
+            'location': 'Armenia (Yerevan)',
+            'targets': ['armenia'],
+            'description': 'Armenian Air Force / former Russian aviation base near Yerevan.'
+        },
     }
-}
+}}
 
 
 # ========================================
