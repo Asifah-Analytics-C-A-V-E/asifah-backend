@@ -44,6 +44,15 @@ except ImportError:
     BS4_AVAILABLE = False
     print("[WARNING] beautifulsoup4 not installed - bond scraping will use fallback")
 
+# Telegram signal source (v3.0.0)
+try:
+    from telegram_signals import fetch_telegram_signals, get_telegram_status
+    TELEGRAM_AVAILABLE = True
+    print("[Lebanon] ✅ Telegram signals module loaded")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Lebanon] ⚠️ Telegram signals not available (telegram_signals.py not found)")
+
 # ========================================
 # FLASK APP INITIALIZATION
 # ========================================
@@ -989,7 +998,21 @@ def scan_security_situation(days=7):
             print(f"[Security Situation] RSS error for '{query}': {str(e)[:80]}")
             continue
 
-    print(f"[Security Situation] Gathered {len(all_articles)} articles")
+    print(f"[Security Situation] Gathered {len(all_articles)} articles from Google News RSS")
+
+    # ── Telegram signals (v3.0.0) ──
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_messages = fetch_telegram_signals(hours_back=48)
+            if telegram_messages:
+                all_articles.extend(telegram_messages)
+                print(f"[Security Situation] ✅ Added {len(telegram_messages)} Telegram messages (total: {len(all_articles)})")
+            else:
+                print(f"[Security Situation] ⚠️ No Telegram messages returned")
+        except Exception as e:
+            print(f"[Security Situation] ❌ Telegram error: {str(e)[:100]}")
+    else:
+        print(f"[Security Situation] Telegram signals not available — using RSS only")
 
     # Build combined text corpus for matching
     all_titles_lower = ' '.join(a['title'].lower() for a in all_articles)
@@ -1828,9 +1851,18 @@ def health():
         except:
             redis_status = 'configured_but_unreachable'
     
+    # Telegram status
+    telegram_status = {}
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_status = get_telegram_status()
+        except:
+            telegram_status = {'error': 'status check failed'}
+
     return jsonify({
         'status': 'healthy',
         'service': 'lebanon-stability',
+        'telegram': telegram_status,
         'version': '2.9.0',
         'cache_backend': redis_status,
         'timestamp': datetime.now(timezone.utc).isoformat()
