@@ -34,6 +34,13 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 
+try:
+    from telegram_signals import fetch_telegram_signals
+    TELEGRAM_AVAILABLE = True
+    print("[Israel] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Israel] ⚠️ Telegram signals not available")
 # ========================================
 # CONFIGURATION
 # ========================================
@@ -327,7 +334,7 @@ def fetch_tase_index():
    # ── Yahoo Finance fallback ──
     TASE_LAST_KNOWN_KEY = 'tase_last_known'
     print("[Israel Econ] Using Yahoo Finance fallback for TASE...")
-    for ticker in ['^TA35', '^TA125']:
+    for ticker in ['^TA35', '^TA125', 'TA35.TA', 'TA125.TA']:
         try:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=5d"
             r = requests.get(url, timeout=10, headers={
@@ -477,7 +484,7 @@ def _parse_rss_articles(url, source_name, days=7):
 
 def scan_israel_conflict(days=7):
     """
-    Scan RSS feeds for conflict, coalition, and hostage indicators.
+    Scan RSS feeds + Telegram for conflict, coalition, and hostage indicators.
     Returns scored conflict data + article list.
     """
     print("[Israel Conflict] Starting scan...")
@@ -487,6 +494,22 @@ def scan_israel_conflict(days=7):
         fetched = _parse_rss_articles(url, name, days=days)
         all_articles.extend(fetched)
         print(f"[Israel Conflict] {name}: {len(fetched)} articles")
+
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_msgs = fetch_telegram_signals(hours_back=days*24, include_extended=True)
+            if telegram_msgs:
+                for msg in telegram_msgs:
+                    all_articles.append({
+                        'title': msg.get('title', '')[:200],
+                        'url': msg.get('url', ''),
+                        'published': msg.get('published', ''),
+                        'source': msg.get('source', 'Telegram'),
+                        'description': msg.get('title', '')[:200]
+                    })
+                print(f"[Israel Conflict] Telegram: {len(telegram_msgs)} messages")
+        except Exception as e:
+            print(f"[Israel Conflict] Telegram error: {str(e)[:100]}")
 
     # Deduplicate by title
     seen = set()
@@ -617,8 +640,8 @@ def fetch_acled_strikes():
         except Exception as e:
             print(f"[ACLED] API error: {str(e)[:100]}")
 
-    # === FALLBACK: RSS strike mentions ===
-    print("[ACLED] No API key — using RSS strike fallback")
+    # === FALLBACK: RSS + Telegram strike mentions ===
+    print("[ACLED] No API key — using RSS + Telegram strike fallback")
     strike_articles = []
     strike_queries = [
         'IDF airstrike Gaza today',
@@ -629,6 +652,22 @@ def fetch_acled_strikes():
     for q in strike_queries:
         url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en&gl=US&ceid=US:en"
         strike_articles.extend(_parse_rss_articles(url, 'Google News - Strikes', days=7))
+
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_msgs = fetch_telegram_signals(hours_back=168, include_extended=True)
+            if telegram_msgs:
+                for msg in telegram_msgs:
+                    strike_articles.append({
+                        'title': msg.get('title', '')[:200],
+                        'url': msg.get('url', ''),
+                        'published': msg.get('published', ''),
+                        'source': msg.get('source', 'Telegram'),
+                        'description': msg.get('title', '')[:200]
+                    })
+                print(f"[ACLED Fallback] Telegram: {len(telegram_msgs)} messages added")
+        except Exception as e:
+            print(f"[ACLED Fallback] Telegram error: {str(e)[:100]}")
 
     # Deduplicate
     seen = set()
@@ -691,6 +730,22 @@ def scan_knesset_news():
     for q in knesset_queries:
         url = f"https://news.google.com/rss/search?q={q.replace(' ','+')}+Israel&hl=en&gl=US&ceid=US:en"
         articles.extend(_parse_rss_articles(url, 'Google News - Politics', days=14))
+
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_msgs = fetch_telegram_signals(hours_back=336, include_extended=True)
+            if telegram_msgs:
+                for msg in telegram_msgs:
+                    articles.append({
+                        'title': msg.get('title', '')[:200],
+                        'url': msg.get('url', ''),
+                        'published': msg.get('published', ''),
+                        'source': msg.get('source', 'Telegram'),
+                        'description': msg.get('title', '')[:200]
+                    })
+                print(f"[Knesset] Telegram: {len(telegram_msgs)} messages added")
+        except Exception as e:
+            print(f"[Knesset] Telegram error: {str(e)[:100]}")
 
     # Deduplicate
     seen = set()
@@ -1064,12 +1119,4 @@ def register_israel_stability_endpoints(flask_app):
     flask_app.add_url_rule('/api/israel-leadership', view_func=api_israel_leadership, methods=['GET'])
     flask_app.add_url_rule('/api/israel-strikes', view_func=api_israel_strikes, methods=['GET'])
     flask_app.add_url_rule('/robots.txt', view_func=robots)
-    print("[Israel Stability] ✅ Routes registered")
-
-
-def register_israel_stability_endpoints(flask_app):
-    flask_app.add_url_rule('/scan-israel-stability', view_func=scan_israel_stability, methods=['GET'])
-    flask_app.add_url_rule('/api/israel-trends', view_func=api_israel_trends, methods=['GET'])
-    flask_app.add_url_rule('/api/israel-leadership', view_func=api_israel_leadership, methods=['GET'])
-    flask_app.add_url_rule('/api/israel-strikes', view_func=api_israel_strikes, methods=['GET'])
     print("[Israel Stability] ✅ Routes registered")
