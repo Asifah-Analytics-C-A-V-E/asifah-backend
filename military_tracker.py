@@ -125,6 +125,14 @@ import math
 import os
 import threading
 
+try:
+    from telegram_signals import fetch_telegram_signals
+    TELEGRAM_AVAILABLE = True
+    print("[Military Tracker] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Military Tracker] ⚠️ Telegram signals not available")
+
 # ========================================
 # CONFIGURATION
 # ========================================
@@ -2952,7 +2960,26 @@ def _run_full_scan(days=7):
     newsapi_articles = fetch_all_newsapi_military(days)
     reddit_posts = fetch_reddit_military(days)
 
-    all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts
+    telegram_articles = []
+    if TELEGRAM_AVAILABLE:
+        try:
+            telegram_msgs = fetch_telegram_signals(hours_back=days*24, include_extended=True)
+            if telegram_msgs:
+                for msg in telegram_msgs:
+                    telegram_articles.append({
+                        'title': msg.get('title', '')[:200],
+                        'description': msg.get('title', '')[:500],
+                        'url': msg.get('url', ''),
+                        'publishedAt': msg.get('published', ''),
+                        'source': {'name': msg.get('source', 'Telegram')},
+                        'content': msg.get('title', '')[:500],
+                        'feed_type': 'telegram'
+                    })
+                print(f"[Military Tracker] Telegram: {len(telegram_articles)} messages")
+        except Exception as e:
+            print(f"[Military Tracker] Telegram error: {str(e)[:100]}")
+
+    all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles
 
     print(f"[Military Tracker] Total articles to analyze: {len(all_articles)}")
 
@@ -3093,7 +3120,8 @@ def _run_full_scan(days=7):
             'defense_rss': len(rss_articles),
             'gdelt': len(gdelt_articles),
             'newsapi': len(newsapi_articles),
-            'reddit': len(reddit_posts)
+            'reddit': len(reddit_posts),
+            'telegram': len(telegram_articles)
         },
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
