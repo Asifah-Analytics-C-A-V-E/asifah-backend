@@ -772,6 +772,14 @@ def _check_cache_or_placeholder(label, cache_key, target=None, extended=False):
 # ========================================
 app = Flask(__name__)
 CORS(app)
+
+try:
+    from telegram_signals import fetch_telegram_signals
+    TELEGRAM_AVAILABLE = True
+    print("[Main Backend] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Main Backend] ⚠️ Telegram signals not available")
 # Rhetoric Tracker — runs scan thread + serves endpoints
 try:
     from rhetoric_tracker import register_rhetoric_endpoints
@@ -4118,8 +4126,28 @@ def api_threat(target):
             days
         )
         
+        telegram_articles = []
+        if TELEGRAM_AVAILABLE:
+            try:
+                telegram_msgs = fetch_telegram_signals(hours_back=days*24, include_extended=True)
+                if telegram_msgs:
+                    for msg in telegram_msgs:
+                        telegram_articles.append({
+                            'title': msg.get('title', '')[:200],
+                            'description': msg.get('title', '')[:500],
+                            'url': msg.get('url', ''),
+                            'publishedAt': msg.get('published', ''),
+                            'source': {'name': msg.get('source', 'Telegram')},
+                            'content': msg.get('title', '')[:500],
+                            'language': 'multi'
+                        })
+                    print(f"[Threat Scan] Telegram: {len(telegram_articles)} messages")
+            except Exception as e:
+                print(f"[Threat Scan] Telegram error: {str(e)[:100]}")
+
         all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ar + 
-                       articles_gdelt_he + articles_gdelt_fa + articles_reddit)
+                       articles_gdelt_he + articles_gdelt_fa + articles_reddit +
+                       telegram_articles)
         
         # NEW: Fetch ALL RSS feeds (leadership rhetoric + Israeli news)
         print(f"[RSS] Fetching RSS feeds...")
