@@ -1839,8 +1839,26 @@ def home():
     })
 
 
-@app.route('/health', methods=['GET'])
-def health():
+@app.route('/debug/telegram', methods=['GET'])
+def debug_telegram():
+    """Test Telegram connection directly."""
+    try:
+        from telegram_signals import fetch_telegram_signals, get_telegram_status
+        import sys
+        status = get_telegram_status()
+        print("[DEBUG] Telegram status:", status, flush=True)
+        print("[DEBUG] Attempting fetch...", flush=True)
+        msgs = fetch_telegram_signals(hours_back=1)
+        print(f"[DEBUG] Fetched {len(msgs)} messages", flush=True)
+        return jsonify({
+            'status': status,
+            'messages_fetched': len(msgs),
+            'sample': [{'title': m.get('title','')[:100], 'source': m.get('source','')} for m in msgs[:3]] if msgs else [],
+            'python_version': sys.version,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()})
     """Health check with Redis status"""
     redis_status = 'not_configured'
     if _redis_available():
