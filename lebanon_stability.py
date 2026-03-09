@@ -1207,7 +1207,13 @@ def scan_security_situation(days=7):
         status_color = '#6b7280'
         matched_indicator = None
 
-        # Check killed first (highest priority)
+        # Check for confirmed status override (analyst-verified intel)
+        if leader.get('confirmed_status') == 'killed':
+            status = 'killed'
+            status_label = 'KILLED'
+            status_color = '#dc2626'
+
+        # Check killed from news (highest priority)
         for kw in leader['keywords_killed']:
             if kw in all_titles_lower:
                 status = 'killed'
