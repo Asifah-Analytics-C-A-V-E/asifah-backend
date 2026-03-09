@@ -947,7 +947,28 @@ HEZBOLLAH_LEADERSHIP = {
         'title': 'Radwan Force (Elite Unit)',
         'title_ar': 'قائد قوة الرضوان',
         'since': None,
-        'note': '
+        'note': 'Ibrahim Aqil killed Sep 2024 along with ~20 Radwan commanders. Successor identity unclear. Unit retains operational capability.',
+        'keywords_alive': ['radwan force commander', 'new radwan commander',
+                           'radwan force operations', 'radwan force active'],
+        'keywords_killed': ['radwan commander killed', 'radwan force decimated',
+                            'radwan force destroyed', 'radwan leadership eliminated'],
+        'keywords_unknown': ['radwan force status', 'radwan commander unknown',
+                             'radwan force reorganizing'],
+    },
+    'fuad_shukr_successor': {
+        'name': 'Senior Military Commander',
+        'title': 'Military Operations Chief',
+        'title_ar': 'رئيس العمليات العسكرية',
+        'since': None,
+        'note': 'Fuad Shukr killed Jul 2024. Abu Ali Tabatabai (successor) killed Nov 2025. Deep leadership vacuum in military command.',
+        'keywords_alive': ['hezbollah military chief', 'hezbollah military commander',
+                           'hezbollah military operations'],
+        'keywords_killed': ['hezbollah commander killed', 'senior hezbollah military killed',
+                            'hezbollah military chief eliminated'],
+        'keywords_unknown': ['hezbollah military command uncertain', 'hezbollah command structure',
+                             'hezbollah reorganizing military'],
+    }
+}
 
 
 def scan_security_situation(days=7):
