@@ -26,7 +26,7 @@ from datetime import datetime, timezone, timedelta
 # ========================================
 
 DTM_API_KEY = os.environ.get('DTM_API_KEY')
-DTM_BASE_URL = 'https://dtmapi.iom.int/api/v3'
+DTM_BASE_URL = 'https://dtmapi.iom.int/v3'
 
 # ReliefWeb API (open, no key needed)
 RELIEFWEB_API_URL = 'https://api.reliefweb.int/v1'
@@ -72,7 +72,7 @@ def fetch_dtm_displacement():
             'ToReportingDate': datetime.now().strftime('%Y-%m-%d')
         }
         response = requests.get(
-            f'{DTM_BASE_URL}/idp-admin0-data',
+            f'{DTM_BASE_URL}/displacement/admin0',
             headers=headers,
             params=params,
             timeout=15
@@ -102,7 +102,7 @@ def fetch_dtm_displacement():
             # Try alternate endpoint format
             try:
                 alt_response = requests.get(
-                    f'{DTM_BASE_URL}/IdpAdmin0Data',
+                    f'{DTM_BASE_URL}/displacement/admin0',
                     headers=headers,
                     params=params,
                     timeout=15
@@ -136,7 +136,7 @@ def fetch_dtm_displacement():
             'ToReportingDate': datetime.now().strftime('%Y-%m-%d')
         }
         response = requests.get(
-            f'{DTM_BASE_URL}/idp-admin1-data',
+            f'{DTM_BASE_URL}/displacement/admin1',
             headers=headers,
             params=params,
             timeout=15
