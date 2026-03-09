@@ -53,6 +53,15 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
     print("[Lebanon] ⚠️ Telegram signals not available (telegram_signals.py not found)")
 
+# Humanitarian data module (DTM API + ReliefWeb + OCHA)
+try:
+    from lebanon_humanitarian import register_humanitarian_endpoints
+    HUMANITARIAN_AVAILABLE = True
+    print("[Lebanon] ✅ Humanitarian data module loaded")
+except ImportError:
+    HUMANITARIAN_AVAILABLE = False
+    print("[Lebanon] ⚠️ Humanitarian module not available (lebanon_humanitarian.py not found)")
+
 # ========================================
 # FLASK APP INITIALIZATION
 # ========================================
@@ -92,6 +101,9 @@ CORS(app, resources={
 # Register rhetoric endpoints (cache-read only — no background scan thread)
 if RHETORIC_AVAILABLE:
     register_rhetoric_endpoints(app)
+
+if HUMANITARIAN_AVAILABLE:
+    register_humanitarian_endpoints(app)
     
 # ========================================
 # CONFIGURATION
