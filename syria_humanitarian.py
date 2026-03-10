@@ -24,6 +24,8 @@ import threading
 import time
 from flask import request, jsonify
 from datetime import datetime, timezone, timedelta
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 
 # ========================================
 # CONFIGURATION
@@ -42,6 +44,14 @@ CACHE_KEY = 'syria_humanitarian'
 
 # Background refresh interval (6 hours)
 REFRESH_INTERVAL_SECONDS = 6 * 3600
+
+# News feed config
+NEWS_CACHE_KEY = 'syria_news'
+GDELT_BASE_URL = 'http://api.gdeltproject.org/api/v2/doc/doc'
+SYRIA_DIRECT_RSS = 'https://syriadirect.org/feed/'
+SOHR_RSS = 'https://www.syriahr.com/en/feed/'
+REDDIT_USER_AGENT = 'AsifahAnalytics/3.0 (Syria Stability Tracker)'
+REDDIT_SUBREDDITS = ['syriancivilwar', 'syria', 'geopolitics', 'MiddleEast']
 
 
 # ========================================
@@ -406,7 +416,169 @@ STATIC_HUMANITARIAN = {
     }
 }
 
+# ========================================
+# NEWS FEED — CACHED ARTICLE AGGREGATION
+# ========================================
 
+def _fetch_rss(url, source_name, max_items=15):
+    """Fetch and parse an RSS feed."""
+    articles = []
+    try:
+        response = requests.get(url, timeout=12, headers={
+            'User-Agent': 'Mozilla/5.0 AsifahAnalytics/3.0'
+        })
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            items = root.findall('.//item')
+            for item in items[:max_items]:
+                title = item.find('title')
+                link = item.find('link')
+                desc = item.find('description')
+                pub = item.find('pubDate')
+                pub_date = ''
+                if pub is not None and pub.text:
+                    try:
+                        pub_date = parsedate_to_datetime(pub.text).isoformat()
+                    except:
+                        pub_date = pub.text
+                articles.append({
+                    'title': title.text if title is not None else '',
+                    'url': link.text if link is not None else '',
+                    'description': (desc.text or '')[:500] if desc is not None else '',
+                    'publishedAt': pub_date,
+                    'source': {'name': source_name},
+                    'language': 'en'
+                })
+            print(f"[Syria News] RSS {source_name}: {len(articles)} articles")
+        else:
+            print(f"[Syria News] RSS {source_name}: HTTP {response.status_code}")
+    except Exception as e:
+        print(f"[Syria News] RSS {source_name} error: {str(e)[:100]}")
+    return articles
+
+
+def _fetch_gdelt(query, sourcelang, exclude_domains=None, max_items=20):
+    """Fetch articles from GDELT."""
+    articles = []
+    try:
+        params = {
+            'query': query,
+            'mode': 'artlist',
+            'maxrecords': max_items,
+            'timespan': '7d',
+            'format': 'json',
+            'sourcelang': sourcelang
+        }
+        response = requests.get(GDELT_BASE_URL, params=params, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            raw = data.get('articles', [])
+            lang_code = {'eng': 'en', 'ara': 'ar', 'heb': 'he', 'fas': 'fa'}.get(sourcelang, 'en')
+            for a in raw:
+                domain = a.get('domain', '')
+                if exclude_domains and any(d in domain for d in exclude_domains):
+                    continue
+                articles.append({
+                    'title': a.get('title', ''),
+                    'url': a.get('url', ''),
+                    'description': a.get('title', ''),
+                    'publishedAt': a.get('seendate', ''),
+                    'source': {'name': domain},
+                    'language': lang_code
+                })
+            print(f"[Syria News] GDELT {sourcelang}: {len(articles)} articles")
+        else:
+            print(f"[Syria News] GDELT {sourcelang}: HTTP {response.status_code}")
+    except Exception as e:
+        print(f"[Syria News] GDELT {sourcelang} error: {str(e)[:100]}")
+    return articles
+
+
+def _fetch_reddit(subreddits, max_per_sub=10):
+    """Fetch posts from Reddit."""
+    articles = []
+    for sub in subreddits:
+        try:
+            url = f'https://www.reddit.com/r/{sub}/search.json?q=Syria&sort=new&t=week&limit={max_per_sub}'
+            response = requests.get(url, timeout=10, headers={'User-Agent': REDDIT_USER_AGENT})
+            if response.status_code == 200:
+                data = response.json()
+                posts = data.get('data', {}).get('children', [])
+                for post in posts:
+                    p = post.get('data', {})
+                    articles.append({
+                        'title': p.get('title', ''),
+                        'url': f"https://reddit.com{p.get('permalink', '')}",
+                        'description': (p.get('selftext', '') or '')[:300],
+                        'publishedAt': datetime.fromtimestamp(p.get('created_utc', 0), tz=timezone.utc).isoformat() if p.get('created_utc') else '',
+                        'source': {'name': f'r/{sub}'},
+                        'language': 'en'
+                    })
+            time.sleep(1)
+        except Exception as e:
+            print(f"[Syria News] Reddit r/{sub} error: {str(e)[:100]}")
+    print(f"[Syria News] Reddit: {len(articles)} posts from {len(subreddits)} subs")
+    return articles
+
+
+def fetch_all_news():
+    """Fetch all Syria news from all sources."""
+    print("[Syria News] Fetching all news sources...")
+    syria_direct = _fetch_rss(SYRIA_DIRECT_RSS, 'Syria Direct')
+    sohr = _fetch_rss(SOHR_RSS, 'SOHR')
+    en_articles = _fetch_gdelt('Syria conflict displacement HTS SDF Aleppo Damascus', 'eng', exclude_domains=['syriadirect.org'])
+    ar_articles = _fetch_gdelt('سوريا نزوح حلب دمشق قسد هيئة تحرير الشام', 'ara')
+    he_articles = _fetch_gdelt('סוריה דמשק חאלב כורדים דאעש', 'heb')
+    fa_articles = _fetch_gdelt('سوریه دمشق حلب کردها داعش', 'fas')
+    reddit = _fetch_reddit(REDDIT_SUBREDDITS)
+
+    result = {
+        'success': True,
+        'fetched_at': datetime.now(timezone.utc).isoformat(),
+        'articles_syria_direct': syria_direct,
+        'articles_sohr': sohr,
+        'articles_en': en_articles,
+        'articles_ar': ar_articles,
+        'articles_he': he_articles,
+        'articles_fa': fa_articles,
+        'articles_reddit': reddit,
+        'counts': {
+            'syria_direct': len(syria_direct),
+            'sohr': len(sohr),
+            'en': len(en_articles),
+            'ar': len(ar_articles),
+            'he': len(he_articles),
+            'fa': len(fa_articles),
+            'reddit': len(reddit),
+        }
+    }
+
+    if _redis_available():
+        _redis_set(NEWS_CACHE_KEY, result)
+        print(f"[Syria News] Cached to Redis (total: {sum(result['counts'].values())} articles)")
+
+    return result
+
+
+def get_news_data(force_refresh=False):
+    """Get Syria news — Redis-first with 4-hour TTL."""
+    if not force_refresh and _redis_available():
+        cached = _redis_get(NEWS_CACHE_KEY)
+        if cached:
+            cached_at = cached.get('fetched_at', '')
+            if cached_at:
+                try:
+                    cached_time = datetime.fromisoformat(cached_at.replace('Z', '+00:00'))
+                    age_hours = (datetime.now(timezone.utc) - cached_time).total_seconds() / 3600
+                    if age_hours < 4:
+                        print(f"[Syria News] Using cached data ({age_hours:.1f}h old)")
+                        cached['from_cache'] = True
+                        cached['cache_age_hours'] = round(age_hours, 1)
+                        return cached
+                except:
+                    pass
+    return fetch_all_news()
+  
 # ========================================
 # COMBINED HUMANITARIAN FETCH
 # ========================================
@@ -492,7 +664,8 @@ def _background_humanitarian_refresh():
         try:
             print("[Syria Humanitarian] Running background refresh...")
             _fetch_all_humanitarian()
-            print("[Syria Humanitarian] Background refresh complete")
+            fetch_all_news()
+            print("[Syria Humanitarian] Background refresh complete (humanitarian + news)")
         except Exception as e:
             print(f"[Syria Humanitarian] Background refresh error: {str(e)[:200]}")
         time.sleep(REFRESH_INTERVAL_SECONDS)
@@ -534,6 +707,16 @@ def register_syria_humanitarian_endpoints(app):
             'sources': STATIC_HUMANITARIAN['source_links'],
         })
 
+    @app.route('/api/syria/news', methods=['GET'])
+    def api_syria_news():
+        """Syria news from all sources — cached."""
+        force = request.args.get('force', 'false').lower() == 'true'
+        try:
+            data = get_news_data(force_refresh=force)
+            return jsonify(data)
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)[:200]}), 200
+          
     @app.route('/debug/syria-dtm', methods=['GET'])
     def debug_syria_dtm():
         """Debug: test DTM API connection for Syria."""
