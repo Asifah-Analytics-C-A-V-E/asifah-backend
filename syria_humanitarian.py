@@ -49,7 +49,7 @@ REFRESH_INTERVAL_SECONDS = 6 * 3600
 NEWS_CACHE_KEY = 'syria_news'
 GDELT_BASE_URL = 'http://api.gdeltproject.org/api/v2/doc/doc'
 SYRIA_DIRECT_RSS = 'https://syriadirect.org/feed/'
-SOHR_RSS = 'https://www.syriahr.com/en/feed/'
+SOHR_RSS = 'https://www.syriahr.com/en/homepage/feed/'
 REDDIT_USER_AGENT = 'AsifahAnalytics/3.0 (Syria Stability Tracker)'
 REDDIT_SUBREDDITS = ['syriancivilwar', 'syria', 'geopolitics', 'MiddleEast']
 
