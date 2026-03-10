@@ -31,6 +31,15 @@ import threading
 from military_tracker import register_military_endpoints, get_military_posture
 from rhetoric_tracker import register_rhetoric_endpoints
 
+# Syria humanitarian data module (DTM API + ReliefWeb + OCHA)
+try:
+    from syria_humanitarian import register_syria_humanitarian_endpoints
+    SYRIA_HUMANITARIAN_AVAILABLE = True
+    print("[ME Backend] ✅ Syria humanitarian module loaded")
+except ImportError:
+    SYRIA_HUMANITARIAN_AVAILABLE = False
+    print("[ME Backend] ⚠️ Syria humanitarian module not available")
+
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -772,7 +781,6 @@ def _check_cache_or_placeholder(label, cache_key, target=None, extended=False):
 # ========================================
 app = Flask(__name__)
 CORS(app)
-
 try:
     from telegram_signals import fetch_telegram_signals
     TELEGRAM_AVAILABLE = True
@@ -801,6 +809,9 @@ from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
 from israel_stability import register_israel_stability_endpoints
 register_israel_stability_endpoints(app)
+# Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
+if SYRIA_HUMANITARIAN_AVAILABLE:
+    register_syria_humanitarian_endpoints(app)
 
 # ========================================
 # CONFIGURATION
