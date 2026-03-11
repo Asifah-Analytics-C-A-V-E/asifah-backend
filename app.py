@@ -6430,6 +6430,34 @@ def cache_status():
         'targets': status,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
+
+@app.route('/api/dashboard', methods=['GET'])
+def api_dashboard():
+    """
+    Returns ALL country card data in a single response from cache.
+    Frontend calls this ONCE on page load instead of N individual endpoints.
+    Never triggers a live scan — cache-only. Background thread keeps it warm.
+    """
+    targets = [
+        'iran', 'hezbollah', 'houthis', 'israel',
+        'jordan', 'syria', 'iraq', 'saudi_arabia',
+        'uae', 'kuwait', 'bahrain', 'qatar', 'egypt', 'yemen'
+    ]
+
+    bundle = {}
+    for target in targets:
+        cached = get_cached_result(target)
+        if cached:
+            bundle[target] = cached
+        else:
+            bundle[target] = _empty_placeholder(target=target)
+
+    return jsonify({
+        'success': True,
+        'cached': True,
+        'last_built': datetime.now(timezone.utc).isoformat(),
+        'countries': bundle
+    })
     
 @app.route('/', methods=['GET'])
 def home():
