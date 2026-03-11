@@ -248,27 +248,28 @@ def fetch_reliefweb_updates():
 # (Updated manually from OCHA Flash Updates)
 # ========================================
 
-# Last updated from: UNHCR briefing March 10, 2026
+# Last updated from: OCHA Flash Update #5, March 9, 2026
+# + UNHCR briefing March 10, 2026
 # + OCHA Flash Update #3, March 7, 2026
 # + UN News reporting, March 9-10, 2026
 # + UNRWA Situation Report #1, March 6, 2026
 # + UNFPA Flash Update, March 5, 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-03-10',
-    'data_period': 'March 2-10, 2026 (renewed hostilities)',
-    'note': 'Static figures from UNHCR/OCHA/UNRWA/UNFPA reports. Updated manually.',
+    'last_manual_update': '2026-03-11',
+    'data_period': 'March 2-11, 2026 (renewed hostilities)',
+    'note': 'Static figures from OCHA Flash Update #5 / UNHCR. Updated manually.',
 
     'casualties': {
-        'killed': 294,
-        'injured': 1000,
+        'killed': 449,
+        'injured': 1294,
         'children_killed': 83,
         'women_killed': 42,
         'rescue_workers_killed': 9,
-        'source': 'OCHA via UN News (March 10, 2026)',
-        'source_url': 'https://news.un.org/en/story/2026/03/1167098',
-        'as_of': '2026-03-10',
-        'note': 'Cumulative since renewed hostilities March 2, 2026. OCHA reports 294 killed in first 8 days.'
+        'source': 'Ministry of Public Health via OCHA Flash Update #5',
+        'source_url': 'https://www.unocha.org/lebanon',
+        'as_of': '2026-03-09',
+        'note': 'Cumulative since renewed hostilities March 2, 2026. Nabatieh has highest casualty toll.'
     },
 
     'displacement': {
@@ -291,22 +292,25 @@ STATIC_HUMANITARIAN = {
     },
 
     'shelters': {
-        'total_shelters': 514,
+        'total_shelters': 567,
         'at_full_capacity': 'Majority exceeding safe standards',
         'capacity_percentage': 95,
+        'schools_as_shelters': 328,
+        'children_education_affected': 104200,
+        'school_aged_idps': 181000,
         'government_designated_sites': 270,
         'unhcr_items_delivered': 168000,
         'unhcr_people_reached': 63000,
         'unrwa_shelters': 2,
         'unrwa_registered': 1300,
         'unrwa_locations': ['Siblin Training Centre (Saida)', 'Nahr el-Bared (North Tripoli)'],
-        'source': 'OCHA Flash Update #3 / UNHCR briefing March 10',
+        'source': 'OCHA Flash Update #5 / DRM / UNHCR',
         'source_urls': [
             'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-3-escalation-hostilities-lebanon-7-march-2026',
             'https://www.unrwa.org/resources/reports/unrwa-situation-report-1-lebanon-emergency-response-2026',
         ],
-        'as_of': '2026-03-10',
-        'note': 'All public schools and Lebanese University campuses designated as shelters. Overcrowding in Beirut. Many IDPs sleeping in cars or on streets.'
+        'as_of': '2026-03-09',
+        'note': '328 schools used as shelters, affecting 104K children education. All public schools and Lebanese University campuses designated. Many IDPs in cars or on streets.'
     },
 
     'evacuation_orders': {
@@ -317,7 +321,7 @@ STATIC_HUMANITARIAN = {
             '110+ towns and locations near the Blue Line',
             '50+ villages (forced evacuation orders March 3)'
         ],
-        'hostile_incidents_drm': 873,
+        'hostile_incidents_drm': 1161,
         'source': 'OCHA Flash Update #3 / DRM Unit',
         'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-1-escalation-hostilities-lebanon-5-march-2026',
         'as_of': '2026-03-07'
@@ -327,10 +331,15 @@ STATIC_HUMANITARIAN = {
         'facilities_attacked_since_oct_2023': 158,
         'health_workers_killed_since_oct_2023': 241,
         'health_workers_injured_since_oct_2023': 292,
-        'source': 'WHO via OCHA',
-        'source_url': 'https://www.who.int/countries/lbn',
-        'as_of': '2026-03-07',
-        'note': 'Cumulative since October 8, 2023'
+        'health_workers_killed_since_mar2': 14,
+        'health_workers_injured_since_mar2': 24,
+        'hospitals_closed': 5,
+        'phccs_closed': 48,
+        'phccs_emergency_only': 7,
+        'source': 'MoPH via OCHA Flash Update #5',
+        'source_url': 'https://www.unocha.org/lebanon',
+        'as_of': '2026-03-09',
+        'note': '5 hospitals and 48 PHCCs closed. 7 PHCCs open for emergencies only. White phosphorus alleged in Yahmar, Nabatieh (HRW).'
     },
 
     'source_links': {
