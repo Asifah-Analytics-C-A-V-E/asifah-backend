@@ -617,6 +617,19 @@ MILITARY_ACTORS = {
             'هجوم على السعودية', 'صاروخ إيراني السعودية',
             'الدفاع الجوي السعودي', 'قاعدة الأمير سلطان',
             'أرامكو هجوم', 'الرياض هجوم',
+            # v2.7.3 — confirmed strike / active defense
+            'ukraine technicians saudi', 'ukraine experts saudi arabia',
+            'ukraine advisors ksa', 'ukraine technical team saudi',
+            'ksa drone shoot down', 'saudi drone intercept confirmed',
+            'saudi shoots down drone', 'saudi shot down iranian drone',
+            'iran bombs saudi', 'iran bombed saudi arabia',
+            'saudi struck iran', 'saudi under attack',
+            'saudi hit confirmed', 'saudi arabia bombed',
+            'saudi arabia war footing', 'saudi high alert',
+            'riyadh sirens', 'riyadh incoming', 'riyadh hit confirmed',
+            'ordered departure ksa', 'ordered departure saudi',
+            'us embassy riyadh ordered departure',
+            'saudi retaliates', 'saudi response iran',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=saudi+arabia+military+OR+missile+OR+attack+OR+defense&hl=en&gl=US&ceid=US:en',
@@ -792,6 +805,17 @@ MILITARY_ACTORS = {
             'السفارة الأمريكية الكويت',
             'الكويت تعبئة', 'الكويت حرب', 'الكويت قصف',
             'الكويت إيران', 'الكويت دفاع جوي',
+            # v2.7.3 — confirmed strike / ordered departure
+            'us embassy kuwait ordered departure',
+            'ordered departure kuwait',
+            'embassy kuwait shuttered', 'embassy kuwait closed war',
+            'kuwait fighter pilots scramble',
+            'kuwait jets intercept', 'kuwait air force scramble iran',
+            'iran bombs kuwait', 'iran bombed kuwait',
+            'iranian strike kuwait confirmed', 'kuwait struck iran',
+            'kuwait under attack', 'kuwait hit', 'kuwait bombed',
+            'kuwait war footing', 'kuwait high alert',
+            'kuwait city sirens', 'kuwait incoming missile',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=kuwait+military+OR+missile+OR+attack+OR+iran+OR+embassy+OR+mobilization&hl=en&gl=US&ceid=US:en',
@@ -2003,6 +2027,26 @@ ALERT_THRESHOLDS = {
     }
 }
 
+# ========================================
+# WAR FOOTING FLOOR SCORES (v2.7.3)
+# Countries confirmed struck by Iran — minimum score floor regardless of scan hits
+# Update manually as situation evolves
+# ========================================
+
+WAR_FOOTING_FLOORS = {
+    'israel':       75,   # Active war, mass barrages
+    'iraq':         40,   # IRI militia ops, US bases hit
+    'kuwait':       35,   # Iranian strikes confirmed; US Embassy ordered departure; USAF scrambled
+    'saudi_arabia': 35,   # Iranian strikes confirmed; drone shoot-downs; Ukraine technicians deployed
+    'uae':          25,   # Struck; UAE air defense active; flights disrupted
+    'jordan':       25,   # Missiles/drones transiting airspace; intercept operations
+    'qatar':        20,   # Al Udeid on heightened alert; airspace affected
+    'bahrain':      20,   # 5th Fleet HQ; heightened posture
+    'turkey':       15,   # Incirlik on alert; border tensions
+    'egypt':        10,   # Suez disruption risk; Sinai watch
+    'oman':         15,   # Strait of Hormuz operations
+    'cyprus':       15,   # Akrotiri on alert; evacuation staging
+}
 
 # ========================================
 # DEFENSE MEDIA RSS FEEDS
@@ -3123,6 +3167,20 @@ def _run_full_scan(days=7):
 
                 if asset == 'base_evacuation':
                     evacuation_signals.append(signal)
+
+    # v2.7.3 — Apply war footing floor scores for confirmed-struck actors
+    print("[Military Tracker] Applying war footing floors...")
+    for actor_id, floor_score in WAR_FOOTING_FLOORS.items():
+        current = per_actor_scores.get(actor_id, 0)
+        if current < floor_score:
+            print(f"[Military Tracker]   Floor applied: {actor_id} {current:.1f} → {floor_score}")
+            per_actor_scores[actor_id] = float(floor_score)
+        active_actors.add(actor_id)
+
+    for actor_id, floor_score in WAR_FOOTING_FLOORS.items():
+        current = per_target_scores.get(actor_id, 0)
+        if current < floor_score:
+            per_target_scores[actor_id] = float(floor_score)
 
     tension_multiplier = calculate_regional_tension_multiplier(active_actors)
 
