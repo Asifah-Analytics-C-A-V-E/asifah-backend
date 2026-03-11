@@ -1564,7 +1564,13 @@ EVACUATION_SUBTYPE_WEIGHTS = {
         'keywords': ['ordered departure', 'embassy ordered departure',
                      'reduced footprint', 'nonessential personnel',
                      'embassy drawdown', 'embassy evacuation',
-                     'partial evacuation', 'personnel relocated']
+                     'partial evacuation', 'personnel relocated',
+                     'tankers vacate', 'vacate air base',
+                     'urged to leave', 'citizens urged to leave',
+                     'airport closed', 'flights cancelled',
+                     'airspace closed', 'flights suspended',
+                     'dubai airport closed', 'ben gurion closed',
+                     'commercial flights cancelled']
     },
     'voluntary_departure': {
         'weight': 3.5,
