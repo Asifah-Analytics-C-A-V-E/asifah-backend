@@ -439,9 +439,23 @@ ESCALATION_PHRASES = {
         'forces engaged', 'launched operation', 'targeted and destroyed',
         'our forces struck', 'successful operation', 'missiles launched',
         'rockets fired at', 'drones launched against',
+        # Rocket volley / barrage signals (v1.2.0)
+        'volley of rockets', 'rocket volley', 'rocket barrage',
+        'barrage of rockets', 'rockets toward', 'rockets into israel',
+        'rockets fired into', 'salvo of rockets', 'rocket salvo',
+        'projectiles fired', 'anti-tank missile fired',
+        'hezbollah fired', 'hezbollah launched', 'hezbollah bombarded',
+        'hezbollah barrage', 'hezbollah volley',
+        '100 rockets', '50 rockets', '30 rockets', 'dozens of rockets',
+        'wave of rockets', 'rocket attack on', 'missile attack on',
+        'katyusha', 'falaq rocket', 'burkan missile', 'kornet missile',
+        'kiryat shmona', 'metula', 'upper galilee', 'safed rockets',
+        'nahariya rockets', 'galilee rockets',
         # Arabic
         'نفذنا عملية', 'استهدفنا', 'أطلقنا صواريخ',
         'عملية ناجحة', 'قواتنا هاجمت',
+        'صواريخ نحو', 'رشقة صاروخية', 'وابل صواريخ',
+        'أطلقنا رشقة', 'حزب الله أطلق',
     ],
     4: [
         'will strike', 'will attack', 'will target',
@@ -450,12 +464,21 @@ ESCALATION_PHRASES = {
         'military operation is inevitable', 'our patience has run out',
         'the decision has been made', 'point of no return',
         'readiness orders issued', 'mobilization ordered',
-        # Arabic
-        'سنضرب', 'سنهاجم', 'قرار الرد اتخذ',
-        'نفاد الصبر', 'الأوامر صدرت',
-        # Hebrew
-        'נתקוף', 'ניתן פקודה', 'כל האופציות',
-    ],
+        # Infrastructure threat signals (v1.2.0)
+        'strike infrastructure', 'target infrastructure',
+        'infrastructure will be targeted', 'infrastructure strikes',
+        'power grid', 'strike power grid', 'target power grid',
+        'beirut port', 'strike beirut', 'target beirut',
+        'bridges will be targeted', 'roads will be targeted',
+        'change posture', 'change our posture', 'change posture in lebanon',
+        'severely change', 'dramatically expand', 'expand operations',
+        'expand strikes', 'widen offensive', 'broaden offensive',
+        'if lebanon does not', 'if beirut does not',
+        'government must act', 'government fails to act',
+        'hold beirut responsible', 'beirut will bear responsibility',
+        'lebanese state responsible', 'lebanon responsible',
+        'last chance', 'final warning', 'last warning',
+        'ultimatum', 'deadline to act',
     3: [
         'will not tolerate', 'red line', 'will pay the price',
         'severe consequences', 'devastating response', 'crushing response',
@@ -463,12 +486,19 @@ ESCALATION_PHRASES = {
         'will respond forcefully', 'will not go unanswered',
         'crossing a line', 'an act of war', 'declaration of war',
         'any aggression will be met', 'playing with fire',
-        # Arabic
-        'لن نتسامح', 'خط أحمر', 'سيدفع الثمن',
-        'عواقب وخيمة', 'الرد سيكون', 'اللعب بالنار',
-        # Hebrew
-        'לא נסבול', 'קו אדום', 'ישלם מחיר',
-    ],
+        # Lebanese govt failure / accountability signals (v1.2.0)
+        'failed to act', 'refuses to act', 'unwilling to act',
+        'has not acted', 'government inaction', 'state failure',
+        'must contain hezbollah', 'must rein in hezbollah',
+        'must disarm hezbollah', 'disarm hezbollah',
+        'must implement 1701', 'failure to implement',
+        'ceasefire violations', 'violation of ceasefire',
+        'repeated violations', 'daily violations',
+        'hold lebanon accountable', 'lebanon must answer',
+        'beirut accountable', 'lebanese state accountability',
+        'idf reserves right', 'right to self defense lebanon',
+        'northern communities', 'residents of the north',
+        'evacuees will not return', 'displaced northerners',
     2: [
         'warns', 'cautioned', 'expressed concern', 'growing tensions',
         'monitoring the situation', 'calls for restraint',
@@ -572,10 +602,19 @@ def fetch_lebanon_articles(days=3):
     # --- GDELT (v1.1.0: increased timeout to 60s, added retry) ---
     gdelt_queries = {
         'eng': [
-            'hezbollah OR lebanon OR "southern lebanon"',
+            'hezbollah OR lebanon OR \"southern lebanon\"',
             'hezbollah OR nasrallah OR naim qassem',
             'israel hezbollah OR idf lebanon',
-            'unifil OR "resolution 1701"',
+            'unifil OR \"resolution 1701\"',
+            # v1.2.0 — escalation-specific queries
+            'hezbollah rockets volley barrage israel',
+            'israel infrastructure strike lebanon threat',
+            'israel warns lebanon government posture',
+            'lebanon ceasefire violation rockets',
+            'israel northern border rockets galilee',
+            'beirut strike israel warns',
+            'hezbollah fired rockets israel today',
+            'israel change posture lebanon',
         ],
         'ara': [
             'حزب الله OR لبنان',
