@@ -248,57 +248,65 @@ def fetch_reliefweb_updates():
 # (Updated manually from OCHA Flash Updates)
 # ========================================
 
-# Last updated from: OCHA Flash Update #3, March 7, 2026
-# + UN News reporting, March 9, 2026
+# Last updated from: UNHCR briefing March 10, 2026
+# + OCHA Flash Update #3, March 7, 2026
+# + UN News reporting, March 9-10, 2026
 # + UNRWA Situation Report #1, March 6, 2026
 # + UNFPA Flash Update, March 5, 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-03-09',
-    'data_period': 'March 2-9, 2026 (renewed hostilities)',
-    'note': 'Static figures from OCHA/UNRWA/UNFPA reports. Updated manually.',
+    'last_manual_update': '2026-03-10',
+    'data_period': 'March 2-10, 2026 (renewed hostilities)',
+    'note': 'Static figures from UNHCR/OCHA/UNRWA/UNFPA reports. Updated manually.',
 
     'casualties': {
-        'killed': 394,
+        'killed': 294,
         'injured': 1000,
         'children_killed': 83,
         'women_killed': 42,
         'rescue_workers_killed': 9,
-        'source': 'Lebanese Ministry of Public Health via OCHA',
-        'source_url': 'https://www.unocha.org/lebanon',
-        'as_of': '2026-03-08',
-        'note': 'Cumulative since renewed hostilities March 2, 2026'
+        'source': 'OCHA via UN News (March 10, 2026)',
+        'source_url': 'https://news.un.org/en/story/2026/03/1167098',
+        'as_of': '2026-03-10',
+        'note': 'Cumulative since renewed hostilities March 2, 2026. OCHA reports 294 killed in first 8 days.'
     },
 
     'displacement': {
-        'total_displaced_registered': 517000,
-        'in_government_shelters': 117228,
-        'shelters_opened': 399,
-        'shelters_at_capacity': 357,
-        'cross_border_to_syria': 37000,
-        'cross_border_single_day_peak': 11000,
+        'total_displaced_registered': 667000,
+        'in_government_shelters': 120000,
+        'shelters_opened': 514,
+        'shelters_at_capacity': 'Majority at or exceeding capacity',
+        'cross_border_to_syria': 78000,
+        'cross_border_to_syria_lebanese': 7700,
+        'cross_border_single_day_peak': 100000,
         'previously_displaced_2024': 65000,
-        'source': 'IOM DTM / Ministry of Social Affairs / UNHCR',
+        'children_displaced': 200000,
+        'source': 'UNHCR briefing (Lindholm Billing) / GoL displacement platform / OCHA',
         'source_urls': [
             'https://dtm.iom.int/lebanon',
-            'https://www.unhcr.org/lb/',
+            'https://www.unhcr.org/uk/news/briefing-notes/unhcr-almost-700-000-displaced-week-across-lebanon-crisis-deepens',
         ],
-        'as_of': '2026-03-08',
-        'note': 'New displacement wave on top of 65,000 still displaced from 2024 conflict'
+        'as_of': '2026-03-10',
+        'note': '667K+ registered on GoL platform (up 100K in 24 hrs). Faster pace than 2024. 78K+ Syrians returned to Syria, 7,700+ Lebanese crossed into Syria.'
     },
 
     'shelters': {
-        'total_shelters': 399,
-        'at_full_capacity': 357,
-        'capacity_percentage': 89.5,
+        'total_shelters': 514,
+        'at_full_capacity': 'Majority exceeding safe standards',
+        'capacity_percentage': 95,
+        'government_designated_sites': 270,
+        'unhcr_items_delivered': 168000,
+        'unhcr_people_reached': 63000,
         'unrwa_shelters': 2,
         'unrwa_registered': 1300,
         'unrwa_locations': ['Siblin Training Centre (Saida)', 'Nahr el-Bared (North Tripoli)'],
-        'source': 'DRM / UNRWA',
+        'source': 'OCHA Flash Update #3 / UNHCR briefing March 10',
         'source_urls': [
+            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-3-escalation-hostilities-lebanon-7-march-2026',
             'https://www.unrwa.org/resources/reports/unrwa-situation-report-1-lebanon-emergency-response-2026',
         ],
-        'as_of': '2026-03-06'
+        'as_of': '2026-03-10',
+        'note': 'All public schools and Lebanese University campuses designated as shelters. Overcrowding in Beirut. Many IDPs sleeping in cars or on streets.'
     },
 
     'evacuation_orders': {
@@ -309,8 +317,8 @@ STATIC_HUMANITARIAN = {
             '110+ towns and locations near the Blue Line',
             '50+ villages (forced evacuation orders March 3)'
         ],
-        'hostile_incidents_drm': 694,
-        'source': 'OCHA Flash Update #1-3',
+        'hostile_incidents_drm': 873,
+        'source': 'OCHA Flash Update #3 / DRM Unit',
         'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-1-escalation-hostilities-lebanon-5-march-2026',
         'as_of': '2026-03-07'
     },
