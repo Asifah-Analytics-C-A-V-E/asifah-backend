@@ -1349,7 +1349,7 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
     
     # ── Election proximity bonus ──
     election_bonus = 0
-    election_date = datetime(2026, 5, 10, tzinfo=timezone.utc)
+    election_date = datetime(2028, 5, 10, tzinfo=timezone.utc)
     days_until_election = (election_date - datetime.now(timezone.utc)).days
     
     if 0 <= days_until_election <= 90:
@@ -1724,7 +1724,7 @@ def _background_lebanon_refresh():
                 'president': 'Joseph Aoun',
                 'days_with_president': stability.get('days_with_president', 0),
                 'president_elected_date': '2025-01-09',
-                'parliamentary_election_date': '2026-05-10',
+                'parliamentary_election_date': '2028-05-10',
                 'days_until_election': stability.get('days_until_election', 0)
             },
             'cache_status': {
@@ -1828,7 +1828,7 @@ def scan_lebanon_stability():
                 'president': 'Joseph Aoun',
                 'days_with_president': stability.get('days_with_president', 0),
                 'president_elected_date': '2025-01-09',
-                'parliamentary_election_date': '2026-05-10',
+                'parliamentary_election_date': '2028-05-10',
                 'days_until_election': stability.get('days_until_election', 0)
             },
             'cache_status': {
