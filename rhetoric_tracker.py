@@ -2,6 +2,8 @@
 Asifah Analytics — Rhetoric & Pattern Recognition Tracker v1.1.0
 February 26, 2026
 
+print(f"[Rhetoric Cache DEBUG] UPSTASH_URL={'SET' if UPSTASH_REDIS_URL else 'MISSING'}, UPSTASH_TOKEN={'SET' if UPSTASH_REDIS_TOKEN else 'MISSING'}, REDIS_URL={'SET' if REDIS_URL else 'MISSING'}")
+
 Tracks rhetorical patterns, spokesperson changes, escalation ladders,
 and coordination signals across actors in a given theatre.
 
