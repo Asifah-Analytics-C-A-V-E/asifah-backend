@@ -396,26 +396,40 @@ LEBANON_ACTORS = {
         'baseline_statements_per_week': 10,
     },
     'unifil': {
-        'name': 'UNIFIL',
+        'name': 'UN / UNIFIL',
         'flag': '🇺🇳',
         'icon': '🕊️',
-        'description': 'UN peacekeeping force in southern Lebanon',
+        'description': 'UN system statements on Lebanon conflict (UNIFIL, OCHA, SG, SC)',
         'spokespersons': [
             'unifil', 'unifil spokesperson', 'unifil statement',
             'un interim force', 'andrea tenenti',
             'unifil head of mission',
+            'antonio guterres', 'un secretary general',
+            'un security council', 'un spokesman', 'stephane dujarric',
+            'ocha lebanon', 'un humanitarian', 'united nations lebanon',
+            'un special coordinator', 'unscol',
         ],
         'keywords': [
+            # UNIFIL core
             'unifil', 'unifil report', 'unifil statement',
             'unifil patrol', 'unifil incident', 'unifil attack',
             'unifil withdrawal', 'unifil mandate', 'resolution 1701',
             'blue line', 'blue line violation', 'blue line incident',
-            'south lebanon peacekeeping',
-            # v1.1.0: Broader UN terms
-            'un peacekeeping lebanon', 'un forces lebanon',
-            '1701',
+            'south lebanon peacekeeping', 'un peacekeeping lebanon',
+            'un forces lebanon', '1701',
+            # UN system — Lebanon conflict
+            'united nations lebanon', 'un secretary general lebanon',
+            'antonio guterres lebanon', 'guterres lebanon',
+            'un security council lebanon', 'unsc lebanon',
+            'un condemns lebanon', 'un calls lebanon',
+            'stephane dujarric lebanon', 'un spokesman lebanon',
+            'ocha lebanon', 'un humanitarian lebanon',
+            'unscol', 'un special coordinator lebanon',
+            'peacekeepers killed lebanon', 'peacekeepers attacked lebanon',
+            'ghana peacekeepers', 'un peacekeepers wounded',
+            'macron condemns peacekeepers',
         ],
-        'baseline_statements_per_week': 3,
+        'baseline_statements_per_week': 5,
     },
 }
 
@@ -587,6 +601,8 @@ def fetch_lebanon_articles(days=3):
     # --- RSS Feeds ---
     rss_feeds = {
         'Al-Manar (EN)': 'https://english.almanar.com.lb/rss',
+        'UN News (Lebanon)': 'https://news.un.org/feed/subscribe/en/news/region/middle-east/feed/rss.xml',
+        'OCHA Lebanon': 'https://www.unocha.org/rss.xml',
         'Al-Manar (AR)': 'https://almanar.com.lb/rss',
         'MEMRI': 'https://www.memri.org/rss.xml',
         'Iran Wire (EN)': 'https://iranwire.com/en/feed/',
@@ -609,7 +625,9 @@ def fetch_lebanon_articles(days=3):
             'hezbollah OR lebanon OR \"southern lebanon\"',
             'hezbollah OR nasrallah OR naim qassem',
             'israel hezbollah OR idf lebanon',
-            'unifil OR \"resolution 1701\"',
+            'unifil OR \\\"resolution 1701\\\"',
+            'united nations lebanon OR guterres lebanon OR \\\"security council\\\" lebanon',
+            'peacekeepers killed lebanon OR un condemns lebanon',
             # v1.2.0 — escalation-specific queries
             'hezbollah rockets volley barrage israel',
             'israel infrastructure strike lebanon threat',
