@@ -62,6 +62,24 @@ LEBANON_CHANNELS = [
     'Lebanon_News',        # Lebanese news aggregator
 ]
 
+# Asia-Pacific channels — Taiwan Strait, Korean Peninsula, South/Central Asia
+ASIA_PACIFIC_CHANNELS = [
+    # Taiwan/China strait monitoring
+    'IntelSlava',          # Intel Slava — multilingual conflict OSINT
+    'chinalawtranslate',   # China law/military analysis
+    'Indo_Pacific_News',   # Indo-Pacific news aggregator
+    # Korean Peninsula
+    'NKNewsOrg',           # NK News — North Korea focused
+    'RALee85',             # Robert Lee — DPRK analyst
+    # South/Central Asia
+    'AfghanistanOSINT',    # Afghanistan conflict monitoring
+    'PakistanMilitary',    # Pakistan military updates
+    'LongWarJournal',      # Long War Journal — AfPak
+    # Regional OSINT
+    'AsiaTimes_OSINT',     # Asia Times conflict coverage
+    'GeoConfirmed',        # Geo-confirmed conflict events (global)
+]
+
 # Extended channels — regional OSINT + Iranian sources + Israel-specific
 EXTENDED_CHANNELS = [
     # Regional conflict monitoring (English/multilingual)
@@ -222,6 +240,7 @@ def fetch_telegram_signals(hours_back=24, include_extended=True):
     channels = LEBANON_CHANNELS.copy()
     if include_extended:
         channels.extend(EXTENDED_CHANNELS)
+        channels.extend(ASIA_PACIFIC_CHANNELS)
 
     # Bridge async to sync
     try:
