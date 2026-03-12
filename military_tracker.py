@@ -818,7 +818,7 @@ MILITARY_ACTORS = {
             'kuwait city sirens', 'kuwait incoming missile',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=kuwait+military+OR+missile+OR+attack+OR+iran+OR+embassy+OR+mobilization&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=kuwait+military+OR+arifjan+OR+ali+al+salem+OR+missile+OR+attack+OR+iran&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -927,13 +927,20 @@ MILITARY_ACTORS = {
             'oman strait closure', 'oman war',
             'oman intercept missile', 'oman shelter',
             'muscat attack', 'duqm attack',
+            'salalah', 'salalah attack', 'salalah strike', 'salalah bombed',
+            'salalah refinery', 'salalah oil', 'oman refinery attack',
+            'oman oil refinery', 'iran bombs oman', 'iran bombed oman',
+            'iranian strike oman', 'iranian missile oman', 'iran attack oman',
+            'oman struck', 'oman under attack', 'oman hit', 'oman casualties',
+            'oman killed', 'royal air force oman scramble',
+            'صلالة هجوم', 'صلالة مصفاة', 'إيران تقصف عمان',
             'oman evacuation', 'oman embassy',
             # Arabic keywords
             'القوات المسلحة العمانية', 'سلطنة عمان عسكري',
             'ميناء الدقم', 'مسقط هجوم',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=oman+military+OR+muscat+OR+duqm+OR+strait+hormuz&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=oman+military+OR+muscat+OR+duqm+OR+salalah+OR+refinery+OR+iran+OR+strike&hl=en&gl=US&ceid=US:en',
         ]
     },
 
