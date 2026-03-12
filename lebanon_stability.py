@@ -588,7 +588,7 @@ def track_hezbollah_activity(days=7):
     """Track Hezbollah rearmament indicators with expanded keyword matching"""
     try:
         print("[Hezbollah] Scanning activity...")
-        
+
         keyword_sets = {
             'english': [
                 'Hezbollah rearmament', 'Hezbollah weapons',
@@ -619,51 +619,49 @@ def track_hezbollah_activity(days=7):
             lang = 'ar' if category == 'arabic' else 'iw' if category == 'hebrew' else 'en'
             gl = 'IL' if category == 'hebrew' else 'US'
             for keyword in keywords:
-            try:
-                query = keyword.replace(' ', '+')
-                url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
-                
-                response = requests.get(url, timeout=10, headers={
-                    'User-Agent': 'Mozilla/5.0'
-                })
-                
-                if response.status_code == 200:
-                    import xml.etree.ElementTree as ET
-                    
-                    root = ET.fromstring(response.content)
-                    items = root.findall('.//item')
-                    
-                    for item in items[:5]:
-                        title_elem = item.find('title')
-                        link_elem = item.find('link')
-                        pubDate_elem = item.find('pubDate')
-                        
-                        if title_elem is not None:
-                            # Filter: only include articles within the date range
-                            include = True
-                            pub_date_str = pubDate_elem.text if pubDate_elem is not None else ''
-                            if pub_date_str:
-                                try:
-                                    from email.utils import parsedate_to_datetime
-                                    pub_date = parsedate_to_datetime(pub_date_str)
-                                    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-                                    if pub_date < cutoff:
-                                        include = False
-                                except:
-                                    pass  # If we can't parse the date, include it
-                            
-                            if include:
-                                article = {
-                                    'title': title_elem.text or '',
-                                    'url': link_elem.text if link_elem is not None else '',
-                                    'published': pub_date_str,
-                                    'keyword': keyword
-                                }
-                                categorized_articles[category].append(article)
-                                all_articles.append(article)
-            except:
-                continue
-        
+                try:
+                    query = keyword.replace(' ', '+')
+                    url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
+
+                    response = requests.get(url, timeout=10, headers={
+                        'User-Agent': 'Mozilla/5.0'
+                    })
+
+                    if response.status_code == 200:
+                        import xml.etree.ElementTree as ET
+
+                        root = ET.fromstring(response.content)
+                        items = root.findall('.//item')
+
+                        for item in items[:5]:
+                            title_elem = item.find('title')
+                            link_elem = item.find('link')
+                            pubDate_elem = item.find('pubDate')
+
+                            if title_elem is not None:
+                                include = True
+                                pub_date_str = pubDate_elem.text if pubDate_elem is not None else ''
+                                if pub_date_str:
+                                    try:
+                                        from email.utils import parsedate_to_datetime
+                                        pub_date = parsedate_to_datetime(pub_date_str)
+                                        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+                                        if pub_date < cutoff:
+                                            include = False
+                                    except:
+                                        pass
+                                if include:
+                                    article = {
+                                        'title': title_elem.text or '',
+                                        'url': link_elem.text if link_elem is not None else '',
+                                        'published': pub_date_str,
+                                        'keyword': keyword
+                                    }
+                                    categorized_articles[category].append(article)
+                                    all_articles.append(article)
+                except:
+                    continue
+
         # v2.9.0: Expanded keyword matching for more accurate scoring
         rearmament_keywords = [
             'rearm', 'weapon', 'missile', 'rocket', 'arsenal', 'munition',
@@ -675,17 +673,17 @@ def track_hezbollah_activity(days=7):
             'operation', 'offensive', 'idf', 'incursion', 'bombardment',
             'targeted killing', 'air raid', 'military operation'
         ]
-        
-        rearmament_count = sum(1 for a in all_articles 
+
+        rearmament_count = sum(1 for a in all_articles
             if any(kw in a['title'].lower() for kw in rearmament_keywords))
-        strike_count = sum(1 for a in all_articles 
+        strike_count = sum(1 for a in all_articles
             if any(kw in a['title'].lower() for kw in strike_keywords))
-        
+
         activity_score = min((rearmament_count * 5 + strike_count * 3), 100)
-        
+
         print(f"[Hezbollah] Rearmament mentions: {rearmament_count}, Strike mentions: {strike_count}")
         print(f"[Hezbollah] Activity score: {activity_score}/100")
-        
+
         return {
             'articles': all_articles[:20],
             'articles_by_tab': {
@@ -699,7 +697,7 @@ def track_hezbollah_activity(days=7):
             'strike_mentions': strike_count,
             'activity_score': activity_score
         }
-        
+
     except Exception as e:
         print(f"[Hezbollah] Error: {str(e)[:200]}")
         return {
@@ -709,7 +707,6 @@ def track_hezbollah_activity(days=7):
             'strike_mentions': 0,
             'activity_score': 0
         }
-
 """
 Lebanon Security Situation Scanner v3.0.0
 New module for lebanon_stability.py
