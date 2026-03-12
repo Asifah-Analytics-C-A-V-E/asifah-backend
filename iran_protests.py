@@ -111,13 +111,16 @@ def save_cache(cache_data):
     # Save to Redis if available
     if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
         try:
+            # Slim payload before Redis save — strip full article arrays to stay under 10MB limit
+            slim_data = {k: v for k, v in cache_data.items() if not k.startswith('articles_')}
+            slim_data['articles'] = cache_data.get('articles', [])[:10]
             requests.post(
                 f"{UPSTASH_REDIS_URL}/set/iran_cache",
                 headers={
                     "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
                     "Content-Type": "application/json"
                 },
-                json={"value": json.dumps(cache_data, default=str)},
+                json={"value": json.dumps(slim_data, default=str)},
                 timeout=10
             )
             print("[Iran Cache] ✅ Saved to Redis")
