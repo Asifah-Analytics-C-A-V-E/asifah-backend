@@ -248,7 +248,7 @@ def fetch_reliefweb_updates():
 # (Updated manually from OCHA Flash Updates)
 # ========================================
 
-# Last updated from: OCHA Flash Update #5, March 9, 2026
+# Last updated from: OCHA Flash Update / DRM Unit, March 12, 2026
 # + UNHCR briefing March 10, 2026
 # + OCHA Flash Update #3, March 7, 2026
 # + UN News reporting, March 9-10, 2026
@@ -256,26 +256,27 @@ def fetch_reliefweb_updates():
 # + UNFPA Flash Update, March 5, 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-03-11',
-    'data_period': 'March 2-11, 2026 (renewed hostilities)',
-    'note': 'Static figures from OCHA Flash Update #5 / UNHCR. Updated manually.',
+    'last_manual_update': '2026-03-12',
+    'data_period': 'March 2-12, 2026 (renewed hostilities)',
+    'note': 'Static figures from OCHA Flash Update / DRM Unit. Updated manually.',
 
     'casualties': {
-        'killed': 449,
-        'injured': 1294,
+        'killed': 687,
+        'injured': 1774,
         'children_killed': 83,
         'women_killed': 42,
         'rescue_workers_killed': 9,
         'source': 'Ministry of Public Health via OCHA Flash Update #5',
         'source_url': 'https://www.unocha.org/lebanon',
-        'as_of': '2026-03-09',
+        'as_of': '2026-03-12',
         'note': 'Cumulative since renewed hostilities March 2, 2026. Nabatieh has highest casualty toll.'
     },
 
     'displacement': {
-        'total_displaced_registered': 667000,
-        'in_government_shelters': 120000,
-        'shelters_opened': 514,
+        'total_displaced_registered': 822600,
+        'in_government_shelters': 128200,
+        'families_in_shelters': 33200,
+        'shelters_opened': 596,
         'shelters_at_capacity': 'Majority at or exceeding capacity',
         'cross_border_to_syria': 78000,
         'cross_border_to_syria_lebanese': 7700,
@@ -287,12 +288,12 @@ STATIC_HUMANITARIAN = {
             'https://dtm.iom.int/lebanon',
             'https://www.unhcr.org/uk/news/briefing-notes/unhcr-almost-700-000-displaced-week-across-lebanon-crisis-deepens',
         ],
-        'as_of': '2026-03-10',
+        'as_of': '2026-03-12',
         'note': '667K+ registered on GoL platform (up 100K in 24 hrs). Faster pace than 2024. 78K+ Syrians returned to Syria, 7,700+ Lebanese crossed into Syria.'
     },
 
     'shelters': {
-        'total_shelters': 567,
+        'total_shelters': 596,
         'at_full_capacity': 'Majority exceeding safe standards',
         'capacity_percentage': 95,
         'schools_as_shelters': 328,
@@ -309,7 +310,7 @@ STATIC_HUMANITARIAN = {
             'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-3-escalation-hostilities-lebanon-7-march-2026',
             'https://www.unrwa.org/resources/reports/unrwa-situation-report-1-lebanon-emergency-response-2026',
         ],
-        'as_of': '2026-03-09',
+        'as_of': '2026-03-12',
         'note': '328 schools used as shelters, affecting 104K children education. All public schools and Lebanese University campuses designated. Many IDPs in cars or on streets.'
     },
 
@@ -321,10 +322,10 @@ STATIC_HUMANITARIAN = {
             '110+ towns and locations near the Blue Line',
             '50+ villages (forced evacuation orders March 3)'
         ],
-        'hostile_incidents_drm': 1161,
-        'source': 'OCHA Flash Update #3 / DRM Unit',
+        'hostile_incidents_drm': 1623,
+        'source': 'OCHA Flash Update / DRM Unit',
         'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-1-escalation-hostilities-lebanon-5-march-2026',
-        'as_of': '2026-03-07'
+        'as_of': '2026-03-12'
     },
 
     'healthcare': {
