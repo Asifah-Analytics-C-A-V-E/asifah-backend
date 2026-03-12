@@ -182,7 +182,15 @@ def cache_set(key, value, ttl_hours=24):
     # Try Upstash REST
     if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
         try:
+            import urllib.parse
+            encoded_payload = urllib.parse.quote(payload, safe='')
             requests.post(
+                f"{UPSTASH_REDIS_URL}/set/{key}/{encoded_payload}?EX={ttl_seconds}",
+                headers={
+                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                },
+                timeout=10
+            )requests.post(
                 f"{UPSTASH_REDIS_URL}/set/{key}",
                 headers={
                     "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
