@@ -161,8 +161,8 @@ REGIONAL_THEATRES = {
         'label': 'Asia & The Pacific Theatre',
         'icon': '🌏',
         'order': 1,
-        'actors': ['china', 'taiwan', 'north_korea', 'pakistan', 'afghanistan'],
-        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, South/Central Asia'
+        'actors': ['china', 'taiwan', 'north_korea', 'south_korea', 'india', 'japan', 'pakistan', 'afghanistan'],
+        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, India-Pakistan, South/Central Asia'
     },
     'europe': {
         'label': 'European Theatre',
@@ -664,6 +664,134 @@ MILITARY_ACTORS = {
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=afghanistan+taliban+OR+isis-k+OR+afghanistan+military&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'india': {
+        'name': 'India',
+        'flag': '🇮🇳',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.7,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Military structure / exercises
+            'indian army', 'indian air force', 'indian navy', 'iaf scramble',
+            'india military exercise', 'india tasman saber', 'malabar exercise',
+            'exercise shakti', 'india us military exercise',
+            'india carrier', 'ins vikrant', 'ins vikramaditya',
+            'india submarine', 'ins arihant', 'india nuclear submarine',
+            # Missiles / nuclear
+            'agni missile', 'agni v', 'agni iv', 'brahmos missile',
+            'india missile test', 'india nuclear', 'india nuclear test',
+            'india ballistic missile', 'india hypersonic',
+            'prithvi missile', 'shaurya missile',
+            # China border / LAC
+            'india china border', 'line of actual control', 'lac standoff',
+            'india china lac', 'galwan valley', 'depsang plains',
+            'india china standoff', 'india china clash',
+            'india china patrol', 'india pla clash',
+            'arunachal pradesh china', 'doklam standoff',
+            # Pakistan / LoC
+            'india pakistan', 'line of control', 'loc ceasefire violation',
+            'india pakistan skirmish', 'india pakistan strike',
+            'india pakistan aerial', 'india pakistan standoff',
+            'india pakistan tension', 'india pakistan war',
+            'kashmir military', 'kashmir insurgency',
+            'pulwama', 'balakot strike', 'india strikes pakistan',
+            # Quad / Indo-Pacific posture
+            'quad india', 'india quad military', 'india aukus',
+            'india indo-pacific', 'india japan defense',
+            'india us defense deal', 'india f-35',
+            # Hindi signals
+            'भारतीय सेना', 'भारत पाकिस्तान',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=india+military+OR+india+china+LAC+OR+india+pakistan+border+OR+agni+missile&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'japan': {
+        'name': 'Japan',
+        'flag': '🇯🇵',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.65,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # JSDF operations
+            'jsdf', 'japan self-defense force', 'japan sdf',
+            'jasdf scramble', 'jasdf intercept', 'japan air scramble',
+            'jmsdf', 'japan maritime self-defense', 'japan destroyer',
+            'japan submarine', 'japan warship', 'japan carrier',
+            'japan f-35', 'japan f-15', 'japan aegis',
+            # Military posture / doctrine
+            'japan defense budget', 'japan rearmament',
+            'japan counterstrike capability', 'japan tomahawk',
+            'japan preemptive strike', 'japan defense white paper',
+            'japan nato', 'japan us military exercise',
+            'yama sakura', 'orient shield', 'keen sword',
+            # China / Senkaku
+            'senkaku islands', 'diaoyu islands',
+            'china japan senkaku', 'pla japan',
+            'chinese warship japan', 'china japan adiz',
+            'japan china coast guard', 'senkaku incursion',
+            # North Korea
+            'north korea japan missile', 'dprk japan',
+            'japan missile alert', 'j-alert japan',
+            'north korea missile japan eez', 'dprk missile japan',
+            # US alliance
+            'us japan military', 'seventh fleet japan',
+            'camp hansen', 'yokosuka naval', 'kadena air base',
+            # Japanese language signals
+            '自衛隊', '北朝鮮 ミサイル', '尖閣 中国', '日本 防衛',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=japan+military+OR+jsdf+OR+senkaku+OR+japan+north+korea+missile&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=自衛隊+OR+北朝鮮+ミサイル+OR+尖閣&hl=ja&gl=JP&ceid=JP:ja',
+        ]
+    },
+
+    'south_korea': {
+        'name': 'South Korea',
+        'flag': '🇰🇷',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.65,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Military structure
+            'rok military', 'republic of korea army', 'roka',
+            'south korea air force', 'rokaf', 'south korea navy',
+            'south korea f-35', 'south korea f-15k',
+            'south korea destroyer', 'south korea submarine',
+            'k2 tank', 'k9 howitzer', 'south korea arms export',
+            # Exercises / posture
+            'ulchi freedom shield', 'korea us military exercise',
+            'us forces korea', 'usfk', 'eighth army korea',
+            'south korea military exercise', 'foal eagle',
+            'south korea defcon', 'south korea alert level',
+            # North Korea / DMZ
+            'south korea north korea', 'inter-korean',
+            'dmz incident', 'korean dmz',
+            'north korea fires south korea', 'nll violation',
+            'north korea south korea border',
+            'south korea shoots north korea',
+            'korean peninsula tension', 'south korea dprk',
+            # Nuclear / missiles
+            'south korea nuclear discussion', 'south korea nuclear weapon',
+            'south korea missile', 'hyunmoo missile',
+            'south korea ballistic', 'south korea cruise missile',
+            # US alliance
+            'us south korea', 'us korea alliance',
+            'terminal high altitude', 'thaad korea',
+            'south korea us nuclear umbrella',
+            # Korean language signals
+            '한국 군사', '북한 도발', '한미 연합',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=south+korea+military+OR+north+korea+south+korea+OR+USFK+OR+korean+peninsula&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=한국+군사+OR+북한+도발&hl=ko&gl=KR&ceid=KR:ko',
         ]
     },
 
@@ -2254,6 +2382,17 @@ DEFENSE_RSS_FEEDS = {
     'Egypt Military (Google)': 'https://news.google.com/rss/search?q=egypt+military+OR+suez+OR+sinai+OR+defense&hl=en&gl=US&ceid=US:en',
     'Turkey Military (Google)': 'https://news.google.com/rss/search?q=turkey+military+OR+incirlik+OR+erdogan+defense+OR+attack&hl=en&gl=US&ceid=US:en',
     'Cyprus Military (Google)': 'https://news.google.com/rss/search?q=cyprus+military+OR+akrotiri+OR+attack+OR+evacuation&hl=en&gl=US&ceid=US:en',
+    # v2.8.0 — Asia-Pacific theatre expansion
+    'Nikkei Asia Defense': 'https://news.google.com/rss/search?q=site:asia.nikkei.com+military+OR+defense&hl=en&gl=US&ceid=US:en',
+    'Japan Times Defense': 'https://news.google.com/rss/search?q=site:japantimes.co.jp+military+OR+defense+OR+jsdf&hl=en&gl=US&ceid=US:en',
+    'South China Morning Post': 'https://news.google.com/rss/search?q=site:scmp.com+military+OR+pla+OR+taiwan&hl=en&gl=US&ceid=US:en',
+    'Korea Herald Defense': 'https://news.google.com/rss/search?q=site:koreaherald.com+military+OR+north+korea+OR+defense&hl=en&gl=US&ceid=US:en',
+    'Yonhap Defense': 'https://news.google.com/rss/search?q=yonhap+military+OR+north+korea+OR+south+korea+defense&hl=en&gl=US&ceid=US:en',
+    'India Defense (Google)': 'https://news.google.com/rss/search?q=india+military+OR+india+china+border+OR+india+pakistan+OR+agni+missile&hl=en&gl=US&ceid=US:en',
+    'Taiwan Defense (Google)': 'https://news.google.com/rss/search?q=taiwan+strait+OR+pla+taiwan+OR+taiwan+military&hl=en&gl=US&ceid=US:en',
+    'INDOPACOM (Google)': 'https://news.google.com/rss/search?q=indopacom+OR+seventh+fleet+OR+pacific+command+military&hl=en&gl=US&ceid=US:en',
+    'Pakistan Military (Google)': 'https://news.google.com/rss/search?q=pakistan+military+OR+pakistan+strikes+afghanistan+OR+ispr&hl=en&gl=US&ceid=US:en',
+    'Afghanistan Military (Google)': 'https://news.google.com/rss/search?q=afghanistan+taliban+military+OR+isis-k+OR+pakistan+strikes+afghanistan&hl=en&gl=US&ceid=US:en',
 }
 
 REDDIT_MILITARY_SUBREDDITS = [
