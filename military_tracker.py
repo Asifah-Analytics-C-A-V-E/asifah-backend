@@ -161,8 +161,8 @@ REGIONAL_THEATRES = {
         'label': 'Asia & The Pacific Theatre',
         'icon': '🌏',
         'order': 1,
-        'actors': ['china'],
-        'description': 'INDOPACOM area — China/PLAN activity, South China Sea, Indian Ocean'
+        'actors': ['china', 'taiwan', 'north_korea', 'pakistan', 'afghanistan'],
+        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, South/Central Asia'
     },
     'europe': {
         'label': 'European Theatre',
@@ -522,6 +522,149 @@ MILITARY_ACTORS = {
             'chinese naval gun', 'plan warship'
         ],
         'rss_feeds': []
+    },
+
+    'taiwan': {
+        'name': 'Taiwan',
+        'flag': '🇹🇼',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.8,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Strait activity
+            'taiwan strait', 'taiwan strait incursion', 'pla taiwan strait',
+            'median line violation', 'taiwan median line',
+            'chinese warplanes taiwan', 'pla aircraft taiwan adiz',
+            'taiwan adiz', 'taiwan air defense zone',
+            # Naval/military
+            'taiwan blockade', 'taiwan naval exercise',
+            'pla navy taiwan', 'chinese carrier taiwan',
+            'taiwan invasion', 'pla amphibious',
+            'pla exercise taiwan', 'joint sword', 'joint sword exercise',
+            'taiwan military exercise', 'han kuang',
+            'taiwan strait crisis', 'taiwan contingency',
+            # US/ally involvement
+            'us warship taiwan strait', 'freedom of navigation taiwan',
+            'us navy taiwan strait', 'seventh fleet taiwan',
+            'japan taiwan defense', 'aukus taiwan',
+            # Political/escalation
+            'taiwan independence declaration', 'taiwan president china',
+            'beijing taiwan threat', 'china taiwan war',
+            'china invade taiwan', 'taiwan reunification force',
+            'pelosi taiwan', 'us arms taiwan', 'taiwan arms sale',
+            # Chinese language
+            '台湾海峡', '解放军台湾', '台海演习',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=taiwan+strait+OR+pla+OR+china+military+taiwan&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'north_korea': {
+        'name': 'North Korea',
+        'flag': '🇰🇵',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.7,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Missile/nuclear
+            'north korea missile', 'dprk missile launch', 'dprk missile test',
+            'north korea icbm', 'dprk icbm', 'hwasong',
+            'north korea nuclear', 'dprk nuclear test',
+            'punggye-ri', 'yongbyon reactor',
+            'north korea hypersonic', 'dprk hypersonic missile',
+            # Military activity
+            'north korea artillery', 'dprk artillery',
+            'north korea military exercise', 'korean people\'s army',
+            'north korea drone', 'dprk drone',
+            'north korea submarine', 'dprk submarine launch',
+            'north korea troops russia', 'dprk soldiers ukraine',
+            # DMZ / peninsula
+            'dmz incident', 'korean dmz', 'north korea border',
+            'north korea south korea', 'inter-korean',
+            'kim jong un military', 'kim jong un weapon',
+            # Sanctions/escalation
+            'north korea provocation', 'dprk provocation',
+            'north korea sanctions violation', 'dprk weapons export',
+            # Korean language signals
+            '북한 미사일', '북한 핵',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=north+korea+missile+OR+dprk+launch+OR+kim+jong+un+military&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'pakistan': {
+        'name': 'Pakistan',
+        'flag': '🇵🇰',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Nuclear
+            'pakistan nuclear', 'pakistan nuclear weapon',
+            'pakistan missile test', 'shaheen missile', 'ghauri missile',
+            'pakistan tactical nuclear', 'nasr missile',
+            # India-Pakistan
+            'india pakistan border', 'line of control', 'loc incident',
+            'india pakistan skirmish', 'india pakistan military',
+            'india pakistan standoff', 'india pakistan tension',
+            'kashmir military', 'kashmir line of control',
+            # Internal instability
+            'pakistan army coup', 'pakistan military intervention',
+            'pakistan imf crisis military', 'pakistan civil war',
+            'balochistan attack', 'ttp attack pakistan',
+            'tehrik-i-taliban pakistan', 'pakistan taliban',
+            # Afghan spillover
+            'pakistan afghanistan border', 'pakistan airstrike afghanistan',
+            'pakistan tora bora', 'pakistan drone strike',
+            # US/China
+            'us pakistan military', 'china pakistan military',
+            'cpec military', 'gwadar security',
+            # Urdu signals
+            'پاکستان فوج', 'پاکستان میزائل',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=pakistan+military+OR+pakistan+missile+OR+india+pakistan+border&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'afghanistan': {
+        'name': 'Afghanistan',
+        'flag': '🇦🇫',
+        'tier': 3,
+        'theatre': 'asia_pacific',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Taliban activity
+            'taliban military', 'taliban offensive',
+            'taliban attack', 'taliban operation',
+            'islamic emirate afghanistan', 'ief afghanistan',
+            # ISIS-K
+            'isis-k afghanistan', 'islamic state khorasan',
+            'iskp attack', 'isis khorasan attack',
+            # Cross-border
+            'afghanistan pakistan border attack',
+            'afghanistan iran border',
+            'afghanistan tajikistan border',
+            'afghanistan uzbekistan border',
+            # Regional spillover
+            'afghanistan civil war', 'anti-taliban resistance',
+            'national resistance front', 'panjshir resistance',
+            'afghanistan drone strike',
+            # Humanitarian/collapse signals
+            'afghanistan collapse', 'afghanistan famine military',
+            'afghanistan opium military',
+            # Dari/Pashto signals
+            'افغانستان طالبان', 'د افغانستان',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=afghanistan+taliban+OR+isis-k+OR+afghanistan+military&hl=en&gl=US&ceid=US:en',
+        ]
     },
 
     'russia': {
