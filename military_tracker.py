@@ -2168,7 +2168,7 @@ def save_military_cache(data):
                     "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
                     "Content-Type": "application/json"
                 },
-                json={"value": payload},
+                data=payload,
                 timeout=10
             )
             if resp.status_code == 200:
