@@ -190,14 +190,6 @@ def cache_set(key, value, ttl_hours=24):
                     "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
                 },
                 timeout=10
-            )requests.post(
-                f"{UPSTASH_REDIS_URL}/set/{key}",
-                headers={
-                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
-                    "Content-Type": "application/json"
-                },
-                json={"value": payload, "EX": ttl_seconds},
-                timeout=10
             )
         except Exception as e:
             print(f"[Rhetoric Cache] Upstash set error: {e}")
