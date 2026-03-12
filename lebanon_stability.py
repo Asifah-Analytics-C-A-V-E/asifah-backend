@@ -470,7 +470,8 @@ def scrape_lebanon_bonds():
             try:
                 import xml.etree.ElementTree as ET
                 query = keyword.replace(' ', '+')
-                url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
+                ceid = f"{lang.upper()}-{gl}"
+                url = f"https://news.google.com/rss/search?q={query}&hl={lang}&gl={gl}&ceid={ceid}"
                 response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
                 if response.status_code == 200:
                     root = ET.fromstring(response.content)
@@ -588,17 +589,36 @@ def track_hezbollah_activity(days=7):
     try:
         print("[Hezbollah] Scanning activity...")
         
-        keywords = [
-            'Hezbollah rearmament',
-            'Hezbollah weapons',
-            'Israeli strike Lebanon',
-            'UNIFIL Lebanon',
-            'Iran weapons Lebanon'
-        ]
-        
+        keyword_sets = {
+            'english': [
+                'Hezbollah rearmament', 'Hezbollah weapons',
+                'Israeli strike Lebanon', 'UNIFIL Lebanon',
+                'Iran weapons Lebanon', 'Lebanon IDF operation',
+                'Lebanon ceasefire', 'Lebanon war 2026',
+                'Hezbollah rocket attack', 'Lebanon hostilities'
+            ],
+            'arabic': [
+                'حزب الله لبنان', 'غارة إسرائيلية لبنان',
+                'قصف لبنان', 'جنوب لبنان',
+                'اليونيفيل لبنان'
+            ],
+            'hebrew': [
+                'חיזבאללה לבנון', 'תקיפה לבנון',
+                'צבא לבנון', 'רקטות חיזבאללה'
+            ],
+            'reddit': [
+                'Lebanon war site:reddit.com',
+                'Hezbollah site:reddit.com'
+            ]
+        }
+
+        categorized_articles = {k: [] for k in keyword_sets}
         all_articles = []
-        
-        for keyword in keywords:
+
+        for category, keywords in keyword_sets.items():
+            lang = 'ar' if category == 'arabic' else 'iw' if category == 'hebrew' else 'en'
+            gl = 'IL' if category == 'hebrew' else 'US'
+            for keyword in keywords:
             try:
                 query = keyword.replace(' ', '+')
                 url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
@@ -633,12 +653,14 @@ def track_hezbollah_activity(days=7):
                                     pass  # If we can't parse the date, include it
                             
                             if include:
-                                all_articles.append({
+                                article = {
                                     'title': title_elem.text or '',
                                     'url': link_elem.text if link_elem is not None else '',
                                     'published': pub_date_str,
                                     'keyword': keyword
-                                })
+                                }
+                                categorized_articles[category].append(article)
+                                all_articles.append(article)
             except:
                 continue
         
@@ -666,6 +688,12 @@ def track_hezbollah_activity(days=7):
         
         return {
             'articles': all_articles[:20],
+            'articles_by_tab': {
+                'english': categorized_articles['english'][:15],
+                'arabic': categorized_articles['arabic'][:15],
+                'hebrew': categorized_articles['hebrew'][:15],
+                'reddit': categorized_articles['reddit'][:10],
+            },
             'total_articles': len(all_articles),
             'rearmament_mentions': rearmament_count,
             'strike_mentions': strike_count,
