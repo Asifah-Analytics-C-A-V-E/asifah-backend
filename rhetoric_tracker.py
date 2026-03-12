@@ -479,6 +479,7 @@ ESCALATION_PHRASES = {
         'lebanese state responsible', 'lebanon responsible',
         'last chance', 'final warning', 'last warning',
         'ultimatum', 'deadline to act',
+    ],
     3: [
         'will not tolerate', 'red line', 'will pay the price',
         'severe consequences', 'devastating response', 'crushing response',
@@ -499,6 +500,7 @@ ESCALATION_PHRASES = {
         'idf reserves right', 'right to self defense lebanon',
         'northern communities', 'residents of the north',
         'evacuees will not return', 'displaced northerners',
+    ],
     2: [
         'warns', 'cautioned', 'expressed concern', 'growing tensions',
         'monitoring the situation', 'calls for restraint',
