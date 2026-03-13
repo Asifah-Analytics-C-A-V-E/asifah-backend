@@ -161,8 +161,8 @@ REGIONAL_THEATRES = {
         'label': 'Asia & The Pacific Theatre',
         'icon': '🌏',
         'order': 1,
-        'actors': ['china', 'taiwan', 'north_korea', 'south_korea', 'india', 'japan', 'pakistan', 'afghanistan'],
-        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, India-Pakistan, South/Central Asia'
+        'actors': ['china', 'taiwan', 'north_korea', 'pakistan', 'afghanistan'],
+        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, South/Central Asia'
     },
     'europe': {
         'label': 'European Theatre',
@@ -569,30 +569,68 @@ MILITARY_ACTORS = {
         'weight': 0.7,
         'feeds_into': ['regional_tension'],
         'keywords': [
-            # Missile/nuclear
-            'north korea missile', 'dprk missile launch', 'dprk missile test',
+            # Missile / launch events (broad)
+            'north korea missile', 'dprk missile', 'north korea launches',
+            'dprk launches', 'north korea fires', 'dprk fires',
+            'north korea ballistic', 'dprk ballistic',
             'north korea icbm', 'dprk icbm', 'hwasong',
-            'north korea nuclear', 'dprk nuclear test',
-            'punggye-ri', 'yongbyon reactor',
-            'north korea hypersonic', 'dprk hypersonic missile',
-            # Military activity
+            'north korea projectile', 'dprk projectile',
+            'north korea short-range', 'north korea medium-range',
+            'north korea test', 'dprk test',
+            # Nuclear
+            'north korea nuclear', 'dprk nuclear',
+            'north korea nuclear weapon', 'dprk nuclear warhead',
+            'north korea nuclear test', 'north korea nuclear drill',
+            'north korea nuclear posture', 'north korea nuclear arsenal',
+            'punggye-ri', 'yongbyon', 'yongbyon reactor',
+            'north korea enrichment', 'north korea plutonium',
+            'north korea tactical nuclear', 'dprk tactical nuclear',
+            'kim nuclear', 'kim warhead',
+            # Kim Jong Un statements / orders (major signal source)
+            'kim jong un', 'kim jong-un',
+            'kim orders', 'kim inspects', 'kim oversees',
+            'kim threatens', 'kim warns', 'kim vows',
+            'kim declares', 'kim military',
+            'north korean leader', 'pyongyang warns',
+            'pyongyang threatens', 'pyongyang fires',
+            'pyongyang launches', 'pyongyang test',
+            'dprk state media', 'korean central news agency', 'kcna',
+            'north korea threatens', 'north korea warns', 'north korea vows',
+            'north korea soldiers', 'dprk soldiers', 'korean soldiers russia',
+            # Military exercises / drills
+            'north korea military exercise', 'north korea drill',
+            'north korea war games', 'north korea combat drill',
+            "korean people's army", 'kpa exercise',
             'north korea artillery', 'dprk artillery',
-            'north korea military exercise', 'korean people\'s army',
-            'north korea drone', 'dprk drone',
-            'north korea submarine', 'dprk submarine launch',
-            'north korea troops russia', 'dprk soldiers ukraine',
-            # DMZ / peninsula
-            'dmz incident', 'korean dmz', 'north korea border',
-            'north korea south korea', 'inter-korean',
-            'kim jong un military', 'kim jong un weapon',
-            # Sanctions/escalation
+            'north korea tank', 'north korea troops',
+            # Provocations / escalation
             'north korea provocation', 'dprk provocation',
-            'north korea sanctions violation', 'dprk weapons export',
+            'north korea escalation', 'korean peninsula tension',
+            'north korea aggression',
+            # Drones / submarines
+            'north korea drone', 'dprk drone', 'north korea uav',
+            'north korea submarine', 'dprk submarine',
+            'north korea submarine launch', 'north korea slbm',
+            # DMZ / inter-Korean
+            'dmz incident', 'korean dmz', 'inter-korean',
+            'north korea south korea', 'north korea border',
+            'nll violation', 'north korea nll',
+            'north korea loudspeaker', 'north korea trash balloon',
+            'north korea balloon', 'north korea mines dmz',
+            # Troops in Russia
+            'north korea troops russia', 'dprk soldiers ukraine',
+            'north korea soldiers deployed', 'korean troops ukraine',
+            # Sanctions / weapons exports
+            'north korea weapons export', 'dprk weapons transfer',
+            'north korea sanctions violation', 'north korea arms',
+            'north korea russia weapons', 'dprk russia military',
             # Korean language signals
-            '북한 미사일', '북한 핵',
+            '북한 미사일', '북한 핵', '김정은', '조선인민군',
+            '북한 도발', '북한 발사', '탄도미사일',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=north+korea+missile+OR+dprk+launch+OR+kim+jong+un+military&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=north+korea+OR+dprk+OR+kim+jong+un+military+missile&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=north+korea+nuclear+OR+dprk+launch+OR+pyongyang+threatens&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -604,31 +642,66 @@ MILITARY_ACTORS = {
         'weight': 0.6,
         'feeds_into': ['regional_tension'],
         'keywords': [
-            # Nuclear
+            # Nuclear / missiles
             'pakistan nuclear', 'pakistan nuclear weapon',
-            'pakistan missile test', 'shaheen missile', 'ghauri missile',
-            'pakistan tactical nuclear', 'nasr missile',
+            'pakistan nuclear arsenal', 'pakistan nuclear doctrine',
+            'pakistan missile test', 'pakistan launches missile',
+            'shaheen missile', 'ghauri missile', 'nasr missile',
+            'pakistan tactical nuclear', 'pakistan ballistic missile',
+            'pakistan cruise missile', 'babur missile',
+            # Pakistan military operations (domestic)
+            'pakistan military operation', 'pakistan army operation',
+            'pakistan air force strike', 'pakistan jets strike',
+            'pakistan military offensive', 'ispr pakistan',
+            'pakistan kills militants', 'pakistan kills terrorists',
+            'pakistan security forces', 'pakistan fc',
+            # TTP — major daily signal source
+            'ttp', 'tehrik-i-taliban pakistan', 'tehrik-e-taliban',
+            'ttp attack', 'ttp kills', 'ttp militants',
+            'ttp fighters', 'ttp ambush', 'ttp soldiers',
+            'ttp north waziristan', 'ttp south waziristan',
+            'ttp khyber', 'ttp kurram', 'ttp bajaur',
+            'pakistan taliban attack', 'pakistan taliban kills',
+            'militant attack pakistan', 'terrorist attack pakistan',
+            # Balochistan insurgency
+            'balochistan attack', 'baloch insurgent',
+            'bla attack', 'balochistan liberation army',
+            'blf attack', 'balochistan separatist',
+            'dera bugti attack', 'turbat attack', 'gwadar attack',
+            # Iran-Pakistan cross-border (key 2026 events)
+            'iran pakistan border', 'iran strikes pakistan',
+            'iran bombs pakistan', 'iran attack pakistan',
+            'iran missile pakistan', 'iran drone pakistan',
+            'iran balochistan strike', 'iran jaish al-adl',
+            'jaish al-adl', 'jaish al adl',
+            'irgc pakistan strike', 'iran retaliates pakistan',
+            'pakistan retaliates iran', 'pakistan iran border',
+            'pakistan iran tension', 'pakistan iran military',
+            'pakistan closes iran border', 'pakistan iran standoff',
+            'pakistan retaliates', 'pakistan retaliation',
+            'iran fires missiles pakistan', 'iran fires pakistan',
+            'iran missiles balochistan', 'iran balochistan',
+            'pakistan iran border crossing', 'pakistan iran escalation',
+            'pakistan iran incident', 'pakistan iran drone',
+            'iran border tension pakistan', 'iran pakistan escalation',
+            'iran fires missiles', 'pakistan-iran border', 'iran missiles into pakistan',
             # India-Pakistan
             'india pakistan border', 'line of control', 'loc incident',
-            'india pakistan skirmish', 'india pakistan military',
-            'india pakistan standoff', 'india pakistan tension',
-            'kashmir military', 'kashmir line of control',
-            # Internal instability
-            'pakistan army coup', 'pakistan military intervention',
-            'pakistan imf crisis military', 'pakistan civil war',
-            'balochistan attack', 'ttp attack pakistan',
-            'tehrik-i-taliban pakistan', 'pakistan taliban',
-            # Afghan spillover
-            'pakistan afghanistan border', 'pakistan airstrike afghanistan',
-            'pakistan tora bora', 'pakistan drone strike',
+            'loc ceasefire violation', 'india pakistan skirmish',
+            'india pakistan military', 'india pakistan tension',
+            'india pakistan standoff', 'kashmir military',
+            'kashmir insurgency', 'kashmir line of control',
+            'pulwama', 'balakot', 'india strikes pakistan',
+            'pakistan strikes india', 'india pakistan aerial',
             # US/China
-            'us pakistan military', 'china pakistan military',
-            'cpec military', 'gwadar security',
+            'pakistan us military', 'china pakistan military',
+            'cpec security', 'gwadar security', 'gwadar attack',
             # Urdu signals
-            'پاکستان فوج', 'پاکستان میزائل',
+            'پاکستان فوج', 'پاکستان میزائل', 'ٹی ٹی پی',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=pakistan+military+OR+pakistan+missile+OR+india+pakistan+border&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=pakistan+military+OR+TTP+attack+OR+pakistan+iran+border&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=pakistan+army+operation+OR+balochistan+attack+OR+iran+pakistan+strike&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -640,158 +713,68 @@ MILITARY_ACTORS = {
         'weight': 0.5,
         'feeds_into': ['regional_tension'],
         'keywords': [
-            # Taliban activity
-            'taliban military', 'taliban offensive',
-            'taliban attack', 'taliban operation',
-            'islamic emirate afghanistan', 'ief afghanistan',
-            # ISIS-K
-            'isis-k afghanistan', 'islamic state khorasan',
-            'iskp attack', 'isis khorasan attack',
-            # Cross-border
-            'afghanistan pakistan border attack',
-            'afghanistan iran border',
-            'afghanistan tajikistan border',
-            'afghanistan uzbekistan border',
+            # Taliban daily activity — broad catch
+            'taliban', 'islamic emirate', 'islamic emirate of afghanistan',
+            'taliban attack', 'taliban offensive', 'taliban operation',
+            'taliban military', 'taliban forces', 'taliban fighters',
+            'taliban seize', 'taliban capture', 'taliban kill',
+            'taliban execute', 'taliban bomb', 'taliban ied',
+            'taliban ambush', 'taliban checkpoint',
+            'haqqani network', 'haqqani',
+            'sirajuddin haqqani', 'mullah baradar',
+            # Taliban governance / crackdowns
+            'islamic emirate crackdown', 'taliban crackdown',
+            'taliban suppress', 'taliban arrest',
+            # TTP — Tehrik-i-Taliban Pakistan (daily news)
+            'ttp', 'tehrik-i-taliban', 'tehrik-e-taliban',
+            'ttp attack', 'ttp militants', 'ttp fighters',
+            'ttp kills', 'ttp soldiers', 'ttp ambush',
+            'pakistan taliban attack', 'pakistan taliban kills',
+            # ISIS-K / ISKP
+            'isis-k', 'iskp', 'islamic state khorasan',
+            'islamic state afghanistan', 'khorasan province isis',
+            'isis-k attack', 'iskp attack', 'iskp bomb',
+            'isis khorasan attack', 'isis afghanistan',
+            # Pakistan cross-border strikes (critical — major 2026 events)
+            'pakistan strikes afghanistan', 'pakistan bombs afghanistan',
+            'pakistan airstrike afghanistan', 'pakistan jets afghanistan',
+            'pakistan military afghanistan', 'pakistan shelling afghanistan',
+            'pakistan kills afghanistan', 'pakistan operation afghanistan',
+            'pakistan afghanistan strike', 'pakistan afghanistan bombing',
+            'pakistan bombs khost', 'pakistan bombs paktika',
+            'pakistan bombs paktia', 'pakistan bombs kunar',
+            'pakistan bombs nangarhar', 'pakistan bombs bajaur',
+            'pakistan bombs mohmand', 'pakistan kills civilians afghanistan',
+            'durand line', 'torkham border', 'chaman border',
+            'pak-afghan border', 'pakistan afghanistan border tension',
+            'afghanistan condemns pakistan', 'kabul condemns islamabad',
+            # Iran cross-border
+            'iran afghanistan border', 'iran strikes afghanistan',
+            'iran afghanistan tension', 'nimroz border',
+            # NRF / resistance
+            'national resistance front', 'nrf afghanistan',
+            'panjshir resistance', 'anti-taliban resistance',
+            'ahmad massoud', 'panjshir fighters',
+            # Key provinces / cities (conflict hotspots)
+            'kabul attack', 'kabul bomb', 'kabul explosion',
+            'kandahar attack', 'kandahar bomb',
+            'helmand attack', 'helmand military',
+            'kunduz attack', 'kunduz military',
+            'nangarhar attack', 'jalalabad attack',
+            'khost attack', 'paktika attack',
+            'badakhshan attack', 'baghlan attack',
+            'herat attack', 'herat military',
+            'farah attack', 'nimroz attack',
             # Regional spillover
-            'afghanistan civil war', 'anti-taliban resistance',
-            'national resistance front', 'panjshir resistance',
-            'afghanistan drone strike',
-            # Humanitarian/collapse signals
-            'afghanistan collapse', 'afghanistan famine military',
-            'afghanistan opium military',
+            'afghanistan civil war', 'afghanistan collapse',
+            'afghanistan drone strike', 'afghanistan airstrike',
             # Dari/Pashto signals
-            'افغانستان طالبان', 'د افغانستان',
+            'افغانستان طالبان', 'د افغانستان', 'طالبان',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=afghanistan+taliban+OR+isis-k+OR+afghanistan+military&hl=en&gl=US&ceid=US:en',
-        ]
-    },
-
-    'india': {
-        'name': 'India',
-        'flag': '🇮🇳',
-        'tier': 2,
-        'theatre': 'asia_pacific',
-        'weight': 0.7,
-        'feeds_into': ['regional_tension'],
-        'keywords': [
-            # Military structure / exercises
-            'indian army', 'indian air force', 'indian navy', 'iaf scramble',
-            'india military exercise', 'india tasman saber', 'malabar exercise',
-            'exercise shakti', 'india us military exercise',
-            'india carrier', 'ins vikrant', 'ins vikramaditya',
-            'india submarine', 'ins arihant', 'india nuclear submarine',
-            # Missiles / nuclear
-            'agni missile', 'agni v', 'agni iv', 'brahmos missile',
-            'india missile test', 'india nuclear', 'india nuclear test',
-            'india ballistic missile', 'india hypersonic',
-            'prithvi missile', 'shaurya missile',
-            # China border / LAC
-            'india china border', 'line of actual control', 'lac standoff',
-            'india china lac', 'galwan valley', 'depsang plains',
-            'india china standoff', 'india china clash',
-            'india china patrol', 'india pla clash',
-            'arunachal pradesh china', 'doklam standoff',
-            # Pakistan / LoC
-            'india pakistan', 'line of control', 'loc ceasefire violation',
-            'india pakistan skirmish', 'india pakistan strike',
-            'india pakistan aerial', 'india pakistan standoff',
-            'india pakistan tension', 'india pakistan war',
-            'kashmir military', 'kashmir insurgency',
-            'pulwama', 'balakot strike', 'india strikes pakistan',
-            # Quad / Indo-Pacific posture
-            'quad india', 'india quad military', 'india aukus',
-            'india indo-pacific', 'india japan defense',
-            'india us defense deal', 'india f-35',
-            # Hindi signals
-            'भारतीय सेना', 'भारत पाकिस्तान',
-        ],
-        'rss_feeds': [
-            'https://news.google.com/rss/search?q=india+military+OR+india+china+LAC+OR+india+pakistan+border+OR+agni+missile&hl=en&gl=US&ceid=US:en',
-        ]
-    },
-
-    'japan': {
-        'name': 'Japan',
-        'flag': '🇯🇵',
-        'tier': 2,
-        'theatre': 'asia_pacific',
-        'weight': 0.65,
-        'feeds_into': ['regional_tension'],
-        'keywords': [
-            # JSDF operations
-            'jsdf', 'japan self-defense force', 'japan sdf',
-            'jasdf scramble', 'jasdf intercept', 'japan air scramble',
-            'jmsdf', 'japan maritime self-defense', 'japan destroyer',
-            'japan submarine', 'japan warship', 'japan carrier',
-            'japan f-35', 'japan f-15', 'japan aegis',
-            # Military posture / doctrine
-            'japan defense budget', 'japan rearmament',
-            'japan counterstrike capability', 'japan tomahawk',
-            'japan preemptive strike', 'japan defense white paper',
-            'japan nato', 'japan us military exercise',
-            'yama sakura', 'orient shield', 'keen sword',
-            # China / Senkaku
-            'senkaku islands', 'diaoyu islands',
-            'china japan senkaku', 'pla japan',
-            'chinese warship japan', 'china japan adiz',
-            'japan china coast guard', 'senkaku incursion',
-            # North Korea
-            'north korea japan missile', 'dprk japan',
-            'japan missile alert', 'j-alert japan',
-            'north korea missile japan eez', 'dprk missile japan',
-            # US alliance
-            'us japan military', 'seventh fleet japan',
-            'camp hansen', 'yokosuka naval', 'kadena air base',
-            # Japanese language signals
-            '自衛隊', '北朝鮮 ミサイル', '尖閣 中国', '日本 防衛',
-        ],
-        'rss_feeds': [
-            'https://news.google.com/rss/search?q=japan+military+OR+jsdf+OR+senkaku+OR+japan+north+korea+missile&hl=en&gl=US&ceid=US:en',
-            'https://news.google.com/rss/search?q=自衛隊+OR+北朝鮮+ミサイル+OR+尖閣&hl=ja&gl=JP&ceid=JP:ja',
-        ]
-    },
-
-    'south_korea': {
-        'name': 'South Korea',
-        'flag': '🇰🇷',
-        'tier': 2,
-        'theatre': 'asia_pacific',
-        'weight': 0.65,
-        'feeds_into': ['regional_tension'],
-        'keywords': [
-            # Military structure
-            'rok military', 'republic of korea army', 'roka',
-            'south korea air force', 'rokaf', 'south korea navy',
-            'south korea f-35', 'south korea f-15k',
-            'south korea destroyer', 'south korea submarine',
-            'k2 tank', 'k9 howitzer', 'south korea arms export',
-            # Exercises / posture
-            'ulchi freedom shield', 'korea us military exercise',
-            'us forces korea', 'usfk', 'eighth army korea',
-            'south korea military exercise', 'foal eagle',
-            'south korea defcon', 'south korea alert level',
-            # North Korea / DMZ
-            'south korea north korea', 'inter-korean',
-            'dmz incident', 'korean dmz',
-            'north korea fires south korea', 'nll violation',
-            'north korea south korea border',
-            'south korea shoots north korea',
-            'korean peninsula tension', 'south korea dprk',
-            # Nuclear / missiles
-            'south korea nuclear discussion', 'south korea nuclear weapon',
-            'south korea missile', 'hyunmoo missile',
-            'south korea ballistic', 'south korea cruise missile',
-            # US alliance
-            'us south korea', 'us korea alliance',
-            'terminal high altitude', 'thaad korea',
-            'south korea us nuclear umbrella',
-            # Korean language signals
-            '한국 군사', '북한 도발', '한미 연합',
-        ],
-        'rss_feeds': [
-            'https://news.google.com/rss/search?q=south+korea+military+OR+north+korea+south+korea+OR+USFK+OR+korean+peninsula&hl=en&gl=US&ceid=US:en',
-            'https://news.google.com/rss/search?q=한국+군사+OR+북한+도발&hl=ko&gl=KR&ceid=KR:ko',
+            'https://news.google.com/rss/search?q=afghanistan+taliban+OR+TTP+OR+isis-k+OR+pakistan+strikes+afghanistan&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=pakistan+airstrike+afghanistan+OR+pakistan+bombs+afghanistan+OR+haqqani&hl=en&gl=US&ceid=US:en',
+            'https://tolonews.com/rss.xml',
         ]
     },
 
@@ -2382,17 +2365,6 @@ DEFENSE_RSS_FEEDS = {
     'Egypt Military (Google)': 'https://news.google.com/rss/search?q=egypt+military+OR+suez+OR+sinai+OR+defense&hl=en&gl=US&ceid=US:en',
     'Turkey Military (Google)': 'https://news.google.com/rss/search?q=turkey+military+OR+incirlik+OR+erdogan+defense+OR+attack&hl=en&gl=US&ceid=US:en',
     'Cyprus Military (Google)': 'https://news.google.com/rss/search?q=cyprus+military+OR+akrotiri+OR+attack+OR+evacuation&hl=en&gl=US&ceid=US:en',
-    # v2.8.0 — Asia-Pacific theatre expansion
-    'Nikkei Asia Defense': 'https://news.google.com/rss/search?q=site:asia.nikkei.com+military+OR+defense&hl=en&gl=US&ceid=US:en',
-    'Japan Times Defense': 'https://news.google.com/rss/search?q=site:japantimes.co.jp+military+OR+defense+OR+jsdf&hl=en&gl=US&ceid=US:en',
-    'South China Morning Post': 'https://news.google.com/rss/search?q=site:scmp.com+military+OR+pla+OR+taiwan&hl=en&gl=US&ceid=US:en',
-    'Korea Herald Defense': 'https://news.google.com/rss/search?q=site:koreaherald.com+military+OR+north+korea+OR+defense&hl=en&gl=US&ceid=US:en',
-    'Yonhap Defense': 'https://news.google.com/rss/search?q=yonhap+military+OR+north+korea+OR+south+korea+defense&hl=en&gl=US&ceid=US:en',
-    'India Defense (Google)': 'https://news.google.com/rss/search?q=india+military+OR+india+china+border+OR+india+pakistan+OR+agni+missile&hl=en&gl=US&ceid=US:en',
-    'Taiwan Defense (Google)': 'https://news.google.com/rss/search?q=taiwan+strait+OR+pla+taiwan+OR+taiwan+military&hl=en&gl=US&ceid=US:en',
-    'INDOPACOM (Google)': 'https://news.google.com/rss/search?q=indopacom+OR+seventh+fleet+OR+pacific+command+military&hl=en&gl=US&ceid=US:en',
-    'Pakistan Military (Google)': 'https://news.google.com/rss/search?q=pakistan+military+OR+pakistan+strikes+afghanistan+OR+ispr&hl=en&gl=US&ceid=US:en',
-    'Afghanistan Military (Google)': 'https://news.google.com/rss/search?q=afghanistan+taliban+military+OR+isis-k+OR+pakistan+strikes+afghanistan&hl=en&gl=US&ceid=US:en',
 }
 
 REDDIT_MILITARY_SUBREDDITS = [
@@ -3013,10 +2985,100 @@ def fetch_all_gdelt_military(days=7):
         'Grønland selvstændighed',
     ]
 
+    # v2.8.0 — Asia-Pacific dedicated query blocks
+    asia_english_queries = [
+        # Afghanistan / Taliban (daily signal)
+        'Taliban attack Afghanistan',
+        'Taliban military operation Afghanistan',
+        'Taliban seize district Afghanistan',
+        'TTP attack Pakistan soldiers',
+        'TTP militants Pakistan border',
+        'Pakistan airstrike Afghanistan',
+        'Pakistan bombs Afghanistan TTP',
+        'Pakistan strikes Khost Paktika',
+        'Haqqani network attack',
+        'ISIS-K attack Afghanistan',
+        'ISKP bomb Afghanistan',
+        'Pakistan Afghanistan border tension',
+        'Iran strikes Pakistan Balochistan',
+        'Iran Pakistan border military',
+        'Jaish al-Adl Iran Pakistan',
+        'Pakistan retaliates Iran',
+        'Pakistan deploys troops Iran border',
+        'Balochistan insurgent attack',
+        'BLA attack Pakistan',
+        'NRF resistance Afghanistan Taliban',
+        # North Korea (provocations are constant)
+        'North Korea missile launch',
+        'North Korea ballistic missile',
+        'DPRK missile test',
+        'North Korea ICBM',
+        'Kim Jong Un military order',
+        'Kim Jong Un nuclear weapon',
+        'Pyongyang ballistic missile',
+        'North Korea nuclear test',
+        'North Korea nuclear warhead',
+        'North Korea provocation',
+        'DPRK provocation South Korea',
+        'North Korea artillery DMZ',
+        'North Korea drone South Korea',
+        'North Korea troops Russia Ukraine',
+        'North Korea soldiers deployed Russia',
+        'DPRK weapons Russia',
+        'North Korea submarine launch',
+        # Pakistan military
+        'Pakistan military operation',
+        'Pakistan ISPR militants killed',
+        'Pakistan nuclear missile test',
+        'India Pakistan line of control',
+        'India Pakistan skirmish Kashmir',
+        # South Korea / peninsula
+        'South Korea North Korea border',
+        'Korean peninsula military tension',
+        'USFK military exercise',
+        'Ulchi Freedom Shield Korea',
+        # Taiwan / China
+        'PLA Taiwan Strait military exercise',
+        'China Taiwan invasion threat',
+        'Taiwan ADIZ incursion PLA',
+        'US Navy Taiwan Strait patrol',
+        # India
+        'India China LAC border clash',
+        'India Pakistan line of control',
+        'India missile test Agni',
+        'India military exercise',
+        # Japan
+        'Japan JSDF scramble China',
+        'Japan North Korea missile alert',
+        'Japan defense budget rearmament',
+        'Senkaku islands China Japan',
+    ]
+
+    korean_queries = [
+        '북한 미사일 발사',
+        '북한 핵 실험',
+        '김정은 군사',
+        '북한 도발',
+        '한미 연합훈련',
+        '북한 탄도미사일',
+        '조선인민군',
+        '북한 남한 군사',
+    ]
+
+    urdu_queries = [
+        'پاکستان فوج آپریشن',
+        'ٹی ٹی پی حملہ',
+        'پاکستان ایران سرحد',
+        'بلوچستان حملہ',
+        'پاکستان افغانستان سرحد',
+        'پاکستان بھارت کنٹرول لائن',
+    ]
+
     all_articles = []
 
     query_blocks = [
         (english_queries, 'eng', 'English'),
+        (asia_english_queries, 'eng', 'Asia-English'),
         (hebrew_queries, 'heb', 'Hebrew'),
         (russian_queries, 'rus', 'Russian'),
         (arabic_queries, 'ara', 'Arabic'),
@@ -3027,6 +3089,8 @@ def fetch_all_gdelt_military(days=7):
         (chinese_queries, 'zho', 'Chinese'),
         (polish_queries, 'pol', 'Polish'),
         (danish_norwegian_queries, 'dan', 'Danish'),
+        (korean_queries, 'kor', 'Korean'),
+        (urdu_queries, 'urd', 'Urdu'),
     ]
 
     for queries, lang_code, lang_name in query_blocks:
