@@ -1772,6 +1772,35 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
         print(f"[v2.9.0] FLOOR OVERRIDE: OSINT={probability}% -> Advisory floor={advisory_floor}%")
         probability = advisory_floor
 
+     # ── Rhetoric escalation boost (v3.1.0) ──
+    # Pull cached rhetoric score for Houthis and Hezbollah targets
+    # Same 0-5 scale used by stability pages; boosts conflict % upward
+    RHETORIC_BOOST = {0: 0, 1: 2, 2: 5, 3: 10, 4: 18, 5: 25}
+    rhetoric_boost = 0
+    try:
+        if target == 'houthis':
+            from rhetoric_tracker_yemen import RHETORIC_CACHE_KEY as YEMEN_RHETORIC_KEY, _redis_get as _yemen_redis_get
+            rhetoric_cache = _yemen_redis_get(YEMEN_RHETORIC_KEY)
+            if rhetoric_cache:
+                max_level = max(
+                    rhetoric_cache.get('maritime_level', 0),
+                    rhetoric_cache.get('direct_strike_level', 0),
+                    rhetoric_cache.get('somaliland_level', 0)
+                )
+                rhetoric_boost = RHETORIC_BOOST.get(max_level, 0)
+                print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (level {max_level})")
+        elif target == 'hezbollah':
+            from rhetoric_tracker import RHETORIC_CACHE_KEY as LB_RHETORIC_KEY, cache_get
+            rhetoric_cache = cache_get(LB_RHETORIC_KEY)
+            if rhetoric_cache:
+                level = rhetoric_cache.get('theatre_escalation_level', 0)
+                rhetoric_boost = RHETORIC_BOOST.get(level, 0)
+                print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (level {level})")
+    except Exception as e:
+        print(f"[{target}] Rhetoric boost skipped: {e}")
+
+    probability = min(probability + rhetoric_boost, 95)
+
     # Final cap (advisory floor can push to 95% max, never 100%)
     probability = min(probability, 95)
 
@@ -1797,7 +1826,8 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
             'advisory_signal_source': diplomatic_signal.get('signal_source'),
             'time_decay_applied': True,
             'source_weighting_applied': True,
-            'formula': 'max(base(25) + adjustment + (weighted_score * 0.8), advisory_floor)'
+            'rhetoric_boost': rhetoric_boost,
+            'formula': 'max(base(25) + adjustment + (weighted_score * 0.8), advisory_floor) + rhetoric_boost'
         },
         'top_contributors': sorted(
             article_details, 
