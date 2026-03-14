@@ -71,37 +71,40 @@ _iran_scan_thread = None
 # CACHE: Upstash Redis + /tmp fallback
 # (v3.1.0: same pattern as military_tracker.py)
 # ============================================
-def load_cache():
-    """Load cache from Upstash Redis, fallback to /tmp file"""
-    # Try Redis first
+def save_cache(cache_data):
+    """Save cache to Upstash Redis + /tmp fallback"""
+    # Save to Redis if available
     if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
         try:
-            resp = requests.get(
-                f"{UPSTASH_REDIS_URL}/get/iran_cache",
-                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-                timeout=5
+            # Slim payload to stay under Upstash 10MB limit
+            # Keep up to 20 articles per language feed
+            slim_data = {k: v for k, v in cache_data.items() if not k.startswith('articles_')}
+            for key in ['articles_en', 'articles_fa', 'articles_ar',
+                        'articles_he', 'articles_reddit',
+                        'articles_iranwire', 'articles_hrana']:
+                slim_data[key] = cache_data.get(key, [])[:20]
+            payload = json.dumps(slim_data, default=str)
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/set/iran_cache",
+                headers={
+                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                data=payload,
+                params={"EX": IRAN_CACHE_TTL_HOURS * 3600},
+                timeout=10
             )
-            data = resp.json()
-            if data.get("result"):
-                cache = json.loads(data["result"])
-                print(f"[Iran Cache] Loaded from Redis ({len(cache)} keys)")
-                return cache
-            print("[Iran Cache] No existing cache in Redis")
+            print(f"[Iran Cache] ✅ Saved to Redis ({len(payload)} bytes)")
         except Exception as e:
-            print(f"[Iran Cache] Redis load error: {e}")
-    else:
-        print("[Iran Cache] No Upstash credentials, trying /tmp fallback")
+            print(f"[Iran Cache] Redis save error: {e}")
 
-    # Fallback to /tmp file
+    # Always save to /tmp as fallback
     try:
-        from pathlib import Path
-        if Path(IRAN_CACHE_FILE).exists():
-            with open(IRAN_CACHE_FILE, 'r') as f:
-                cache = json.load(f)
-                print("[Iran Cache] Loaded from /tmp fallback")
-                return cache
+        with open(IRAN_CACHE_FILE, 'w') as f:
+            json.dump(cache_data, f, indent=2, default=str)
+        print("[Iran Cache] Saved /tmp fallback")
     except Exception as e:
-        print(f"[Iran Cache] /tmp load error: {e}")
+        print(f"[Iran Cache] /tmp save error: {e}")
 
     return {}
 
