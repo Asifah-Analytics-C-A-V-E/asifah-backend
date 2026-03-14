@@ -30,7 +30,6 @@ from pathlib import Path
 import threading
 from military_tracker import register_military_endpoints, get_military_posture
 from rhetoric_tracker import register_rhetoric_endpoints
-
 # Syria humanitarian data module (DTM API + ReliefWeb + OCHA)
 try:
     from syria_humanitarian import register_syria_humanitarian_endpoints
@@ -39,7 +38,15 @@ try:
 except ImportError:
     SYRIA_HUMANITARIAN_AVAILABLE = False
     print("[ME Backend] ⚠️ Syria humanitarian module not available")
-
+# Yemen stability + Houthi rhetoric modules
+try:
+    from yemen_stability import register_yemen_routes
+    from rhetoric_tracker_yemen import register_houthi_rhetoric_routes
+    YEMEN_AVAILABLE = True
+    print("[ME Backend] ✅ Yemen stability + Houthi rhetoric modules loaded")
+except ImportError:
+    YEMEN_AVAILABLE = False
+    print("[ME Backend] ⚠️ Yemen modules not available")
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -812,6 +819,10 @@ register_israel_stability_endpoints(app)
 # Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
 if SYRIA_HUMANITARIAN_AVAILABLE:
     register_syria_humanitarian_endpoints(app)
+# Yemen Stability + Houthi Rhetoric Modules
+if YEMEN_AVAILABLE:
+    register_yemen_routes(app)
+    register_houthi_rhetoric_routes(app)
 
 # ========================================
 # CONFIGURATION
