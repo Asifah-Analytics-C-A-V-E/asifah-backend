@@ -1427,8 +1427,21 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
     # ── NEW: Humanitarian floor ──
     # Chronic crisis drag: power, water, healthcare, brain drain
     humanitarian_drag = -5
-    
-    # ── Final score (v3.0.0 — includes security situation) ──
+
+    # ── Rhetoric penalty (v3.1.0) ──
+    RHETORIC_PENALTY = {0: 0, 1: -2, 2: -5, 3: -10, 4: -18, 5: -25}
+    rhetoric_penalty = 0
+    try:
+        from rhetoric_tracker import RHETORIC_CACHE_KEY, cache_get
+        rhetoric_cache = cache_get(RHETORIC_CACHE_KEY)
+        if rhetoric_cache:
+            theatre_level = rhetoric_cache.get('theatre_escalation_level', 0)
+            rhetoric_penalty = RHETORIC_PENALTY.get(theatre_level, 0)
+            print(f"[Lebanon Stability] Rhetoric penalty: {rhetoric_penalty} (level {theatre_level})")
+    except Exception as e:
+        print(f"[Lebanon Stability] Rhetoric penalty skipped: {e}")
+
+    # ── Final score (v3.1.0 — includes rhetoric penalty) ──
     stability_score = (base_score 
                       - currency_impact 
                       - bond_impact 
@@ -1438,7 +1451,8 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
                       + presidential_bonus 
                       + election_bonus
                       + ceasefire_bonus
-                      + humanitarian_drag)
+                      + humanitarian_drag
+                      + rhetoric_penalty)
     
     stability_score = max(0, min(100, stability_score))
     stability_score = int(stability_score)
@@ -1471,7 +1485,7 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
         trend = "improving"
     
     print(f"[Lebanon Stability] ✅ Score: {stability_score}/100 ({risk_level})")
-    print(f"[Lebanon Stability] Components: base={base_score}, currency=-{currency_impact}, bonds=-{bond_impact}, hez=-{hezbollah_impact:.0f}, ground_ops=-{ground_ops_penalty}, unifil=-{unifil_penalty}, president=+{presidential_bonus}, election=+{election_bonus}, ceasefire=+{ceasefire_bonus}, humanitarian={humanitarian_drag}")
+    print(f"[Lebanon Stability] Components: base={base_score}, currency=-{currency_impact}, bonds=-{bond_impact}, hez=-{hezbollah_impact:.0f}, ground_ops=-{ground_ops_penalty}, unifil=-{unifil_penalty}, president=+{presidential_bonus}, election=+{election_bonus}, ceasefire=+{ceasefire_bonus}, humanitarian={humanitarian_drag}, rhetoric={rhetoric_penalty}")
 
     return {
         'score': stability_score,
@@ -1488,12 +1502,13 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
             'presidential_bonus': presidential_bonus,
             'election_bonus': election_bonus,
             'ceasefire_bonus': ceasefire_bonus,
-            'humanitarian_drag': humanitarian_drag
+            'humanitarian_drag': humanitarian_drag,
+            'rhetoric_penalty': rhetoric_penalty
         },
         'days_with_president': days_with_president,
         'days_until_election': days_until_election,
         'ceasefire_active': ceasefire_active,
-        'version': '2.9.1-recalibrated'
+        'version': '3.1.0-rhetoric'
     }
 
 # ========================================
