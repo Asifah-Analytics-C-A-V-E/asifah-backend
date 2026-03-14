@@ -1827,7 +1827,19 @@ def scan_lebanon_stability():
                 print(f"[Lebanon] ✅ Security data from cache ({security_data.get('total_articles_scanned', 0)} articles)")
             else:
                 print(f"[Lebanon] ⚠️ No cached security data — triggering background scan")
-                t = threading.Thread(target=lambda: scan_security_situation(days=7), daemon=True)
+                def _bg_security_scan():
+                    try:
+                        sec = scan_security_situation(days=7)
+                        if sec and sec.get('total_articles_scanned', 0) > 0:
+                            existing = _redis_get(REDIS_CACHE_KEY)
+                            if existing:
+                                existing['security_situation'] = sec
+                                existing['last_updated'] = datetime.now(timezone.utc).isoformat()
+                                _redis_set(REDIS_CACHE_KEY, existing)
+                                print(f"[Lebanon] ✅ Background security scan saved ({sec['total_articles_scanned']} articles)")
+                    except Exception as e:
+                        print(f"[Lebanon] Background security scan error: {e}")
+                t = threading.Thread(target=_bg_security_scan, daemon=True)
                 t.start()
         except Exception as e:
             print(f"[Lebanon] ❌ Security cache read failed: {str(e)}")
@@ -1841,7 +1853,31 @@ def scan_lebanon_stability():
             stability.get('score', 0),
             gold_data
         )
-        
+
+        # Save full response to Redis so security_situation persists
+        if _redis_available() and security_data:
+            full_payload = {
+                'success': True,
+                'stability': stability,
+                'currency': currency_data,
+                'bonds': bond_data,
+                'hezbollah': hezbollah_data,
+                'gold_reserves': gold_data,
+                'security_situation': security_data,
+                'government': {
+                    'has_president': True,
+                    'president': 'Joseph Aoun',
+                    'days_with_president': stability.get('days_with_president', 0),
+                    'president_elected_date': '2025-01-09',
+                    'parliamentary_election_date': '2028-05-10',
+                    'days_until_election': stability.get('days_until_election', 0)
+                },
+                'last_updated': datetime.now(timezone.utc).isoformat(),
+                'version': '3.0.0-lebanon'
+            }
+            _redis_set(REDIS_CACHE_KEY, full_payload)
+            print("[Lebanon] ✅ Full response with security_situation saved to Redis")
+
         # Report cache status
         cache = load_lebanon_cache()
         cache_days = len(cache.get('history', {}))
