@@ -47,75 +47,54 @@ SESSION_NAME = 'asifah_session'
 # Channels to monitor for Lebanon security situation
 LEBANON_CHANNELS = [
     # Israeli/IDF sources (Hebrew + Arabic)
-    'AvichayAdraee',       # IDF Arabic spokesperson — evacuation warnings
-    'IDFSpokesperson',     # IDF English spokesperson
-    'yaborached',          # Yair Altman — Hebrew, breaks IDF ops early
+    'avichay_adraee',      # IDF Arabic spokesperson — evacuation warnings
+    'idfonline',           # IDF English spokesperson
     'AbuAliExpress',       # Abu Ali Express — bilingual Hebrew/Arabic OSINT
     'kann_news',           # Kann News — Hebrew breaking alerts
     'channel14news',       # Channel 14 — right-leaning, fast on military
-    'iaborached',          # i24 Hebrew news
     # Lebanese sources (Arabic)
-    'AlManarTV',           # Hezbollah-affiliated media (Al Manar)
-    'AlMayadeenNews',      # Al-Mayadeen — pro-resistance axis
-    'LBCILebanon',         # LBCI — Lebanese news
+    'almanar_tv',          # Hezbollah-affiliated media (Al Manar)
+    'almayadeen_net',      # Al-Mayadeen — pro-resistance axis
+    'LBCI_Lebanon',        # LBCI — Lebanese news
     'MTVLebanonNews',      # MTV Lebanon — Christian perspective
-    'Lebanon_News',        # Lebanese news aggregator
+    'nayaforiraq',         # Naya For Iraq — Iraq/Levant coverage
 ]
 
 # Asia-Pacific channels — Taiwan Strait, Korean Peninsula, South/Central Asia
 ASIA_PACIFIC_CHANNELS = [
     # Taiwan/China strait monitoring
     'IntelSlava',          # Intel Slava — multilingual conflict OSINT
-    'chinalawtranslate',   # China law/military analysis
-    'Indo_Pacific_News',   # Indo-Pacific news aggregator
     # Korean Peninsula
-    'NKNewsOrg',           # NK News — North Korea focused
     'RALee85',             # Robert Lee — DPRK analyst
     # South/Central Asia
-    'AfghanistanOSINT',    # Afghanistan conflict monitoring
     'PakistanMilitary',    # Pakistan military updates
-    'LongWarJournal',      # Long War Journal — AfPak
-    # Regional OSINT
-    'AsiaTimes_OSINT',     # Asia Times conflict coverage
-    'GeoConfirmed',        # Geo-confirmed conflict events (global)
 ]
 
 # Extended channels — regional OSINT + Iranian sources + Israel-specific
 EXTENDED_CHANNELS = [
     # Regional conflict monitoring (English/multilingual)
     'C_Military1',         # Conflict/military OSINT
-    'Intel_Sky',           # Intel Sky — very active aggregator
+    'IntelSky',            # Intel Sky — very active aggregator
     'ClashReport',         # Clash Report — conflict monitoring
     'WarMonitors',         # War Monitor — multilingual
     'OSINTdefender',       # OSINT Defender — English, high signal
-    'SouthFrontEN',        # South Front — conflict analysis
-    'ryaborached',         # Rybar — Russian military analysis (English posts)
+    'war_in_ukraine',      # Ukraine war updates
+    'UkrWarReport',        # Ukraine military reporting
     # Iranian sources
-    'TassimNewsEN',        # Tasnim News Agency — English
-    'preaborached',        # Press TV English
     'IranIntl_En',         # Iran International — English
-    'IranIntl',            # Iran International — Farsi
-    'ManotoNews',          # Manoto — Farsi opposition media
-    'RadioFardaFA',        # Radio Farda — Farsi (RFE/RL)
-    'AmadNewsFA',          # Amad News — Farsi dissident
-    'ABORACHED_IRGC',      # IRGC-affiliated channel
-    # Lebanese military/political
-    'maaborached',         # Lebanese military updates
-    'GLZRadio',            # IDF radio — Galatz
+    'iranintl',            # Iran International — Farsi
+    'manoto1',             # Manoto — Farsi opposition media
+    'rodast_omiddana',     # Omid Dana — Farsi political commentary
     # Israel-specific
-    'YnetNews',            # Ynet English breaking news
+    'ynet_news',           # Ynet English breaking news
     'TimesofIsrael',       # Times of Israel
     'Aborached',           # Israeli security commentary
-    'IsraelHayomEng',      # Israel Hayom English
-    'haborached',          # Israeli political commentary
-    'KeshetNews',          # Keshet 12 News — Hebrew
-    'N12News',             # Channel 12 News — Hebrew
-    'Aborached13',         # Channel 13 News — Hebrew
-    # Military-specific
-    'miaborached',         # Military Intelligence aggregator
-    'CentcomOfficial',     # CENTCOM official (if exists)
-    'WarInUkraine',        # Ukraine war updates
-    'UkrWarReport',        # Ukraine military reporting
+    'glzradio',            # IDF radio — Galatz
+    'keshet12news',        # Keshet 12 News — Hebrew
+    'n12news',             # Channel 12 News — Hebrew
+    'N12chat',             # Channel 12 live chat/breaking — Hebrew
+    # CENTCOM
+    'CentcomOfficial',     # CENTCOM official
 ]
 
 
