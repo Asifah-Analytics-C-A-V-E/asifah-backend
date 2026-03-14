@@ -221,15 +221,26 @@ def get_government_status():
     return {
         "supreme_leader": {
             "name": "Ayatollah Ali Khamenei",
-            "title": "Supreme Leader",
+            "title": "Former Supreme Leader",
             "since": "1989-06-04",
             "age": 86,
-            "note": "Compound destroyed in opening US-Israel strike on Feb 28, 2026",
-            "status": "KILLED",
+            "note": "Compound destroyed in opening US-Israel strike on Feb 28, 2026; latest reports indicate injured but alive",
+            "status": "INJURED — ALIVE (Unconfirmed)",
+            "status_color": "orange",
+            "status_date": "2026-03-14",
+            "status_detail": "Initial reports confirmed death; subsequent intelligence suggests injured but alive. Location unknown.",
+            "successor": "Mujtaba Khamenei — elected Supreme Leader by surviving Assembly of Experts members"
+        },
+        "mujtaba_khamenei": {
+            "name": "Mujtaba Khamenei",
+            "title": "Supreme Leader",
+            "since": "2026-03-14",
+            "age": 56,
+            "note": "Son of Ali Khamenei; elected by surviving Assembly of Experts members following father's reported death",
+            "status": "ACTIVE",
             "status_color": "red",
-            "status_date": "2026-02-28",
-            "status_detail": "Leadership House compound destroyed; death confirmed by multiple sources",
-            "successor": "Mujtaba Khamenei (likely) — Assembly of Experts struck during succession session"
+            "status_date": "2026-03-14",
+            "status_detail": "First public statement vowed to avenge father's killing, keep Strait of Hormuz closed, and target US bases in region"
         },
         "president": {
             "name": "Masoud Pezeshkian",
@@ -294,10 +305,10 @@ def get_government_status():
         },
         "days_pezeshkian_in_office": (datetime.now() - datetime(2024, 7, 28)).days,
         "regime_status_summary": {
-            "overall": "SEVERE DEGRADATION",
+            "overall": "SEVERE DEGRADATION — NEW LEADERSHIP",
             "color": "red",
-            "summary": "Supreme Leader killed. Succession body struck. IRGC C2 degraded. Navy destroyed. Air defense suppressed. Government continuity uncertain.",
-            "last_updated": "2026-03-05"
+            "summary": "Ali Khamenei injured/status uncertain. Mujtaba Khamenei elected Supreme Leader. IRGC C2 degraded. Navy destroyed. Air defense suppressed. Hormuz closed.",
+            "last_updated": "2026-03-14"
         }
     }
 
@@ -623,7 +634,16 @@ def get_iran_oil_production_status(all_articles=None):
             "production_bpd": bpd, "production_date": latest_production["date"],
             "production_source": latest_production["source"],
             "production_source_url": latest_production["source_url"],
-            "news_link": news_link, "last_updated": datetime.now().isoformat()
+            "news_link": news_link, "last_updated": datetime.now().isoformat(),
+            "kharg_island": {
+                "status": "STRUCK",
+                "status_color": "red",
+                "emoji": "🔴",
+                "note": "Kharg Island handles ~90% of Iran's crude oil exports",
+                "status_detail": "Kharg Island oil terminal struck March 14, 2026; export capacity severely degraded",
+                "coords": [29.2397, 50.3247],
+                "live_tracker_url": "https://www.marinetraffic.com/en/ais/home/centerx:50.3/centery:29.2/zoom:11"
+            }
         }
     except Exception as e:
         print(f"[Oil Production Status Error]: {e}")
