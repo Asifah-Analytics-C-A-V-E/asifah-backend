@@ -803,7 +803,7 @@ try:
 except Exception as e:
     print(f"[App] ⚠️ Flight scan thread failed: {e}")
 # Iran Stability Module (consolidated from iran_protests.py)
-from iran_protests import register_iran_routes
+from iran_protests import register_iran_routes, load_cache, save_cache, is_cache_fresh
 register_iran_routes(app)
 from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
