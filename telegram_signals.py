@@ -60,6 +60,37 @@ LEBANON_CHANNELS = [
     'nayaforiraq',         # Naya For Iraq — Iraq/Levant coverage
 ]
 
+# Yemen / Red Sea / Horn of Africa channels
+YEMEN_CHANNELS = [
+    # Houthi / Ansar Allah
+    'YemenMonitor',        # Yemen Monitor — conflict tracking
+    'ansarallah_en',       # Ansar Allah English channel
+    'almasirah_net',       # Al-Masirah TV — Houthi-affiliated media
+    # Israeli sources — IDF actions against Houthis
+    'avichay_adraee',      # IDF Arabic spokesperson (already in Lebanon)
+    'idfonline',           # IDF English (already in Lebanon)
+    'yair_altime',         # Yair Altman — Israeli military journalist
+    'keshet12news',        # Channel 12 — Hebrew breaking
+    'n12news',             # N12 — Hebrew
+    'N12chat',             # N12 live breaking
+    'kann_news',           # Kan News — Hebrew
+    'glzradio',            # Galatz IDF radio
+    # Red Sea / Maritime OSINT
+    'OSINTdefender',       # OSINT Defender — covers Red Sea attacks
+    'WarMonitors',         # War Monitor — covers Houthi strikes
+    'ClashReport',         # Clash Report — maritime incidents
+    'C_Military1',         # C_Military1 — Houthi military activity
+    'IntelSky',            # Intel Sky — aggregator
+    # Horn of Africa / Somaliland watch
+    'AJEnglish',           # Al Jazeera English — Somalia/Somaliland coverage
+    # US/CENTCOM
+    'CentcomOfficial',     # CENTCOM — Red Sea operations
+    # Arabic regional
+    'almayadeen_net',      # Al-Mayadeen — axis of resistance coverage
+    'almanar_tv',          # Al-Manar — covers Houthi operations
+    'iranintl',            # Iran International — Iran-Houthi nexus
+]
+
 # Asia-Pacific channels — Taiwan Strait, Korean Peninsula, South/Central Asia
 ASIA_PACIFIC_CHANNELS = [
     # Taiwan/China strait monitoring
@@ -244,6 +275,39 @@ def fetch_telegram_signals(hours_back=24, include_extended=True):
         return []
 
 
+def fetch_telegram_signals_yemen(hours_back=24):
+    """
+    Fetch Telegram signals specifically for Yemen/Houthi/Red Sea theatre.
+    Pulls from YEMEN_CHANNELS — includes Houthi media, Israeli sources
+    watching IDF actions against Houthis, Red Sea OSINT, and Horn of Africa.
+
+    Returns list of article-format dicts compatible with rhetoric_tracker_yemen.py
+    """
+    if not _telegram_available():
+        print("[Telegram/Yemen] Signals unavailable — skipping")
+        return []
+
+    channels = YEMEN_CHANNELS.copy()
+
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _async_fetch_messages(channels, hours_back))
+                return future.result(timeout=120)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(_async_fetch_messages(channels, hours_back))
+            finally:
+                loop.close()
+    except Exception as e:
+        print(f"[Telegram/Yemen] ❌ fetch error: {str(e)[:200]}")
+        return []
+
+
 def get_telegram_status():
     """Return status info for health check / debugging."""
     return {
@@ -251,6 +315,8 @@ def get_telegram_status():
         'api_configured': bool(TELEGRAM_API_ID and TELEGRAM_API_HASH),
         'phone_configured': bool(TELEGRAM_PHONE),
         'session_available': os.path.exists(f'{SESSION_NAME}.session') or bool(os.environ.get('TELEGRAM_SESSION_BASE64')),
-        'channels': LEBANON_CHANNELS,
+        'channels_lebanon': LEBANON_CHANNELS,
+        'channels_yemen': YEMEN_CHANNELS,
+        'channels_extended': EXTENDED_CHANNELS,
         'ready': _telegram_available() and (os.path.exists(f'{SESSION_NAME}.session') or bool(os.environ.get('TELEGRAM_SESSION_BASE64')))
     }
