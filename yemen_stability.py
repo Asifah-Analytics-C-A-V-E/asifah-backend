@@ -513,16 +513,38 @@ def calculate_yemen_stability(articles, red_sea, houthi, humanitarian):
         'elevated': 8,
         'monitoring': 0
     }
-    score -= red_sea_penalties.get(red_sea['status'], 0)
+    red_sea_penalty = red_sea_penalties.get(red_sea['status'], 0)
+    score -= red_sea_penalty
 
     # Humanitarian drag
     score -= 15  # Yemen is chronically at worst-in-world level
 
-    # Somaliland watch bonus/penalty
+    # Somaliland watch penalty
+    somaliland_penalty = 0
     if red_sea['somaliland_watch']['alert_level'] == 'HIGH':
-        score -= 10
+        somaliland_penalty = 10
     elif red_sea['somaliland_watch']['alert_level'] == 'ELEVATED':
-        score -= 5
+        somaliland_penalty = 5
+    score -= somaliland_penalty
+
+    # ── Rhetoric penalty (v1.1.0) ──
+    RHETORIC_PENALTY = {0: 0, 1: -2, 2: -5, 3: -10, 4: -18, 5: -25}
+    rhetoric_penalty = 0
+    try:
+        from rhetoric_tracker_yemen import RHETORIC_CACHE_KEY as YEMEN_RHETORIC_KEY, _redis_get
+        rhetoric_cache = _redis_get(YEMEN_RHETORIC_KEY)
+        if rhetoric_cache:
+            # Take max level across all vectors
+            max_level = max(
+                rhetoric_cache.get('maritime_level', 0),
+                rhetoric_cache.get('direct_strike_level', 0),
+                rhetoric_cache.get('somaliland_level', 0)
+            )
+            rhetoric_penalty = RHETORIC_PENALTY.get(max_level, 0)
+            print(f"[Yemen Stability] Rhetoric penalty: {rhetoric_penalty} (level {max_level})")
+    except Exception as e:
+        print(f"[Yemen Stability] Rhetoric penalty skipped: {e}")
+    score += rhetoric_penalty
 
     score = max(0, min(100, score))
 
@@ -542,9 +564,10 @@ def calculate_yemen_stability(articles, red_sea, houthi, humanitarian):
         'risk_color': risk_color,
         'components': {
             'houthi_escalation': round(houthi_penalty),
-            'red_sea_status': red_sea_penalties.get(red_sea['status'], 0),
+            'red_sea_status': red_sea_penalty,
             'humanitarian_drag': 15,
-            'somaliland_watch': 10 if red_sea['somaliland_watch']['alert_level'] == 'HIGH' else 5 if red_sea['somaliland_watch']['alert_level'] == 'ELEVATED' else 0,
+            'somaliland_watch': somaliland_penalty,
+            'rhetoric_penalty': rhetoric_penalty,
         }
     }
 
