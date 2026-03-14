@@ -1817,6 +1817,7 @@ def scan_iran_protests_handler(app):
     - No cache → return empty skeleton + trigger background refresh
     NEVER runs _run_iran_scan() synchronously in the request handler.
     """
+    from iran_protests import load_cache, save_cache, is_cache_fresh
     try:
         cache = load_cache()
 
