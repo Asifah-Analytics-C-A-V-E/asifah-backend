@@ -916,7 +916,7 @@ def run_rhetoric_scan(days=3):
             ar['escalation_color'] = ESCALATION_LEVELS[escalation_level]['color']
 
             ar['escalation_history'].append({
-                'timestamp': pub_date,
+                'timestamp': pub_date.isoformat() if pub_date else '',
                 'level': escalation_level,
                 'phrase': trigger_phrase,
             })
@@ -1254,7 +1254,9 @@ def _save_daily_snapshot(result):
             }
 
         # Load existing history
-        history = cache_get(RHETORIC_HISTORY_KEY) or {'snapshots': {}}
+        history = cache_get(RHETORIC_HISTORY_KEY) or {}
+        if 'snapshots' not in history:
+            history['snapshots'] = {}
 
         # Add today's snapshot
         history['snapshots'][today] = snapshot
@@ -1352,9 +1354,16 @@ def register_rhetoric_endpoints(app):
                     _trigger_rhetoric_scan()
                     return _cors_response(cached)
 
-                # No cache at all — return empty + trigger scan
-                _trigger_rhetoric_scan()
-                return _cors_response(_build_empty_result())
+                # No cache at all — run scan synchronously so first caller gets real data
+                print("[Rhetoric] Cold start — running synchronous scan")
+                try:
+                    result = run_rhetoric_scan(days=3)
+                    cache_set(RHETORIC_CACHE_KEY, result, ttl_hours=24)
+                    return _cors_response(result)
+                except Exception as e:
+                    print(f"[Rhetoric] Cold start scan failed: {e}")
+                    _trigger_rhetoric_scan()
+                    return _cors_response(_build_empty_result())
 
             # Forced refresh
             _trigger_rhetoric_scan()
