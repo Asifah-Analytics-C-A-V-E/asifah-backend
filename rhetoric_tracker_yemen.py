@@ -1,6 +1,6 @@
 """
 Houthi Rhetoric Tracker — Asifah Analytics
-v1.0.0 — March 2026
+v1.1.0 — March 2026
 
 Tracks escalation rhetoric from Ansar Allah (Houthis) and responses
 from KSA, UAE, US, Israel across two primary threat vectors:
@@ -12,6 +12,8 @@ Also monitors:
 - Somaliland/Horn of Africa for ground operation precursors
 - KSA-Houthi ceasefire/negotiation signals
 - STC-PLC tensions
+
+Sources: Google News RSS (EN/AR) + Telegram (Houthi media, IDF, Red Sea OSINT, Israeli channels)
 
 Registers on ME backend (asifah-backend.onrender.com)
 Endpoint: GET /api/rhetoric/yemen
@@ -30,6 +32,15 @@ from flask import jsonify, request
 # ============================================
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+
+# Telegram integration — graceful fallback if unavailable
+try:
+    from telegram_signals import fetch_telegram_signals_yemen
+    TELEGRAM_AVAILABLE = True
+    print("[Yemen Rhetoric] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Yemen Rhetoric] ⚠️ Telegram signals not available — RSS only")
 
 RHETORIC_CACHE_KEY  = 'yemen_rhetoric_cache'
 RHETORIC_CACHE_TTL  = 6 * 3600  # 6 hours
@@ -212,6 +223,84 @@ ACTOR_KEYWORDS = {
 
 
 # ============================================
+# REDDIT CONFIG
+# ============================================
+REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+YEMEN_SUBREDDITS = [
+    'Yemen',
+    'geopolitics',
+    'CredibleDefense',
+    'YemeniCrisis',
+    'worldnews',
+]
+
+YEMEN_REDDIT_KEYWORDS = [
+    'houthi', 'ansar allah', 'red sea', 'bab el-mandeb',
+    'yemen war', 'houthi missile', 'houthi drone',
+    'somaliland israel', 'shipping attack',
+]
+
+
+def fetch_reddit_yemen(days=3):
+    """Fetch Reddit posts from Yemen/Houthi-relevant subreddits."""
+    if days <= 1:
+        time_filter = 'day'
+    elif days <= 7:
+        time_filter = 'week'
+    else:
+        time_filter = 'month'
+
+    query = ' OR '.join(YEMEN_REDDIT_KEYWORDS[:4])
+    posts = []
+
+    for subreddit in YEMEN_SUBREDDITS:
+        try:
+            time.sleep(2)  # polite rate limit
+            url = f'https://www.reddit.com/r/{subreddit}/search.json'
+            params = {
+                'q': query,
+                'restrict_sr': 'true',
+                'sort': 'new',
+                't': time_filter,
+                'limit': 25
+            }
+            resp = requests.get(url, params=params,
+                                headers={'User-Agent': REDDIT_USER_AGENT},
+                                timeout=10)
+            if resp.status_code != 200:
+                continue
+
+            data = resp.json()
+            children = data.get('data', {}).get('children', [])
+            count = 0
+            for post in children:
+                pd = post.get('data', {})
+                title = pd.get('title', '')
+                # Only include if at least one Yemen keyword in title/text
+                text_lower = f"{title} {pd.get('selftext','')}".lower()
+                if not any(kw in text_lower for kw in YEMEN_REDDIT_KEYWORDS):
+                    continue
+                posts.append({
+                    'title': title[:200],
+                    'url': f"https://www.reddit.com{pd.get('permalink','')}",
+                    'published': datetime.fromtimestamp(
+                        pd.get('created_utc', 0), tz=timezone.utc
+                    ).isoformat(),
+                    'description': pd.get('selftext', '')[:300],
+                    'source': f'r/{subreddit}',
+                    'weight': 0.8,  # Reddit slightly lower weight than news
+                })
+                count += 1
+            print(f"[Yemen Rhetoric/Reddit] r/{subreddit}: {count} posts")
+        except Exception as e:
+            print(f"[Yemen Rhetoric/Reddit] r/{subreddit} error: {e}")
+            continue
+
+    return posts
+
+
+# ============================================
 # RSS SOURCES
 # ============================================
 RHETORIC_RSS_FEEDS = [
@@ -273,13 +362,14 @@ def _redis_set(key, value, ttl=RHETORIC_CACHE_TTL):
 # ARTICLE FETCHING
 # ============================================
 def fetch_rhetoric_articles(days=3):
-    """Fetch articles from RSS feeds"""
+    """Fetch articles from RSS feeds + Telegram channels"""
     import xml.etree.ElementTree as ET
     from email.utils import parsedate_to_datetime
 
     articles = []
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
+    # ── RSS feeds ──
     for feed_url, weight in RHETORIC_RSS_FEEDS:
         try:
             resp = requests.get(feed_url, timeout=10,
@@ -313,7 +403,63 @@ def fetch_rhetoric_articles(days=3):
         except Exception as e:
             print(f"[Yemen Rhetoric RSS] Error: {e}")
 
-    # Deduplicate
+    rss_count = len(articles)
+    print(f"[Yemen Rhetoric] RSS: {rss_count} articles")
+
+    # ── Telegram signals ──
+    if TELEGRAM_AVAILABLE:
+        try:
+            hours_back = days * 24
+            tg_messages = fetch_telegram_signals_yemen(hours_back=hours_back)
+            tg_count = 0
+            for msg in tg_messages:
+                # Normalize to same format as RSS articles
+                pub = msg.get('published', '')
+                try:
+                    pub_dt = datetime.fromisoformat(pub)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                    if pub_dt < since:
+                        continue
+                    pub_str = pub_dt.isoformat()
+                except Exception:
+                    pub_str = pub
+
+                articles.append({
+                    'title': msg.get('title', '')[:300],
+                    'url': msg.get('url', ''),
+                    'published': pub_str if isinstance(pub_str, str) else '',
+                    'description': msg.get('title', '')[:300],  # Telegram msgs have no separate desc
+                    'source': msg.get('source', 'Telegram'),
+                    'weight': 1.1,  # Slight boost — Telegram is often faster than RSS
+                    'views': msg.get('views', 0),
+                    'forwards': msg.get('forwards', 0),
+                })
+                tg_count += 1
+            print(f"[Yemen Rhetoric] Telegram: {tg_count} messages added")
+        except Exception as e:
+            print(f"[Yemen Rhetoric] Telegram fetch error: {e}")
+
+    # ── Reddit posts ──
+    try:
+        reddit_posts = fetch_reddit_yemen(days=days)
+        for post in reddit_posts:
+            # Normalize published field name (Reddit uses 'published')
+            pub = post.get('published', '')
+            try:
+                pub_dt = datetime.fromisoformat(pub)
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                if pub_dt < since:
+                    continue
+            except Exception:
+                pass
+            articles.append(post)
+        print(f"[Yemen Rhetoric] Reddit: {len(reddit_posts)} posts added")
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Reddit fetch error: {e}")
+
+    # Deduplicate by URL
     seen = set()
     unique = []
     for a in articles:
@@ -321,7 +467,10 @@ def fetch_rhetoric_articles(days=3):
             seen.add(a['url'])
             unique.append(a)
 
-    print(f"[Yemen Rhetoric] Fetched {len(unique)} unique articles")
+    tg_count = sum(1 for a in unique if 'Telegram' in a.get('source',''))
+    reddit_count = sum(1 for a in unique if a.get('source','').startswith('r/'))
+    rss_final = len(unique) - tg_count - reddit_count
+    print(f"[Yemen Rhetoric] Total unique: {len(unique)} ({rss_final} RSS + {tg_count} Telegram + {reddit_count} Reddit)")
     return unique
 
 
@@ -480,7 +629,7 @@ def run_houthi_rhetoric_scan(days=3):
             theatre_summary['ceasefire_max_level'], {}).get('label', 'None'),
         'actors': actor_results,
         'coordination_signals': theatre_summary['coordination_signals'][:5],
-        'version': '1.0.0-yemen-rhetoric'
+        'version': '1.2.0-yemen-rhetoric-telegram-reddit'
     }
 
     _redis_set(RHETORIC_CACHE_KEY, result)
@@ -558,7 +707,7 @@ def register_houthi_rhetoric_routes(app):
                 'theatre': 'Yemen / Red Sea',
                 'theatre_score': 0,
                 'theatre_level': 'Scanning...',
-                'version': '1.0.0-yemen-rhetoric'
+                'version': '1.2.0-yemen-rhetoric-telegram-reddit'
             })
 
         result = run_houthi_rhetoric_scan(days=days)
