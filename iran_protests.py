@@ -348,56 +348,62 @@ def get_exchange_rate():
 # OIL PRICE DATA (BRENT CRUDE)
 # ============================================
 def get_brent_oil_price():
-    """Fetch current Brent crude oil price from Alpha Vantage API"""
+    """Fetch current Brent crude oil price from Yahoo Finance (no API key required)"""
     try:
-        url = f"https://www.alphavantage.co/query?function=CRUDE_OIL_BRENT&interval=daily&apikey={ALPHA_VANTAGE_KEY}"
-        response = requests.get(url, timeout=10)
+        # BZ=F = Brent Crude Futures on Yahoo Finance
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=10)
         data = response.json()
 
-        if "data" in data and len(data["data"]) > 0:
-            valid_data = [d for d in data["data"] if d.get("value", ".") != "."]
-            if len(valid_data) < 2:
-                return get_fallback_oil_price()
+        result = data.get("chart", {}).get("result", [])
+        if not result:
+            raise ValueError("No chart data returned")
 
-            latest = valid_data[0]
-            previous = valid_data[1]
-            current_price = float(latest["value"])
-            previous_price = float(previous["value"])
-            price_change = current_price - previous_price
-            percent_change = (price_change / previous_price) * 100
+        meta = result[0].get("meta", {})
+        current_price = meta.get("regularMarketPrice") or meta.get("previousClose")
+        previous_price = meta.get("chartPreviousClose") or meta.get("previousClose")
 
-            if price_change > 0.01:
-                arrow, trend = "↑", "up"
-            elif price_change < -0.01:
-                arrow, trend = "↓", "down"
-            else:
-                arrow, trend = "→", "flat"
+        if not current_price:
+            raise ValueError("No price in meta")
 
-            sparkline_data = []
-            for d in reversed(valid_data[:90]):
-                try:
-                    sparkline_data.append({
-                        "date": d["date"],
-                        "price": round(float(d["value"]), 2)
-                    })
-                except (ValueError, KeyError):
-                    continue
+        price_change = round(current_price - previous_price, 2) if previous_price else 0.0
+        percent_change = round((price_change / previous_price) * 100, 2) if previous_price else 0.0
 
-            return {
-                "success": True,
-                "current_price": round(current_price, 2),
-                "price_change": round(price_change, 2),
-                "percent_change": round(percent_change, 2),
-                "arrow": arrow, "trend": trend,
-                "timestamp": latest["date"],
-                "currency": "USD", "unit": "bbl",
-                "sparkline": sparkline_data
-            }
+        if price_change > 0.01:
+            arrow, trend = "↑", "up"
+        elif price_change < -0.01:
+            arrow, trend = "↓", "down"
         else:
-            return get_fallback_oil_price()
+            arrow, trend = "→", "flat"
+
+        # Build sparkline from historical closes if available
+        sparkline_data = []
+        timestamps = result[0].get("timestamp", [])
+        closes = result[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
+        for ts, price in zip(timestamps[-90:], closes[-90:]):
+            if price:
+                from datetime import datetime as dt
+                sparkline_data.append({
+                    "date": dt.utcfromtimestamp(ts).strftime("%Y-%m-%d"),
+                    "price": round(price, 2)
+                })
+
+        print(f"[Oil Price] Yahoo Finance: Brent ${current_price} ({arrow}{abs(percent_change)}%)")
+        return {
+            "success": True,
+            "current_price": round(current_price, 2),
+            "price_change": price_change,
+            "percent_change": percent_change,
+            "arrow": arrow, "trend": trend,
+            "timestamp": datetime.now().strftime("%Y-%m-%d"),
+            "currency": "USD", "unit": "bbl",
+            "source": "yahoo_finance",
+            "sparkline": sparkline_data
+        }
 
     except Exception as e:
-        print(f"[Oil Price API Error]: {e}")
+        print(f"[Oil Price] Yahoo Finance error: {e} — using fallback")
         return get_fallback_oil_price()
 
 
@@ -405,9 +411,9 @@ def get_fallback_oil_price():
     """Fallback oil price data when API is unavailable"""
     return {
         "success": True,
-        "current_price": 74.50,
-        "price_change": 0.00, "percent_change": 0.00,
-        "arrow": "→", "trend": "flat",
+        "current_price": 103.14,
+        "price_change": 2.68, "percent_change": 2.67,
+        "arrow": "↑", "trend": "up",
         "timestamp": datetime.now().strftime("%Y-%m-%d"),
         "currency": "USD", "unit": "bbl",
         "source": "fallback", "sparkline": []
