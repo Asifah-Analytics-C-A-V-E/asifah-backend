@@ -1792,8 +1792,7 @@ def _trigger_iran_background_scan(app, days=7):
         global _iran_scan_running
         try:
             print("[Iran] Background scan starting...")
-            with app.test_request_context('/scan-iran-protests?days=7'):
-                _run_iran_scan(days=days)
+            _run_iran_scan(days=days)
         except Exception as e:
             print(f"[Iran] Background scan error: {e}")
             import traceback
