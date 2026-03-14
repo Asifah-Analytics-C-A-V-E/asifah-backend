@@ -117,8 +117,8 @@ if HUMANITARIAN_AVAILABLE:
 # ========================================
 
 # Upstash Redis (persistent cache - replaces /tmp file!)
-UPSTASH_URL = os.environ.get('UPSTASH_REDIS_REST_URL')
-UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+UPSTASH_URL = os.environ.get('UPSTASH_REDIS_REST_URL') or os.environ.get('UPSTASH_REDIS_URL')
+UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN') or os.environ.get('UPSTASH_REDIS_TOKEN')
 
 REDIS_CACHE_KEY = 'lebanon_cache'
 
