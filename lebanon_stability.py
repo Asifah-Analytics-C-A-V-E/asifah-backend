@@ -56,6 +56,11 @@ except ImportError:
 # Humanitarian data module (DTM API + ReliefWeb + OCHA)
 try:
     from lebanon_humanitarian import register_humanitarian_endpoints
+    try:
+        from lebanon_events import register_events_endpoints
+    except ImportError:
+        register_events_endpoints = None
+        print("[Lebanon] ⚠️ Events module not available (lebanon_events.py not found)")
     HUMANITARIAN_AVAILABLE = True
     print("[Lebanon] ✅ Humanitarian data module loaded")
 except ImportError:
@@ -104,6 +109,8 @@ if RHETORIC_AVAILABLE:
 
 if HUMANITARIAN_AVAILABLE:
     register_humanitarian_endpoints(app)
+    if register_events_endpoints:
+        register_events_endpoints(app)
     
 # ========================================
 # CONFIGURATION
