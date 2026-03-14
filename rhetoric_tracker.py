@@ -936,7 +936,7 @@ def run_rhetoric_scan(days=3):
                     'title': article.get('title', '')[:120],
                     'url': article.get('url', ''),
                     'source': article.get('source', 'Unknown'),
-                    'published': pub_date,
+                    'published': pub_date.isoformat() if pub_date else '',
                     'escalation_level': escalation_level,
                     'escalation_label': ESCALATION_LEVELS[escalation_level]['label'],
                     'trigger_phrase': trigger_phrase,
@@ -944,7 +944,7 @@ def run_rhetoric_scan(days=3):
 
             # Coordination timeline
             coordination_timeline.append({
-                'timestamp': pub_date,
+                'timestamp': pub_date.isoformat() if pub_date else '',
                 'actor': actor_id,
                 'level': escalation_level,
             })
