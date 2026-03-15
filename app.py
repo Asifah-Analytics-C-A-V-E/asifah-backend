@@ -1805,6 +1805,17 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
                 level = rhetoric_cache.get('theatre_escalation_level', 0)
                 rhetoric_boost = RHETORIC_BOOST.get(level, 0)
                 print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (level {level})")
+        elif target == 'syria':
+            from rhetoric_tracker_syria import RHETORIC_CACHE_KEY as SYRIA_RHETORIC_KEY, _redis_get as _syria_redis_get
+            rhetoric_cache = _syria_redis_get(SYRIA_RHETORIC_KEY)
+            if rhetoric_cache:
+                level = max(
+                    rhetoric_cache.get('factional_level', 0),
+                    rhetoric_cache.get('israeli_strike_level', 0),
+                    rhetoric_cache.get('isis_level', 0),
+                )
+                rhetoric_boost = RHETORIC_BOOST.get(level, 0)
+                print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (level {level})")
     except Exception as e:
         print(f"[{target}] Rhetoric boost skipped: {e}")
 
