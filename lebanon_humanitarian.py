@@ -261,8 +261,8 @@ STATIC_HUMANITARIAN = {
     'note': 'Static figures from OCHA Flash Update / DRM Unit. Updated manually.',
 
     'casualties': {
-        'killed': 687,
-        'injured': 1774,
+        'killed': 826,
+        'injured': 2009,
         'children_killed': 83,
         'women_killed': 42,
         'rescue_workers_killed': 9,
@@ -273,7 +273,7 @@ STATIC_HUMANITARIAN = {
     },
 
     'displacement': {
-        'total_displaced_registered': 822600,
+        'total_displaced_registered': 831882,
         'in_government_shelters': 128200,
         'families_in_shelters': 33200,
         'shelters_opened': 596,
@@ -322,7 +322,7 @@ STATIC_HUMANITARIAN = {
             '110+ towns and locations near the Blue Line',
             '50+ villages (forced evacuation orders March 3)'
         ],
-        'hostile_incidents_drm': 1623,
+        'hostile_incidents_drm': 1928,
         'source': 'OCHA Flash Update / DRM Unit',
         'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-1-escalation-hostilities-lebanon-5-march-2026',
         'as_of': '2026-03-12'
