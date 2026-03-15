@@ -888,63 +888,52 @@ def run_rhetoric_scan(days=3):
             'escalation_history': [],
         }
 
-    # Analyze each article
+# Analyze each article
     total_classified = 0
     coordination_timeline = []
-
     for article in articles:
         actors = classify_actor(article)
-
         if not actors:
             continue
-
         total_classified += 1
         escalation_level, trigger_phrase = score_escalation(article)
         topics = extract_topics(article)
         pub_date = article.get('publishedAt', '')
-
         for actor_id in actors:
             ar = actor_results[actor_id]
             ar['statement_count'] += 1
-
             # Track escalation
             if escalation_level > ar['max_escalation_level']:
                 ar['max_escalation_level'] = escalation_level
                 ar['max_escalation_phrase'] = trigger_phrase
-
             ar['escalation_label'] = ESCALATION_LEVELS[escalation_level]['label']
             ar['escalation_color'] = ESCALATION_LEVELS[escalation_level]['color']
-
             ar['escalation_history'].append({
                 'timestamp': pub_date.isoformat() if hasattr(pub_date, 'isoformat') else (pub_date if pub_date else ''),
                 'level': escalation_level,
                 'phrase': trigger_phrase,
             })
-
             # Spokesperson detection
             person = detect_spokesperson(article, actor_id)
             if person and person not in ar['spokespersons_detected']:
                 ar['spokespersons_detected'].append(person)
-
             # Topics
             for topic in topics:
                 ar['topics'][topic] += 1
-
             # Top articles (keep top 5 by escalation level)
             if len(ar['top_articles']) < 5 or escalation_level >= 3:
                 ar['top_articles'].append({
                     'title': article.get('title', '')[:120],
                     'url': article.get('url', ''),
                     'source': article.get('source', 'Unknown'),
-                    'published': pub_date.isoformat() if pub_date else '',
+                    'published': pub_date.isoformat() if hasattr(pub_date, 'isoformat') else (pub_date if pub_date else ''),
                     'escalation_level': escalation_level,
                     'escalation_label': ESCALATION_LEVELS[escalation_level]['label'],
                     'trigger_phrase': trigger_phrase,
                 })
-
             # Coordination timeline
             coordination_timeline.append({
-                'timestamp': pub_date.isoformat() if pub_date else '',
+                'timestamp': pub_date.isoformat() if hasattr(pub_date, 'isoformat') else (pub_date if pub_date else ''),
                 'actor': actor_id,
                 'level': escalation_level,
             })
