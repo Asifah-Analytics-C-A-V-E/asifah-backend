@@ -916,7 +916,7 @@ def run_rhetoric_scan(days=3):
             ar['escalation_color'] = ESCALATION_LEVELS[escalation_level]['color']
 
             ar['escalation_history'].append({
-                'timestamp': pub_date.isoformat() if pub_date else '',
+                'timestamp': pub_date.isoformat() if hasattr(pub_date, 'isoformat') else (pub_date if pub_date else ''),
                 'level': escalation_level,
                 'phrase': trigger_phrase,
             })
