@@ -224,11 +224,11 @@ def get_government_status():
             "title": "Former Supreme Leader",
             "since": "1989-06-04",
             "age": 86,
-            "note": "Compound destroyed in opening US-Israel strike on Feb 28, 2026; latest reports indicate injured but alive",
-            "status": "INJURED — ALIVE (Unconfirmed)",
-            "status_color": "orange",
-            "status_date": "2026-03-14",
-            "status_detail": "Initial reports confirmed death; subsequent intelligence suggests injured but alive. Location unknown.",
+            "note": "Killed in US-Israel strike on Feb 28, 2026. Compound destroyed in opening strike; death confirmed by multiple sources.",
+            "status": "KILLED",
+            "status_color": "red",
+            "status_date": "2026-02-28",
+            "status_detail": "Death confirmed. Mujtaba Khamenei elected Supreme Leader by surviving Assembly of Experts members.",
             "successor": "Mujtaba Khamenei — elected Supreme Leader by surviving Assembly of Experts members"
         },
         "mujtaba_khamenei": {
@@ -307,7 +307,7 @@ def get_government_status():
         "regime_status_summary": {
             "overall": "SEVERE DEGRADATION — NEW LEADERSHIP",
             "color": "red",
-            "summary": "Ali Khamenei injured/status uncertain. Mujtaba Khamenei elected Supreme Leader. IRGC C2 degraded. Navy destroyed. Air defense suppressed. Hormuz closed.",
+            "summary": "Ali Khamenei KILLED Feb 28. Mujtaba Khamenei elected Supreme Leader.IRGC C2 degraded. Navy destroyed. Air defense suppressed. Hormuz closed.",
             "last_updated": "2026-03-14"
         }
     }
