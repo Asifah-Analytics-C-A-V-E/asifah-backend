@@ -841,6 +841,8 @@ if YEMEN_AVAILABLE:
     register_syria_rhetoric_routes(app)
 if IRAQ_RHETORIC_AVAILABLE:
     register_iraq_rhetoric_routes(app)
+    from iraq_humanitarian import register_iraq_humanitarian_endpoints
+    register_iraq_humanitarian_endpoints(app)
 
 # ========================================
 # CONFIGURATION
