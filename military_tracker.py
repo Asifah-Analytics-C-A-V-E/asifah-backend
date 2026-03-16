@@ -1543,7 +1543,16 @@ ASSET_CATEGORIES = {
             'carrier strike group', 'aircraft carrier', 'uss nimitz',
             'uss eisenhower', 'uss ford', 'uss lincoln', 'uss truman',
             'uss roosevelt', 'uss reagan', 'uss vinson', 'uss stennis',
-            'uss washington', 'uss bush', 'csg deployed'
+            'uss washington', 'uss bush', 'csg deployed',
+            # Named ships currently in news (v2.8.0)
+            'uss carl vinson', 'uss ronald reagan', 'uss george washington',
+            'uss harry truman', 'uss gerald ford', 'uss john c stennis',
+            # Movement language
+            'carrier transits', 'carrier arrives', 'carrier departs',
+            'carrier redeployed', 'carrier repositioned', 'csg transiting',
+            'strike group arrives', 'strike group departs', 'strike group redeployed',
+            'carrier strike group pacific', 'carrier strike group persian gulf',
+            'carrier strike group red sea', 'carrier strike group mediterranean'
         ]
     },
     'submarine': {
@@ -1572,8 +1581,32 @@ ASSET_CATEGORIES = {
             'b-2 stealth bomber', 'long-range mission'
         ]
     },
-    'amphibious_group': {
-        'label': 'Amphibious Ready Group',
+    'naval_movement': {
+        'label': 'Naval Redeployment',
+        'icon': '🔄',
+        'weight': 3.5,
+        'description': 'Significant naval asset movement — redeployment, transit, repositioning signal.',
+        'keywords': [
+            # Redeployment/repositioning language
+            'navy redeployed', 'ships redeployed', 'fleet repositioned',
+            'naval assets moved', 'warships repositioned', 'ships transiting',
+            'destroyer redeployed', 'cruiser redeployed', 'frigate redeployed',
+            # Fleet-to-fleet transitions (key strategic signal)
+            'fifth fleet to seventh', 'persian gulf to pacific',
+            'redeployed to pacific', 'shifted to pacific', 'moved to pacific',
+            'redeployed from gulf', 'withdrawn from gulf', 'departing gulf',
+            'transit strait of hormuz', 'transit suez canal',
+            # Minesweepers (Peter's specific signal)
+            'minesweeper', 'mine countermeasures', 'mcm vessel',
+            'uss pioneer', 'uss chief', 'uss devastator', 'uss champion',
+            'avenger class', 'mine warfare',
+            # General movement signals
+            'arrives fifth fleet', 'departs fifth fleet',
+            'arrives sixth fleet', 'departs sixth fleet',
+            'arrives seventh fleet', 'departs seventh fleet',
+            'navcent arrival', 'navcent departure',
+        ]
+    },
         'icon': '⚓',
         'weight': 3.5,
         'description': 'Marines + landing ships. Ground intervention capability.',
@@ -1914,6 +1947,18 @@ LOCATION_MULTIPLIERS = {
     'nsa bahrain': 2.5,
     'fifth fleet': 2.5,
     '5th fleet': 2.5,
+    'sixth fleet': 2.0,
+    '6th fleet': 2.0,
+    'seventh fleet': 2.0,
+    '7th fleet': 2.0,
+    'navcent': 2.5,
+    'indopacom': 2.0,
+    'minesweeper': 2.0,
+    'mine countermeasures': 2.0,
+    'naval station rota': 2.0,
+    'naval station norfolk': 1.5,
+    'naval base guam': 2.0,
+    'yokosuka': 2.0,
     'sheikh isa air base': 2.0,
     'mina salman': 2.0,
     # Kuwait (v2.7.0)
@@ -2355,6 +2400,12 @@ DEFENSE_RSS_FEEDS = {
     'Kurdistan24': 'https://news.google.com/rss/search?q=site:kurdistan24.net+military&hl=en&gl=US&ceid=US:en',
     # v2.6.0 — Bahrain
     'Bahrain News (Google)': 'https://news.google.com/rss/search?q=bahrain+military+OR+fifth+fleet+OR+naval&hl=en&gl=US&ceid=US:en',
+    # v2.8.0 — Naval movement tracking
+    'USNI News': 'https://news.usni.org/feed',
+    'USNI Fleet': 'https://news.google.com/rss/search?q=site:news.usni.org+fleet+OR+deployed+OR+carrier&hl=en&gl=US&ceid=US:en',
+    'TWZ Naval': 'https://news.google.com/rss/search?q=site:twz.com+navy+OR+carrier+OR+fleet+OR+ship&hl=en&gl=US&ceid=US:en',
+    'NavalNews Movements': 'https://news.google.com/rss/search?q=site:navalnews.com+deployed+OR+transit+OR+arrives+OR+departs&hl=en&gl=US&ceid=US:en',
+    'USNI Proceedings': 'https://news.google.com/rss/search?q=site:usni.org+navy+deployment+OR+fleet+OR+carrier&hl=en&gl=US&ceid=US:en',
     # v2.7.0 — War footing: all Gulf + regional actors
     'Kuwait Military (Google)': 'https://news.google.com/rss/search?q=kuwait+military+OR+missile+OR+attack+OR+troops&hl=en&gl=US&ceid=US:en',
     'Saudi Military (Google)': 'https://news.google.com/rss/search?q=saudi+arabia+military+OR+missile+OR+attack+OR+defense&hl=en&gl=US&ceid=US:en',
@@ -2656,6 +2707,12 @@ def fetch_all_gdelt_military(days=7):
     """Fetch military articles from GDELT across multiple queries and languages."""
 
     english_queries = [
+        # --- Naval movements (v2.8.0) ---
+        'US navy ship redeployed pacific gulf',
+        'carrier strike group transiting repositioned',
+        'minesweeper navy middle east pacific',
+        'fifth fleet seventh fleet naval movement',
+        'navy warship departs arrives gulf',
         # --- CENTCOM / Middle East ---
         'military deployment middle east',
         'carrier strike group persian gulf',
