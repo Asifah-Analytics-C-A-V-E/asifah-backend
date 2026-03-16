@@ -910,6 +910,40 @@ def run_syria_rhetoric_scan(days=3):
     }
 
     _redis_set(RHETORIC_CACHE_KEY, result)
+
+    # ── HISTORY SNAPSHOT (v1.1.0) ──────────────────────────────────────
+    # Append a compact snapshot to the rolling history list.
+    # Capped at 120 entries (~30 days at 4 scans/day).
+    try:
+        snapshot = json.dumps({
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'score': rhetoric_score,
+            'level': max_level,
+            'label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Unknown'),
+            'factional': max_factional,
+            'strikes': max_strikes,
+            'isis': max_isis,
+        })
+        HISTORY_KEY = 'rhetoric:syria:history'
+        # LPUSH prepends so index 0 is always newest
+        if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+            import urllib.parse
+            enc = urllib.parse.quote(snapshot, safe='')
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/lpush/{HISTORY_KEY}/{enc}",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/ltrim/{HISTORY_KEY}/0/119",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            print(f"[Syria Rhetoric] 📈 History snapshot saved")
+    except Exception as e:
+        print(f"[Syria Rhetoric] History append error (non-fatal): {e}")
+    # ────────────────────────────────────────────────────────────────────
+
     print(f"[Syria Rhetoric] ✅ Complete. Level: {result['theatre_escalation_label']} | Score: {rhetoric_score}/100")
     return result
 
@@ -1010,4 +1044,37 @@ def register_syria_rhetoric_routes(app):
             })
         return jsonify({'success': False, 'message': 'No cached data yet — scan in progress'})
 
-    print("[Syria Rhetoric] ✅ Routes registered: /api/rhetoric/syria, /api/rhetoric/syria/summary")
+    @app.route('/api/rhetoric/syria/history', methods=['GET'])
+    def syria_rhetoric_history():
+        """Rolling history of rhetoric snapshots — last 120 entries (~30 days)."""
+        from flask import request as flask_request
+        try:
+            limit = int(flask_request.args.get('limit', 120))
+            limit = max(1, min(limit, 120))
+            HISTORY_KEY = 'rhetoric:syria:history'
+            entries = []
+            if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+                resp = requests.get(
+                    f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/{limit - 1}",
+                    headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                    timeout=5
+                )
+                raw = resp.json().get('result', [])
+                for item in raw:
+                    try:
+                        entries.append(json.loads(item))
+                    except Exception:
+                        pass
+            # entries are newest-first (LPUSH); reverse for chronological chart display
+            entries.reverse()
+            return jsonify({
+                'success': True,
+                'theatre': 'Syria',
+                'history_key': 'rhetoric:syria:history',
+                'count': len(entries),
+                'entries': entries,   # [{ts, score, level, label, factional, strikes, isis}, …]
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    print("[Syria Rhetoric] ✅ Routes registered: /api/rhetoric/syria, /api/rhetoric/syria/summary, /api/rhetoric/syria/history")
