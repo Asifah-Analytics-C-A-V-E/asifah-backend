@@ -778,8 +778,8 @@ def fetch_rhetoric_articles(days=3):
             seen.add(u)
             unique.append(a)
 
-    tg_c   = sum(1 for a in unique if 'Telegram' in a.get('source', ''))
-    red_c  = sum(1 for a in unique if a.get('source', '').startswith('r/'))
+    tg_c   = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
+    red_c  = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
     rss_c  = len(unique) - tg_c - red_c
     print(f"[Iraq Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {red_c} Reddit)")
     return unique
