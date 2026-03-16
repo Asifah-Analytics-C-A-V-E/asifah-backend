@@ -1037,8 +1037,37 @@ def run_rhetoric_scan(days=3):
     print(f"[Rhetoric Scan] ✅ Complete in {scan_time}s — "
           f"theatre level: {theatre_escalation['label']}, score: {rhetoric_score}")
 
-    # Save daily snapshot for trend tracking
+    # Save daily snapshot for trend tracking (existing system)
     _save_daily_snapshot(result)
+
+    # ── INTRADAY LPUSH HISTORY (v1.1.0) — matches Syria/Yemen pattern ──
+    # Appends a compact snapshot to a rolling Redis list every scan.
+    # Capped at 120 entries (~30 days at 4 scans/day).
+    try:
+        import urllib.parse as _urlparse
+        snapshot = json.dumps({
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'score': rhetoric_score,
+            'level': theatre_escalation.get('level', 0),
+            'label': theatre_escalation.get('label', 'Unknown'),
+        }, default=str)
+        LPUSH_KEY = 'rhetoric:lebanon:history:intraday'
+        if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+            enc = _urlparse.quote(snapshot, safe='')
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/lpush/{LPUSH_KEY}/{enc}",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/ltrim/{LPUSH_KEY}/0/119",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            print(f"[Rhetoric] 📈 Intraday history snapshot saved")
+    except Exception as e:
+        print(f"[Rhetoric] Intraday history append error (non-fatal): {e}")
+    # ────────────────────────────────────────────────────────────────────
 
     return result
 
@@ -1403,8 +1432,48 @@ def register_rhetoric_endpoints(app):
         except Exception as e:
             return _cors_response({'success': False, 'error': str(e)[:200]}, 500)
 
+    @app.route('/api/rhetoric/lebanon/history', methods=['GET'])
+    def api_rhetoric_lebanon_history():
+        """Rolling history normalized to match Syria/Yemen /history shape.
+        Reads the existing daily snapshot store and returns entries array:
+        [{ts, score, level, label}, …] oldest-first, for chart rendering.
+        """
+        try:
+            limit = int(flask_request.args.get('limit', 120))
+            # Daily snapshots: cap at 30 days for 7d/30d toggle
+            days = min(30, limit)
+            trends = get_rhetoric_trends(days)
+            entries = []
+            if trends.get('success') and trends.get('trends'):
+                t = trends['trends']
+                dates = t.get('dates', [])
+                scores = t.get('rhetoric_score', [])
+                levels = t.get('theatre_level', [])
+                level_labels = {
+                    0: 'Baseline', 1: 'Rhetoric', 2: 'Tension',
+                    3: 'Confrontation', 4: 'Incident', 5: 'Active Conflict'
+                }
+                for i, date in enumerate(dates):
+                    score = scores[i] if i < len(scores) else 0
+                    level = levels[i] if i < len(levels) else 0
+                    entries.append({
+                        'ts': date + 'T12:00:00+00:00',  # noon UTC as canonical daily stamp
+                        'score': score,
+                        'level': level,
+                        'label': level_labels.get(level, 'Unknown'),
+                    })
+            return _cors_response({
+                'success': True,
+                'theatre': 'Lebanon',
+                'history_key': RHETORIC_HISTORY_KEY,
+                'count': len(entries),
+                'entries': entries,   # [{ts, score, level, label}, …]
+            })
+        except Exception as e:
+            return _cors_response({'success': False, 'error': str(e)[:200]}, 500)
+
     print("[Rhetoric Tracker] ✅ Endpoints registered: "
-          "/api/rhetoric/lebanon, /api/rhetoric/lebanon/summary, /api/rhetoric/lebanon/trends")
+          "/api/rhetoric/lebanon, /api/rhetoric/lebanon/summary, /api/rhetoric/lebanon/trends, /api/rhetoric/lebanon/history")
 
     # Skip scan thread if running in lightweight/cache-only mode
     if os.environ.get('RHETORIC_SCAN_DISABLED'):
