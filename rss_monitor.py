@@ -51,6 +51,27 @@ REGIONAL_ARAB_RSS_FEEDS = {
     'arab_news': 'https://news.google.com/rss/search?q=site:arabnews.com+middle+east&hl=en&gl=US&ceid=US:en',
 }
 
+# Iraq-specific feeds — PMF, KRG, ISF, Iran-Iraq nexus
+IRAQ_RSS_FEEDS = {
+    # Kurdish / KRG — best English Iraq security coverage
+    'rudaw':            'https://www.rudaw.net/english/feed',
+    'kurdistan24':      'https://www.kurdistan24.net/en/rss.xml',
+    # Iraqi English OSINT
+    'shafaq_news':      'https://news.google.com/rss/search?q=site:shafaq.com+iraq&hl=en&gl=US&ceid=US:en',
+    'nina_iraq':        'https://news.google.com/rss/search?q=site:ninanews.com&hl=en&gl=US&ceid=US:en',
+    # PMF / militia activity — via Al-Monitor and MEMRI Iraq
+    'almonitor_iraq':   'https://news.google.com/rss/search?q=site:al-monitor.com+iraq+PMF+OR+hashd&hl=en&gl=US&ceid=US:en',
+    'memri_iraq':       'https://news.google.com/rss/search?q=site:memri.org+iraq&hl=en&gl=US&ceid=US:en',
+    # US/CENTCOM Iraq ops
+    'centcom_iraq':     'https://news.google.com/rss/search?q=CENTCOM+iraq+OR+%22US+forces+iraq%22&hl=en&gl=US&ceid=US:en',
+    # Iran-Iraq nexus
+    'iran_iraq_nexus':  'https://news.google.com/rss/search?q=iran+iraq+%22PMF%22+OR+%22Hashd%22+OR+%22Kata%27ib%22&hl=en&gl=US&ceid=US:en',
+    # Sunni / political
+    'baghdad_post':     'https://news.google.com/rss/search?q=site:thebaghdadpost.com&hl=en&gl=US&ceid=US:en',
+    # Kirkuk / disputed territories
+    'kirkuk_now':       'https://news.google.com/rss/search?q=%22Kirkuk%22+OR+%22disputed+territories%22+iraq&hl=en&gl=US&ceid=US:en',
+}
+
 # Combine all feeds
 ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS}
 
@@ -310,6 +331,11 @@ def fetch_leadership_rss():
 def fetch_israeli_rss():
     """Fetch only Israeli news RSS feeds"""
     return fetch_all_rss(ISRAELI_RSS_FEEDS)
+
+
+def fetch_iraq_rss():
+    """Fetch Iraq-specific RSS feeds — PMF, KRG, ISF, Iran-Iraq nexus, CENTCOM."""
+    return fetch_all_rss(IRAQ_RSS_FEEDS)
 
 
 # ========================================
