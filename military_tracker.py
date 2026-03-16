@@ -1607,6 +1607,8 @@ ASSET_CATEGORIES = {
             'navcent arrival', 'navcent departure',
         ]
     },
+    'amphibious_group': {
+        'label': 'Amphibious Ready Group',
         'icon': '⚓',
         'weight': 3.5,
         'description': 'Marines + landing ships. Ground intervention capability.',
