@@ -109,6 +109,28 @@ SYRIA_CHANNELS = [
     'IranIntl_En',          # Iran International — Iran proxies in Syria
 ]
 
+IRAQ_CHANNELS = [
+    # Iraqi state / official
+    'IraqiNewsAgency',      # INA — Iraqi News Agency, official Baghdad positions
+    # PMF / Hashd al-Shaabi — Shi'a militia rhetoric (highest priority for escalation)
+    'SabreenNews',          # Sabreen News — PMF/Hashd-affiliated, direct militia statements
+    'nayaforiraq',          # Naya For Iraq — Iraq/Levant, covers PMF activity
+    # Kurdish / KRG
+    'kurdistan24english',   # Kurdistan 24 English — KRG, Peshmerga, Kirkuk tensions
+    'BasNews_Arabic',       # Bas News Arabic — Sulaymaniyah/PUK perspective
+    # Independent Iraqi English OSINT
+    'Shafaq_News',          # Shafaq News — best multilingual Iraq security coverage
+    # Iran nexus — IRGC/Quds Force direction of Iraqi militias
+    'IranIntl_En',          # Iran International EN — Iran-PMF nexus
+    'ManarNewsEN',          # Al-Manar EN — axis of resistance, Iraq ops
+    'almayadeenenglish',    # Al-Mayadeen — resistance axis framing
+    # CENTCOM / US forces in Iraq
+    'CentcomOfficial',      # CENTCOM — US force protection, Iraq ops
+    'OSINTdefender',        # OSINT Defender — US base strikes, drone attacks
+    'WarMonitors',          # War Monitor — Iraqi militia strikes
+    'ClashReport',          # Clash Report — Iraq incident tracking
+]
+
 ASIA_PACIFIC_CHANNELS = [
     'IntelSlava',           # Intel Slava — multilingual conflict OSINT
     'RALee85',              # Robert Lee — DPRK analyst
@@ -300,6 +322,17 @@ def fetch_telegram_signals_syria(hours_back=24):
         return []
 
 
+def fetch_telegram_signals_iraq(hours_back=24):
+    """Iraq theatre fetch — PMF/Hashd, KRG, ISF, Iran-Iraq nexus, CENTCOM."""
+    if not _telegram_available():
+        return []
+    try:
+        return _run_async(IRAQ_CHANNELS.copy(), hours_back)
+    except Exception as e:
+        print(f"[Telegram/Iraq] ❌ fetch error: {str(e)[:200]}")
+        return []
+
+
 # ========================================
 # HEALTH CHECK
 # ========================================
@@ -313,6 +346,7 @@ def get_telegram_status():
         'channels_lebanon': LEBANON_CHANNELS,
         'channels_yemen': YEMEN_CHANNELS,
         'channels_syria': SYRIA_CHANNELS,
+        'channels_iraq': IRAQ_CHANNELS,
         'channels_extended': EXTENDED_CHANNELS,
         'ready': _telegram_available() and (
             os.path.exists(f'{SESSION_NAME}.session') or
