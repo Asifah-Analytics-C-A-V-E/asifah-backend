@@ -55,6 +55,13 @@ try:
 except ImportError:
     SYRIA_RHETORIC_AVAILABLE = False
     print("[ME Backend] ⚠️ Syria rhetoric module not available")
+try:
+    from rhetoric_tracker_iraq import register_iraq_rhetoric_routes
+    IRAQ_RHETORIC_AVAILABLE = True
+    print("[ME Backend] ✅ Iraq rhetoric module loaded")
+except ImportError:
+    IRAQ_RHETORIC_AVAILABLE = False
+    print("[ME Backend] ⚠️ Iraq rhetoric module not available")
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -832,6 +839,8 @@ if YEMEN_AVAILABLE:
     register_yemen_routes(app)
     register_houthi_rhetoric_routes(app)
     register_syria_rhetoric_routes(app)
+if IRAQ_RHETORIC_AVAILABLE:
+    register_iraq_rhetoric_routes(app)
 
 # ========================================
 # CONFIGURATION
