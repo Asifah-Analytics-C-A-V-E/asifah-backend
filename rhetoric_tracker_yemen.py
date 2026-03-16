@@ -633,6 +633,36 @@ def run_houthi_rhetoric_scan(days=3):
     }
 
     _redis_set(RHETORIC_CACHE_KEY, result)
+
+    # ── HISTORY SNAPSHOT (v1.1.0) ──────────────────────────────────────
+    try:
+        snapshot = json.dumps({
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'score': max_level * 20,
+            'level': max_level,
+            'label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Unknown'),
+            'maritime': max_maritime,
+            'strikes': max_strike,
+        })
+        HISTORY_KEY = 'rhetoric:yemen:history'
+        if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+            import urllib.parse
+            enc = urllib.parse.quote(snapshot, safe='')
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/lpush/{HISTORY_KEY}/{enc}",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/ltrim/{HISTORY_KEY}/0/119",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            print(f"[Yemen Rhetoric] 📈 History snapshot saved")
+    except Exception as e:
+        print(f"[Yemen Rhetoric] History append error (non-fatal): {e}")
+    # ────────────────────────────────────────────────────────────────────
+
     print(f"[Yemen Rhetoric] ✅ Complete. Theatre level: {result['theatre_level']}")
     return result
 
@@ -731,4 +761,36 @@ def register_houthi_rhetoric_routes(app):
             })
         return jsonify({'success': False, 'message': 'No cached data yet'})
 
-    print("[Yemen Rhetoric] ✅ Routes registered: /api/rhetoric/yemen, /api/rhetoric/yemen/summary")
+    @app.route('/api/rhetoric/yemen/history', methods=['GET'])
+    def yemen_rhetoric_history():
+        """Rolling history of rhetoric snapshots — last 120 entries (~30 days)."""
+        from flask import request as flask_request
+        try:
+            limit = int(flask_request.args.get('limit', 120))
+            limit = max(1, min(limit, 120))
+            HISTORY_KEY = 'rhetoric:yemen:history'
+            entries = []
+            if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+                resp = requests.get(
+                    f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/{limit - 1}",
+                    headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                    timeout=5
+                )
+                raw = resp.json().get('result', [])
+                for item in raw:
+                    try:
+                        entries.append(json.loads(item))
+                    except Exception:
+                        pass
+            entries.reverse()
+            return jsonify({
+                'success': True,
+                'theatre': 'Yemen / Red Sea',
+                'history_key': 'rhetoric:yemen:history',
+                'count': len(entries),
+                'entries': entries,   # [{ts, score, level, label, maritime, strikes}, …]
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    print("[Yemen Rhetoric] ✅ Routes registered: /api/rhetoric/yemen, /api/rhetoric/yemen/summary, /api/rhetoric/yemen/history")
