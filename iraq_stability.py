@@ -3,7 +3,7 @@ Iraq Stability Index v1.0.0
 March 2026
 
 Calculates a composite Iraq stability score (0-100) from:
-  - Oil price (Brent crude — live via Yahoo Finance, same feed as Iran)
+  - Oil price (Brent crude  -  live via Yahoo Finance, same feed as Iran)
   - Iraq oil production & Basra terminal status (static, updated manually)
   - IQD/USD exchange rate & parallel market gap (static)
   - Governance status: PM, parliament, KRG dispute (static)
@@ -12,14 +12,14 @@ Calculates a composite Iraq stability score (0-100) from:
   - Humanitarian drag (chronic baseline)
 
 Scoring philosophy (base 50):
-  Oil is the jugular — 90% of govt revenue. Basra = single point of failure.
+  Oil is the jugular  -  90% of govt revenue. Basra = single point of failure.
   Governance is fragmented but functional. PMF = permanent wild card.
   Rhetoric tracker is the leading indicator for escalation.
 
 Provides:
-  /api/iraq/stability        — full stability response
-  /api/iraq/stability/score  — score + risk level only (for front page card)
-  /debug/iraq-stability      — component breakdown
+  /api/iraq/stability         -  full stability response
+  /api/iraq/stability/score   -  score + risk level only (for front page card)
+  /debug/iraq-stability       -  component breakdown
 
 Env vars (already set on ME backend):
   UPSTASH_REDIS_URL, UPSTASH_REDIS_TOKEN
@@ -138,7 +138,7 @@ def get_brent_oil_price():
             "sparkline": sparkline_data
         }
     except Exception as e:
-        print(f"[Iraq Oil] Yahoo Finance error: {e} — using fallback")
+        print(f"[Iraq Oil] Yahoo Finance error: {e}  -  using fallback")
         return {
             "success": False,
             "current_price": 103.75,
@@ -153,7 +153,7 @@ def get_brent_oil_price():
 
 # ============================================
 # IRAQ OIL PRODUCTION & BASRA STATUS
-# Static — updated manually from OPEC/EIA reports
+# Static  -  updated manually from OPEC/EIA reports
 # ============================================
 
 def get_iraq_oil_production():
@@ -171,7 +171,7 @@ def get_iraq_oil_production():
         "source": "OPEC Monthly Oil Market Report",
         "source_url": "https://www.opec.org/opec_web/en/publications/338.htm",
 
-        # Basra export terminals — the single point of failure
+        # Basra export terminals  -  the single point of failure
         "basra_terminals": {
             "status": "operational",        # operational | degraded | suspended | attacked
             "status_emoji": "🟢",
@@ -186,13 +186,13 @@ def get_iraq_oil_production():
             "live_tracker_url": "https://www.marinetraffic.com/en/ais/home/centerx:48.8/centery:29.7/zoom:11"
         },
 
-        # KRG northern oil — separate pipeline, separate dispute
+        # KRG northern oil  -  separate pipeline, separate dispute
         "krg_northern": {
             "status": "suspended",
             "status_emoji": "🔴",
-            "status_text": "KIRKUK–CEYHAN PIPELINE SUSPENDED",
-            "detail": "Kirkuk–Ceyhan pipeline suspended since March 2023 ICC arbitration ruling. "
-                      "~450K bpd of northern exports offline. Baghdad–KRG revenue dispute unresolved.",
+            "status_text": "KIRKUK-CEYHAN PIPELINE SUSPENDED",
+            "detail": "Kirkuk-Ceyhan pipeline suspended since March 2023 ICC arbitration ruling. "
+                      "~450K bpd of northern exports offline. Baghdad-KRG revenue dispute unresolved.",
             "bpd_offline": 450000,
             "dispute_active": True,
             "source": "Reuters / Iraq Oil Report"
@@ -206,7 +206,7 @@ def get_iraq_oil_production():
 
 # ============================================
 # IQD / USD EXCHANGE RATE
-# Static — updated manually
+# Static  -  updated manually
 # Official rate: ~1,300 IQD/USD (CBl pegged)
 # Parallel market: ~1,480-1,520 IQD/USD
 # ============================================
@@ -249,14 +249,14 @@ def get_iqd_exchange_rate():
         "source":          "CBI / Iraq bazaar reports",
         "source_url":      "https://cbi.iq/",
         "note": "CBI hard peg at 1,300. US sanctions on Iraq's dollar access "
-                "(for Iran payments) drove parallel rate up in 2023–24. "
+                "(for Iran payments) drove parallel rate up in 2023-24. "
                 "Current gap reflects residual pressure + war uncertainty."
     }
 
 
 # ============================================
 # GOVERNANCE STATUS
-# Static — updated manually
+# Static  -  updated manually
 # ============================================
 
 def get_iraq_governance():
@@ -295,12 +295,12 @@ def get_iraq_governance():
             "active":       True,
             "status_emoji": "🟠",
             "issues": [
-                "Kirkuk–Ceyhan pipeline suspended since 2023 ICC ruling",
+                "Kirkuk-Ceyhan pipeline suspended since 2023 ICC ruling",
                 "KRG budget share withheld by Baghdad",
                 "Peshmerga integration into Iraqi security forces stalled",
                 "Disputed territories (Sinjar, Kirkuk) authority unresolved"
             ],
-            "note": "KRG–Baghdad relationship is structurally dysfunctional but "
+            "note": "KRG-Baghdad relationship is structurally dysfunctional but "
                     "neither side wants full rupture. Iran-US war may accelerate US-KRG realignment."
         },
         "pmf_political": {
@@ -318,7 +318,7 @@ def get_iraq_governance():
 
 # ============================================
 # RHETORIC PENALTY
-# Live — reads from Iraq rhetoric tracker Redis cache
+# Live  -  reads from Iraq rhetoric tracker Redis cache
 # ============================================
 
 RHETORIC_PENALTY = {0: 0, 1: -2, 2: -5, 3: -10, 4: -18, 5: -25}
@@ -355,12 +355,12 @@ def calculate_iraq_stability(oil_data, production_data, iqd_data, governance_dat
     Base: 50
     Oil price:          +5 to -12  (fiscal health signal)
     Basra terminals:    0 to -20   (catastrophic if disrupted)
-    KRG pipeline:        -4        (chronic — already suspended)
+    KRG pipeline:        -4        (chronic  -  already suspended)
     IQD parallel gap:   0 to -8   (capital flight signal)
     Governance/PMF:     -5 to -12  (structural fragmentation)
-    Rhetoric penalty:   0 to -25   (leading indicator — live)
-    Humanitarian drag:  -5         (chronic baseline — IDPs, services)
-    War context bonus:  0          (no bonus — active conflict theatre)
+    Rhetoric penalty:   0 to -25   (leading indicator  -  live)
+    Humanitarian drag:  -5         (chronic baseline  -  IDPs, services)
+    War context bonus:  0          (no bonus  -  active conflict theatre)
     """
     base_score = 50
     components = {}
@@ -395,7 +395,7 @@ def calculate_iraq_stability(oil_data, production_data, iqd_data, governance_dat
         elif basra_status == 'degraded':
             basra_impact = -8
         else:
-            basra_impact = 0   # Operational — no penalty
+            basra_impact = 0   # Operational  -  no penalty
         components['basra_impact'] = basra_impact
         print(f"[Iraq Stability] Basra impact: {basra_impact:+d} ({basra_status})")
 
@@ -424,7 +424,7 @@ def calculate_iraq_stability(oil_data, production_data, iqd_data, governance_dat
         print(f"[Iraq Stability] IQD impact: {iqd_impact:+d} ({gap_status})")
 
     # ── Governance / PMF fragmentation ──
-    # Structural penalty — PMF parallel state, KRG dysfunction, PM dependency on Iran blocs
+    # Structural penalty  -  PMF parallel state, KRG dysfunction, PM dependency on Iran blocs
     governance_impact = -8  # Baseline structural fragmentation
     if governance_data:
         pmf = governance_data.get('pmf_political', {})
@@ -556,7 +556,7 @@ def _fetch_all_stability():
 
 
 def get_stability_data(force_refresh=False):
-    """Get Iraq stability data — Redis-first with 4-hour TTL."""
+    """Get Iraq stability data  -  Redis-first with 4-hour TTL."""
     if not force_refresh and _redis_available():
         cached = _redis_get(CACHE_KEY)
         if cached:
@@ -603,7 +603,7 @@ def register_iraq_stability_endpoints(app):
     @app.route('/api/iraq/stability', methods=['GET'])
     def api_iraq_stability():
         """
-        Full Iraq stability index — score, oil, IQD, governance, rhetoric.
+        Full Iraq stability index  -  score, oil, IQD, governance, rhetoric.
         ?force=true bypasses Redis cache.
         """
         force = request.args.get('force', 'false').lower() == 'true'
@@ -616,7 +616,7 @@ def register_iraq_stability_endpoints(app):
     @app.route('/api/iraq/stability/score', methods=['GET'])
     def api_iraq_stability_score():
         """
-        Lightweight score endpoint — for front page card / rhetoric tracker badge.
+        Lightweight score endpoint  -  for front page card / rhetoric tracker badge.
         Returns score, risk_level, risk_color, trend only.
         """
         try:
