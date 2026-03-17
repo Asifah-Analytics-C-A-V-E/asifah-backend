@@ -1657,7 +1657,7 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
     Calculate sophisticated threat probability score
     
     Used by all 4 threat cards (Iran, Hezbollah, Houthis, Syria)
-    Supports dynamic time windows (24hr, 48hr, 7day, 30day)
+    Supports dynamic time windows (hourly, 48-hour, 7-day, 30-day)
     
     Returns:
     - probability: 0-100 score
@@ -2653,7 +2653,7 @@ def calculate_israel_incoming_threats(articles, days_analyzed=7):
     1. Iran direct (ballistic/cruise missiles, drones)
     2. Hezbollah (rockets, missiles, ATGMs, drones)
     3. Hamas (rockets, tunnels, infiltration)
-    4. West Bank / Gaza (shooting, stabbing, IEDs — distinct from Hamas)
+    4. West Bank / Gaza (shooting, stabbing, IEDs  -  distinct from Hamas)
     5. Houthis (long-range ballistic/cruise missiles)
     6. Syria-based threats (Iranian proxies, spillover)
     """
@@ -2746,12 +2746,12 @@ def calculate_israel_outgoing_operations(articles, days_analyzed=7):
     Calculate probability of Israeli OUTGOING military operations
     
     Unlike Jordan (defensive only), Israel is an active striker:
-    1. Israel → Lebanon (daily strikes on Hezbollah)
-    2. Israel → Gaza (ongoing operations)
-    3. Israel → Iran (strategic strikes)
-    4. Israel → Syria (periodic strikes on Iranian assets)
-    5. Israel → West Bank (counter-terror raids)
-    6. Israel → Yemen/Houthis (retaliatory strikes)
+    1. Israel -> Lebanon (daily strikes on Hezbollah)
+    2. Israel -> Gaza (ongoing operations)
+    3. Israel -> Iran (strategic strikes)
+    4. Israel -> Syria (periodic strikes on Iranian assets)
+    5. Israel -> West Bank (counter-terror raids)
+    6. Israel -> Yemen/Houthis (retaliatory strikes)
     """
     
     outgoing_scores = {
