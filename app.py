@@ -1657,7 +1657,7 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
     Calculate sophisticated threat probability score
     
     Used by all 4 threat cards (Iran, Hezbollah, Houthis, Syria)
-    Supports dynamic time windows (24h, 48h, 7d, 30d)
+    Supports dynamic time windows (24hr, 48hr, 7day, 30day)
     
     Returns:
     - probability: 0-100 score
