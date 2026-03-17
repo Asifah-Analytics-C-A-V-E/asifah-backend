@@ -130,7 +130,7 @@ def _file_save_cache(cache_data):
 
 
 def get_cached_result(target):
-    """Get cached result for a target — tries Redis first, then file fallback"""
+    """Get cached result for a target - tries Redis first, then file fallback"""
     # Try Redis
     if redis_client:
         try:
@@ -154,7 +154,7 @@ def get_cached_result(target):
 
 
 def update_cache(target, data, ttl_hours=24):
-    """Update cache for a specific target — writes to Redis AND file fallback"""
+    """Update cache for a specific target - writes to Redis AND file fallback"""
     cache_entry = {
         **data,
         'cached_at': datetime.now(timezone.utc).isoformat(),
@@ -205,7 +205,7 @@ def is_cache_fresh(cached_data, max_age_hours=6):
 
 
 def get_all_cache_status():
-    """Get status of all cached targets — useful for debugging"""
+    """Get status of all cached targets - useful for debugging"""
     targets = ['iran', 'hezbollah', 'houthis', 'syria', 'jordan', 'israel', 'iraq']
     status = {}
     for target in targets:
