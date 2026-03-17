@@ -773,10 +773,10 @@ def fetch_rhetoric_articles(days=3):
                     pub_str = pub
 
                 articles.append({
-                    'title': msg.get('title', '')[:300],
+                    'title': msg.get('title', '')[:500],
                     'url': msg.get('url', ''),
                     'published': pub_str if isinstance(pub_str, str) else '',
-                    'description': msg.get('title', '')[:300],
+                    'description': msg.get('title', '')[:1000],
                     'source': msg.get('source', 'Telegram'),
                     'weight': 1.2,  # Telegram gets slight boost — real-time
                     'views': msg.get('views', 0),
