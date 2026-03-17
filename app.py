@@ -2,6 +2,7 @@
 Asifah Analytics Backend v3.0.0
 February 8, 2026
 
+"""
 All endpoints working:
 - /api/threat/<target> (hezbollah, iran, houthis, syria)
 - /api/syria-conflicts
@@ -10,7 +11,6 @@ All endpoints working:
 - /api/houthis-threat (with caching)
 - /api/syria-conflict (with caching)
 """
-
 # ========================================
 # IMPORTS
 # ========================================
@@ -47,7 +47,6 @@ try:
 except ImportError:
     YEMEN_AVAILABLE = False
     print("[ME Backend] ⚠️ Yemen modules not available")
-
 try:
     from rhetoric_tracker_syria import register_syria_rhetoric_routes
     SYRIA_RHETORIC_AVAILABLE = True
@@ -62,6 +61,20 @@ try:
 except ImportError:
     IRAQ_RHETORIC_AVAILABLE = False
     print("[ME Backend] ⚠️ Iraq rhetoric module not available")
+try:
+    from iraq_humanitarian import register_iraq_humanitarian_endpoints
+    IRAQ_HUMANITARIAN_AVAILABLE = True
+    print("[ME Backend] ✅ Iraq humanitarian module loaded")
+except ImportError:
+    IRAQ_HUMANITARIAN_AVAILABLE = False
+    print("[ME Backend] ⚠️ Iraq humanitarian module not available")
+try:
+    from iraq_stability import register_iraq_stability_endpoints
+    IRAQ_STABILITY_AVAILABLE = True
+    print("[ME Backend] ✅ Iraq stability module loaded")
+except ImportError:
+    IRAQ_STABILITY_AVAILABLE = False
+    print("[ME Backend] ⚠️ Iraq stability module not available")
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -841,8 +854,10 @@ if YEMEN_AVAILABLE:
     register_syria_rhetoric_routes(app)
 if IRAQ_RHETORIC_AVAILABLE:
     register_iraq_rhetoric_routes(app)
-    from iraq_humanitarian import register_iraq_humanitarian_endpoints
+if IRAQ_HUMANITARIAN_AVAILABLE:
     register_iraq_humanitarian_endpoints(app)
+if IRAQ_STABILITY_AVAILABLE:
+    register_iraq_stability_endpoints(app)
 
 # ========================================
 # CONFIGURATION
