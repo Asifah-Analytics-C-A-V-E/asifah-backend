@@ -1,1198 +1,1000 @@
-"""
-Iraq Rhetoric Tracker — Asifah Analytics
-v1.0.0 — March 2026
+<!-- Asifah Analytics - Iraq Rhetoric Tracker v1.0.0 - March 2026 -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Iraq Rhetoric Tracker — Asifah Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    /* ── THEME VARIABLES ── */
+    :root {
+        --bg-color: #f5f5f5;
+        --container-bg: #ffffff;
+        --card-bg: #ffffff;
+        --card-border: #e1e8ed;
+        --text-primary: #1a1a2e;
+        --text-secondary: #4a5568;
+        --text-muted: #718096;
+        --article-bg: #f8f9fa;
+        --accent: #c17f3a;
+        --accent-glow: rgba(193,127,58,0.3);
+        --card-glow: none;
+        --card-hover-glow: 0 8px 20px rgba(0,0,0,0.12);
+        --watermark-opacity: 0.07;
+        --watermark-filter: none;
+    }
 
-Tracks escalation rhetoric across Iraq's multi-faction landscape
-during the active Iran-US war (March 2026):
+    [data-theme="dark"] {
+        --bg-color: #0d0b08;
+        --container-bg: #111209;
+        --card-bg: #111209;
+        --card-border: #00c8d4;
+        --text-primary: #e8d5a3;
+        --text-secondary: #c4a96d;
+        --text-muted: #8a7048;
+        --article-bg: #0c0f0a;
+        --accent: #d4943f;
+        --accent-glow: rgba(212,148,63,0.25);
+        --cyber-cyan: #00c8d4;
+        --cyber-cyan-glow: rgba(0,200,212,0.18);
+        --card-glow: 0 0 6px rgba(0,200,212,0.12), 0 0 1px rgba(0,200,212,0.25);
+        --card-hover-glow: 0 0 22px rgba(0,200,212,0.28), 0 8px 25px rgba(0,0,0,0.5);
+        --watermark-opacity: 0.22;
+        --watermark-filter: saturate(5) brightness(0.9) hue-rotate(170deg);
+    }
 
-Actors monitored:
-- PMF / Hashd al-Shaabi — Iran-directed Shi'a militia umbrella
-- Kata'ib Hezbollah — most lethal PMF faction, anti-US operations
-- Muqtada al-Sadr — political wildcard, Saraya al-Salam militia
-- KRG / Peshmerga — Kurdish autonomous region, Kirkuk tensions
-- Iran (re: Iraq) — IRGC Quds Force, direct strikes on US facilities
-- US Forces / CENTCOM — force protection posture, base strike responses
-- Iraqi Government (ISF) — Baghdad's balancing act
-- ISIS Resurgence — Anbar/Diyala desert pockets
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-Five threat vectors:
-1. PMF MOBILIZATION — militia rhetoric, mobilization orders, anti-US statements
-2. IRAN DIRECT STRIKES — ballistic missiles/drones vs Embassy Baghdad, Consulate Erbil
-3. US BASE STRIKES — drone/rocket attacks on Al Asad, Ain al-Asad, Erbil airbase
-4. KURDISH TENSIONS — Kirkuk standoffs, Peshmerga-PMF friction, PKK/Turkey spillover
-5. ISIS RESURGENCE — Anbar/Diyala sleeper cells exploiting security vacuum
+    body {
+        font-family: 'Times New Roman', Times, serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        min-height: 100vh;
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
 
-Sources: Google News RSS (EN/AR/KU) + Rudaw + Kurdistan24
-         + Telegram (IRAQ_CHANNELS) + Reddit
-         + Iran International + CENTCOM
+    /* Watermark */
+    body::before {
+        content: '';
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 110vmin; height: 110vmin;
+        min-width: 800px; min-height: 800px;
+        max-width: 1400px; max-height: 1400px;
+        background-image: url('https://raw.githubusercontent.com/SassAndSweet/asifah-analytics/main/Asifah_Analytics_1_25_26_V1_LOGO.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        opacity: var(--watermark-opacity);
+        filter: var(--watermark-filter);
+        z-index: 0;
+        pointer-events: none;
+        user-select: none;
+    }
 
-Registers on ME backend (asifah-backend.onrender.com)
-Endpoints: GET /api/rhetoric/iraq
-           GET /api/rhetoric/iraq/summary
-           GET /api/rhetoric/iraq/history
-"""
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        position: relative;
+        z-index: 1;
+    }
 
-import os
-import json
-import threading
-import time
-import requests
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
-from flask import jsonify, request
+    /* ── HEADER ── */
+    header {
+        background: linear-gradient(135deg, var(--bg-color), #1a1a0a);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 20px 25px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        position: relative;
+    }
+    [data-theme="dark"] header {
+        background: linear-gradient(135deg, #0a0e08, #12160a);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 40px var(--accent-glow), 0 0 60px rgba(0,200,212,0.08);
+        border-bottom: 1px solid rgba(0,200,212,0.25);
+    }
+    .header-logo { width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--card-border); flex-shrink: 0; }
+    .header-center { flex: 1; text-align: center; }
+    .header-flag { font-size: 0.75rem; font-weight: 700; letter-spacing: 3px; color: var(--text-muted); text-transform: uppercase; }
+    .header-title { font-family: 'Times New Roman', Times, serif; font-size: clamp(1.3rem, 3vw, 1.9rem); font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--text-primary); margin: 4px 0; }
+    .header-subtitle { font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px; }
+    .header-timestamp { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; letter-spacing: 0.5px; }
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 
-# ============================================
-# CONFIG
-# ============================================
-UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
-UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+    /* Back link */
+    .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 14px; border-radius: 8px;
+        border: 1px solid var(--card-border);
+        color: var(--text-muted); font-size: 0.7rem; font-weight: 700;
+        letter-spacing: 1px; text-decoration: none; text-transform: uppercase;
+        transition: all 0.2s;
+    }
+    .back-link:hover { border-color: var(--accent); color: var(--accent); }
 
-try:
-    from telegram_signals import fetch_telegram_signals_iraq
-    TELEGRAM_AVAILABLE = True
-    print("[Iraq Rhetoric] ✅ Telegram signals available")
-except ImportError:
-    TELEGRAM_AVAILABLE = False
-    print("[Iraq Rhetoric] ⚠️ Telegram signals not available — RSS only")
+    /* Lang buttons */
+    .lang-group { display: flex; gap: 4px; }
+    .lang-btn {
+        font-family: 'Times New Roman', Times, serif;
+        padding: 4px 10px; border-radius: 6px;
+        border: 1px solid var(--card-border);
+        background: transparent; color: var(--text-muted);
+        font-size: 0.7rem; font-weight: 700; cursor: pointer;
+        transition: all 0.2s; letter-spacing: 0.5px;
+    }
+    .lang-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    [data-theme="dark"] .lang-btn.active { color: #0d0b08; }
 
-try:
-    from rss_monitor import fetch_iraq_rss
-    RSS_MONITOR_AVAILABLE = True
-    print("[Iraq Rhetoric] ✅ RSS monitor available")
-except ImportError:
-    RSS_MONITOR_AVAILABLE = False
-    print("[Iraq Rhetoric] ⚠️ RSS monitor not available")
+    /* Theme toggle */
+    .theme-row { display: flex; align-items: center; gap: 8px; }
+    .theme-label { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 1.5px; text-transform: uppercase; }
+    .theme-toggle { position: relative; width: 48px; height: 24px; cursor: pointer; }
+    .theme-toggle input { opacity: 0; width: 0; height: 0; }
+    .theme-toggle-slider {
+        position: absolute; inset: 0; border-radius: 12px;
+        background: #ccc; transition: 0.3s;
+        display: flex; align-items: center; padding: 2px;
+    }
+    [data-theme="dark"] .theme-toggle-slider { background: var(--accent); transform: none; }
+    .theme-toggle-slider::before {
+        content: '☀️'; width: 20px; height: 20px;
+        border-radius: 50%; background: white;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 12px; transition: 0.3s; margin-left: 0;
+    }
+    [data-theme="dark"] .theme-toggle-slider::before { content: '🌙'; margin-left: 24px; }
 
-RHETORIC_CACHE_KEY = 'iraq_rhetoric_cache'
-RHETORIC_CACHE_TTL = 6 * 3600  # 6 hours
-SCAN_INTERVAL_HOURS = 6
+    /* ── HISTORY CHART (gold standard) ── */
+    .history-chart-card { background: var(--container-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 22px; margin-bottom: 18px; box-shadow: var(--card-glow); }
+    .history-chart-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .history-chart-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+    .history-toggle-group { display: flex; gap: 4px; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 3px; }
+    .history-toggle-btn { font-family: 'Times New Roman', Times, serif; font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; padding: 4px 12px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; text-transform: uppercase; background: transparent; color: var(--text-muted); transition: all 0.2s; }
+    .history-toggle-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .history-toggle-btn:hover:not(.active) { border-color: var(--card-border); color: var(--text-primary); }
+    [data-theme="dark"] .history-toggle-btn.compare.active { background: #00c8d4; border-color: #00c8d4; color: #0d0b08; }
+    .history-chart-wrap { position: relative; height: 180px; }
+    .history-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px; }
+    .history-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+    .history-legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .history-legend-dot { width: 10px; height: 3px; border-radius: 2px; }
 
-_rhetoric_running = False
-_rhetoric_lock    = threading.Lock()
+    /* ── SECTION CARDS ── */
+    .section-card {
+        background: var(--container-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 22px;
+        margin-bottom: 18px;
+        box-shadow: var(--card-glow);
+        transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+    }
+    .section-card:hover { box-shadow: var(--card-hover-glow); }
 
+    [data-theme="dark"] .section-card { box-shadow: var(--card-glow); border-color: var(--card-border); }
+    [data-theme="dark"] .history-chart-card { box-shadow: var(--card-glow); border-color: var(--card-border); }
 
-# ============================================
-# ESCALATION LEVELS — Gold Standard
-# ============================================
-ESCALATION_LEVELS = {
-    0: {'label': 'Baseline',      'color': '#6b7280', 'description': 'No significant signals'},
-    1: {'label': 'Rhetoric',      'color': '#3b82f6', 'description': 'Standard factional statements'},
-    2: {'label': 'Tension',       'color': '#f59e0b', 'description': 'Warnings, mobilization language'},
-    3: {'label': 'Confrontation', 'color': '#f97316', 'description': 'Direct threats, troop movements'},
-    4: {'label': 'Incident',      'color': '#ef4444', 'description': 'Attacks confirmed, strikes reported'},
-    5: {'label': 'Active Conflict','color': '#dc2626', 'description': 'Ongoing operations, multiple fronts'},
-}
+    .section-title {
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 2px;
+        text-transform: uppercase; color: var(--accent);
+        margin-bottom: 18px; padding-bottom: 10px;
+        border-bottom: 1px solid var(--card-border);
+    }
 
+    /* ── THEATRE BANNER ── */
+    .theatre-banner {
+        background: var(--container-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 22px 28px;
+        margin-bottom: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+        box-shadow: var(--card-glow);
+    }
+    .theatre-score-big { font-size: clamp(3rem, 8vw, 5rem); font-weight: 900; line-height: 1; color: var(--accent); }
+    .theatre-score-label { font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-top: 4px; }
+    .theatre-badge { display: inline-block; padding: 5px 16px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: white; margin-top: 8px; }
+    .theatre-right { text-align: right; }
+    .theatre-escalation-label-text { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); }
+    .theatre-level-display { font-size: clamp(1.2rem, 3vw, 1.6rem); font-weight: 700; margin: 4px 0; }
+    .theatre-level-desc { font-size: 0.7rem; color: var(--text-muted); }
+    .theatre-scan-info { font-size: 0.6rem; color: var(--text-muted); font-style: italic; margin-top: 4px; }
 
-# ============================================
-# ACTORS
-# ============================================
-ACTORS = {
-    'pmf_hashd': {
-        'name': 'PMF / Hashd al-Shaabi',
-        'flag': '🇮🇶',
-        'icon': '⚔️',
-        'color': '#dc2626',
-        'role': 'Iran-Directed Shi\'a Militia Umbrella',
-        'description': 'Popular Mobilization Forces — umbrella of 60+ Shi\'a militias, IRGC-directed',
-        'spokespersons': [
-            'faleh al-fayyadh', 'hadi al-amiri', 'abu mahdi al-muhandis legacy',
-            'hashd al-shaabi', 'pmf spokesperson', 'islamic resistance in iraq',
-            'المقاومة الإسلامية في العراق', 'هيئة الحشد الشعبي',
-            'فالح الفياض', 'هادي العامري',
-        ],
-        'keywords': [
-            'pmf', 'hashd', 'hashd al-shaabi', 'popular mobilization',
-            'islamic resistance in iraq', 'iraqi resistance factions',
-            'iran-backed militia', 'iran-backed iraqi', 'iraqi militia',
-            'resistance factions iraq', 'factions iraq', 'iraqi factions',
-            'we will not allow', 'will target', 'will respond',
-            'المقاومة الإسلامية في العراق', 'الحشد الشعبي', 'فصائل مسلحة',
-            'فصائل عراقية', 'المقاومة العراقية',
-        ],
-        'baseline_statements_per_week': 15,
-    },
-    'kataib': {
-        'name': 'Kata\'ib Hezbollah',
-        'flag': '☪️',
-        'icon': '🎯',
-        'color': '#b91c1c',
-        'role': 'PMF\'s Most Lethal Anti-US Faction',
-        'description': 'IRGC-Quds Force direct proxy — responsible for Tower 22 and multiple US base attacks',
-        'spokespersons': [
-            'kataib hezbollah', 'kata\'ib hezbollah', 'abu hussein al-hamidawi',
-            'kataib hezbollah media', 'kataib spokesman',
-            'كتائب حزب الله', 'أبو حسين الحمداوي',
-            # KH signature threat language
-            'revenge for', 'avenge', 'martyr blood',
-            'we hold america responsible', 'america will pay',
-            'targeting americans', 'american presence must end',
-            'expel american forces', 'resistance will not be silent',
-            # Arabic signature phrases
-            'الثأر', 'دم الشهيد', 'نحمّل أمريكا المسؤولية',
-            'إخراج القوات الأمريكية', 'لن تمر الجريمة دون عقاب',
-            'الرد قادم', 'الأمريكيون سيدفعون الثمن',
-            'أبو علي العسكري', 'الثأر لأبو علي',
-        ],
-        'keywords': [
-            'kataib hezbollah', 'kata\'ib hezbollah', 'kata\'ib',
-            'kataib', 'hezbollah iraq', 'iraq hezbollah',
-            'كتائب حزب الله', 'كتائب',
-            'tower 22', 'drone attack us base', 'attacked us forces',
-            'operation true promise iraq', 'islamic resistance response',
-            'we will respond', 'will not go unanswered', 'blood will not be wasted',
-            'our response is coming', 'await our response', 'open battle',
-            'لن يمر دون رد', 'دماؤهم لن تضيع', 'انتظروا ردنا',
-            'المقاومة ستردّ', 'سنثأر', 'معركة مفتوحة',
-            'أبو مجاهد العساف', 'المسؤول الأمني كتائب',
-            'الحاج أبو مجاهد', 'مقرًا', 'كتائب تعلن',
-            'اغتيال قيادي', 'استشهاد قيادي',
-        ],
-        'baseline_statements_per_week': 8,
-    },
-    'sadr': {
-        'name': 'Muqtada al-Sadr',
-        'flag': '🕌',
-        'icon': '👁️',
-        'color': '#7c3aed',
-        'role': 'Political Wildcard / Saraya al-Salam',
-        'description': 'Populist Shi\'a cleric — commands Saraya al-Salam militia, unpredictable swing factor',
-        'spokespersons': [
-            'muqtada al-sadr', 'sadr', 'sadr office', 'sadrist movement',
-            'saraya al-salam', 'mahdi army', 'sadr city statement',
-            'مقتدى الصدر', 'التيار الصدري', 'سرايا السلام',
-        ],
-        'keywords': [
-            'muqtada', 'al-sadr', 'sadr', 'sadrist', 'saraya al-salam',
-            'mahdi army', 'sadr city', 'sadr statement', 'sadr warns',
-            'sadr condemns', 'sadr calls', 'sadr movement',
-            'مقتدى الصدر', 'الصدر', 'التيار الصدري', 'سرايا السلام',
-            'المهدي', 'الصدريون',
-        ],
-        'baseline_statements_per_week': 5,
-    },
-    'krg': {
-        'name': 'KRG / Peshmerga',
-        'flag': '🏔️',
-        'icon': '⚙️',
-        'color': '#f59e0b',
-        'role': 'Kurdish Autonomous Region',
-        'description': 'Kurdistan Regional Government — controls Erbil, Sulaymaniyah; Peshmerga forces; Kirkuk dispute',
-        'spokespersons': [
-            'masrour barzani', 'nechirvan barzani', 'krg spokesperson',
-            'peshmerga command', 'kurdistan regional government',
-            'masoud barzani', 'pdk', 'puk',
-            'مسرور بارزاني', 'نيجيرفان بارزاني', 'البيشمركة',
-            'حكومة إقليم كردستان',
-        ],
-        'keywords': [
-            'krg', 'peshmerga', 'kurdistan regional government',
-            'erbil', 'sulaymaniyah', 'duhok', 'barzani',
-            'kurdish forces iraq', 'kurdish autonomous', 'kurdistan iraq',
-            'kirkuk disputed', 'oil fields kirkuk', 'pkk iraq',
-            'turkey strikes kurdistan', 'pdk', 'puk',
-            'البيشمركة', 'إقليم كردستان', 'أربيل', 'السليمانية',
-            'كركوك', 'البرزاني', 'حزب العمال الكردستاني',
-        ],
-        'baseline_statements_per_week': 7,
-    },
-    'iran_iraq': {
-        'name': 'Iran (re: Iraq)',
-        'flag': '🇮🇷',
-        'icon': '🔱',
-        'color': '#16a34a',
-        'role': 'IRGC / Direct Strike Actor',
-        'description': 'Iran directing PMF + conducting direct ballistic missile/drone strikes on US Embassy Baghdad, Consulate Erbil',
-        'spokespersons': [
-            'irgc', 'quds force', 'iranian foreign ministry',
-            'khamenei iraq', 'iran foreign ministry iraq',
-            'سپاه پاسداران', 'نیروی قدس', 'وزارت خارجه ایران',
-            'خامنه‌ای', 'حرس الثوري', 'فيلق القدس',
-        ],
-        'keywords': [
-            'iran iraq', 'irgc iraq', 'quds force iraq',
-            'iranian backed iraq', 'iran militia iraq',
-            'iran strikes iraq', 'iran missile iraq',
-            'iran drone iraq', 'iranian attack iraq',
-            'tehran iraq', 'iran warns iraq', 'iran threatens iraq',
-            # Direct strike keywords
-            'missile baghdad', 'missile erbil', 'drone baghdad',
-            'drone erbil', 'attack embassy', 'attack consulate',
-            'strikes us embassy', 'hits us embassy', 'embassy attack',
-            'consulate attack', 'ballistic missile iraq',
-            'إيران العراق', 'الحرس الثوري العراق', 'فيلق القدس',
-            'صاروخ بغداد', 'صاروخ أربيل', 'هجوم السفارة',
-            'هجوم القنصلية',
-        ],
-        'baseline_statements_per_week': 10,
-    },
-    'us_centcom': {
-        'name': 'US Forces / CENTCOM',
-        'flag': '🇺🇸',
-        'icon': '🛡️',
-        'color': '#3b82f6',
-        'role': 'Force Protection / Counterstrikes',
-        'description': 'US forces at Al Asad, Ain al-Asad, Erbil base, Baghdad — responding to Iran/PMF attacks',
-        'spokespersons': [
-            'centcom', 'pentagon iraq', 'us military iraq',
-            'department of defense iraq', 'us forces iraq',
-            'us embassy baghdad', 'state department iraq',
-            'us consul erbil',
-        ],
-        'keywords': [
-            'centcom iraq', 'us forces iraq', 'us military iraq',
-            'us troops iraq', 'american forces iraq',
-            'al asad airbase', 'ain al-asad', 'us base iraq',
-            'us embassy baghdad', 'us consulate erbil',
-            'american embassy', 'american consulate',
-            'us strike iraq', 'us retaliation iraq',
-            'force protection iraq', 'us jets iraq',
-            'operation inherent resolve', 'us airstrike',
-            'pentagon iraq', 'department of defense',
-            'القوات الأمريكية', 'السفارة الأمريكية', 'القنصلية الأمريكية',
-            'القاعدة الأمريكية', 'عين الأسد', 'الأسد الجوي',
-        ],
-        'baseline_statements_per_week': 8,
-    },
-    'iraqi_gov': {
-        'name': 'Iraqi Government (ISF)',
-        'flag': '🏛️',
-        'icon': '⚖️',
-        'color': '#0ea5e9',
-        'role': 'Baghdad\'s Balancing Act',
-        'description': 'Shi\'a-led government navigating between Iran pressure and US partnership — ISF forces',
-        'spokespersons': [
-            'mohammed shia al-sudani', 'al-sudani', 'sudani',
-            'iraqi government', 'iraqi prime minister',
-            'iraqi foreign ministry', 'isf', 'iraqi security forces',
-            'محمد شياع السوداني', 'السوداني', 'الحكومة العراقية',
-            'وزارة الخارجية العراقية',
-        ],
-        'keywords': [
-            'al-sudani', 'sudani', 'iraqi prime minister',
-            'iraqi government', 'baghdad government',
-            'iraqi security forces', 'isf', 'iraqi army',
-            'iraq condemns', 'iraq demands', 'iraq protests',
-            'iraq sovereignty', 'iraqi sovereignty',
-            'iraq foreign ministry', 'iraq warns',
-            'السوداني', 'الحكومة العراقية', 'القوات الأمنية العراقية',
-            'الجيش العراقي', 'السيادة العراقية', 'الخارجية العراقية',
-        ],
-        'baseline_statements_per_week': 8,
-    },
-    'isis_iraq': {
-        'name': 'ISIS Resurgence',
-        'flag': '☠️',
-        'icon': '💀',
-        'color': '#374151',
-        'role': 'Insurgent Threat / Security Vacuum',
-        'description': 'ISIS exploiting security vacuum during Iran-US war — Anbar, Diyala, Kirkuk desert pockets',
-        'spokespersons': [
-            'amaq', 'islamic state iraq', 'isis claim',
-            'isis statement', 'amaq news agency',
-        ],
-        'keywords': [
-            'isis iraq', 'islamic state iraq', 'isil iraq', 'daesh iraq',
-            'isis attack iraq', 'isis ambush', 'isis ied',
-            'isis sleeper cell', 'isis resurgence iraq',
-            'anbar isis', 'diyala isis', 'kirkuk isis',
-            'nineveh isis', 'isis desert', 'isis insurgency',
-            'anti-isis operation', 'counter-isis iraq',
-            'داعش العراق', 'تنظيم الدولة العراق', 'عمليات ضد داعش',
-            'خلايا نائمة', 'الأنبار داعش', 'ديالى داعش',
-        ],
-        'baseline_statements_per_week': 3,
-    },
-}
+    /* ── VECTOR TABS ── */
+    .vector-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .vector-tab {
+        background: var(--article-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 8px;
+        padding: 10px 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        flex: 1;
+        min-width: 140px;
+        text-align: center;
+    }
+    .vector-tab:hover { box-shadow: var(--card-hover-glow); }
+    .vector-tab.active { border-color: var(--accent); background: rgba(212,148,63,0.08); }
+    [data-theme="dark"] .vector-tab.active { border-color: var(--cyber-cyan); background: rgba(0,200,212,0.08); }
+    .vector-tab-icon { font-size: 1.2rem; margin-bottom: 4px; }
+    .vector-tab-label { font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); }
+    .vector-tab-level { font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
 
+    /* ── ESCALATION LADDER ── */
+    .ladder-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    .ladder-step {
+        flex: 1; min-width: 70px;
+        text-align: center; padding: 12px 6px;
+        border-radius: 8px;
+        border: 2px solid var(--card-border);
+        background: var(--article-bg);
+        transition: all 0.3s;
+    }
+    .ladder-step.active {
+        background: rgba(212,148,63,0.1);
+        box-shadow: 0 0 16px rgba(212,148,63,0.3);
+    }
+    [data-theme="dark"] .ladder-step.active { box-shadow: 0 0 16px rgba(0,200,212,0.25); }
+    .ladder-step-num { font-size: 1.25rem; font-weight: 900; }
+    .ladder-step-label { font-size: 0.55rem; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
 
-# ============================================
-# THREAT VECTORS — Five-dimension analysis
-# ============================================
+    /* ── ACTORS GRID ── */
+    .actors-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .actor-card {
+        background: var(--article-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        padding: 16px;
+        transition: all 0.3s;
+    }
+    .actor-card:hover { box-shadow: var(--card-hover-glow); transform: translateY(-2px); }
+    .actor-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .actor-flag { font-size: 1.4rem; flex-shrink: 0; }
+    .actor-name { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.5px; }
+    .actor-role { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 1px; }
+    .actor-level-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: white; margin-left: auto; flex-shrink: 0; }
+    .actor-stats { display: flex; gap: 12px; font-size: 0.65rem; color: var(--text-muted); margin-bottom: 8px; }
+    .actor-silence-alert {
+        background: rgba(212,148,63,0.15);
+        border: 1px solid rgba(212,148,63,0.4);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 0.65rem;
+        color: var(--accent);
+        margin-top: 8px;
+    }
+    .vector-pills { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+    .vector-pill {
+        font-size: 0.55rem; font-weight: 700;
+        padding: 2px 8px; border-radius: 3px;
+        color: white; letter-spacing: 0.5px;
+    }
 
-# VECTOR 1: PMF MOBILIZATION
-PMF_MOBILIZATION_TRIGGERS = {
-    5: [
-        'full mobilization', 'general mobilization', 'all factions mobilize',
-        'open war on americans', 'expel all american forces',
-        'resistance ready for full escalation', 'we declare war',
-        'بدء التعبئة العامة', 'التصعيد الشامل',
-    ],
-    4: [
-        'mobilize forces', 'mobilization order', 'all factions on alert',
-        'resistance factions mobilize', 'ready to strike',
-        'put on combat footing', 'units deployed forward',
-        'تعبئة الفصائل', 'الفصائل تستعد', 'نصب كمائن',
-    ],
-    3: [
-        'we will respond', 'will not go unanswered', 'we will retaliate',
-        'red line crossed', 'patience is running out',
-        'resistance will act', 'attack imminent',
-        'سنرد', 'لن يمر دون رد', 'الخط الأحمر',
-         # KH/PMF Arabic escalation language
-        'الرد قادم', 'سيكون ردنا', 'لن يمر دون رد',
-        'العملية قادمة', 'في الطريق', 'قريباً',
-        'مقرًا', 'نعترف', 'نؤكد',
-        'الثأر واجب', 'لا بد من الرد',
-        'أبو مجاهد', 'أبو علي العسكري',
-    ],
-    2: [
-        'condemn us aggression', 'demand withdrawal',
-        'resistance factions warn', 'pmf warns',
-        'hashd warns', 'we reserve the right',
-        'نطالب بالانسحاب', 'نحتفظ بحق الرد',
-        'المسؤول الأمني', 'بيان رسمي', 'تصريح',
-        'كتائب تعلن', 'أعلنت كتائب',
-        'الحاج', 'أبو مجاهد', 'قيادي',
-        'شهيد', 'استشهد', 'اغتيال',
-    ],
-    1: [
-        'pmf', 'hashd', 'islamic resistance', 'resistance factions',
-        'popular mobilization', 'kataib', 'asaib',
-        'الحشد الشعبي', 'المقاومة الإسلامية', 'فصائل مسلحة',
-    ],
-}
+    /* ── COORDINATION SIGNALS ── */
+    .coord-item {
+        background: var(--article-bg);
+        border-left: 3px solid var(--accent);
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-bottom: 10px;
+        font-size: 0.75rem;
+    }
+    .coord-item.critical { border-left-color: #dc2626; background: rgba(220,38,38,0.08); }
 
-# VECTOR 2: IRAN DIRECT STRIKES (on Iraq soil — Embassy/Consulate/US facilities)
-IRAN_STRIKE_TRIGGERS = {
-    5: [
-        'embassy destroyed', 'consulate destroyed', 'direct hit embassy',
-        'direct hit consulate', 'massive missile strike baghdad',
-        'ballistic missile embassy', 'total destruction',
-        'تدمير السفارة', 'صاروخ باليستي على السفارة',
-    ],
-    4: [
-        'missile hits embassy', 'drone hits embassy', 'strikes embassy',
-        'missile hits consulate', 'drone hits consulate',
-        'attack on us embassy', 'attack on us consulate',
-        'us diplomatic compound struck', 'iran fires at embassy',
-        'ضربة السفارة الأمريكية', 'هجوم القنصلية', 'يستهدف السفارة',
-    ],
-    3: [
-        'rockets near embassy', 'explosion near embassy',
-        'near consulate erbil', 'close to us diplomatic',
-        'iran threatens embassy', 'iran warns embassy',
-        'التحذير من ضرب السفارة', 'قصف قرب السفارة',
-    ],
-    2: [
-        'iran missile iraq', 'iran drone iraq', 'iran strikes iraq',
-        'ballistic missile iraq', 'iran attack iraq',
-        'صاروخ إيراني', 'طائرة مسيّرة إيرانية', 'ضربة إيرانية على العراق',
-    ],
-    1: [
-        'iran iraq', 'iranian attack', 'irgc iraq', 'quds force iraq',
-        'إيران العراق', 'الحرس الثوري', 'فيلق القدس',
-    ],
-}
+    /* ── ARTICLES ── */
+    .article-item {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--card-border);
+        font-size: 0.75rem;
+    }
+    .article-item:last-child { border-bottom: none; }
+    .article-link { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .article-link:hover { text-decoration: underline; }
+    .article-meta { font-size: 0.6rem; color: var(--text-muted); margin-top: 2px; }
 
-# VECTOR 3: US BASE STRIKES (PMF/Kata'ib attacks on US military facilities)
-US_BASE_STRIKE_TRIGGERS = {
-    5: [
-        'overrun us base', 'us base destroyed', 'mass casualty us forces',
-        'multiple bases hit simultaneously', 'coordinated attack all bases',
-    ],
-    4: [
-        'rockets hit al asad', 'drone hits al asad', 'strike ain al-asad',
-        'attack us base iraq', 'us soldiers killed iraq',
-        'us base under attack', 'us forces casualties iraq',
-        'erbil airbase attack', 'baghdad airport attack',
-        'ضرب قاعدة عين الأسد', 'هجوم على القاعدة الأمريكية',
-    ],
-    3: [
-        'rockets fired at base', 'drones intercepted us base',
-        'attempted attack us base', 'rockets land near base',
-        'mortar us base', 'us base targeted',
-        'استهداف القاعدة', 'قذائف على القاعدة',
-    ],
-    2: [
-        'drone attack iraq', 'rocket attack iraq', 'us forces targeted',
-        'militia attack us', 'irgc drone iraq',
-        'هجوم بطائرة مسيّرة', 'صواريخ تستهدف',
-    ],
-    1: [
-        'al asad', 'ain al-asad', 'us base iraq', 'us troops iraq',
-        'erbil base', 'operation inherent resolve',
-        'عين الأسد', 'قاعدة أمريكية', 'القوات الأمريكية',
-    ],
-}
+    /* ── FOOTER ── */
+    .page-footer { text-align: center; padding: 20px 0 30px; font-size: 0.6rem; color: var(--text-muted); letter-spacing: 1px; }
 
-# VECTOR 4: KURDISH TENSIONS
-KURDISH_TENSION_TRIGGERS = {
-    5: [
-        'peshmerga pmf clash', 'kurdish forces under attack',
-        'erbil bombed', 'krg declares emergency',
-        'full kirkuk offensive',
-    ],
-    4: [
-        'peshmerga mobilize', 'pmf advances on kirkuk',
-        'armed confrontation kirkuk', 'krg forces on alert',
-        'turkey strikes peshmerga', 'pkk attack erbil',
-        'تقدم الحشد نحو كركوك', 'مواجهة مسلحة كركوك',
-    ],
-    3: [
-        'kirkuk standoff', 'peshmerga pmf standoff',
-        'disputed territory standoff', 'krg warns pmf',
-        'turkey threatens', 'pkk attack iraq',
-        'توتر كركوك', 'مواجهة البيشمركة والحشد',
-    ],
-    2: [
-        'kirkuk tensions', 'disputed territories iraq',
-        'peshmerga warning', 'krg protests', 'barzani warns',
-        'turkey pkk iraq', 'pkk iraq',
-        'توترات كركوك', 'الأراضي المتنازع عليها',
-    ],
-    1: [
-        'kirkuk', 'peshmerga', 'krg', 'kurdish iraq',
-        'erbil', 'sulaymaniyah', 'barzani',
-        'كركوك', 'البيشمركة', 'إقليم كردستان', 'أربيل',
-    ],
-}
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+        header { flex-direction: column; align-items: center; text-align: center; }
+        .header-right { align-items: center; }
+        .theatre-banner { flex-direction: column; text-align: center; }
+        .theatre-right { text-align: center; }
+        .vector-tab { min-width: 100px; padding: 8px 10px; }
+        .actors-grid { grid-template-columns: 1fr; }
+    }
 
-# VECTOR 5: ISIS RESURGENCE
-ISIS_RESURGENCE_TRIGGERS = {
-    5: [
-        'isis controls territory', 'isis seizes town',
-        'isis major offensive iraq', 'isis caliphate re-established',
-    ],
-    4: [
-        'isis mass casualty attack', 'isis kills soldiers',
-        'isis overruns checkpoint', 'large isis attack',
-        'isis coordinated attack', 'isis complex attack',
-        'داعش يستولي', 'هجوم كبير لداعش',
-    ],
-    3: [
-        'isis ambush iraq', 'isis ied iraq', 'isis attack',
-        'isis fighters iraq', 'isis operation iraq',
-        'isis sleeper cell activated', 'anti-isis operation launched',
-        'كمين داعش', 'عبوة داعش', 'عملية ضد داعش',
-    ],
-    2: [
-        'isis activity iraq', 'isis presence iraq',
-        'isis threat iraq', 'counter-isis', 'isis movement',
-        'نشاط داعش', 'تهديد داعش', 'مكافحة الإرهاب',
-    ],
-    1: [
-        'isis iraq', 'daesh iraq', 'islamic state iraq', 'isil iraq',
-        'anbar', 'diyala', 'nineveh insurgency',
-        'داعش', 'تنظيم الدولة', 'الأنبار', 'ديالى',
-    ],
-}
+    /* ── RTL ── */
+    [dir="rtl"] .back-link { flex-direction: row-reverse; }
+    [dir="rtl"] .coord-item { border-left: none; border-right: 3px solid var(--accent); }
+    [dir="rtl"] .coord-item.critical { border-right-color: #dc2626; }
+</style>
+</head>
+<body>
+<div class="container">
 
+    <!-- HEADER -->
+    <header>
+        <a href="index.html" class="back-link" data-i18n="backLink">← Back to Dashboard</a>
+        <img src="https://raw.githubusercontent.com/SassAndSweet/asifah-analytics/main/Asifah_Analytics_1_25_26_V1_LOGO.png"
+             class="header-logo" alt="Asifah Analytics"/>
+        <div class="header-center">
+            <div class="header-flag">🇮🇶 <span data-i18n="pageFlag">IRAQ</span></div>
+            <div class="header-title" data-i18n="pageTitle">IRAQ RHETORIC TRACKER</div>
+            <div class="header-subtitle" data-i18n="pageSubtitle">PMF · Kata'ib · Sadr · KRG · Iran · CENTCOM · ISIS Watch</div>
+            <div class="header-timestamp">Last updated: <span id="lastUpdated" data-i18n="loading">Loading...</span></div>
+        </div>
+        <div class="header-right">
+            <div class="lang-group">
+                <button class="lang-btn active" onclick="setLanguage('en')">EN</button>
+                <button class="lang-btn" onclick="setLanguage('ar')">ع</button>
+                <button class="lang-btn" onclick="setLanguage('he')">עב</button>
+                <button class="lang-btn" onclick="setLanguage('fa')">ف</button>
+            </div>
+            <div class="theme-row">
+                <span class="theme-label" data-i18n="themeLabel">THEME</span>
+                <label class="theme-toggle">
+                    <input type="checkbox" id="themeToggle" onchange="toggleTheme()"/>
+                    <span class="theme-toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </header>
 
-# ============================================
-# ACTOR → KEYWORD MAPPING (article routing)
-# ============================================
-ACTOR_KEYWORDS = {
-    'pmf_hashd':  ['pmf', 'hashd', 'popular mobilization', 'islamic resistance iraq',
-                   'resistance factions', 'الحشد الشعبي', 'المقاومة الإسلامية في العراق'],
-    'kataib':     ['kataib', 'kata\'ib', 'hezbollah iraq', 'كتائب حزب الله'],
-    'sadr':       ['sadr', 'muqtada', 'sadrist', 'saraya al-salam',
-                   'الصدر', 'مقتدى', 'سرايا السلام'],
-    'krg':        ['peshmerga', 'krg', 'barzani', 'erbil', 'kirkuk', 'sulaymaniyah',
-                   'البيشمركة', 'كردستان العراق', 'البرزاني'],
-    'iran_iraq':  ['iran iraq', 'irgc iraq', 'quds force iraq', 'iranian',
-                   'ballistic missile iraq', 'drone baghdad', 'embassy attack',
-                   'consulate attack', 'إيران العراق', 'الحرس الثوري'],
-    'us_centcom': ['centcom', 'us forces iraq', 'us military iraq', 'us base',
-                   'al asad', 'ain al-asad', 'us embassy baghdad', 'us consulate erbil',
-                   'القوات الأمريكية', 'السفارة الأمريكية'],
-    'iraqi_gov':  ['al-sudani', 'iraqi government', 'iraqi prime minister',
-                   'iraqi army', 'iraqi security forces',
-                   'السوداني', 'الحكومة العراقية', 'الجيش العراقي'],
-    'isis_iraq':  ['isis iraq', 'daesh iraq', 'islamic state iraq', 'amaq',
-                   'داعش العراق', 'تنظيم الدولة'],
-}
+    <!-- THEATRE BANNER -->
+    <div class="theatre-banner" id="theatreBanner">
+        <div>
+            <div class="theatre-score-big" id="theatreScore">--</div>
+            <div class="theatre-score-label" data-i18n="scoreLabel">RHETORIC SCORE / 100</div>
+            <div class="theatre-badge" id="theatreBadge" style="background:#6b7280;">--</div>
+        </div>
+        <div class="theatre-right">
+            <div class="theatre-escalation-label-text" data-i18n="escalationLabel">THEATRE ESCALATION LEVEL</div>
+            <div class="theatre-level-display" id="theatreLevelDisplay">--</div>
+            <div class="theatre-level-desc" id="theatreLevelDesc">--</div>
+            <div class="theatre-scan-info" id="theatreScanInfo" data-i18n="loading">Loading...</div>
+        </div>
+    </div>
 
+    <!-- VECTOR TABS -->
+    <div class="section-card">
+        <div class="section-title" data-i18n="vectorTitle">⚡ THREAT VECTORS</div>
+        <div class="vector-tabs" id="vectorTabs">
+            <div class="vector-tab active" data-vector="pmf" onclick="setVector('pmf')">
+                <div class="vector-tab-icon">⚔️</div>
+                <div class="vector-tab-label" data-i18n="vecPMF">PMF Mobilization</div>
+                <div class="vector-tab-level" id="vecLevelPMF">--</div>
+            </div>
+            <div class="vector-tab" data-vector="iran" onclick="setVector('iran')">
+                <div class="vector-tab-icon">🚀</div>
+                <div class="vector-tab-label" data-i18n="vecIran">Iran Direct Strikes</div>
+                <div class="vector-tab-level" id="vecLevelIran">--</div>
+            </div>
+            <div class="vector-tab" data-vector="base" onclick="setVector('base')">
+                <div class="vector-tab-icon">🛡️</div>
+                <div class="vector-tab-label" data-i18n="vecBase">US Base Strikes</div>
+                <div class="vector-tab-level" id="vecLevelBase">--</div>
+            </div>
+            <div class="vector-tab" data-vector="kurdish" onclick="setVector('kurdish')">
+                <div class="vector-tab-icon">🏔️</div>
+                <div class="vector-tab-label" data-i18n="vecKurd">Kurdish Tensions</div>
+                <div class="vector-tab-level" id="vecLevelKurd">--</div>
+            </div>
+            <div class="vector-tab" data-vector="isis" onclick="setVector('isis')">
+                <div class="vector-tab-icon">☠️</div>
+                <div class="vector-tab-label" data-i18n="vecISIS">ISIS Resurgence</div>
+                <div class="vector-tab-level" id="vecLevelISIS">--</div>
+            </div>
+        </div>
+    </div>
 
-# ============================================
-# COORDINATION SIGNAL DETECTION
-# ============================================
-COORDINATION_PAIRS = [
-    ('pmf_hashd', 'iran_iraq',  'Iran + PMF coordinated escalation — proxy axis activation'),
-    ('pmf_hashd', 'kataib',     'PMF + Kata\'ib joint mobilization — most dangerous combination'),
-    ('kataib',    'iran_iraq',  'Kata\'ib + Iran coordinated — direct IRGC Quds Force direction'),
-    ('sadr',      'pmf_hashd',  'Sadr + PMF alignment — mass street pressure + armed militia'),
-    ('iraqi_gov', 'us_centcom', 'Iraqi Government + US coordination — sovereignty response'),
-    ('krg',       'us_centcom', 'KRG + US coordination — northern front consolidation'),
-]
+    <!-- ESCALATION LADDER -->
+    <div class="section-card">
+        <div class="section-title" data-i18n="ladderTitle">🪜 ESCALATION LADDER</div>
+        <div class="ladder-row" id="ladderRow"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:10px;">
+            <div style="font-size:11px;color:var(--text-muted);" id="articlesClassified" data-i18n="articlesClassified">📰 Corresponding articles in Top Articles by Actor below</div>
+            <button onclick="triggerScan()" id="scanBtn" style="
+                background: var(--accent); color: white; border: none;
+                padding: 8px 20px; border-radius: 8px; cursor: pointer;
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+                display: flex; align-items: center; gap: 6px;
+                transition: opacity 0.2s;
+            ">
+                🔄 <span data-i18n="refreshScan">Refresh Scan</span>
+            </button>
+        </div>
+    </div>
 
-SILENCE_BASELINE = {
-    'pmf_hashd':  3,
-    'kataib':     2,
-    'sadr':       1,
-    'krg':        2,
-    'iran_iraq':  2,
-    'us_centcom': 2,
-    'iraqi_gov':  2,
-    'isis_iraq':  1,
-}
+    <!-- RHETORIC HISTORY CHART -->
+    <div class="history-chart-card" id="historyCard">
+        <div class="history-chart-header">
+            <span class="history-chart-title">📈 <span data-i18n="trendTitle">RHETORIC TREND</span></span>
+            <div class="history-toggle-group">
+                <button class="history-toggle-btn active" id="btn7d" onclick="setHistoryView('7d')">7 DAY</button>
+                <button class="history-toggle-btn" id="btn30d" onclick="setHistoryView('30d')">30 DAY</button>
+                <button class="history-toggle-btn compare" id="btnCompare" onclick="setHistoryView('compare')">COMPARE</button>
+            </div>
+        </div>
+        <div class="history-chart-wrap">
+            <canvas id="historyChart"></canvas>
+            <div class="history-empty" id="historyEmpty" style="display:none;">📡 <span data-i18n="chartEmpty">Collecting data — first snapshot saves on next scan cycle</span></div>
+        </div>
+        <div class="history-legend" id="historyLegend">
+            <div class="history-legend-item"><div class="history-legend-dot" style="background:#22c55e;"></div> Iraq</div>
+        </div>
+    </div>
 
+    <!-- COORDINATION SIGNALS -->
+    <div class="section-card" id="coordCard" style="display:none;">
+        <div class="section-title" data-i18n="coordTitle">⚡ COORDINATION SIGNALS</div>
+        <div id="coordList"></div>
+    </div>
 
-# ============================================
-# RSS FEEDS
-# ============================================
-RHETORIC_RSS_FEEDS = [
-    # English — PMF / Iran-Iraq nexus
-    ("https://news.google.com/rss/search?q=PMF+Iraq+Iran+militia+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Hashd+al-Shaabi+Iraq&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Kataib+Hezbollah+Iraq&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Iraq+US+embassy+Baghdad+attack&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=US+consulate+Erbil+attack+Iran&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Iran+missile+drone+Iraq+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=al+Asad+airbase+attack+Iraq&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=CENTCOM+Iraq+strike+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    # Kurdish / KRG
-    ("https://news.google.com/rss/search?q=Kirkuk+Peshmerga+PMF+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    ("https://news.google.com/rss/search?q=KRG+Erbil+security+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    ("https://www.rudaw.net/english/feed", 1.0),
-    ("https://www.kurdistan24.net/en/rss.xml", 0.95),
-    # ISIS
-    ("https://news.google.com/rss/search?q=ISIS+Iraq+attack+Anbar+Diyala+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    # Sadr
-    ("https://news.google.com/rss/search?q=Muqtada+al-Sadr+Iraq+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    # Broader Iraq security
-    ("https://news.google.com/rss/search?q=Iraq+war+Iran+2026+militia&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Iraq+security+2026+attack&hl=en&gl=US&ceid=US:en", 0.85),
-    # Arabic — Iraq
-    ("https://news.google.com/rss/search?q=الحشد+الشعبي+العراق+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
-    ("https://news.google.com/rss/search?q=كتائب+حزب+الله+العراق&hl=ar&gl=SA&ceid=SA:ar", 1.0),
-    ("https://news.google.com/rss/search?q=إيران+العراق+ضربة+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
-    ("https://news.google.com/rss/search?q=السفارة+الأمريكية+بغداد+هجوم&hl=ar&gl=SA&ceid=SA:ar", 1.0),
-    ("https://news.google.com/rss/search?q=داعش+العراق+هجوم+2026&hl=ar&gl=SA&ceid=SA:ar", 0.9),
-    ("https://news.google.com/rss/search?q=مقتدى+الصدر+العراق&hl=ar&gl=SA&ceid=SA:ar", 0.9),
-    ("https://news.google.com/rss/search?q=كركوك+البيشمركة+2026&hl=ar&gl=SA&ceid=SA:ar", 0.85),
-    # Farsi — Iran directing Iraq operations
-    ("https://news.google.com/rss/search?q=سپاه+عراق+عملیات&hl=fa&gl=IR&ceid=IR:fa", 0.95),
-    ("https://news.google.com/rss/search?q=ایران+عراق+موشک&hl=fa&gl=IR&ceid=IR:fa", 0.95),
-    # Hebrew — Israeli intel on Iran-Iraq
-    ("https://news.google.com/rss/search?q=עיראק+איראן+מיליציה&hl=iw&gl=IL&ceid=IL:iw", 0.85),
-]
+    <!-- ACTOR STATUS GRID -->
+    <div class="section-card">
+        <div class="section-title" data-i18n="actorTitle">🎯 ACTOR STATUS</div>
+        <div class="actors-grid" id="actorsGrid"></div>
+    </div>
 
+    <!-- TOP ARTICLES -->
+    <div class="section-card" id="articlesSection">
+        <div class="section-title" data-i18n="articlesTitle">📰 TOP ARTICLES BY ACTOR</div>
+        <div id="articlesList"></div>
+    </div>
 
-# ============================================
-# REDDIT CONFIG
-# ============================================
-REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    <!-- FOOTER -->
+    <div class="page-footer">
+        © 2025-2026 ASIFAH ANALYTICS — ALL RIGHTS RESERVED — v1.0.0-iraq |
+        <a href="https://www.buymeacoffee.com/asifahanalytics" target="_blank" style="color:var(--accent);text-decoration:none;">☕ buy me a coffee</a>
+    </div>
 
-IRAQ_SUBREDDITS = [
-    'CredibleDefense',
-    'geopolitics',
-    'worldnews',
-    'iraq',
-    'IRG',
-]
+</div><!-- /container -->
 
-IRAQ_REDDIT_KEYWORDS = [
-    'pmf iraq', 'kataib', 'hashd', 'us embassy baghdad',
-    'us consulate erbil', 'iran iraq missile', 'al asad attack',
-    'sadr iraq', 'peshmerga kirkuk', 'isis iraq 2026',
-]
+<script>
+    const API_BASE = 'https://asifah-backend.onrender.com';
 
+    // ══════════════════════════════════════════════════════════════
+    // RHETORIC HISTORY CHART — Gold Standard v1.0
+    // ══════════════════════════════════════════════════════════════
+    let _historyChart = null;
+    let _historyView  = '7d';
 
-def fetch_reddit_iraq(days=3):
-    """Fetch Reddit posts from Iraq-relevant subreddits."""
-    time_filter = 'day' if days <= 1 else 'week' if days <= 7 else 'month'
-    query = ' OR '.join(IRAQ_REDDIT_KEYWORDS[:4])
-    posts = []
+    const HISTORY_CONFIG = {
+        theatre:    'Iraq',
+        historyUrl: API_BASE + '/api/rhetoric/iraq/history',
+        color:      '#22c55e',  // Iraq: green
+        compareTheatres: [
+            { label: 'Iraq',    url: API_BASE + '/api/rhetoric/iraq/history',    color: '#22c55e' },
+            { label: 'Syria',   url: API_BASE + '/api/rhetoric/syria/history',   color: '#d4943f' },
+            { label: 'Lebanon', url: 'https://lebanon-stability-backend.onrender.com/api/rhetoric/lebanon/history', color: '#6495ed' },
+            { label: 'Yemen',   url: API_BASE + '/api/rhetoric/yemen/history',   color: '#f97316' },
+        ]
+    };
 
-    for subreddit in IRAQ_SUBREDDITS:
-        try:
-            time.sleep(2)
-            url = f'https://www.reddit.com/r/{subreddit}/search.json'
-            params = {
-                'q': query,
-                'restrict_sr': 'true',
-                'sort': 'new',
-                't': time_filter,
-                'limit': 25
-            }
-            resp = requests.get(url, params=params,
-                                headers={'User-Agent': REDDIT_USER_AGENT},
-                                timeout=10)
-            if resp.status_code != 200:
-                continue
+    const LEVEL_ZONES = [
+        { yMin: 0,  yMax: 20,  color: 'rgba(107,114,128,0.08)' },
+        { yMin: 20, yMax: 40,  color: 'rgba(59,130,246,0.08)'  },
+        { yMin: 40, yMax: 60,  color: 'rgba(245,158,11,0.10)'  },
+        { yMin: 60, yMax: 80,  color: 'rgba(249,115,22,0.12)'  },
+        { yMin: 80, yMax: 100, color: 'rgba(220,38,38,0.14)'   },
+    ];
 
-            children = resp.json().get('data', {}).get('children', [])
-            count = 0
-            for post in children:
-                pd = post.get('data', {})
-                title = pd.get('title', '')
-                text_lower = f"{title} {pd.get('selftext','')}".lower()
-                if not any(kw in text_lower for kw in IRAQ_REDDIT_KEYWORDS):
-                    continue
-                posts.append({
-                    'title': title[:200],
-                    'url': f"https://www.reddit.com{pd.get('permalink','')}",
-                    'published': datetime.fromtimestamp(
-                        pd.get('created_utc', 0), tz=timezone.utc
-                    ).isoformat(),
-                    'description': pd.get('selftext', '')[:300],
-                    'source': f'r/{subreddit}',
-                    'weight': 0.8,
-                })
-                count += 1
-            print(f"[Iraq Rhetoric/Reddit] r/{subreddit}: {count} posts")
-        except Exception as e:
-            print(f"[Iraq Rhetoric/Reddit] r/{subreddit} error: {e}")
-
-    return posts
-
-
-# ============================================
-# REDIS HELPERS
-# ============================================
-def _redis_get(key):
-    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
-        return None
-    try:
-        resp = requests.get(
-            f"{UPSTASH_REDIS_URL}/get/{key}",
-            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-            timeout=5
-        )
-        data = resp.json()
-        if data.get('result'):
-            return json.loads(data['result'])
-    except Exception as e:
-        print(f"[Iraq Rhetoric Redis] GET error: {e}")
-    return None
-
-
-def _redis_set(key, value, ttl=RHETORIC_CACHE_TTL):
-    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
-        return False
-    try:
-        payload = json.dumps(value, default=str)
-        resp = requests.post(
-            f"{UPSTASH_REDIS_URL}/set/{key}",
-            headers={
-                "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            data=payload,
-            params={"EX": ttl},
-            timeout=5
-        )
-        return resp.json().get('result') == 'OK'
-    except Exception as e:
-        print(f"[Iraq Rhetoric Redis] SET error: {e}")
-    return False
-
-
-# ============================================
-# ARTICLE FETCHING
-# ============================================
-def fetch_rhetoric_articles(days=3):
-    """Fetch articles from RSS + dedicated Iraq RSS + Telegram + Reddit."""
-    articles = []
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-
-    # ── Core RSS ──
-    for feed_url, weight in RHETORIC_RSS_FEEDS:
-        try:
-            resp = requests.get(feed_url, timeout=12,
-                                headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code != 200:
-                continue
-            root = ET.fromstring(resp.content)
-            for item in root.findall('.//item'):
-                title = item.findtext('title', '')
-                url   = item.findtext('link', '')
-                pub   = item.findtext('pubDate', '')
-                desc  = item.findtext('description', '')
-                try:
-                    pub_dt = parsedate_to_datetime(pub)
-                    if pub_dt.tzinfo is None:
-                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                    if pub_dt < since:
-                        continue
-                    pub_str = pub_dt.isoformat()
-                except Exception:
-                    pub_str = pub
-
-                articles.append({
-                    'title': title,
-                    'url': url,
-                    'published': pub_str if isinstance(pub_str, str) else '',
-                    'description': desc[:300],
-                    'source': feed_url.split('q=')[1].split('&')[0] if 'q=' in feed_url else 'RSS',
-                    'weight': weight,
-                })
-        except Exception as e:
-            print(f"[Iraq Rhetoric RSS] Error {feed_url[:60]}: {e}")
-
-    rss_count = len(articles)
-    print(f"[Iraq Rhetoric] Core RSS: {rss_count} articles")
-
-    # ── Dedicated Iraq RSS monitor feeds ──
-    if RSS_MONITOR_AVAILABLE:
-        try:
-            iraq_rss = fetch_iraq_rss()
-            added = 0
-            for art in iraq_rss:
-                pub = art.get('published', art.get('date', ''))
-                try:
-                    pub_dt = datetime.fromisoformat(pub)
-                    if pub_dt.tzinfo is None:
-                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                    if pub_dt < since:
-                        continue
-                    pub_str = pub_dt.isoformat()
-                except Exception:
-                    pub_str = pub
-                articles.append({
-                    'title': art.get('title', '')[:300],
-                    'url': art.get('url', art.get('link', '')),
-                    'published': pub_str,
-                    'description': art.get('description', '')[:300],
-                    'source': art.get('source', 'Iraq RSS'),
-                    'weight': 1.0,
-                })
-                added += 1
-            print(f"[Iraq Rhetoric] RSS monitor: {added} Iraq-specific articles")
-        except Exception as e:
-            print(f"[Iraq Rhetoric] RSS monitor error: {e}")
-
-    # ── Telegram ──
-    if TELEGRAM_AVAILABLE:
-        try:
-            hours_back = days * 24
-            tg_messages = fetch_telegram_signals_iraq(hours_back=hours_back)
-            tg_count = 0
-            for msg in tg_messages:
-                pub = msg.get('published', '')
-                try:
-                    pub_dt = datetime.fromisoformat(pub)
-                    if pub_dt.tzinfo is None:
-                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                    if pub_dt < since:
-                        continue
-                    pub_str = pub_dt.isoformat()
-                except Exception:
-                    pub_str = pub
-
-                articles.append({
-                    'title': msg.get('title', '')[:500],
-                    'url': msg.get('url', ''),
-                    'published': pub_str if isinstance(pub_str, str) else '',
-                    'description': msg.get('title', '')[:1000],
-                    'source': msg.get('source', 'Telegram'),
-                    'weight': 1.2,  # Telegram gets slight boost — real-time
-                    'views': msg.get('views', 0),
-                    'forwards': msg.get('forwards', 0),
-                })
-                tg_count += 1
-            print(f"[Iraq Rhetoric] Telegram: {tg_count} messages")
-        except Exception as e:
-            print(f"[Iraq Rhetoric] Telegram error: {e}")
-
-    # ── Reddit ──
-    try:
-        reddit_posts = fetch_reddit_iraq(days=days)
-        for post in reddit_posts:
-            articles.append(post)
-        print(f"[Iraq Rhetoric] Reddit: {len(reddit_posts)} posts")
-    except Exception as e:
-        print(f"[Iraq Rhetoric] Reddit error: {e}")
-
-    # Deduplicate by URL
-    seen = set()
-    unique = []
-    for a in articles:
-        u = a.get('url', '')
-        if u and u not in seen:
-            seen.add(u)
-            unique.append(a)
-
-    tg_c   = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
-    red_c  = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    rss_c  = len(unique) - tg_c - red_c
-    print(f"[Iraq Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {red_c} Reddit)")
-    return unique
-
-
-# ============================================
-# CLASSIFY ARTICLES
-# ============================================
-def classify_articles(articles):
-    """Classify articles by actor and threat vector."""
-
-    actor_results = {
-        actor_id: {
-            'name': info['name'],
-            'flag': info['flag'],
-            'icon': info['icon'],
-            'color': info['color'],
-            'role': info['role'],
-            'statement_count': 0,
-            'pmf_score': 0,
-            'iran_strike_score': 0,
-            'us_base_score': 0,
-            'kurdish_score': 0,
-            'isis_score': 0,
-            'max_level': 0,
-            'top_articles': [],
-            'silence_alert': False,
-            'new_voice': False,
+    const zoneBandPlugin = {
+        id: 'zoneBands',
+        beforeDraw(chart) {
+            const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+            LEVEL_ZONES.forEach(zone => {
+                const yTop = y.getPixelForValue(zone.yMax);
+                const yBottom = y.getPixelForValue(zone.yMin);
+                ctx.save(); ctx.fillStyle = zone.color;
+                ctx.fillRect(left, Math.min(yTop,yBottom), right-left, Math.abs(yBottom-yTop));
+                ctx.restore();
+            });
         }
-        for actor_id, info in ACTORS.items()
+    };
+
+    function _sliceEntries(entries, view) {
+        if (!entries || entries.length === 0) return [];
+        return view === '7d' ? entries.slice(-28) : entries;
+    }
+    function _fmtLabel(ts) {
+        try { return new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric' }); }
+        catch { return ts; }
     }
 
-    theatre_summary = {
-        'pmf_max_level': 0,
-        'iran_strike_max_level': 0,
-        'us_base_max_level': 0,
-        'kurdish_max_level': 0,
-        'isis_max_level': 0,
-        'total_articles': len(articles),
-        'coordination_signals': [],
+    function renderHistoryChart(datasets, labels) {
+        const canvas = document.getElementById('historyChart');
+        const emptyEl = document.getElementById('historyEmpty');
+        if (!canvas) return;
+        if (!datasets || !datasets.length || !datasets[0].data.length) {
+            canvas.style.display='none'; if(emptyEl) emptyEl.style.display='block'; return;
+        }
+        canvas.style.display='block'; if(emptyEl) emptyEl.style.display='none';
+        if (_historyChart) { _historyChart.destroy(); _historyChart=null; }
+        const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+        const gridColor = isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.06)';
+        const tickColor = isDark?'#8a7048':'#8c7a5a';
+        const fontFam = "'Times New Roman', Times, serif";
+        _historyChart = new Chart(canvas.getContext('2d'), {
+            type:'line', plugins:[zoneBandPlugin], data:{labels,datasets},
+            options:{
+                responsive:true, maintainAspectRatio:false, animation:{duration:400},
+                interaction:{mode:'index',intersect:false},
+                plugins:{
+                    legend:{display:datasets.length>1, labels:{color:tickColor,font:{family:fontFam,size:10},boxWidth:20,boxHeight:2,usePointStyle:true,pointStyle:'line'}},
+                    tooltip:{
+                        backgroundColor:isDark?'#0d1b2e':'#fff',
+                        borderColor:isDark?'rgba(0,200,212,0.3)':'rgba(0,0,0,0.1)',
+                        borderWidth:1, titleColor:isDark?'#e8d5a3':'#2c2416', bodyColor:isDark?'#c4a96d':'#5c4a2a',
+                        titleFont:{family:fontFam,size:11,weight:'bold'}, bodyFont:{family:fontFam,size:10},
+                        callbacks:{label(ctx){const l=['Baseline','Rhetoric','Tension','Confrontation','Incident','Active Conflict']; return ` ${ctx.dataset.label||'Score'}: ${ctx.parsed.y} — ${l[Math.min(Math.floor(ctx.parsed.y/20),5)]||''}`;}}
+                    }
+                },
+                scales:{
+                    x:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:fontFam,size:9},maxTicksLimit:8,maxRotation:0}},
+                    y:{min:0,max:100,grid:{color:gridColor},ticks:{color:tickColor,font:{family:fontFam,size:9},stepSize:20,callback:v=>['BL','RH','TN','CF','IC','AC'][v/20]||v}}
+                }
+            }
+        });
     }
 
-    actor_timestamps = {a: [] for a in ACTORS}
-
-    for article in articles:
-        text = f"{article.get('title', '')} {article.get('description', '')}".lower()
-        pub_date = article.get('published', '')
-
-        # ── Route article to actors ──
-        matched_actors = []
-        for actor_id, keywords in ACTOR_KEYWORDS.items():
-            if any(kw in text for kw in keywords):
-                matched_actors.append(actor_id)
-                actor_results[actor_id]['statement_count'] += 1
-                if pub_date:
-                    actor_timestamps[actor_id].append(pub_date)
-
-                # Store top articles (cap at 5)
-                if len(actor_results[actor_id]['top_articles']) < 5:
-                    actor_results[actor_id]['top_articles'].append({
-                        'title': article.get('title', '')[:150],
-                        'url': article.get('url', ''),
-                        'source': article.get('source', ''),
-                        'published': pub_date if isinstance(pub_date, str) else '',
-                    })
-
-        # ── Score vectors ──
-        for level in range(5, 0, -1):
-            # PMF mobilization
-            for kw in PMF_MOBILIZATION_TRIGGERS.get(level, []):
-                if kw in text:
-                    for actor_id in matched_actors:
-                        if level > actor_results[actor_id]['pmf_score']:
-                            actor_results[actor_id]['pmf_score'] = level
-                    if level > theatre_summary['pmf_max_level']:
-                        theatre_summary['pmf_max_level'] = level
-                    break
-
-            # Iran direct strikes
-            for kw in IRAN_STRIKE_TRIGGERS.get(level, []):
-                if kw in text:
-                    for actor_id in matched_actors:
-                        if level > actor_results[actor_id]['iran_strike_score']:
-                            actor_results[actor_id]['iran_strike_score'] = level
-                    if level > theatre_summary['iran_strike_max_level']:
-                        theatre_summary['iran_strike_max_level'] = level
-                    break
-
-            # US base strikes
-            for kw in US_BASE_STRIKE_TRIGGERS.get(level, []):
-                if kw in text:
-                    for actor_id in matched_actors:
-                        if level > actor_results[actor_id]['us_base_score']:
-                            actor_results[actor_id]['us_base_score'] = level
-                    if level > theatre_summary['us_base_max_level']:
-                        theatre_summary['us_base_max_level'] = level
-                    break
-
-            # Kurdish tensions
-            for kw in KURDISH_TENSION_TRIGGERS.get(level, []):
-                if kw in text:
-                    for actor_id in matched_actors:
-                        if level > actor_results[actor_id]['kurdish_score']:
-                            actor_results[actor_id]['kurdish_score'] = level
-                    if level > theatre_summary['kurdish_max_level']:
-                        theatre_summary['kurdish_max_level'] = level
-                    break
-
-            # ISIS resurgence
-            for kw in ISIS_RESURGENCE_TRIGGERS.get(level, []):
-                if kw in text:
-                    for actor_id in matched_actors:
-                        if level > actor_results[actor_id]['isis_score']:
-                            actor_results[actor_id]['isis_score'] = level
-                    if level > theatre_summary['isis_max_level']:
-                        theatre_summary['isis_max_level'] = level
-                    break
-
-    # ── Per-actor max level + silence detection ──
-    for actor_id, ar in actor_results.items():
-        ar['max_level'] = max(
-            ar['pmf_score'], ar['iran_strike_score'],
-            ar['us_base_score'], ar['kurdish_score'], ar['isis_score']
-        )
-        ar['escalation_level'] = ar['max_level']
-        ar['escalation_label'] = ESCALATION_LEVELS.get(ar['max_level'], {}).get('label', 'Baseline')
-        ar['escalation_color'] = ESCALATION_LEVELS.get(ar['max_level'], {}).get('color', '#6b7280')
-
-        baseline = SILENCE_BASELINE.get(actor_id, 2)
-        if ar['statement_count'] == 0 and baseline >= 2:
-            ar['silence_alert'] = True
-
-    # ── Coordination signal detection ──
-    window_hours = 48
-    for a1_id, a2_id, message in COORDINATION_PAIRS:
-        a1 = actor_results[a1_id]
-        a2 = actor_results[a2_id]
-        if a1['max_level'] >= 2 and a2['max_level'] >= 2:
-            theatre_summary['coordination_signals'].append({
-                'actors': [a1_id, a2_id],
-                'message': message,
-                'severity': 'critical' if (a1['max_level'] + a2['max_level']) >= 8 else 'high',
-                'a1_level': a1['max_level'],
-                'a2_level': a2['max_level'],
-            })
-
-    return actor_results, theatre_summary
-
-
-# ============================================
-# RHETORIC SCORE CALCULATION
-# ============================================
-def _calculate_rhetoric_score(actor_results, theatre_summary):
-    """Calculate 0–100 composite rhetoric score."""
-    # Vector maximums (weighted by strategic importance)
-    pmf_score    = theatre_summary['pmf_max_level']        # weight 2.0 — primary driver
-    iran_score   = theatre_summary['iran_strike_max_level'] # weight 2.5 — highest strategic weight
-    base_score   = theatre_summary['us_base_max_level']     # weight 2.0
-    kurd_score   = theatre_summary['kurdish_max_level']     # weight 1.0
-    isis_score   = theatre_summary['isis_max_level']        # weight 1.0
-
-    weighted = (
-        pmf_score  * 2.0 +
-        iran_score * 2.5 +
-        base_score * 2.0 +
-        kurd_score * 1.0 +
-        isis_score * 1.0
-    )
-    max_possible = 5 * (2.0 + 2.5 + 2.0 + 1.0 + 1.0)  # = 42.5
-    base = (weighted / max_possible) * 85
-
-    # Coordination bonus
-    coord_bonus = min(len(theatre_summary['coordination_signals']) * 5, 15)
-
-    score = min(100, int(base + coord_bonus))
-    return score
-
-
-# ============================================
-# MAIN SCAN
-# ============================================
-def run_iraq_rhetoric_scan(days=3):
-    """Full Iraq rhetoric scan. Returns result dict."""
-    print(f"\n[Iraq Rhetoric] ═══ Starting scan (days={days}) ═══")
-    start = datetime.now(timezone.utc)
-
-    articles = fetch_rhetoric_articles(days=days)
-    actor_results, theatre_summary = classify_articles(articles)
-    rhetoric_score = _calculate_rhetoric_score(actor_results, theatre_summary)
-
-    max_pmf    = theatre_summary['pmf_max_level']
-    max_iran   = theatre_summary['iran_strike_max_level']
-    max_base   = theatre_summary['us_base_max_level']
-    max_kurd   = theatre_summary['kurdish_max_level']
-    max_isis   = theatre_summary['isis_max_level']
-    max_level  = max(max_pmf, max_iran, max_base, max_kurd, max_isis)
-
-    scan_time = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
-
-    result = {
-        'success': True,
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'days_analyzed': days,
-        'total_articles': len(articles),
-        'theatre': 'Iraq',
-        'theatre_score': rhetoric_score,
-        'theatre_escalation_level': max_level,
-        'theatre_escalation_label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Baseline'),
-        'theatre_escalation_color': ESCALATION_LEVELS.get(max_level, {}).get('color', '#6b7280'),
-        'theatre_escalation_description': ESCALATION_LEVELS.get(max_level, {}).get('description', ''),
-        # Per-vector levels
-        'pmf_level':        max_pmf,
-        'pmf_label':        ESCALATION_LEVELS.get(max_pmf, {}).get('label', 'Baseline'),
-        'iran_strike_level': max_iran,
-        'iran_strike_label': ESCALATION_LEVELS.get(max_iran, {}).get('label', 'Baseline'),
-        'us_base_level':    max_base,
-        'us_base_label':    ESCALATION_LEVELS.get(max_base, {}).get('label', 'Baseline'),
-        'kurdish_level':    max_kurd,
-        'kurdish_label':    ESCALATION_LEVELS.get(max_kurd, {}).get('label', 'Baseline'),
-        'isis_level':       max_isis,
-        'isis_label':       ESCALATION_LEVELS.get(max_isis, {}).get('label', 'Baseline'),
-        # Actors and signals
-        'actors': actor_results,
-        'coordination_signals': theatre_summary['coordination_signals'][:5],
-        'scan_time_seconds': scan_time,
-        'version': '1.0.0-iraq-rhetoric',
+    async function loadHistoryData() {
+        try {
+            const resp = await fetch(HISTORY_CONFIG.historyUrl+'?limit=120');
+            if(!resp.ok) return;
+            const data = await resp.json();
+            const entries = _sliceEntries(data.entries||[], _historyView);
+            const legendEl = document.getElementById('historyLegend');
+            if(legendEl) legendEl.innerHTML=`<div class="history-legend-item"><div class="history-legend-dot" style="background:${HISTORY_CONFIG.color};"></div> ${HISTORY_CONFIG.theatre}</div>`;
+            renderHistoryChart([{
+                label:HISTORY_CONFIG.theatre, data:entries.map(e=>e.score??0),
+                borderColor:HISTORY_CONFIG.color, backgroundColor:'rgba(34,197,94,0.07)',
+                borderWidth:2, pointRadius:entries.length<15?3:0, pointHoverRadius:4, fill:true, tension:0.35
+            }], entries.map(e=>_fmtLabel(e.ts)));
+        } catch(e){ console.warn('[HistoryChart]',e); }
     }
 
-    _redis_set(RHETORIC_CACHE_KEY, result)
+    async function loadCompareData() {
+        try {
+            const results = await Promise.allSettled(
+                HISTORY_CONFIG.compareTheatres.map(t=>fetch(t.url+'?limit=120').then(r=>r.ok?r.json():null))
+            );
+            let maxEntries=[];
+            results.forEach(r=>{const e=r.status==='fulfilled'&&r.value?.entries?_sliceEntries(r.value.entries,_historyView):[];if(e.length>maxEntries.length)maxEntries=e;});
+            const labels=maxEntries.map(e=>_fmtLabel(e.ts));
+            const datasets=HISTORY_CONFIG.compareTheatres.map((t,i)=>{
+                const e=results[i].status==='fulfilled'&&results[i].value?.entries?_sliceEntries(results[i].value.entries,_historyView):[];
+                return{label:t.label,data:e.map(x=>x.score??0),borderColor:t.color,backgroundColor:'transparent',borderWidth:2,pointRadius:e.length<15?3:0,pointHoverRadius:4,fill:false,tension:0.35};
+            });
+            const legendEl=document.getElementById('historyLegend');
+            if(legendEl) legendEl.innerHTML=HISTORY_CONFIG.compareTheatres.map(t=>`<div class="history-legend-item"><div class="history-legend-dot" style="background:${t.color};"></div> ${t.label}</div>`).join('');
+            renderHistoryChart(datasets,labels);
+        } catch(e){ console.warn('[HistoryChart compare]',e); }
+    }
 
-    # ── HISTORY SNAPSHOT (gold standard v1.1.0) ──
-    try:
-        import urllib.parse
-        snapshot = json.dumps({
-            'ts':    datetime.now(timezone.utc).isoformat(),
-            'score': rhetoric_score,
-            'level': max_level,
-            'label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Baseline'),
-            'pmf':   max_pmf,
-            'iran':  max_iran,
-            'base':  max_base,
-            'kurd':  max_kurd,
-            'isis':  max_isis,
-        })
-        HISTORY_KEY = 'rhetoric:iraq:history'
-        if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
-            enc = urllib.parse.quote(snapshot, safe='')
-            requests.post(
-                f"{UPSTASH_REDIS_URL}/lpush/{HISTORY_KEY}/{enc}",
-                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-                timeout=5
-            )
-            requests.post(
-                f"{UPSTASH_REDIS_URL}/ltrim/{HISTORY_KEY}/0/119",
-                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-                timeout=5
-            )
-            print(f"[Iraq Rhetoric] 📈 History snapshot saved")
-    except Exception as e:
-        print(f"[Iraq Rhetoric] History append error (non-fatal): {e}")
+    function setHistoryView(mode) {
+        _historyView=mode;
+        document.getElementById('btn7d').classList.toggle('active',mode==='7d');
+        document.getElementById('btn30d').classList.toggle('active',mode==='30d');
+        document.getElementById('btnCompare').classList.toggle('active',mode==='compare');
+        if(mode==='compare') loadCompareData(); else loadHistoryData();
+    }
 
-    print(f"[Iraq Rhetoric] ✅ Complete in {scan_time}s — "
-          f"Level: {result['theatre_escalation_label']} | Score: {rhetoric_score}/100")
-    return result
+    // ══════════════════════════════════════════════════════════════
+    // ESCALATION LEVELS — Gold Standard
+    // ══════════════════════════════════════════════════════════════
+    const ESCALATION_LEVELS = {
+        0: { label:'Baseline',       color:'#6b7280', description:'No significant signals' },
+        1: { label:'Rhetoric',       color:'#3b82f6', description:'Standard factional statements' },
+        2: { label:'Tension',        color:'#f59e0b', description:'Warnings, mobilization language' },
+        3: { label:'Confrontation',  color:'#f97316', description:'Direct threats, troop movements' },
+        4: { label:'Incident',       color:'#ef4444', description:'Attacks confirmed, strikes reported' },
+        5: { label:'Active Conflict',color:'#dc2626', description:'Ongoing operations, multiple fronts' },
+    };
 
+    // ══════════════════════════════════════════════════════════════
+    // TRANSLATIONS
+    // ══════════════════════════════════════════════════════════════
+    const T = {
+        en: {
+            backLink:'← Back to Dashboard', pageFlag:'IRAQ', pageTitle:'IRAQ RHETORIC TRACKER',
+            pageSubtitle:"PMF · Kata'ib · Sadr · KRG · Iran · CENTCOM · ISIS Watch",
+            loading:'Loading...', scoreLabel:'RHETORIC SCORE / 100',
+            escalationLabel:'THEATRE ESCALATION LEVEL',
+            vectorTitle:'⚡ THREAT VECTORS',
+            vecPMF:'PMF Mobilization', vecIran:'Iran Direct Strikes',
+            vecBase:'US Base Strikes', vecKurd:'Kurdish Tensions', vecISIS:'ISIS Resurgence',
+            ladderTitle:'🪜 ESCALATION LADDER',
+            articlesClassified:'📰 Corresponding articles in Top Articles by Actor below',
+            refreshScan:'Refresh Scan',
+            trendTitle:'RHETORIC TREND',
+            chartEmpty:'Collecting data — first snapshot saves on next scan cycle',
+            coordTitle:'⚡ COORDINATION SIGNALS',
+            actorTitle:'🎯 ACTOR STATUS',
+            articlesTitle:'📰 TOP ARTICLES BY ACTOR',
+            themeLabel:'THEME',
+            silence:'⚠️ UNUSUAL SILENCE — below baseline activity',
+            articles:'articles', maxLevel:'Max Level',
+            pmfVec:'PMF', iranVec:'Iran', baseVec:'Base', kurdVec:'Kurd', isisVec:'ISIS',
+        },
+        ar: {
+            backLink:'→ العودة للوحة التحكم', pageFlag:'العراق', pageTitle:'متتبع الخطاب العراقي',
+            pageSubtitle:'الحشد الشعبي · كتائب · الصدر · إقليم كردستان · إيران · سنتكوم · مراقبة داعش',
+            loading:'جارٍ التحميل...', scoreLabel:'نقاط الخطاب / 100',
+            escalationLabel:'مستوى التصعيد المسرحي',
+            vectorTitle:'⚡ محاور التهديد',
+            vecPMF:'تعبئة الحشد', vecIran:'ضربات إيران المباشرة',
+            vecBase:'ضربات القواعد الأمريكية', vecKurd:'التوترات الكردية', vecISIS:'تنامي داعش',
+            ladderTitle:'🪜 سلم التصعيد',
+            articlesClassified:'📰 المقالات المقابلة في قسم المقالات أدناه',
+            refreshScan:'تحديث المسح',
+            trendTitle:'اتجاه الخطاب',
+            chartEmpty:'جمع البيانات — أول لقطة تُحفظ في دورة المسح القادمة',
+            coordTitle:'⚡ إشارات التنسيق',
+            actorTitle:'🎯 حالة الأطراف',
+            articlesTitle:'📰 أبرز المقالات حسب الطرف',
+            themeLabel:'المظهر',
+            silence:'⚠️ صمت غير معتاد — نشاط أقل من المعتاد',
+            articles:'مقالات', maxLevel:'أعلى مستوى',
+            pmfVec:'الحشد', iranVec:'إيران', baseVec:'قاعدة', kurdVec:'كردي', isisVec:'داعش',
+        },
+        he: {
+            backLink:'← חזרה ללוח הבקרה', pageFlag:'עיראק', pageTitle:'עוקב רטוריקה עיראק',
+            pageSubtitle:"PMF · כתאיב · סאדר · KRG · איראן · CENTCOM · מעקב דאע\"ש",
+            loading:'טוען...', scoreLabel:'ציון רטוריקה / 100',
+            escalationLabel:'רמת הסלמה מחזאית',
+            vectorTitle:'⚡ ממדי איום',
+            vecPMF:'גיוס PMF', vecIran:'מתקפות ישירות איראן',
+            vecBase:'מתקפות בסיסי ארה"ב', vecKurd:'מתחים כורדים', vecISIS:'עלייה מחדש של דאע"ש',
+            ladderTitle:'🪜 סולם ההסלמה',
+            articlesClassified:'📰 מאמרים תואמים בסעיף מאמרים מובילים למטה',
+            refreshScan:'רענן סריקה',
+            trendTitle:'מגמת רטוריקה',
+            chartEmpty:'אוסף נתונים — תמונת מצב ראשונה נשמרת במחזור הסריקה הבא',
+            coordTitle:'⚡ אותות תיאום',
+            actorTitle:'🎯 סטטוס שחקנים',
+            articlesTitle:'📰 מאמרים מובילים לפי שחקן',
+            themeLabel:'ערכת נושא',
+            silence:'⚠️ שתיקה חריגה — פעילות נמוכה מהבסיס',
+            articles:'מאמרים', maxLevel:'רמה מקסימלית',
+            pmfVec:'PMF', iranVec:'איראן', baseVec:'בסיס', kurdVec:'כורדי', isisVec:'דאע"ש',
+        },
+        fa: {
+            backLink:'→ بازگشت به داشبورد', pageFlag:'عراق', pageTitle:'ردیاب خطاب عراق',
+            pageSubtitle:'حشد شعبی · کتائب · صدر · کردستان · ایران · سنتکام · پایش داعش',
+            loading:'در حال بارگذاری...', scoreLabel:'امتیاز خطاب / ۱۰۰',
+            escalationLabel:'سطح تشدید تئاتر',
+            vectorTitle:'⚡ بردارهای تهدید',
+            vecPMF:'بسیج حشد', vecIran:'حملات مستقیم ایران',
+            vecBase:'حملات به پایگاه‌های آمریکا', vecKurd:'تنش‌های کردی', vecISIS:'احیای داعش',
+            ladderTitle:'🪜 نردبان تشدید',
+            articlesClassified:'📰 مقالات مرتبط در بخش مقالات برتر',
+            refreshScan:'بازخوانی اسکن',
+            trendTitle:'روند خطاب',
+            chartEmpty:'در حال جمع‌آوری داده‌ها — اولین اسنپ‌شات در چرخه بعدی ذخیره می‌شود',
+            coordTitle:'⚡ سیگنال‌های هماهنگی',
+            actorTitle:'🎯 وضعیت بازیگران',
+            articlesTitle:'📰 مقالات برتر بر اساس بازیگر',
+            themeLabel:'تم',
+            silence:'⚠️ سکوت غیرمعمول — فعالیت کمتر از حد پایه',
+            articles:'مقالات', maxLevel:'حداکثر سطح',
+            pmfVec:'حشد', iranVec:'ایران', baseVec:'پایگاه', kurdVec:'کردی', isisVec:'داعش',
+        },
+    };
 
-def _bg_rhetoric_scan():
-    global _rhetoric_running
-    try:
-        run_iraq_rhetoric_scan()
-    except Exception as e:
-        print(f"[Iraq Rhetoric] Background scan error: {e}")
-    finally:
-        with _rhetoric_lock:
-            _rhetoric_running = False
+    // ══════════════════════════════════════════════════════════════
+    // STATE
+    // ══════════════════════════════════════════════════════════════
+    let currentLang = 'en';
+    let currentVector = 'pmf';
+    let currentData = null;
+    let retryInterval = null;
+    let retryCount = 0;
 
+    // ══════════════════════════════════════════════════════════════
+    // LANGUAGE
+    // ══════════════════════════════════════════════════════════════
+    function setLanguage(lang) {
+        currentLang = lang;
+        const rtl = ['ar','fa'];
+        document.documentElement.dir = rtl.includes(lang) ? 'rtl' : 'ltr';
+        document.documentElement.lang = lang;
+        const t = T[lang] || T.en;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (t[key] !== undefined) el.textContent = t[key];
+        });
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent.trim() === lang.toUpperCase() ||
+                (lang === 'he' && btn.textContent.trim() === 'עב') ||
+                (lang === 'ar' && btn.textContent.trim() === 'ع') ||
+                (lang === 'fa' && btn.textContent.trim() === 'ف'));
+        });
+        if (currentData) renderAll(currentData);
+    }
 
-# ============================================
-# ROUTE REGISTRATION
-# ============================================
-def register_iraq_rhetoric_routes(app):
-    """Register all Iraq rhetoric endpoints on the Flask app."""
+    // ══════════════════════════════════════════════════════════════
+    // THEME
+    // ══════════════════════════════════════════════════════════════
+    function toggleTheme() {
+        const isDark = document.getElementById('themeToggle').checked;
+        document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        localStorage.setItem('iq_rhetoric_theme', isDark ? 'light' : 'dark');
+        if (_historyChart) {
+            _historyChart.destroy(); _historyChart = null;
+            if (_historyView === 'compare') loadCompareData();
+            else loadHistoryData();
+        }
+    }
+    function loadTheme() {
+        const saved = localStorage.getItem('iq_rhetoric_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        document.getElementById('themeToggle').checked = saved === 'light';
+    }
 
-    @app.route('/api/rhetoric/iraq', methods=['GET'])
-    def iraq_rhetoric():
-        """Main Iraq rhetoric endpoint."""
-        force = request.args.get('force', '').lower() in ('true', '1', 'yes')
+    // ══════════════════════════════════════════════════════════════
+    // VECTOR TABS
+    // ══════════════════════════════════════════════════════════════
+    function setVector(v) {
+        currentVector = v;
+        document.querySelectorAll('.vector-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.vector === v);
+        });
+    }
 
-        if force:
-            print("[Iraq Rhetoric] Force refresh requested")
-            try:
-                result = run_iraq_rhetoric_scan()
-                return jsonify(result)
-            except Exception as e:
-                return jsonify({'success': False, 'error': str(e)[:200]}), 500
+    function renderVectors(data) {
+        const map = {
+            pmf:    { id:'vecLevelPMF',  level: data.pmf_level    || 0 },
+            iran:   { id:'vecLevelIran', level: data.iran_strike_level || 0 },
+            base:   { id:'vecLevelBase', level: data.us_base_level || 0 },
+            kurdish:{ id:'vecLevelKurd', level: data.kurdish_level || 0 },
+            isis:   { id:'vecLevelISIS', level: data.isis_level    || 0 },
+        };
+        Object.entries(map).forEach(([key, cfg]) => {
+            const el = document.getElementById(cfg.id);
+            if (!el) return;
+            const lv = ESCALATION_LEVELS[cfg.level] || ESCALATION_LEVELS[0];
+            el.textContent = `L${cfg.level} — ${lv.label}`;
+            el.style.color = lv.color;
+        });
+    }
 
-        cached = _redis_get(RHETORIC_CACHE_KEY)
-        if cached:
-            cached['cached'] = True
-            return jsonify(cached)
+    // ══════════════════════════════════════════════════════════════
+    // ESCALATION LADDER
+    // ══════════════════════════════════════════════════════════════
+    function renderLadder(activeLevel) {
+        const row = document.getElementById('ladderRow');
+        if (!row) return;
+        row.innerHTML = '';
+        for (let i = 0; i <= 5; i++) {
+            const lv = ESCALATION_LEVELS[i];
+            const div = document.createElement('div');
+            div.className = 'ladder-step' + (i === activeLevel ? ' active' : '');
+            if (i === activeLevel) {
+                div.style.borderColor = lv.color;
+                div.style.boxShadow = `0 0 16px ${lv.color}55`;
+            }
+            div.innerHTML = `<div class="ladder-step-num" style="color:${lv.color}">${i}</div>
+                             <div class="ladder-step-label" style="color:${lv.color}">${lv.label}</div>`;
+            row.appendChild(div);
+        }
+    }
 
-        # No cache — trigger background scan, return placeholder
-        global _rhetoric_running
-        with _rhetoric_lock:
-            if not _rhetoric_running:
-                _rhetoric_running = True
-                t = threading.Thread(target=_bg_rhetoric_scan, daemon=True)
-                t.start()
+    // ══════════════════════════════════════════════════════════════
+    // THEATRE BANNER
+    // ══════════════════════════════════════════════════════════════
+    function renderTheatre(data) {
+        const level = data.theatre_escalation_level || 0;
+        const lv = ESCALATION_LEVELS[level] || ESCALATION_LEVELS[0];
+        const score = data.theatre_score || 0;
 
-        return jsonify({
-            'success': True,
-            'awaiting_scan': True,
-            'theatre': 'Iraq',
-            'theatre_score': 0,
-            'theatre_escalation_level': 0,
-            'theatre_escalation_label': 'Baseline',
-            'theatre_escalation_color': '#6b7280',
-            'actors': {},
-            'coordination_signals': [],
-            'message': 'First scan in progress — check back in 2-3 minutes',
-        })
+        document.getElementById('theatreScore').textContent = score;
+        document.getElementById('theatreScore').style.color = lv.color;
 
-    @app.route('/api/rhetoric/iraq/summary', methods=['GET'])
-    def iraq_rhetoric_summary():
-        """Lightweight summary for stability page badge."""
-        cached = _redis_get(RHETORIC_CACHE_KEY)
-        if cached:
-            return jsonify({
-                'success': True,
-                'theatre_score': cached.get('theatre_score', 0),
-                'theatre_escalation_level': cached.get('theatre_escalation_level', 0),
-                'theatre_escalation_label': cached.get('theatre_escalation_label', 'Baseline'),
-                'theatre_escalation_color': cached.get('theatre_escalation_color', '#6b7280'),
-                'pmf_level':         cached.get('pmf_level', 0),
-                'iran_strike_level': cached.get('iran_strike_level', 0),
-                'us_base_level':     cached.get('us_base_level', 0),
-                'kurdish_level':     cached.get('kurdish_level', 0),
-                'isis_level':        cached.get('isis_level', 0),
-                'timestamp': cached.get('timestamp'),
-                'cached': True,
-            })
-        return jsonify({'success': False, 'message': 'No cached data yet — scan in progress'})
+        const badge = document.getElementById('theatreBadge');
+        badge.textContent = lv.label;
+        badge.style.background = lv.color;
 
-    @app.route('/api/rhetoric/iraq/history', methods=['GET'])
-    def iraq_rhetoric_history():
-        """Rolling history — last 120 snapshots (~30 days). Used by trend chart."""
-        try:
-            limit = int(request.args.get('limit', 120))
-            limit = max(1, min(limit, 120))
-            HISTORY_KEY = 'rhetoric:iraq:history'
-            entries = []
-            if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
-                resp = requests.get(
-                    f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/{limit - 1}",
-                    headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-                    timeout=5
-                )
-                raw = resp.json().get('result', [])
-                for item in raw:
-                    try:
-                        entries.append(json.loads(item))
-                    except Exception:
-                        pass
-            entries.reverse()  # oldest first for chart
-            return jsonify({
-                'success': True,
-                'theatre': 'Iraq',
-                'history_key': HISTORY_KEY,
-                'count': len(entries),
-                'entries': entries,
-            })
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e)}), 500
+        document.getElementById('theatreLevelDisplay').textContent = `Level ${level} — ${lv.label}`;
+        document.getElementById('theatreLevelDisplay').style.color = lv.color;
+        document.getElementById('theatreLevelDesc').textContent = lv.description;
 
-    # Background scan thread (every 6 hours)
-    def _periodic_scan():
-        time.sleep(120)  # Boot delay
-        print("[Iraq Rhetoric] Starting initial scan...")
-        _bg_rhetoric_scan()
-        while True:
-            print(f"[Iraq Rhetoric] Sleeping {SCAN_INTERVAL_HOURS}h until next scan...")
-            time.sleep(SCAN_INTERVAL_HOURS * 3600)
-            _bg_rhetoric_scan()
+        if (data.scanned_at || data.timestamp) {
+            const ts = new Date(data.scanned_at || data.timestamp);
+            const ago = Math.round((Date.now() - ts.getTime()) / 60000);
+            const agoTxt = ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+            document.getElementById('theatreScanInfo').textContent =
+                `Last scan: ${agoTxt} · ${data.total_articles || 0} articles analyzed`;
+        }
+        document.getElementById('lastUpdated').textContent =
+            new Date(data.scanned_at || data.timestamp || Date.now()).toLocaleString();
+    }
 
-    thread = threading.Thread(target=_periodic_scan, daemon=True)
-    thread.start()
+    // ══════════════════════════════════════════════════════════════
+    // COORDINATION SIGNALS
+    // ══════════════════════════════════════════════════════════════
+    function renderCoordination(signals) {
+        const card = document.getElementById('coordCard');
+        const list = document.getElementById('coordList');
+        if (!signals || signals.length === 0) { card.style.display='none'; return; }
+        card.style.display='block';
+        list.innerHTML = '';
+        signals.forEach(sig => {
+            const div = document.createElement('div');
+            div.className = 'coord-item' + (sig.severity === 'critical' ? ' critical' : '');
+            div.innerHTML = `<strong>⚡ ${sig.message}</strong>`;
+            list.appendChild(div);
+        });
+    }
 
-    print("[Iraq Rhetoric] ✅ Routes registered: "
-          "/api/rhetoric/iraq, /api/rhetoric/iraq/summary, /api/rhetoric/iraq/history")
+    // ══════════════════════════════════════════════════════════════
+    // ACTOR STATUS GRID
+    // ══════════════════════════════════════════════════════════════
+    function renderActors(actors) {
+        const grid = document.getElementById('actorsGrid');
+        if (!grid || !actors) return;
+        grid.innerHTML = '';
+
+        const ORDER = ['pmf_hashd','kataib','iran_iraq','us_centcom','sadr','iraqi_gov','krg','isis_iraq'];
+        const t = T[currentLang] || T.en;
+
+        ORDER.forEach(id => {
+            const a = actors[id];
+            if (!a) return;
+            const maxLv = a.max_level || a.escalation_level || 0;
+            const lv = ESCALATION_LEVELS[maxLv] || ESCALATION_LEVELS[0];
+
+            const pills = [];
+            if ((a.pmf_score||0) > 0)         pills.push(`<span class="vector-pill" style="background:${ESCALATION_LEVELS[a.pmf_score]?.color||'#6b7280'}">${t.pmfVec} L${a.pmf_score}</span>`);
+            if ((a.iran_strike_score||0) > 0)  pills.push(`<span class="vector-pill" style="background:${ESCALATION_LEVELS[a.iran_strike_score]?.color||'#6b7280'}">${t.iranVec} L${a.iran_strike_score}</span>`);
+            if ((a.us_base_score||0) > 0)      pills.push(`<span class="vector-pill" style="background:${ESCALATION_LEVELS[a.us_base_score]?.color||'#6b7280'}">${t.baseVec} L${a.us_base_score}</span>`);
+            if ((a.kurdish_score||0) > 0)      pills.push(`<span class="vector-pill" style="background:${ESCALATION_LEVELS[a.kurdish_score]?.color||'#6b7280'}">${t.kurdVec} L${a.kurdish_score}</span>`);
+            if ((a.isis_score||0) > 0)         pills.push(`<span class="vector-pill" style="background:${ESCALATION_LEVELS[a.isis_score]?.color||'#6b7280'}">${t.isisVec} L${a.isis_score}</span>`);
+
+            const card = document.createElement('div');
+            card.className = 'actor-card';
+            card.innerHTML = `
+                <div class="actor-header">
+                    <div class="actor-flag">${a.flag||''} ${a.icon||''}</div>
+                    <div>
+                        <div class="actor-name">${a.name}</div>
+                        <div class="actor-role">${a.role||''}</div>
+                    </div>
+                    <div class="actor-level-badge" style="background:${lv.color}">${lv.label}</div>
+                </div>
+                <div class="actor-stats">
+                    <span>📰 ${a.statement_count||0} ${t.articles}</span>
+                    <span>📊 ${t.maxLevel} ${maxLv}</span>
+                </div>
+                ${pills.length ? `<div class="vector-pills">${pills.join('')}</div>` : ''}
+                ${a.silence_alert ? `<div class="actor-silence-alert">⚠️ ${t.silence}</div>` : ''}
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // TOP ARTICLES
+    // ══════════════════════════════════════════════════════════════
+    function renderArticles(actors) {
+        const list = document.getElementById('articlesList');
+        if (!list || !actors) return;
+        list.innerHTML = '';
+
+        const ORDER = ['pmf_hashd','kataib','iran_iraq','us_centcom','sadr','iraqi_gov','krg','isis_iraq'];
+        ORDER.forEach(id => {
+            const a = actors[id];
+            if (!a || !a.top_articles || a.top_articles.length === 0) return;
+
+            const section = document.createElement('div');
+            section.style.marginBottom = '18px';
+            section.innerHTML = `<div style="font-size:0.7rem;font-weight:700;color:var(--accent);letter-spacing:1px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--card-border);">${a.flag||''} ${a.name}</div>`;
+
+            a.top_articles.slice(0,3).forEach(art => {
+                const item = document.createElement('div');
+                item.className = 'article-item';
+                const dt = art.published ? new Date(art.published).toLocaleDateString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+                item.innerHTML = `
+                    <a href="${art.url||'#'}" target="_blank" rel="noopener" class="article-link">${art.title||'Untitled'}</a>
+                    <div class="article-meta">${art.source||''} ${dt ? '· '+dt : ''}</div>
+                `;
+                section.appendChild(item);
+            });
+            list.appendChild(section);
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // RENDER ALL
+    // ══════════════════════════════════════════════════════════════
+    function renderAll(data) {
+        currentData = data;
+        const level = data.theatre_escalation_level || 0;
+        renderTheatre(data);
+        renderLadder(level);
+        renderVectors(data);
+        renderCoordination(data.coordination_signals || []);
+        renderActors(data.actors || {});
+        renderArticles(data.actors || {});
+
+        const artCount = document.getElementById('articlesClassified');
+        if (artCount) artCount.textContent = `📰 ${data.total_articles || 0} articles analyzed · Corresponding articles below`;
+
+        // Load history chart
+        loadHistoryData();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // DATA LOADING
+    // ══════════════════════════════════════════════════════════════
+    async function loadRhetoricData(forceRefresh=false) {
+        try {
+            const url = API_BASE + '/api/rhetoric/iraq' + (forceRefresh ? '?force=true' : '');
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+
+            if (data.awaiting_scan) {
+                document.getElementById('theatreScanInfo').textContent = 'Scan in progress — first scan takes 2-3 minutes...';
+                renderLadder(0);
+                if (!retryInterval) {
+                    retryInterval = setInterval(async () => {
+                        retryCount++;
+                        try {
+                            const r = await fetch(API_BASE + '/api/rhetoric/iraq');
+                            const d = await r.json();
+                            if (!d.awaiting_scan) {
+                                clearInterval(retryInterval); retryInterval=null; retryCount=0;
+                                renderAll(d);
+                            } else {
+                                document.getElementById('theatreScanInfo').textContent = `Scan in progress — retry ${retryCount}/8...`;
+                                if (retryCount >= 8) { clearInterval(retryInterval); retryInterval=null; }
+                            }
+                        } catch(e) { if(retryCount>=8){clearInterval(retryInterval);retryInterval=null;} }
+                    }, 60000);
+                }
+                return;
+            }
+            renderAll(data);
+        } catch(err) {
+            console.error('[Iraq Rhetoric] Load error:', err);
+            document.getElementById('theatreScanInfo').textContent = 'Error loading data — retrying...';
+            setTimeout(() => loadRhetoricData(), 30000);
+        }
+    }
+
+    async function triggerScan() {
+        const btn = document.getElementById('scanBtn');
+        if (btn) { btn.style.opacity='0.5'; btn.disabled=true; }
+        document.getElementById('theatreScanInfo').textContent = 'Scan triggered — this takes 2-3 minutes...';
+        try {
+            await loadRhetoricData(true);
+        } finally {
+            if (btn) { btn.style.opacity='1'; btn.disabled=false; }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // INIT
+    // ══════════════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTheme();
+        loadRhetoricData();
+    });
+</script>
+</body>
+</html>
