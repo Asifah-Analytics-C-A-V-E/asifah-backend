@@ -114,6 +114,9 @@ IRAQ_CHANNELS = [
     'IraqiNewsAgency',      # INA — Iraqi News Agency, official Baghdad positions
     # PMF / Hashd al-Shaabi — Shi'a militia rhetoric (highest priority for escalation)
     'SabreenNews',          # Sabreen News — PMF/Hashd-affiliated, direct militia statements
+    'kataibmedia',          # Kata'ib Hezbollah official media wing — direct statements
+    'alwahdapress',         # Al-Wahda Press — carries Kata'ib/PMF formal statements
+    'almanarnews',          # Al-Manar Arabic — direct militia/resistance axis coverage
     'nayaforiraq',          # Naya For Iraq — Iraq/Levant, covers PMF activity
     # Kurdish / KRG
     'kurdistan24english',   # Kurdistan 24 English — KRG, Peshmerga, Kirkuk tensions
