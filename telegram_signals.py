@@ -238,7 +238,8 @@ async def _async_fetch_messages(channels, hours_back=24):
                 for msg in history.messages:
                     if msg.date and msg.date.replace(tzinfo=timezone.utc) > since and msg.message:
                         messages.append({
-                            'title': msg.message[:200],
+                            'title': msg.message[:500],
+                            'body': msg.message,
                             'url': f'https://t.me/{channel}/{msg.id}',
                             'published': msg.date.replace(tzinfo=timezone.utc).isoformat(),
                             'query': f'telegram_{channel}',
