@@ -124,6 +124,16 @@ ACTORS = {
             'kataib hezbollah', 'kata\'ib hezbollah', 'abu hussein al-hamidawi',
             'kataib hezbollah media', 'kataib spokesman',
             'كتائب حزب الله', 'أبو حسين الحمداوي',
+            # KH signature threat language
+            'revenge for', 'avenge', 'martyr blood',
+            'we hold america responsible', 'america will pay',
+            'targeting americans', 'american presence must end',
+            'expel american forces', 'resistance will not be silent',
+            # Arabic signature phrases
+            'الثأر', 'دم الشهيد', 'نحمّل أمريكا المسؤولية',
+            'إخراج القوات الأمريكية', 'لن تمر الجريمة دون عقاب',
+            'الرد قادم', 'الأمريكيون سيدفعون الثمن',
+            'أبو علي العسكري', 'الثأر لأبو علي',
         ],
         'keywords': [
             'kataib hezbollah', 'kata\'ib hezbollah', 'kata\'ib',
