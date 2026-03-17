@@ -656,7 +656,8 @@ MILITARY_ACTORS = {
             'pakistan kills militants', 'pakistan kills terrorists',
             'pakistan security forces', 'pakistan fc',
             # TTP — major daily signal source
-            'ttp', 'tehrik-i-taliban pakistan', 'tehrik-e-taliban',
+            'tehrik-i-taliban pakistan', 'tehrik-e-taliban',
+            'tehrik-i-taliban', 'tehrik e taliban',
             'ttp attack', 'ttp kills', 'ttp militants',
             'ttp fighters', 'ttp ambush', 'ttp soldiers',
             'ttp north waziristan', 'ttp south waziristan',
@@ -726,7 +727,7 @@ MILITARY_ACTORS = {
             'islamic emirate crackdown', 'taliban crackdown',
             'taliban suppress', 'taliban arrest',
             # TTP — Tehrik-i-Taliban Pakistan (daily news)
-            'ttp', 'tehrik-i-taliban', 'tehrik-e-taliban',
+            'tehrik-i-taliban', 'tehrik-e-taliban',
             'ttp attack', 'ttp militants', 'ttp fighters',
             'ttp kills', 'ttp soldiers', 'ttp ambush',
             'pakistan taliban attack', 'pakistan taliban kills',
@@ -1616,6 +1617,17 @@ ASSET_CATEGORIES = {
             'amphibious ready group', 'arg deployed', 'marine expeditionary unit',
             'meu deployed', 'amphibious assault ship', 'lhd deployed',
             'lpd deployed', 'dock landing ship'
+            # Marine ground force deployment signals (v2.9.0)
+            'marine ground troops', 'marines deploying', 'marines headed to',
+            'marines en route', 'marines bound for', 'marines carrying',
+            'warship carrying marines', 'ship carrying marines',
+            'tracked off singapore', 'tracked off', 'spotted off',
+            'transiting singapore', 'transiting malacca',
+            'believed to be carrying', 'believed carrying troops',
+            'heading to middle east', 'heading for middle east',
+            'bound for middle east', 'en route middle east',
+            'wasp class', 'america class', 'lha deployed',
+            'lhd deployed', 'lha transiting', 'lhd transiting',
         ]
     },
     'fighter_surge': {
@@ -1961,6 +1973,18 @@ LOCATION_MULTIPLIERS = {
     'naval station norfolk': 1.5,
     'naval base guam': 2.0,
     'yokosuka': 2.0,
+    # Indo-Pacific transit waypoints (v2.9.0)
+    'singapore': 2.0,
+    'strait of malacca': 2.5,
+    'strait of singapore': 2.0,
+    'south china sea': 2.0,
+    'diego garcia': 2.5,
+    'andaman sea': 1.5,
+    'bay of bengal': 1.5,
+    'indian ocean': 1.5,
+    'horn of africa': 1.5,
+    'djibouti': 2.0,
+    'camp lemonnier': 2.5,
     'sheikh isa air base': 2.0,
     'mina salman': 2.0,
     # Kuwait (v2.7.0)
