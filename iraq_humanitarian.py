@@ -180,14 +180,20 @@ def fetch_dtm_displacement():
     # Governorate-level (Admin 1)
     try:
         print("[Iraq DTM] Fetching governorate-level IDP data...")
-        params = {
-            'CountryName': 'Iraq',
-            'FromReportingDate': '2024-01-01',
-            'ToReportingDate': datetime.now().strftime('%Y-%m-%d')
-        }
+        params = [
+            ('appname', 'asifah-analytics'),
+            ('query[value]', 'Iraq displacement IDP humanitarian PMF conflict'),
+            ('query[operator]', 'AND'),
+            ('sort[]', 'date:desc'),
+            ('limit', 8),
+            ('fields[include][]', 'title'),
+            ('fields[include][]', 'date.created'),
+            ('fields[include][]', 'url_alias'),
+            ('fields[include][]', 'source.name'),
+        ]
+
         response = requests.get(
-            f'{DTM_BASE_URL}/displacement/admin1',
-            headers=headers,
+            f'{RELIEFWEB_API_URL}/reports',
             params=params,
             timeout=15
         )
