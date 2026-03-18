@@ -181,7 +181,7 @@ def fetch_dtm_displacement():
     try:
         print("[Iraq DTM] Fetching governorate-level IDP data...")
         params = [
-            ('appname', 'asifah-analytics'),
+            ('appname', 'asifah'),
             ('query[value]', 'Iraq displacement IDP humanitarian PMF conflict'),
             ('query[operator]', 'AND'),
             ('sort[]', 'date:desc'),
