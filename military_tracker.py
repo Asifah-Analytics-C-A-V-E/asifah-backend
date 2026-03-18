@@ -1597,10 +1597,19 @@ ASSET_CATEGORIES = {
             'redeployed to pacific', 'shifted to pacific', 'moved to pacific',
             'redeployed from gulf', 'withdrawn from gulf', 'departing gulf',
             'transit strait of hormuz', 'transit suez canal',
-            # Minesweepers (Peter's specific signal)
+            # Minesweepers + Hormuz mining threat (v2.9.1)
             'minesweeper', 'mine countermeasures', 'mcm vessel',
             'uss pioneer', 'uss chief', 'uss devastator', 'uss champion',
             'avenger class', 'mine warfare',
+            # LCS minesweeping variant — Hormuz repositioning signal
+            'uss tulsa', 'uss santa barbara', 'uss cincinnati',
+            'littoral combat ship', 'lcs minesweeping', 'lcs mine',
+            'independence class lcs', 'freedom class lcs',
+            'hormuz mining', 'mining strait of hormuz', 'iran mining',
+            'hormuz mine threat', 'mine threat gulf',
+            'minesweeper malaysia', 'minesweeper singapore',
+            'lcs repositioned', 'lcs redeployed', 'gulf lcs withdrawn',
+            'logistical stop malaysia', 'port visit penang',
             # General movement signals
             'arrives fifth fleet', 'departs fifth fleet',
             'arrives sixth fleet', 'departs sixth fleet',
@@ -1969,6 +1978,16 @@ LOCATION_MULTIPLIERS = {
     'indopacom': 2.0,
     'minesweeper': 2.0,
     'mine countermeasures': 2.0,
+    'hormuz mining': 3.5,       # Iran mining = major escalation signal
+    'mining strait of hormuz': 3.5,
+    'iran mining': 3.0,
+    'mine threat gulf': 3.0,
+    'uss tulsa': 2.5,           # Named LCS vessels — specific signal
+    'uss santa barbara': 2.5,
+    'uss cincinnati': 2.5,
+    'littoral combat ship': 2.0,
+    'lcs minesweeping': 2.5,
+    'lcs redeployed': 2.5,
     'naval station rota': 2.0,
     'naval station norfolk': 1.5,
     'naval base guam': 2.0,
