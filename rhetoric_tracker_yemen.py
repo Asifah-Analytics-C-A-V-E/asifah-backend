@@ -1128,7 +1128,7 @@ def run_houthi_rhetoric_scan(days=3):
     # ── Re-save with all enriched fields ──
     _redis_set(RHETORIC_CACHE_KEY, result)
 
-print(f"[Yemen Rhetoric] ✅ Complete. Theatre level: {result['theatre_level']} | Specificity: {theatre_specificity}/10 | Delta: {result.get('delta', {}).get('direction', 'n/a')}")
+    print(f"[Yemen Rhetoric] ✅ Complete. Theatre level: {result['theatre_level']} | Specificity: {theatre_specificity}/10 | Delta: {result.get('delta', {}).get('direction', 'n/a')}")
     return result
 
 def _bg_rhetoric_scan():
