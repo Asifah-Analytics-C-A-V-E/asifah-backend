@@ -182,6 +182,26 @@ SOMALILAND_TRIGGERS = {
     ],
 }
 
+# Conditional Threats — "if X then Y" tripwire language
+CONDITIONAL_TRIGGERS = {
+    3: [
+        'if the strikes continue', 'if israel attacks', 'if us forces',
+        'should the aggression', 'any attack on iran will', 'if the blockade',
+        'we will respond if', 'in the event of', 'if they dare',
+        'should they attempt', 'if hodeida is struck', 'if yemen is targeted',
+    ],
+    2: [
+        'we reserve the right', 'all options on the table',
+        'prepared to respond', 'will not hesitate', 'if provoked',
+        'conditional ceasefire', 'unless the bombing stops',
+        'if negotiations fail', 'if demands are not met',
+    ],
+    1: [
+        'if', 'unless', 'provided that', 'on condition',
+        'should the situation', 'in response to',
+    ],
+}
+
 # KSA-Houthi Ceasefire Signals
 CEASEFIRE_TRIGGERS = {
     3: ['ceasefire agreement signed', 'peace deal yemen', 'houthi agrees ceasefire'],
@@ -315,6 +335,92 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=الحوثيون+صواريخ&hl=ar&gl=SA&ceid=SA:ar", 0.9),
     ("https://news.google.com/rss/search?q=البحر+الأحمر+الحوثيون&hl=ar&gl=SA&ceid=SA:ar", 0.9),
 ]
+
+
+# ============================================
+# SPECIFICITY SCORER
+# ============================================
+
+# Named geographies that indicate operational specificity
+SPECIFIC_GEOGRAPHIES = [
+    'eilat', 'tel aviv', 'haifa', 'ashkelon', 'beer sheva',
+    'riyadh', 'jeddah', 'abu dhabi', 'dubai', 'manama',
+    'hodeidah', 'aden', 'mukalla', 'marib',
+    'strait of hormuz', 'bab el-mandeb', 'red sea', 'suez canal',
+    'gulf of aden', 'arabian sea',
+    'camp lemonnier', 'djibouti', 'berbera', 'socotra',
+]
+
+# Named asset classes indicating operational targeting
+SPECIFIC_ASSETS = [
+    'carrier strike group', 'uss ', 'aircraft carrier', 'destroyer',
+    'aramco', 'oil terminal', 'oil tanker', 'lng carrier',
+    'supertanker', 'bulk carrier', 'container ship',
+    'patriot battery', 'thaad', 'iron dome',
+    'air base', 'naval base', 'military installation',
+    'us embassy', 'embassy compound',
+]
+
+# Time-bounded language
+TIME_BOUNDED = [
+    'within 24 hours', 'within 48 hours', 'within 72 hours',
+    'by friday', 'by tomorrow', 'before the end of',
+    'in the coming hours', 'imminent', 'within days',
+    'before dawn', 'tonight', 'this week',
+]
+
+# Operational framing language
+OPERATIONAL_FRAMING = [
+    'preparing to launch', 'positioned to strike', 'ready to fire',
+    'loading missiles', 'drone swarm', 'coordinated attack',
+    'multi-front', 'simultaneous strike', 'saturation attack',
+    'hypersonic', 'ballistic salvo', 'anti-ship missile fired',
+]
+
+
+def _score_specificity(text):
+    """
+    Score 0-10 how operationally specific the rhetoric is.
+    Higher = more concrete targeting language = stronger signal.
+    Returns score and breakdown dict.
+    """
+    score = 0
+    breakdown = {
+        'named_geographies': [],
+        'named_assets': [],
+        'time_bounded': [],
+        'operational_framing': [],
+        'conditional_threats': [],
+    }
+
+    for geo in SPECIFIC_GEOGRAPHIES:
+        if geo in text:
+            breakdown['named_geographies'].append(geo)
+            score += 1
+
+    for asset in SPECIFIC_ASSETS:
+        if asset in text:
+            breakdown['named_assets'].append(asset)
+            score += 1
+
+    for tb in TIME_BOUNDED:
+        if tb in text:
+            breakdown['time_bounded'].append(tb)
+            score += 2  # Time-bounded = stronger weight
+
+    for op in OPERATIONAL_FRAMING:
+        if op in text:
+            breakdown['operational_framing'].append(op)
+            score += 2  # Operational framing = stronger weight
+
+    # Check conditional triggers level 3 (highest specificity conditionals)
+    for kw in CONDITIONAL_TRIGGERS.get(3, []):
+        if kw in text:
+            breakdown['conditional_threats'].append(kw)
+            score += 2
+
+    # Cap at 10
+    return min(score, 10), breakdown
 
 
 # ============================================
@@ -504,27 +610,28 @@ def classify_articles(articles):
         'ceasefire_max_level': 0,
         'total_articles': len(articles),
         'coordination_signals': [],
+        'conditional_threats': [],
+        'specificity_scores': [],  # Collect per-article scores for theatre avg
     }
 
     for article in articles:
         text = f"{article.get('title','')} {article.get('description','')}".lower()
         pub_date = article.get('published', '')
 
-        # Identify actor
-        actor_id = None
-        for aid, info in ACTORS.items():
+        # Identify ALL matching actors (multi-actor match — v2.0)
+        matched_actors = []
+        for aid in ACTORS:
             for kw in ACTOR_KEYWORDS.get(aid, []):
                 if kw.lower() in text:
-                    actor_id = aid
+                    matched_actors.append(aid)
                     break
-            if actor_id:
-                break
 
-        if not actor_id:
+        if not matched_actors:
             continue
 
-        ar = actor_results[actor_id]
-        ar['statement_count'] += 1
+        for actor_id in matched_actors:
+            ar = actor_results[actor_id]
+            ar['statement_count'] += 1
 
         # Score each vector
         for level in range(5, 0, -1):
@@ -566,8 +673,27 @@ def classify_articles(articles):
                         theatre_summary['ceasefire_max_level'] = level
                     break
 
-        # Coordination signal: Houthis + Iran in same article
-        if actor_id == 'houthis' and any(kw in text for kw in ACTOR_KEYWORDS['iran']):
+        # ── Specificity scoring (runs once per article, not per actor) ──
+        if actor_id == matched_actors[0]:  # Score once per article
+            spec_score, spec_breakdown = _score_specificity(text)
+            article['_specificity_score'] = spec_score
+            article['_specificity_breakdown'] = spec_breakdown
+
+            # Conditional threat detection
+            for level in range(3, 0, -1):
+                for kw in CONDITIONAL_TRIGGERS.get(level, []):
+                    if kw in text:
+                        theatre_summary.setdefault('conditional_threats', []).append({
+                            'phrase': kw,
+                            'level': level,
+                            'article': article.get('title', '')[:100],
+                            'published': pub_date if isinstance(pub_date, str) else '',
+                            'specificity': spec_score,
+                        })
+                        break
+
+        # ── Coordination signal: any Iran keyword co-occurring with Houthis ──
+        if 'houthis' in matched_actors and any(kw in text for kw in ACTOR_KEYWORDS['iran']):
             theatre_summary['coordination_signals'].append({
                 'message': 'Iran-Houthi coordination signal detected',
                 'article': article.get('title', '')[:100],
@@ -580,6 +706,10 @@ def classify_articles(articles):
             ar['direct_strike_score'],
             ar['somaliland_score']
         )
+        spec_score = article.get('_specificity_score', 0)
+        if spec_score > 0:
+            theatre_summary['specificity_scores'].append(spec_score)
+
         if len(ar['top_articles']) < 5 or max_level >= 3:
             ar['top_articles'].append({
                 'title': article.get('title', '')[:120],
@@ -588,9 +718,323 @@ def classify_articles(articles):
                 'published': pub_date if isinstance(pub_date, str) else '',
                 'maritime_level': ar['maritime_score'],
                 'direct_strike_level': ar['direct_strike_score'],
+                'specificity_score': spec_score,
             })
 
     return actor_results, theatre_summary
+
+
+# ============================================
+# DELTA CALCULATION
+# ============================================
+
+def _compute_delta():
+    """
+    Read last 14 history entries, compute 7-entry avg,
+    compare to most recent entry. Returns delta dict.
+    """
+    try:
+        HISTORY_KEY = 'rhetoric:yemen:history'
+        if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+            return None
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/13",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5
+        )
+        raw = resp.json().get('result', [])
+        entries = []
+        for item in raw:
+            try:
+                entries.append(json.loads(item))
+            except Exception:
+                pass
+
+        if len(entries) < 3:
+            return {'direction': 'insufficient_data', 'entries_available': len(entries)}
+
+        # Most recent is index 0 (lpush = newest first)
+        current = entries[0]
+        prior = entries[1:]  # up to 13 prior entries
+
+        prior_scores = [e.get('score', 0) for e in prior]
+        prior_levels = [e.get('level', 0) for e in prior]
+        prior_avg_score = round(sum(prior_scores) / len(prior_scores), 1)
+        prior_avg_level = round(sum(prior_levels) / len(prior_levels), 2)
+
+        score_change = (current.get('score', 0)) - prior_avg_score
+        level_change = round((current.get('level', 0)) - prior_avg_level, 2)
+
+        if score_change > 10:
+            direction = 'rising'
+        elif score_change < -10:
+            direction = 'falling'
+        else:
+            direction = 'stable'
+
+        return {
+            'direction': direction,
+            'score_change': round(score_change, 1),
+            'level_change': level_change,
+            'current_score': current.get('score', 0),
+            'prior_avg_score': prior_avg_score,
+            'prior_avg_level': prior_avg_level,
+            'vs_period': f'{len(prior)}-scan average',
+        }
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Delta compute error: {e}")
+        return None
+
+
+# ============================================
+# ACTOR BASELINE TRACKING
+# ============================================
+
+BASELINE_KEY = 'rhetoric_baseline:yemen'
+
+def _update_actor_baselines(actor_results):
+    """
+    Rolling average of statement_count and max_level per actor.
+    Stored in Redis as rhetoric_baseline:yemen.
+    Uses exponential moving average (alpha=0.2) so recent scans
+    have more weight without needing to store full history.
+    """
+    try:
+        existing = _redis_get(BASELINE_KEY) or {}
+        updated = {}
+        alpha = 0.2  # Weight for new observation vs history
+
+        for actor_id, ar in actor_results.items():
+            current_statements = ar.get('statement_count', 0)
+            current_level = max(
+                ar.get('maritime_score', 0),
+                ar.get('direct_strike_score', 0),
+                ar.get('somaliland_score', 0),
+            )
+            prev = existing.get(actor_id, {})
+
+            if not prev:
+                # First scan — seed with current values
+                updated[actor_id] = {
+                    'avg_statements': current_statements,
+                    'avg_level': current_level,
+                    'scans': 1,
+                }
+            else:
+                scans = prev.get('scans', 1)
+                updated[actor_id] = {
+                    'avg_statements': round(
+                        alpha * current_statements + (1 - alpha) * prev.get('avg_statements', current_statements), 2
+                    ),
+                    'avg_level': round(
+                        alpha * current_level + (1 - alpha) * prev.get('avg_level', current_level), 3
+                    ),
+                    'scans': min(scans + 1, 999),  # Cap to avoid bloat
+                }
+
+        _redis_set(BASELINE_KEY, updated, ttl=30 * 24 * 3600)  # 30-day TTL
+        print(f"[Yemen Rhetoric] ✅ Actor baselines updated")
+        return updated
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Baseline update error: {e}")
+        return {}
+
+
+def _detect_silence_anomalies(actor_results, baselines):
+    """
+    Flag actors whose current statement count is significantly
+    below their rolling baseline. Silence after escalation = signal.
+    Threshold: actual < 30% of baseline avg (and baseline avg > 3 to avoid noise).
+    """
+    anomalies = []
+    try:
+        for actor_id, ar in actor_results.items():
+            baseline = baselines.get(actor_id, {})
+            avg_statements = baseline.get('avg_statements', 0)
+            scans = baseline.get('scans', 0)
+
+            # Need at least 5 scans of history before flagging silence
+            if scans < 5 or avg_statements < 3:
+                continue
+
+            actual = ar.get('statement_count', 0)
+            if actual < avg_statements * 0.30:
+                pct_below = round((1 - actual / avg_statements) * 100)
+                actor_info = ACTORS.get(actor_id, {})
+                anomalies.append({
+                    'actor_id': actor_id,
+                    'actor_name': actor_info.get('name', actor_id),
+                    'actor_flag': actor_info.get('flag', ''),
+                    'expected_statements': round(avg_statements),
+                    'actual_statements': actual,
+                    'deviation': f'{pct_below}% below baseline',
+                    'signal': 'Unusual quiet — possible operational security or patron direction',
+                })
+                print(f"[Yemen Rhetoric] 🔇 Silence anomaly: {actor_id} ({actual} vs avg {avg_statements:.1f})")
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Silence detection error: {e}")
+    return anomalies
+
+
+# ============================================
+# CROSS-THEATER COORDINATION
+# ============================================
+
+CROSSTHEATER_KEY = 'rhetoric:crosstheater:fingerprints'
+
+def _write_crosstheater_signal(result):
+    """
+    Write Yemen's current fingerprint to the shared cross-theater Redis key.
+    All trackers (Yemen, Iraq, Lebanon, Syria, Iran when built) write here.
+    Structure: {theatre_name: {ts, level, top_phrases, named_targets, actor_levels}}
+    """
+    try:
+        # Read existing fingerprints
+        existing = _redis_get(CROSSTHEATER_KEY) or {}
+
+        # Build Yemen's fingerprint
+        actors = result.get('actors', {})
+        houthi_articles = actors.get('houthis', {}).get('top_articles', [])
+
+        # Extract top phrases from coordination signals and conditional threats
+        top_phrases = []
+        for sig in result.get('coordination_signals', [])[:3]:
+            if sig.get('article'):
+                top_phrases.append(sig['article'][:60])
+        for ct in result.get('conditional_threats', [])[:3]:
+            if ct.get('phrase'):
+                top_phrases.append(ct['phrase'])
+
+        # Named targets from specificity breakdown
+        named_targets = []
+        for art in houthi_articles[:5]:
+            # Pull any geography mentions from title
+            title_lower = art.get('title', '').lower()
+            for geo in SPECIFIC_GEOGRAPHIES:
+                if geo in title_lower and geo not in named_targets:
+                    named_targets.append(geo)
+
+        existing['yemen'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theatre': 'Yemen / Red Sea',
+            'level': result.get('theatre_score', 0) // 20,
+            'score': result.get('theatre_score', 0),
+            'maritime_level': result.get('maritime_level', 0),
+            'top_phrases': top_phrases[:5],
+            'named_targets': named_targets[:8],
+            'actor_levels': {
+                aid: max(
+                    actors.get(aid, {}).get('maritime_score', 0),
+                    actors.get(aid, {}).get('direct_strike_score', 0),
+                )
+                for aid in ['houthis', 'iran', 'usa']
+            },
+            'specificity_score': result.get('specificity_score', 0),
+        }
+
+        _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)  # 8h TTL
+        print(f"[Yemen Rhetoric] ✅ Cross-theater fingerprint written")
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Cross-theater write error: {e}")
+
+
+def _detect_crosstheater_coordination():
+    """
+    Read all theater fingerprints and look for:
+    1. Phrase overlap between theaters (same language = coordination signal)
+    2. Simultaneous level spikes across Iran-proxy theaters
+    3. Named target convergence (multiple theaters referencing same target)
+
+    Gracefully handles missing theaters (Iran tracker not yet built).
+    Returns list of coordination findings with confidence scores.
+    """
+    findings = []
+    try:
+        fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
+
+        if len(fingerprints) < 2:
+            return []  # Need at least 2 theaters to compare
+
+        theaters = list(fingerprints.keys())
+        now = datetime.now(timezone.utc)
+
+        # Filter to fingerprints written in last 14 hours (fresh data only)
+        fresh = {}
+        for name, fp in fingerprints.items():
+            try:
+                fp_age = (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600
+                if fp_age <= 14:
+                    fresh[name] = fp
+                else:
+                    print(f"[CrossTheater] Skipping stale fingerprint: {name} ({fp_age:.1f}h old)")
+            except Exception:
+                pass
+
+        if len(fresh) < 2:
+            return []
+
+        # Note any missing expected theaters gracefully
+        expected = ['yemen', 'iraq', 'lebanon', 'iran', 'israel']
+        missing = [t for t in expected if t not in fresh]
+        if missing:
+            print(f"[CrossTheater] Note: {missing} fingerprints not yet available (trackers pending)")
+
+        # Check 1: Simultaneous level spikes (all proxy theaters elevated)
+        proxy_theaters = {k: v for k, v in fresh.items() if k in ['yemen', 'iraq', 'lebanon']}
+        if len(proxy_theaters) >= 2:
+            elevated = {k: v for k, v in proxy_theaters.items() if v.get('level', 0) >= 2}
+            if len(elevated) >= 2:
+                avg_level = round(sum(v['level'] for v in elevated.values()) / len(elevated), 1)
+                confidence = min(len(elevated) * 30, 90)
+                findings.append({
+                    'type': 'simultaneous_elevation',
+                    'message': f"Simultaneous elevated rhetoric across {len(elevated)} Iran-aligned theaters",
+                    'theaters': list(elevated.keys()),
+                    'avg_level': avg_level,
+                    'confidence': confidence,
+                    'signal': 'Multi-theater coordination possible — watch for synchronized operations',
+                    'missing_theaters': missing,
+                })
+
+        # Check 2: Named target convergence
+        all_targets = {}
+        for name, fp in fresh.items():
+            for target in fp.get('named_targets', []):
+                all_targets.setdefault(target, []).append(name)
+
+        shared_targets = {t: theaters for t, theaters in all_targets.items() if len(theaters) >= 2}
+        if shared_targets:
+            findings.append({
+                'type': 'target_convergence',
+                'message': f"Shared target references across multiple theaters",
+                'shared_targets': shared_targets,
+                'confidence': min(len(shared_targets) * 25, 85),
+                'signal': 'Multiple theaters referencing same targets — possible coordinated targeting',
+                'missing_theaters': missing,
+            })
+
+        # Check 3: Phrase overlap
+        all_phrases = {}
+        for name, fp in fresh.items():
+            for phrase in fp.get('top_phrases', []):
+                phrase_key = phrase[:30].lower()
+                all_phrases.setdefault(phrase_key, []).append(name)
+
+        shared_phrases = {p: t for p, t in all_phrases.items() if len(t) >= 2}
+        if shared_phrases:
+            findings.append({
+                'type': 'phrase_synchronization',
+                'message': f"Synchronized language detected across {len(set(t for ts in shared_phrases.values() for t in ts))} theaters",
+                'shared_phrases': list(shared_phrases.keys())[:5],
+                'confidence': min(len(shared_phrases) * 20, 80),
+                'signal': 'Similar framing across theaters within 14h window — narrative coordination signal',
+                'missing_theaters': missing,
+            })
+
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Cross-theater detection error: {e}")
+
+    return findings
 
 
 # ============================================
@@ -607,6 +1051,10 @@ def run_houthi_rhetoric_scan(days=3):
     max_maritime = theatre_summary['maritime_max_level']
     max_strike   = theatre_summary['direct_strike_max_level']
     max_level    = max(max_maritime, max_strike)
+
+    # ── Compute theatre-level specificity score (avg of scored articles) ──
+    spec_scores = theatre_summary.get('specificity_scores', [])
+    theatre_specificity = round(sum(spec_scores) / len(spec_scores), 1) if spec_scores else 0
 
     result = {
         'success': True,
@@ -629,12 +1077,19 @@ def run_houthi_rhetoric_scan(days=3):
             theatre_summary['ceasefire_max_level'], {}).get('label', 'None'),
         'actors': actor_results,
         'coordination_signals': theatre_summary['coordination_signals'][:5],
-        'version': '1.2.0-yemen-rhetoric-telegram-reddit'
+        'conditional_threats': theatre_summary.get('conditional_threats', [])[:8],
+        'specificity_score': theatre_specificity,
+        'version': '2.0.0-yemen-rhetoric-enhanced'
     }
 
-    _redis_set(RHETORIC_CACHE_KEY, result)
+    # ── Baseline + silence detection ──
+    baselines = _update_actor_baselines(actor_results)
+    result['silence_anomalies'] = _detect_silence_anomalies(actor_results, baselines)
 
-    # ── HISTORY SNAPSHOT (v1.1.0) ──────────────────────────────────────
+    # ── Delta vs prior scans ──
+    _redis_set(RHETORIC_CACHE_KEY, result)  # Save first so history is up to date
+
+    # ── History snapshot (unchanged pattern) ──
     try:
         snapshot = json.dumps({
             'ts': datetime.now(timezone.utc).isoformat(),
@@ -643,6 +1098,7 @@ def run_houthi_rhetoric_scan(days=3):
             'label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Unknown'),
             'maritime': max_maritime,
             'strikes': max_strike,
+            'specificity': theatre_specificity,
         })
         HISTORY_KEY = 'rhetoric:yemen:history'
         if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
@@ -658,14 +1114,22 @@ def run_houthi_rhetoric_scan(days=3):
                 headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
                 timeout=5
             )
-            print(f"[Yemen Rhetoric] 📈 History snapshot saved")
+            print(f"[Yemen Rhetoric] History snapshot saved")
     except Exception as e:
         print(f"[Yemen Rhetoric] History append error (non-fatal): {e}")
-    # ────────────────────────────────────────────────────────────────────
 
-    print(f"[Yemen Rhetoric] ✅ Complete. Theatre level: {result['theatre_level']}")
+    # ── Delta (reads history written above) ──
+    result['delta'] = _compute_delta()
+
+    # ── Cross-theater coordination ──
+    _write_crosstheater_signal(result)
+    result['crosstheater_coordination'] = _detect_crosstheater_coordination()
+
+    # ── Re-save with all enriched fields ──
+    _redis_set(RHETORIC_CACHE_KEY, result)
+
+print(f"[Yemen Rhetoric] ✅ Complete. Theatre level: {result['theatre_level']} | Specificity: {theatre_specificity}/10 | Delta: {result.get('delta', {}).get('direction', 'n/a')}")
     return result
-
 
 def _bg_rhetoric_scan():
     global _rhetoric_running
