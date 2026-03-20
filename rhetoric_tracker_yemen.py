@@ -197,7 +197,7 @@ CONDITIONAL_TRIGGERS = {
         'if negotiations fail', 'if demands are not met',
     ],
     1: [
-        'if', 'unless', 'provided that', 'on condition',
+        'unless', 'provided that', 'on condition',
         'should the situation', 'in response to',
     ],
 }
