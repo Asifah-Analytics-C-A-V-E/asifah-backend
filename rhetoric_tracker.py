@@ -444,10 +444,26 @@ ESCALATION_LEVELS = {
 # Vector 1: Ground Operations (IDF incursions, UNIFIL, Syria border buildup)
 GROUND_OPS_TRIGGERS = {
     5: [
+        # Original
         'idf enters lebanon', 'ground invasion lebanon', 'troops cross border',
         'idf ground operation', 'ground forces inside lebanon',
         'unifil attacked', 'peacekeepers killed', 'peacekeepers shot',
         'hts seizes border', 'syrian forces cross into lebanon',
+        # v2.1: Current reality — IDF stationed/present inside Lebanon
+        'israeli forces inside lebanon', 'idf inside lebanon',
+        'israeli troops inside lebanon', 'israeli soldiers in lebanon',
+        'idf stationed in lebanon', 'israeli positions in lebanon',
+        'idf positions in southern lebanon', 'israel occupies',
+        'israeli military presence in lebanon', 'idf remain in lebanon',
+        'israeli forces remain', 'troops remain in lebanon',
+        'israeli occupation southern lebanon', 'idf holds positions',
+        'idf withdrawal from lebanon', 'israeli withdrawal lebanon',
+        # Hebrew transliterated / English reporting on Hebrew sources
+        'nekudot amida', 'standing positions lebanon',
+        # Arabic reporting phrases
+        'قوات إسرائيلية داخل لبنان', 'جنود إسرائيليون داخل لبنان',
+        'الاحتلال الإسرائيلي جنوب لبنان', 'تمركز قوات إسرائيلية',
+        'نقاط إسرائيلية في لبنان',
     ],
     4: [
         'preparing ground operation', 'ground incursion imminent',
@@ -455,6 +471,10 @@ GROUND_OPS_TRIGGERS = {
         'idf readying ground', 'ground operation authorized',
         'syria buildup border', 'hts advancing toward lebanon',
         'weapons convoy detected', 'transfer hezbollah weapons',
+        # v2.1: Expansion / reinforcement signals
+        'idf expands presence', 'additional troops lebanon',
+        'reinforcements southern lebanon', 'idf reinforces positions',
+        'expanding positions in lebanon', 'new idf position',
     ],
     3: [
         'will enter lebanon', 'ground operation option', 'idf prepares incursion',
@@ -1053,10 +1073,30 @@ def fetch_lebanon_articles(days=3):
             'المقاومة الإسلامية لبنان',
             'سوريا لبنان حدود',
             'فرنسا لبنان',
+            # v2.1: Arabic ground ops — Israeli forces in south Lebanon
+            'قوات إسرائيلية جنوب لبنان',
+            'توغل إسرائيلي لبنان',
+            'جنود إسرائيليون لبنان',
+            'اجتياح إسرائيلي لبنان',
+            'تمركز إسرائيلي لبنان',
+            'نقاط إسرائيلية جنوب لبنان',
+            'قوات الاحتلال لبنان',
+            'الجيش الإسرائيلي داخل لبنان',
         ],
         'heb': [
             'חיזבאללה OR לבנון',
             'גבול צפון OR פיקוד צפון',
+            # v2.1: Hebrew ground ops — IDF positions/presence in Lebanon
+            'כוחות צה"ל בלבנון',
+            'חיילים בלבנון',
+            'נקודות עמידה לבנון',
+            'כוחות בדרום לבנון',
+            'התמקמות בלבנון',
+            'עמדות בלבנון',
+            'פעילות קרקעית לבנון',
+            'כיבוש דרום לבנון',
+            'נוכחות צבאית לבנון',
+            'צה"ל שוהה בלבנון',
         ],
         'fas': [
             'حزب‌الله OR لبنان',
@@ -1214,20 +1254,89 @@ def score_vectors(text):
     return results
 
 
-def score_escalation(article):
-    """Legacy single-score escalation for per-actor escalation_level field."""
+# Actors that primarily REPORT ON or COMMENT ON events.
+# Their escalation score is downgraded if reporting language is detected.
+# Cap is NOT applied if they use their own genuinely threatening language
+# (e.g. LAF deploying, GOL issuing ultimatum to Hezbollah).
+REPORTING_ACTORS = {
+    'lebanese_government', 'unifil', 'france', 'cyprus'
+}
+
+# Phrases that indicate an actor is reporting, condemning, or mourning —
+# not threatening. Presence + reporting actor = cap at level 2 (Warning).
+REPORTING_LANGUAGE = [
+    # Condemning / denouncing
+    'condemns', 'condemned', 'denounces', 'denounced',
+    'rejects the attack', 'rejects the strike',
+    'protests the', 'protested the',
+    # Mourning / victim language
+    'mourns', 'mourning', 'mourned', 'condolences',
+    'victims of', 'casualties in', 'killed in the attack',
+    'civilian casualties', 'civilian deaths',
+    # Calling on others to act
+    'calls on', 'calls for', 'urges', 'urged',
+    'demands ceasefire', 'demands halt', 'demands end to',
+    'international community must', 'must stop the',
+    'calls for investigation', 'calls for restraint',
+    'calls for de-escalation',
+    # Reporting framing
+    'in response to the attack', 'following the attack',
+    'after the strike', 'following the strike',
+    'in the wake of', 'following the bombardment',
+    'reports that israeli', 'confirmed that israeli',
+    'acknowledges the attack',
+    # Expressing concern
+    'expressed concern', 'deeply concerned about the',
+    'expresses condemnation', 'condemns israeli',
+    'condemns hezbollah',
+    # Arabic equivalents
+    'يستنكر', 'استنكر', 'يدين', 'أدان',
+    'يطالب بوقف', 'يطالب بإنهاء',
+    'يعزي', 'ضحايا الهجوم', 'في أعقاب',
+    # Hebrew equivalents
+    'מגנה', 'גינה', 'קורא ל', 'דורש הפסקה',
+    'קורבנות', 'בעקבות התקיפה',
+]
+
+
+def score_escalation(article, actor_id=None):
+    """
+    Single-score escalation for per-actor escalation_level field.
+    v2.1: Reporting actors (GOL, UNIFIL, France, Cyprus) get capped
+    at level 2 if reporting/condemning language is detected —
+    prevents GOL from scoring Active Conflict just from reporting
+    on Kiryat Shmona. Cap does NOT apply if they use their own
+    genuinely threatening language without reporting context.
+    """
     title   = (article.get('title') or '').lower()
     desc    = (article.get('description') or '').lower()
     content = (article.get('content') or '').lower()
     text    = f"{title} {desc} {content}"
 
-    # Use rockets + ground ops + crossborder for overall escalation
+    # Score normally first
+    raw_level = 1
+    trigger = None
     for level in range(5, 0, -1):
         for kw_dict in [ROCKETS_TRIGGERS, GROUND_OPS_TRIGGERS, CROSSBORDER_TRIGGERS]:
             for kw in kw_dict.get(level, []):
                 if kw in text:
-                    return level, kw
-    return 1, None
+                    raw_level = level
+                    trigger = kw
+                    break
+            if trigger:
+                break
+        if trigger:
+            break
+
+    # Reporting language downgrade — only for reporting actors at level 3+
+    if actor_id in REPORTING_ACTORS and raw_level >= 3:
+        is_reporting = any(phrase in text for phrase in REPORTING_LANGUAGE)
+        if is_reporting:
+            print(f"[Rhetoric] 📰 Reporting downgrade: {actor_id} "
+                  f"capped at L2 (was L{raw_level}, trigger: '{trigger}')")
+            return 2, trigger
+
+    return raw_level, trigger
 
 
 def detect_spokesperson(article, actor_id):
@@ -1534,14 +1643,17 @@ def run_rhetoric_scan(days=3):
                     })
                     break
 
-        # Per-actor scoring
-        escalation_level, trigger_phrase = score_escalation(article)
+        # Per-actor scoring — each actor scored individually so
+        # reporting actors get their own downgraded score
         topics = extract_topics(article)
         pub_date = article.get('publishedAt', '')
 
         for actor_id in actors:
             ar = actor_results[actor_id]
             ar['statement_count'] += 1
+
+            # Score with actor context (v2.1 reporting downgrade)
+            escalation_level, trigger_phrase = score_escalation(article, actor_id)
 
             if escalation_level > ar['max_escalation_level']:
                 ar['max_escalation_level'] = escalation_level
