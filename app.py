@@ -60,6 +60,13 @@ try:
 except ImportError:
     IRAQ_RHETORIC_AVAILABLE = False
     print("[ME Backend] ⚠️ Iraq rhetoric module not available")
+
+try:
+    from rhetoric_tracker_iran import register_iran_rhetoric_routes
+    print("[ME Backend] ✅ Iran rhetoric (command node) module loaded")
+except Exception as e:
+    register_iran_rhetoric_routes = None
+    print(f"[ME Backend] ⚠️ Iran rhetoric module not available: {e}")
 try:
     from iraq_humanitarian import register_iraq_humanitarian_endpoints
     IRAQ_HUMANITARIAN_AVAILABLE = True
@@ -853,6 +860,9 @@ if YEMEN_AVAILABLE:
     register_syria_rhetoric_routes(app)
 if IRAQ_RHETORIC_AVAILABLE:
     register_iraq_rhetoric_routes(app)
+
+if register_iran_rhetoric_routes:
+    register_iran_rhetoric_routes(app)
 if IRAQ_HUMANITARIAN_AVAILABLE:
     register_iraq_humanitarian_endpoints(app)
 if IRAQ_STABILITY_AVAILABLE:
