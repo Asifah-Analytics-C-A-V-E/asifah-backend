@@ -1864,6 +1864,25 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
                 )
                 rhetoric_boost = RHETORIC_BOOST.get(level, 0)
                 print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (level {level})")
+        elif target == 'iran':
+            # Iran is the command node — stronger boost scale than proxies
+            # IRGC direct level drives primary boost; proxy activation adds
+            # secondary boost because 4 elevated proxies = active-war posture
+            IRAN_RHETORIC_BOOST = {0: 0, 1: 3, 2: 7, 3: 13, 4: 22, 5: 32}
+            IRAN_PROXY_BOOST    = {0: 0, 1: 0, 2: 3, 3: 7,  4: 12, 5: 18}
+            from rhetoric_tracker_iran import RHETORIC_CACHE_KEY as IRAN_RHETORIC_KEY, _redis_get as _iran_rhetoric_redis_get
+            rhetoric_cache = _iran_rhetoric_redis_get(IRAN_RHETORIC_KEY)
+            if rhetoric_cache:
+                irgc_level  = rhetoric_cache.get('irgc_direct_level', 0)
+                proxy_level = rhetoric_cache.get('proxy_activation_level', 0)
+                theatre_level = rhetoric_cache.get('theatre_escalation_level', 0)
+                # Use max of irgc_direct and theatre for primary boost
+                primary_level = max(irgc_level, theatre_level)
+                rhetoric_boost = (
+                    IRAN_RHETORIC_BOOST.get(primary_level, 0) +
+                    IRAN_PROXY_BOOST.get(proxy_level, 0)
+                )
+                print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (IRGC L{irgc_level}, proxy L{proxy_level}, theatre L{theatre_level})")
     except Exception as e:
         print(f"[{target}] Rhetoric boost skipped: {e}")
 
