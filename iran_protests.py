@@ -1505,7 +1505,38 @@ def calculate_regime_stability(all_articles, casualties, exchange_rate, oil_pric
         'internal_cohesion': 0.10
     }
     composite = sum(scores[k] * weights[k] for k in weights)
-    stability_score = int(max(5, min(95, composite)))
+
+    # ── Rhetoric penalty (command node — v3.3.0) ──
+    # Iran rhetoric tracker is a command node — IRGC/Khamenei escalation
+    # directly reflects regime externalizing pressure, which destabilizes
+    # the domestic stability picture. Penalty is stronger than Lebanon's
+    # because proxy activation signals regime is in active-war posture.
+    RHETORIC_PENALTY = {0: 0, 1: -2, 2: -5, 3: -10, 4: -18, 5: -28}
+    rhetoric_penalty = 0
+    proxy_penalty = 0
+    try:
+        if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+            import json as _json
+            resp = requests.get(
+                f"{UPSTASH_REDIS_URL}/get/rhetoric:iran:latest",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            rdata = resp.json()
+            if rdata.get('result'):
+                rhetoric_cache = _json.loads(rdata['result'])
+                theatre_level = rhetoric_cache.get('theatre_escalation_level', 0)
+                rhetoric_penalty = RHETORIC_PENALTY.get(theatre_level, 0)
+                # Additional penalty if proxy activation index is elevated
+                # — means Iran is actively directing proxies (wartime posture)
+                PROXY_PENALTY = {0: 0, 1: 0, 2: -3, 3: -8, 4: -15, 5: -20}
+                proxy_level = rhetoric_cache.get('proxy_activation_level', 0)
+                proxy_penalty = PROXY_PENALTY.get(proxy_level, 0)
+                print(f"[Iran Stability] Rhetoric penalty: {rhetoric_penalty} (theatre L{theatre_level}) | Proxy penalty: {proxy_penalty} (proxy L{proxy_level})")
+    except Exception as e:
+        print(f"[Iran Stability] Rhetoric penalty skipped: {e}")
+
+    stability_score = int(max(5, min(95, composite + rhetoric_penalty + proxy_penalty)))
 
     if stability_score >= 70: risk_level = "STABLE - Low Risk"
     elif stability_score >= 50: risk_level = "MODERATE RISK - Elevated Tensions"
@@ -1526,12 +1557,17 @@ def calculate_regime_stability(all_articles, casualties, exchange_rate, oil_pric
     else:
         trend = "stable"
 
+    print(f"[Iran Stability] ✅ Score: {stability_score}/100 ({risk_level}) | rhetoric={rhetoric_penalty} proxy={proxy_penalty}")
+
     return {
         "stability_score": stability_score, "risk_level": risk_level,
         "trend": trend, "trend_day_count": len(trend_history),
         "components": scores, "weights": weights,
         "composite_raw": round(composite, 1),
-        "methodology": "Multi-component: Protest(30%) + Economic(25%) + Security(20%) + Geopolitical(15%) + Cohesion(10%)"
+        "rhetoric_penalty": rhetoric_penalty,
+        "proxy_penalty": proxy_penalty,
+        "methodology": "Multi-component: Protest(30%) + Economic(25%) + Security(20%) + Geopolitical(15%) + Cohesion(10%) + Rhetoric + Proxy",
+        "version": "3.3.0-command-node-rhetoric"
     }
 
 
