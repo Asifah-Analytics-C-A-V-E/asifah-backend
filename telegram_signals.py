@@ -43,6 +43,10 @@ SESSION_NAME      = 'asifah_session'
 # ========================================
 
 LEBANON_CHANNELS = [
+    # Palestinian / Resistance axis breaking news
+    'QudsN',                # Quds News Network — 722K subs, resistance-axis Arabic breaking news
+    # Israeli/IDF sources
+    'avichay_adraee',       # IDF Arabic spokesperson — evacuation warningsLEBANON_CHANNELS = [
     # Israeli/IDF sources
     'avichay_adraee',       # IDF Arabic spokesperson — evacuation warnings
     'idfonline',            # IDF English spokesperson
@@ -84,7 +88,10 @@ YEMEN_CHANNELS = [
     'rodast_omiddana',      # Omid Dana — Farsi political commentary
 ]
 
+
 SYRIA_CHANNELS = [
+    # Palestinian / Resistance axis breaking news
+    'QudsN',                # Quds News Network — resistance-axis, covers Syria/Lebanon/Gaza nexus
     # Syria-specific OSINT
     'syrianinfowar',        # Syrian Information War — OSINT, conflict tracking
     'SyriaNewsNow',         # Syria News Now — general Syria updates
@@ -110,6 +117,10 @@ SYRIA_CHANNELS = [
 ]
 
 IRAQ_CHANNELS = [
+    # Palestinian / Resistance axis breaking news
+    'QudsN',                # Quds News Network — resistance-axis, covers Iraq/PMF nexus
+    # Iraqi state / official
+    'IraqiNewsAgency',      # INA — Iraqi News Agency, official Baghdad positionsIRAQ_CHANNELS = [
     # Iraqi state / official
     'IraqiNewsAgency',      # INA — Iraqi News Agency, official Baghdad positions
     # PMF / Hashd al-Shaabi — Shi'a militia rhetoric (highest priority for escalation)
@@ -140,7 +151,42 @@ ASIA_PACIFIC_CHANNELS = [
     'PakistanMilitary',     # Pakistan military updates
 ]
 
+IRAN_CHANNELS = [
+    # Supreme Leader / Iranian government official
+    'khamenei_ir',          # Khamenei official — supreme leader statements, fatwa language
+    'IRIranArmy',           # Iranian Army official — conventional military statements
+    # IRGC-affiliated / state media
+    'tasnimnews_en',        # Tasnim News English — IRGC-affiliated, operation announcements
+    'FarsNewsAgency',       # Fars News English — IRGC-affiliated, proxy coordination signals
+    'PressTV',              # Press TV — Iranian state English, regime framing
+    'QudsN',                # Quds News Network — resistance-axis, Iran-directed ops
+    # Proxy network — Hezbollah
+    'ManarNewsEN',          # Al-Manar English — Hezbollah operations, Iran-Hezbollah nexus
+    'almanarnews',          # Al-Manar Arabic — direct Hezbollah/Iran statements
+    'almayadeenenglish',    # Al-Mayadeen — axis of resistance framing
+    # Proxy network — Houthi / Yemen
+    'YemenMonitor',         # Yemen Monitor — Houthi operations
+    'WarMonitors',          # War Monitor — Houthi/PMF strikes
+    # Proxy network — Iraq PMF
+    'SabreenNews',          # Sabreen News — PMF/Hashd statements
+    'kataibmedia',          # Kata'ib Hezbollah — direct IRGC proxy statements
+    'nayaforiraq',          # Naya For Iraq — Iraq/Iran nexus
+    # OSINT — Iran operations
+    'OSINTdefender',        # OSINT Defender — Iran strikes, Operation True Promise tracking
+    'ClashReport',          # Clash Report — Iran missile/drone operations
+    'IntelSlava',           # Intel Slava — multilingual, Iran war coverage
+    'AbuAliExpress',        # Abu Ali Express — Israeli perspective on Iran ops
+    # Persian / domestic Iran signals
+    'rodast_omiddana',      # Omid Dana — Farsi political commentary, domestic pressure signals
+    'IranIntl_En',          # Iran International English — opposition/protest signals
+    # CENTCOM / US response
+    'CentcomOfficial',      # CENTCOM — US strikes on Iran, force posture
+    'kann_news',            # Kan News Hebrew — Israeli perspective on Iran
+]
+
 EXTENDED_CHANNELS = [
+    # Palestinian / Resistance axis breaking news
+    'QudsN',                # Quds News Network — broad resistance-axis coverage
     # General conflict OSINT
     'C_Military1',
     'ClashReport',
@@ -337,6 +383,22 @@ def fetch_telegram_signals_iraq(hours_back=24):
         return []
 
 
+def fetch_telegram_signals_iran(hours_back=24):
+    """
+    Iran command node fetch — Supreme Leader, IRGC, state media,
+    proxy network (Hezbollah/Houthi/PMF), domestic pressure signals,
+    and Israeli/US response channels.
+    Primary purpose: detect when Iran is activating or directing proxies.
+    """
+    if not _telegram_available():
+        return []
+    try:
+        return _run_async(IRAN_CHANNELS.copy(), hours_back)
+    except Exception as e:
+        print(f"[Telegram/Iran] ❌ fetch error: {str(e)[:200]}")
+        return []
+
+
 # ========================================
 # HEALTH CHECK
 # ========================================
@@ -351,6 +413,7 @@ def get_telegram_status():
         'channels_yemen': YEMEN_CHANNELS,
         'channels_syria': SYRIA_CHANNELS,
         'channels_iraq': IRAQ_CHANNELS,
+        'channels_iran': IRAN_CHANNELS,
         'channels_extended': EXTENDED_CHANNELS,
         'ready': _telegram_available() and (
             os.path.exists(f'{SESSION_NAME}.session') or
