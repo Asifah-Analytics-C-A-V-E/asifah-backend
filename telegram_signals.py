@@ -151,6 +151,36 @@ ASIA_PACIFIC_CHANNELS = [
     'PakistanMilitary',     # Pakistan military updates
 ]
 
+ISRAEL_CHANNELS = [
+    # Tzeva Adom / Alert channels — real-time rocket/missile alerts
+    'tzevaadom_en',         # Tzeva Adom English — every Pikud HaOref alert in real time
+    'tzevaadom',            # Tzeva Adom Hebrew — primary alert feed
+    'pikudHaoref',          # Pikud HaOref official channel
+    # IDF / Military
+    'idfonline',            # IDF English spokesperson — official strike/ops announcements
+    'avichay_adraee',       # IDF Arabic spokesperson — Arabic-language ops
+    'Yair_Altman_channel14',  # Yair Altman — Channel 14, best Hebrew OSINT northern front + IDF
+    'idfofficial',            # IDF Official English — primary IDF announcements channel
+    'osintisraelgroup',       # OSINT Israel — aggregates 50+ Hebrew/Arabic channels in English
+    'AbuAliExpress',        # Abu Ali Express — bilingual Hebrew/Arabic OSINT
+    'kann_news',            # Kan News — Hebrew breaking, fast on military
+    'channel14news',        # Channel 14 — right-leaning, fast on military ops
+    # Israeli political — War Cabinet, annexation rhetoric
+    'Netanyahu_War_Room',   # Netanyahu official Telegram
+    'Israel_HaYom',         # Israel Hayom — right-wing, settler/annexation signals
+    # Threat actors — inbound signals
+    'ManarNewsEN',          # Al-Manar English — Hezbollah ops against Israel
+    'almayadeenenglish',    # Al-Mayadeen — resistance axis ops
+    'QudsN',                # Quds News Network — Hamas/resistance signals
+    'WarMonitors',          # War Monitor — strike tracking both directions
+    'ClashReport',          # Clash Report — incident tracking
+    'OSINTdefender',        # OSINT Defender — multi-threat tracking
+    'IntelSlava',           # Intel Slava — multilingual ME OSINT
+    # West Bank / Palestinian civil signals
+    'AJEnglish',            # Al Jazeera — West Bank, settler violence coverage
+    'IranIntl_En',          # Iran International — Iran-Israel nexus
+]
+
 IRAN_CHANNELS = [
     # Supreme Leader / Iranian government official
     'khamenei_ir',          # Khamenei official — supreme leader statements, fatwa language
@@ -383,6 +413,21 @@ def fetch_telegram_signals_iraq(hours_back=24):
         return []
 
 
+def fetch_telegram_signals_israel(hours_back=24):
+    """
+    Israel fetch — Tzeva Adom alerts, IDF ops, War Cabinet,
+    inbound threat actors (Hezbollah/Hamas/Houthi/Iran),
+    West Bank/annexation signals, US coordination.
+    """
+    if not _telegram_available():
+        return []
+    try:
+        return _run_async(ISRAEL_CHANNELS.copy(), hours_back)
+    except Exception as e:
+        print(f"[Telegram/Israel] ❌ fetch error: {str(e)[:200]}")
+        return []
+
+
 def fetch_telegram_signals_iran(hours_back=24):
     """
     Iran command node fetch — Supreme Leader, IRGC, state media,
@@ -414,6 +459,7 @@ def get_telegram_status():
         'channels_syria': SYRIA_CHANNELS,
         'channels_iraq': IRAQ_CHANNELS,
         'channels_iran': IRAN_CHANNELS,
+        'channels_israel': ISRAEL_CHANNELS,
         'channels_extended': EXTENDED_CHANNELS,
         'ready': _telegram_available() and (
             os.path.exists(f'{SESSION_NAME}.session') or
