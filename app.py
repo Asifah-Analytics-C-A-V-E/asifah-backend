@@ -67,6 +67,13 @@ try:
 except Exception as e:
     register_iran_rhetoric_routes = None
     print(f"[ME Backend] ⚠️ Iran rhetoric module not available: {e}")
+
+try:
+    from rhetoric_tracker_israel import register_israel_rhetoric_routes
+    print("[ME Backend] ✅ Israel rhetoric (dual dashboard) module loaded")
+except Exception as e:
+    register_israel_rhetoric_routes = None
+    print(f"[ME Backend] ⚠️ Israel rhetoric module not available: {e}")
 try:
     from iraq_humanitarian import register_iraq_humanitarian_endpoints
     IRAQ_HUMANITARIAN_AVAILABLE = True
@@ -863,6 +870,9 @@ if IRAQ_RHETORIC_AVAILABLE:
 
 if register_iran_rhetoric_routes:
     register_iran_rhetoric_routes(app)
+
+if register_israel_rhetoric_routes:
+    register_israel_rhetoric_routes(app)
 if IRAQ_HUMANITARIAN_AVAILABLE:
     register_iraq_humanitarian_endpoints(app)
 if IRAQ_STABILITY_AVAILABLE:
