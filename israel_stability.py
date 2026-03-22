@@ -890,6 +890,36 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
     humanitarian_drag = -4
     print(f"[Israel Stability] Humanitarian drag: {humanitarian_drag}")
 
+    # ── Rhetoric penalty (v1.1.0 — dual dashboard) ──
+    # Inbound: when Iran/Hezbollah are actively striking Israel,
+    # regional_impact increases dynamically beyond the static baseline.
+    # Outbound: annexation rhetoric at L3+ adds coalition pressure drag.
+    INBOUND_PENALTY  = {0:0, 1:0, 2:-2, 3:-5, 4:-12, 5:-20}
+    OUTBOUND_PENALTY = {0:0, 1:0, 2:0,  3:-3, 4:-6,  5:-10}
+    ALERT_PENALTY    = {0:0, 1:-1, 2:-2, 3:-4, 4:-7, 5:-10}
+    rhetoric_inbound  = 0
+    rhetoric_outbound = 0
+    rhetoric_alerts   = 0
+    try:
+        if UPSTASH_URL and UPSTASH_TOKEN:
+            resp = requests.get(
+                f"{UPSTASH_URL}/get/rhetoric:israel:latest",
+                headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+                timeout=5
+            )
+            rdata = resp.json()
+            if rdata.get('result'):
+                rc = json.loads(rdata['result'])
+                inbound_lv  = rc.get('inbound_max_level', 0)
+                outbound_lv = rc.get('annexation_level', 0)
+                alert_lv    = rc.get('alert_level', 0)
+                rhetoric_inbound  = INBOUND_PENALTY.get(inbound_lv, 0)
+                rhetoric_outbound = OUTBOUND_PENALTY.get(outbound_lv, 0)
+                rhetoric_alerts   = ALERT_PENALTY.get(alert_lv, 0)
+                print(f"[Israel Stability] Rhetoric: inbound={rhetoric_inbound} (L{inbound_lv}), outbound={rhetoric_outbound} (L{outbound_lv}), alerts={rhetoric_alerts} (L{alert_lv})")
+    except Exception as e:
+        print(f"[Israel Stability] Rhetoric penalty skipped: {e}")
+
     # ── Final score ──
     score = (
         base
@@ -899,6 +929,9 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
         - regional_impact
         + hostage_bonus
         + humanitarian_drag
+        + rhetoric_inbound
+        + rhetoric_outbound
+        + rhetoric_alerts
     )
     score = max(0, min(100, int(score)))
 
@@ -925,6 +958,8 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
     print(f"[Israel Stability] ✅ Score: {score}/100 ({risk_level})")
     print(f"[Israel Stability] Components: base={base}, econ={econ_bonus:+}, war=-{war_impact}, coalition=-{coalition_impact}, regional=-{regional_impact}, hostage=+{hostage_bonus}, humanitarian={humanitarian_drag}")
 
+    print(f"[Israel Stability] ✅ Score: {score}/100 ({risk_level}) | rhetoric_inbound={rhetoric_inbound} outbound={rhetoric_outbound} alerts={rhetoric_alerts}")
+
     return {
         'score': score,
         'risk_level': risk_level,
@@ -937,7 +972,10 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
             'coalition_impact': -coalition_impact,
             'regional_impact': -regional_impact,
             'hostage_bonus': hostage_bonus,
-            'humanitarian_drag': humanitarian_drag
+            'humanitarian_drag': humanitarian_drag,
+            'rhetoric_inbound': rhetoric_inbound,
+            'rhetoric_outbound': rhetoric_outbound,
+            'rhetoric_alerts': rhetoric_alerts,
         },
         'version': '1.0.0-active-war'
     }
