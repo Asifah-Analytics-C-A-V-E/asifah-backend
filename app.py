@@ -1874,6 +1874,23 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
                 )
                 rhetoric_boost = RHETORIC_BOOST.get(level, 0)
                 print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (level {level})")
+        elif target == 'israel':
+            # Israel is the strike actor — inbound threat level drives boost
+            # TCI (threat convergence index) adds secondary boost
+            ISRAEL_INBOUND_BOOST = {0:0, 1:2, 2:5, 3:10, 4:18, 5:28}
+            ISRAEL_TCI_BOOST     = {0:0, 1:2, 2:4, 3:8,  4:12, 5:16}
+            from rhetoric_tracker_israel import RHETORIC_CACHE_KEY as ISRAEL_RHETORIC_KEY, _redis_get as _israel_redis_get
+            rhetoric_cache = _israel_redis_get(ISRAEL_RHETORIC_KEY)
+            if rhetoric_cache:
+                inbound_lv = rhetoric_cache.get('inbound_max_level', 0)
+                tci        = rhetoric_cache.get('threat_convergence_index', 0)
+                alert_lv   = rhetoric_cache.get('alert_level', 0)
+                rhetoric_boost = (
+                    ISRAEL_INBOUND_BOOST.get(inbound_lv, 0) +
+                    ISRAEL_TCI_BOOST.get(tci, 0) +
+                    min(alert_lv * 3, 12)  # Alert boost — real incoming fire
+                )
+                print(f"[{target}] Rhetoric boost: +{rhetoric_boost}% (inbound L{inbound_lv}, TCI {tci}, alerts L{alert_lv})")
         elif target == 'iran':
             # Iran is the command node — stronger boost scale than proxies
             # IRGC direct level drives primary boost; proxy activation adds
