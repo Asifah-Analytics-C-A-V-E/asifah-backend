@@ -1728,7 +1728,7 @@ def register_israel_rhetoric_routes(app):
     print(f"[Israel Rhetoric] ✅ Periodic scan thread started ({SCAN_INTERVAL_HOURS}h cycle)")
 
     @app.route('/api/rhetoric/israel', methods=['GET'])
-    def israel_rhetoric():
+    def israel_rhetoric_main():
         force = request.args.get('force', '').lower() in ('true', '1', 'yes')
         if force:
             try:
@@ -1758,7 +1758,7 @@ def register_israel_rhetoric_routes(app):
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])
-    def israel_rhetoric_summary():
+    def israel_rhetoric_summary_ep():
         cached = _redis_get(RHETORIC_CACHE_KEY) or _redis_get(RHETORIC_CACHE_KEY_LEGACY)
         if cached:
             return jsonify({
@@ -1806,7 +1806,7 @@ def register_israel_rhetoric_routes(app):
         })
 
     @app.route('/api/rhetoric/israel/history', methods=['GET'])
-    def israel_rhetoric_history():
+    def israel_rhetoric_history_ep():
         try:
             limit = max(1, min(int(request.args.get('limit', 120)), 120))
             entries = []
@@ -1828,7 +1828,7 @@ def register_israel_rhetoric_routes(app):
             return jsonify({'success': False, 'error': str(e)}), 500
 
     @app.route('/api/rhetoric/israel/alerts', methods=['GET'])
-    def israel_alerts():
+    def israel_alerts_ep():
         """Pikud HaOref alert counts — current 24h window."""
         hours = int(request.args.get('hours', 24))
         force = request.args.get('force', '').lower() in ('true', '1')
