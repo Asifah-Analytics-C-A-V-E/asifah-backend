@@ -1,5 +1,5 @@
 """
-Lebanon Humanitarian Data Module v1.0.0
+Lebanon Humanitarian Data Module v1.1.0
 March 2026
 
 Fetches humanitarian crisis data from:
@@ -12,6 +12,7 @@ stability page humanitarian dashboard cards.
 
 Env vars required:
   - DTM_API_KEY: IOM DTM API v3 subscription key
+  - RELIEFWEB_APPNAME: ReliefWeb registered app name (e.g. asifah-analytics)
   - UPSTASH_REDIS_REST_URL: Redis cache URL
   - UPSTASH_REDIS_REST_TOKEN: Redis cache token
 """
@@ -29,8 +30,9 @@ from datetime import datetime, timezone, timedelta
 DTM_API_KEY = os.environ.get('DTM_API_KEY')
 DTM_BASE_URL = 'https://dtmapi.iom.int/v3'
 
-# ReliefWeb API (open, no key needed)
+# ReliefWeb API (open, but registered appname required)
 RELIEFWEB_API_URL = 'https://api.reliefweb.int/v1'
+RELIEFWEB_APPNAME = os.environ.get('RELIEFWEB_APPNAME', 'asifah-analytics')
 
 # Redis (shared with main lebanon_stability.py)
 UPSTASH_URL = os.environ.get('UPSTASH_REDIS_REST_URL')
@@ -82,7 +84,6 @@ def fetch_dtm_displacement():
         if response.status_code == 200:
             data = response.json()
             if data and len(data) > 0:
-                # Get the most recent round
                 latest = sorted(data, key=lambda x: x.get('reportingDate', ''), reverse=True)
                 if latest:
                     most_recent = latest[0]
@@ -100,29 +101,6 @@ def fetch_dtm_displacement():
                 print("[DTM] Country-level: No data returned")
         else:
             print(f"[DTM] Country-level: HTTP {response.status_code}")
-            # Try alternate endpoint format
-            try:
-                alt_response = requests.get(
-                    f'{DTM_BASE_URL}/displacement/admin0',
-                    headers=headers,
-                    params=params,
-                    timeout=15
-                )
-                if alt_response.status_code == 200:
-                    data = alt_response.json()
-                    if data and len(data) > 0:
-                        latest = sorted(data, key=lambda x: x.get('reportingDate', ''), reverse=True)
-                        if latest:
-                            most_recent = latest[0]
-                            result['country_level'] = {
-                                'total_idps': most_recent.get('numPresentIdpInd', 0),
-                                'reporting_date': most_recent.get('reportingDate', ''),
-                                'round_number': most_recent.get('roundNumber', ''),
-                                'operation': most_recent.get('operation', ''),
-                            }
-                            print(f"[DTM] ✅ Alt endpoint: {most_recent.get('numPresentIdpInd', 0):,} IDPs")
-            except Exception as e:
-                print(f"[DTM] Alt endpoint error: {str(e)[:100]}")
 
     except Exception as e:
         result['error'] = f"DTM country-level error: {str(e)[:200]}"
@@ -146,7 +124,6 @@ def fetch_dtm_displacement():
         if response.status_code == 200:
             data = response.json()
             if data and len(data) > 0:
-                # Group by admin1 and get latest round for each
                 admin1_latest = {}
                 for entry in data:
                     admin1 = entry.get('admin1Name', 'Unknown')
@@ -192,19 +169,8 @@ def fetch_reliefweb_updates():
 
     try:
         print("[ReliefWeb] Fetching Lebanon flash updates...")
-        params = {
-            'appname': 'asifah-analytics',
-            'filter[field]': 'country.iso3',
-            'filter[value]': 'LBN',
-            'filter[operator]': 'AND',
-            'sort[]': 'date:desc',
-            'limit': 10,
-            'fields[include][]': ['title', 'date.created', 'url_alias', 'source.name', 'body-html'],
-        }
-
-        # Search for flash updates specifically
         search_params = {
-            'appname': 'asifah-analytics',
+            'appname': RELIEFWEB_APPNAME,
             'query[value]': 'Lebanon flash update escalation hostilities',
             'query[operator]': 'AND',
             'sort[]': 'date:desc',
@@ -248,99 +214,108 @@ def fetch_reliefweb_updates():
 # (Updated manually from OCHA Flash Updates)
 # ========================================
 
-# Last updated from: OCHA Flash Update / DRM Unit, March 12, 2026
-# + UNHCR briefing March 10, 2026
-# + OCHA Flash Update #3, March 7, 2026
-# + UN News reporting, March 9-10, 2026
-# + UNRWA Situation Report #1, March 6, 2026
-# + UNFPA Flash Update, March 5, 2026
+# Last updated: March 24, 2026
+# Sources:
+#   OCHA Flash Update #10, March 19, 2026
+#   OCHA Flash Update #9, March 16, 2026
+#   OCHA Flash Update #8, March 12-13, 2026
+#   DRM Unit / Lebanese PM Office daily report, March 21, 2026
+#   MoPH via The Intercept, mid-March 2026
+#   OCHA Security Council briefing (Tom Fletcher), March 10, 2026
+#   OCHA Flash Appeal Lebanon March-May 2026, launched March 13, 2026
+#   IOM global displacement update, March 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-03-12',
-    'data_period': 'March 2-12, 2026 (renewed hostilities)',
-    'note': 'Static figures from OCHA Flash Update / DRM Unit. Updated manually.',
+    'last_manual_update': '2026-03-24',
+    'data_period': 'March 2 – 21, 2026 (renewed hostilities)',
+    'note': 'Static figures compiled from OCHA Flash Updates #1–10 and DRM Unit daily reports. Updated manually.',
 
     'casualties': {
-        'killed': 826,
-        'injured': 2009,
-        'children_killed': 83,
-        'women_killed': 42,
-        'rescue_workers_killed': 9,
-        'source': 'Ministry of Public Health via OCHA Flash Update #5',
+        'killed': 1024,
+        'injured': 2740,
+        'children_killed': 118,
+        'children_injured': 332,
+        'women_killed': None,
+        'rescue_workers_killed': 31,
+        'source': 'DRM Unit / Lebanese PM Office & MoPH',
         'source_url': 'https://www.unocha.org/lebanon',
-        'as_of': '2026-03-12',
-        'note': 'Cumulative since renewed hostilities March 2, 2026. Nabatieh has highest casualty toll.'
+        'as_of': '2026-03-21',
+        'note': 'Cumulative since renewed hostilities March 2, 2026. UNICEF: equivalent of one classroom of children killed or wounded daily. 31 healthcare workers killed since March 2.'
     },
 
     'displacement': {
-        'total_displaced_registered': 831882,
-        'in_government_shelters': 128200,
-        'families_in_shelters': 33200,
-        'shelters_opened': 596,
-        'shelters_at_capacity': 'Majority at or exceeding capacity',
-        'cross_border_to_syria': 78000,
-        'cross_border_to_syria_lebanese': 7700,
-        'cross_border_single_day_peak': 100000,
+        'total_displaced_registered': 1200000,
+        'total_displaced_pct_population': 19,
+        'in_government_shelters': 134439,
+        'shelters_opened': 636,
+        'shelters_at_capacity': 'Majority overcrowded — limited electricity, heating, and WASH',
+        'cross_border_to_syria': 37000,
         'previously_displaced_2024': 65000,
-        'children_displaced': 200000,
-        'source': 'UNHCR briefing (Lindholm Billing) / GoL displacement platform / OCHA',
+        'children_displaced': 300000,
+        'source': 'OCHA Flash Update #10 / DRM Unit',
         'source_urls': [
+            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-10-escalation-hostilities-lebanon-19-march-2026',
             'https://dtm.iom.int/lebanon',
-            'https://www.unhcr.org/uk/news/briefing-notes/unhcr-almost-700-000-displaced-week-across-lebanon-crisis-deepens',
         ],
-        'as_of': '2026-03-12',
-        'note': '667K+ registered on GoL platform (up 100K in 24 hrs). Faster pace than 2024. 78K+ Syrians returned to Syria, 7,700+ Lebanese crossed into Syria.'
+        'as_of': '2026-03-19',
+        'note': '1.2M+ displaced — roughly 1 in 5 people in Lebanon. Only ~12.5% in formal collective shelters; majority with host families or in informal sites. Displacement orders now cover ~14% of Lebanese territory (1,470 sq km).'
     },
 
     'shelters': {
-        'total_shelters': 596,
+        'total_shelters': 636,
         'at_full_capacity': 'Majority exceeding safe standards',
-        'capacity_percentage': 95,
-        'schools_as_shelters': 328,
-        'children_education_affected': 104200,
-        'school_aged_idps': 181000,
-        'government_designated_sites': 270,
-        'unhcr_items_delivered': 168000,
-        'unhcr_people_reached': 63000,
-        'unrwa_shelters': 2,
-        'unrwa_registered': 1300,
-        'unrwa_locations': ['Siblin Training Centre (Saida)', 'Nahr el-Bared (North Tripoli)'],
-        'source': 'OCHA Flash Update #5 / DRM / UNHCR',
+        'capacity_percentage': 98,
+        'schools_as_shelters': 472,
+        'children_education_affected': None,
+        'school_aged_idps': None,
+        'government_designated_sites': None,
+        'source': 'OCHA Flash Update #10',
         'source_urls': [
-            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-3-escalation-hostilities-lebanon-7-march-2026',
-            'https://www.unrwa.org/resources/reports/unrwa-situation-report-1-lebanon-emergency-response-2026',
+            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-10-escalation-hostilities-lebanon-19-march-2026',
         ],
-        'as_of': '2026-03-12',
-        'note': '328 schools used as shelters, affecting 104K children education. All public schools and Lebanese University campuses designated. Many IDPs in cars or on streets.'
+        'as_of': '2026-03-19',
+        'note': '472 schools (public, private, TVET) converted to shelters. Many IDPs in cars, streets, unfinished buildings. Overcrowding raising disease, fire, and GBV risks. Flash Appeal requests $308.3M for March–May 2026.'
     },
 
     'evacuation_orders': {
         'active_orders': True,
+        'territory_covered_sqkm': 1470,
+        'territory_pct_lebanon': 14,
         'areas': [
             'Entire area south of the Litani River (~850 sq km, 500,000+ people)',
-            'Beirut Southern Suburbs (issued 3 times since March 2)',
+            'Litani to Zahrani river zone (expanded order)',
+            'Beirut Southern Suburbs (issued multiple times since March 2)',
             '110+ towns and locations near the Blue Line',
-            '50+ villages (forced evacuation orders March 3)'
+            'Tyre district including Palestinian camps (March 17)',
+            'Localized building/neighborhood orders in Beirut (ongoing)'
         ],
-        'hostile_incidents_drm': 1928,
-        'source': 'OCHA Flash Update / DRM Unit',
-        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-1-escalation-hostilities-lebanon-5-march-2026',
-        'as_of': '2026-03-12'
+        'source': 'OCHA Flash Update #9 / DRM Unit',
+        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-9-escalation-hostilities-lebanon-16-march-2026',
+        'as_of': '2026-03-19',
+        'note': 'Displacement orders now cover ~14% of Lebanon\'s territory. Many families displaced multiple times as orders expand geographically.'
     },
 
     'healthcare': {
-        'facilities_attacked_since_oct_2023': 158,
-        'health_workers_killed_since_oct_2023': 241,
-        'health_workers_injured_since_oct_2023': 292,
-        'health_workers_killed_since_mar2': 14,
-        'health_workers_injured_since_mar2': 24,
+        'health_workers_killed_since_mar2': 31,
+        'health_workers_injured_since_mar2': None,
+        'healthcare_attacks_since_mar2': 25,
         'hospitals_closed': 5,
-        'phccs_closed': 48,
-        'phccs_emergency_only': 7,
-        'source': 'MoPH via OCHA Flash Update #5',
-        'source_url': 'https://www.unocha.org/lebanon',
-        'as_of': '2026-03-09',
-        'note': '5 hospitals and 48 PHCCs closed. 7 PHCCs open for emergencies only. White phosphorus alleged in Yahmar, Nabatieh (HRW).'
+        'phccs_closed': 49,
+        'phccs_emergency_only': None,
+        'source': 'OCHA Security Council briefing / MoPH / WHO',
+        'source_url': 'https://www.unocha.org/news/un-relief-chief-tells-security-council-exhausted-lebanon-not-asking-help-oxygen',
+        'as_of': '2026-03-19',
+        'note': '5 hospitals and 49+ PHCCs closed in South and Beirut southern suburbs. WHO recorded 25 attacks on healthcare since Feb 28. Fuel shortages threatening hospital operations and water pumping.'
+    },
+
+    'flash_appeal': {
+        'amount_usd': 308300000,
+        'period': 'March – May 2026',
+        'target_beneficiaries': 1000000,
+        'launched': '2026-03-13',
+        'source': 'OCHA Flash Appeal Lebanon March-May 2026',
+        'source_url': 'https://www.unocha.org/publications/report/lebanon/flash-appeal-lebanon-march-may-2026-march-2026-enar',
+        'note': 'Launched jointly with GoL by UN Secretary-General Guterres during March 13 solidarity visit to Beirut.'
     },
 
     'source_links': {
@@ -358,11 +333,6 @@ STATIC_HUMANITARIAN = {
             'label': 'ReliefWeb Lebanon',
             'url': 'https://reliefweb.int/country/lbn',
             'icon': '📰'
-        },
-        'unrwa': {
-            'label': 'UNRWA Emergency',
-            'url': 'https://www.unrwa.org/resources/reports/unrwa-situation-report-1-lebanon-emergency-response-2026',
-            'icon': '🏥'
         },
         'unhcr': {
             'label': 'UNHCR Lebanon',
@@ -436,7 +406,7 @@ def get_humanitarian_data(force_refresh=False):
     dtm_data = fetch_dtm_displacement()
     reliefweb_data = fetch_reliefweb_updates()
 
-    # If DTM returned fresh IDP numbers, update the displacement card
+    # If DTM returned fresh IDP numbers, overlay on static displacement card
     displacement_data = dict(STATIC_HUMANITARIAN['displacement'])
     if dtm_data and dtm_data.get('country_level'):
         dtm_idps = dtm_data['country_level'].get('total_idps', 0)
@@ -458,6 +428,7 @@ def get_humanitarian_data(force_refresh=False):
         'shelters': STATIC_HUMANITARIAN['shelters'],
         'evacuation_orders': STATIC_HUMANITARIAN['evacuation_orders'],
         'healthcare': STATIC_HUMANITARIAN['healthcare'],
+        'flash_appeal': STATIC_HUMANITARIAN['flash_appeal'],
 
         'dtm_raw': dtm_data,
         'reliefweb_reports': reliefweb_data.get('reports', []) if reliefweb_data else [],
@@ -527,6 +498,7 @@ def register_humanitarian_endpoints(app):
         return jsonify({
             'dtm_api_key_set': bool(DTM_API_KEY),
             'dtm_base_url': DTM_BASE_URL,
+            'reliefweb_appname': RELIEFWEB_APPNAME,
             'result': dtm_data
         })
 
