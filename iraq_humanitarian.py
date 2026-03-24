@@ -1,5 +1,5 @@
 """
-Iraq Humanitarian Data Module v1.0.0
+Iraq Humanitarian Data Module v1.1.0
 March 2026
 
 Fetches humanitarian crisis data from:
@@ -11,6 +11,7 @@ Provides /api/iraq/humanitarian endpoint for the Iraq stability page.
 
 Env vars required (already set on ME backend):
   - DTM_API_KEY: IOM DTM API v3 subscription key
+  - RELIEFWEB_APPNAME: ReliefWeb registered app name (e.g. asifah-analytics)
   - UPSTASH_REDIS_URL: Redis cache URL
   - UPSTASH_REDIS_TOKEN: Redis cache token
 
@@ -40,6 +41,7 @@ DTM_API_KEY    = os.environ.get('DTM_API_KEY')
 DTM_BASE_URL   = 'https://dtmapi.iom.int/v3'
 
 RELIEFWEB_API_URL = 'https://api.reliefweb.int/v1'
+RELIEFWEB_APPNAME = os.environ.get('RELIEFWEB_APPNAME', 'asifah-analytics')
 
 UPSTASH_URL   = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
@@ -152,10 +154,14 @@ def fetch_dtm_displacement():
                     }
                     print(f"[Iraq DTM] Country-level: {most_recent.get('numPresentIdpInd', 0):,} IDPs")
             else:
-                print("[Iraq DTM] Country-level: No data returned")
-                # Try ISO code
+                print("[Iraq DTM] Country-level: No data returned — trying alt name...")
                 params['CountryName'] = 'Republic of Iraq'
-                alt = requests.get(f'{DTM_BASE_URL}/displacement/admin0', headers=headers, params=params, timeout=15)
+                alt = requests.get(
+                    f'{DTM_BASE_URL}/displacement/admin0',
+                    headers=headers,
+                    params=params,
+                    timeout=15
+                )
                 if alt.status_code == 200:
                     data = alt.json()
                     if data and len(data) > 0:
@@ -180,20 +186,14 @@ def fetch_dtm_displacement():
     # Governorate-level (Admin 1)
     try:
         print("[Iraq DTM] Fetching governorate-level IDP data...")
-        params = [
-            ('appname', 'asifah'),
-            ('query[value]', 'Iraq displacement IDP humanitarian PMF conflict'),
-            ('query[operator]', 'AND'),
-            ('sort[]', 'date:desc'),
-            ('limit', 8),
-            ('fields[include][]', 'title'),
-            ('fields[include][]', 'date.created'),
-            ('fields[include][]', 'url_alias'),
-            ('fields[include][]', 'source.name'),
-        ]
-
+        params = {
+            'CountryName': 'Iraq',
+            'FromReportingDate': '2024-01-01',
+            'ToReportingDate': datetime.now().strftime('%Y-%m-%d')
+        }
         response = requests.get(
-            f'{RELIEFWEB_API_URL}/reports',
+            f'{DTM_BASE_URL}/displacement/admin1',
+            headers=headers,
             params=params,
             timeout=15
         )
@@ -244,7 +244,7 @@ def fetch_reliefweb_updates():
     try:
         print("[Iraq ReliefWeb] Fetching reports...")
         params = {
-            'appname': 'asifah-analytics',
+            'appname': RELIEFWEB_APPNAME,
             'query[value]': 'Iraq displacement IDP humanitarian PMF conflict',
             'query[operator]': 'AND',
             'sort[]': 'date:desc',
@@ -272,6 +272,7 @@ def fetch_reliefweb_updates():
             print(f"[Iraq ReliefWeb] Found {len(result['reports'])} reports")
         else:
             result['error'] = f"HTTP {response.status_code}"
+            print(f"[Iraq ReliefWeb] HTTP {response.status_code}")
 
     except Exception as e:
         result['error'] = str(e)[:200]
@@ -295,8 +296,8 @@ STATIC_HUMANITARIAN = {
         'total_idps': 1200000,
         'conflict_idps': 950000,
         'isis_era_unresolved': 250000,
-        'new_conflict_2026': 85000,  # estimate — Iran-US war spillover, PMF/US airstrikes
-        'returnees_since_2017': 4800000,  # returned after ISIS defeat
+        'new_conflict_2026': 85000,
+        'returnees_since_2017': 4800000,
         'still_displaced': 1200000,
         'resident_population': 42300000,
         'source': 'IOM DTM Iraq (baseline) + OCHA Iraq 2026',
@@ -362,18 +363,18 @@ def _fetch_all_humanitarian():
     """Fetch all Iraq humanitarian data and assemble response."""
     print("[Iraq Humanitarian] Fetching all humanitarian data...")
 
-    dtm_data     = fetch_dtm_displacement()
-    reliefweb    = fetch_reliefweb_updates()
+    dtm_data  = fetch_dtm_displacement()
+    reliefweb = fetch_reliefweb_updates()
 
     # Merge DTM dynamic data over static baseline
     displacement = STATIC_HUMANITARIAN['displacement'].copy()
     if dtm_data and dtm_data.get('country_level'):
         cl = dtm_data['country_level']
         if cl.get('total_idps') and cl['total_idps'] > 0:
-            displacement['dtm_api_idps']   = cl['total_idps']
-            displacement['dtm_round']      = cl.get('round_number', '')
-            displacement['dtm_as_of']      = cl.get('reporting_date', '')
-            displacement['dtm_reason']     = cl.get('displacement_reason', '')
+            displacement['dtm_api_idps'] = cl['total_idps']
+            displacement['dtm_round']    = cl.get('round_number', '')
+            displacement['dtm_as_of']    = cl.get('reporting_date', '')
+            displacement['dtm_reason']   = cl.get('displacement_reason', '')
 
     result = {
         'success': True,
@@ -381,19 +382,11 @@ def _fetch_all_humanitarian():
         'from_cache': False,
         'country': 'Iraq',
 
-        # Core displacement
         'displacement': displacement,
-
-        # Active emergency (Iran-US war spillover)
         'march_2026_emergency': STATIC_HUMANITARIAN['march_2026_emergency'],
-
-        # Sinjar / Yazidi
         'sinjar_yazidi': STATIC_HUMANITARIAN['sinjar_yazidi'],
-
-        # Camp overview
         'camp_overview': STATIC_HUMANITARIAN['camp_overview'],
 
-        # DTM governorate breakdown
         'dtm_governorate_level': dtm_data.get('governorate_level', []) if dtm_data else [],
         'dtm_source_info': {
             'source': dtm_data.get('source', 'IOM DTM API v3') if dtm_data else 'IOM DTM API v3',
@@ -401,18 +394,15 @@ def _fetch_all_humanitarian():
             'error': dtm_data.get('error') if dtm_data else 'DTM_API_KEY not configured',
         },
 
-        # ReliefWeb OCHA reports
         'reliefweb_reports': reliefweb.get('reports', []),
         'reliefweb_source': reliefweb.get('source_url', 'https://reliefweb.int/country/irq'),
+        'reliefweb_appname': RELIEFWEB_APPNAME,
 
-        # Source links
         'source_links': STATIC_HUMANITARIAN['source_links'],
-
         'note': STATIC_HUMANITARIAN['note'],
         'last_manual_update': STATIC_HUMANITARIAN['last_manual_update'],
     }
 
-    # Cache it
     if _redis_available():
         _redis_set(CACHE_KEY, result)
 
@@ -501,6 +491,7 @@ def register_iraq_humanitarian_endpoints(app):
         return jsonify({
             'dtm_api_key_set': bool(DTM_API_KEY),
             'dtm_base_url': DTM_BASE_URL,
+            'reliefweb_appname': RELIEFWEB_APPNAME,
             'result': dtm_data
         })
 
