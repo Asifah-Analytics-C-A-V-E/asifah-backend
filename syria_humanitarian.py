@@ -1,5 +1,5 @@
 """
-Syria Humanitarian Data Module v1.0.0
+Syria Humanitarian Data Module v1.1.0
 March 2026
 
 Fetches humanitarian crisis data from:
@@ -11,6 +11,7 @@ Provides /api/syria/humanitarian endpoint for the Syria stability page.
 
 Env vars required (already set on ME backend):
   - DTM_API_KEY: IOM DTM API v3 subscription key
+  - RELIEFWEB_APPNAME: ReliefWeb registered app name (e.g. asifah-analytics)
   - UPSTASH_REDIS_URL: Redis cache URL
   - UPSTASH_REDIS_TOKEN: Redis cache token
 
@@ -34,8 +35,9 @@ from email.utils import parsedate_to_datetime
 DTM_API_KEY = os.environ.get('DTM_API_KEY')
 DTM_BASE_URL = 'https://dtmapi.iom.int/v3'
 
-# ReliefWeb API (open, no key needed)
+# ReliefWeb API (open, but registered appname required)
 RELIEFWEB_API_URL = 'https://api.reliefweb.int/v1'
+RELIEFWEB_APPNAME = os.environ.get('RELIEFWEB_APPNAME', 'asifah-analytics')
 
 # Redis (same env vars as ME backend app.py)
 UPSTASH_URL = os.environ.get('UPSTASH_REDIS_URL')
@@ -158,9 +160,7 @@ def fetch_dtm_displacement():
                     }
                     print(f"[Syria DTM] Country-level: {most_recent.get('numPresentIdpInd', 0):,} IDPs")
             else:
-                print("[Syria DTM] Country-level: No data returned")
-
-                # Try alternate country name
+                print("[Syria DTM] Country-level: No data returned — trying alt name...")
                 params['CountryName'] = 'Syria'
                 alt_response = requests.get(
                     f'{DTM_BASE_URL}/displacement/admin0',
@@ -250,7 +250,7 @@ def fetch_reliefweb_updates():
     try:
         print("[Syria ReliefWeb] Fetching reports...")
         params = {
-            'appname': 'asifah-analytics',
+            'appname': RELIEFWEB_APPNAME,
             'query[value]': 'Syria displacement IDP humanitarian returns',
             'query[operator]': 'AND',
             'sort[]': 'date:desc',
@@ -278,6 +278,7 @@ def fetch_reliefweb_updates():
             print(f"[Syria ReliefWeb] Found {len(result['reports'])} reports")
         else:
             result['error'] = f"HTTP {response.status_code}"
+            print(f"[Syria ReliefWeb] HTTP {response.status_code}")
 
     except Exception as e:
         result['error'] = str(e)[:200]
@@ -578,7 +579,8 @@ def get_news_data(force_refresh=False):
                 except:
                     pass
     return fetch_all_news()
-  
+
+
 # ========================================
 # COMBINED HUMANITARIAN FETCH
 # ========================================
@@ -615,11 +617,11 @@ def _fetch_all_humanitarian():
 
         'dtm_raw': dtm_data,
         'reliefweb_reports': reliefweb_data.get('reports', []) if reliefweb_data else [],
+        'reliefweb_appname': RELIEFWEB_APPNAME,
 
         'source_links': STATIC_HUMANITARIAN['source_links'],
     }
 
-    # Cache to Redis
     if _redis_available():
         _redis_set(CACHE_KEY, result)
         print("[Syria Humanitarian] Cached to Redis")
@@ -628,10 +630,7 @@ def _fetch_all_humanitarian():
 
 
 def get_humanitarian_data(force_refresh=False):
-    """
-    Get Syria humanitarian data — Redis-first with 6-hour TTL.
-    """
-    # Check cache (unless force refresh)
+    """Get Syria humanitarian data — Redis-first with 6-hour TTL."""
     if not force_refresh and _redis_available():
         cached = _redis_get(CACHE_KEY)
         if cached:
@@ -658,8 +657,7 @@ def get_humanitarian_data(force_refresh=False):
 def _background_humanitarian_refresh():
     """Background thread: refresh Syria humanitarian data every 6 hours."""
     print("[Syria Humanitarian] Background refresh thread started (6h cycle)")
-    # Initial delay — let the main app start first
-    time.sleep(60)
+    time.sleep(60)  # Boot delay
     while True:
         try:
             print("[Syria Humanitarian] Running background refresh...")
@@ -716,7 +714,7 @@ def register_syria_humanitarian_endpoints(app):
             return jsonify(data)
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)[:200]}), 200
-          
+
     @app.route('/debug/syria-dtm', methods=['GET'])
     def debug_syria_dtm():
         """Debug: test DTM API connection for Syria."""
@@ -724,6 +722,7 @@ def register_syria_humanitarian_endpoints(app):
         return jsonify({
             'dtm_api_key_set': bool(DTM_API_KEY),
             'dtm_base_url': DTM_BASE_URL,
+            'reliefweb_appname': RELIEFWEB_APPNAME,
             'result': dtm_data
         })
 
