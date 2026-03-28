@@ -917,7 +917,7 @@ def _compute_inbound_threat_from_fingerprints():
                 continue
             try:
                 age_h = (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600
-                if age_h <= 14:
+                if age_h <= 24:
                     result[key] = fp.get('level', 0)
                     result['fingerprints_age'][theater] = round(age_h, 1)
                     if theater == 'iran' and fp.get('is_command_node'):
