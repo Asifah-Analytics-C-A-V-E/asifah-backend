@@ -932,7 +932,7 @@ def _write_crosstheater_signal(result):
             'specificity_score': result.get('specificity_score', 0),
         }
 
-        _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)  # 8h TTL
+        _redis_set(CROSSTHEATER_KEY, existing, ttl=14 * 3600)  # 14h TTL — covers 12h scan cycle
         print(f"[Yemen Rhetoric] ✅ Cross-theater fingerprint written")
     except Exception as e:
         print(f"[Yemen Rhetoric] Cross-theater write error: {e}")
