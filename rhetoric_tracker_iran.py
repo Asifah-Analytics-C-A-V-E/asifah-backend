@@ -535,6 +535,32 @@ PROXY_DIRECTIVE_LANGUAGE = [
     'تنسيق المحور', 'به دستور ایران', 'با هماهنگی سپاه',
 ]
 
+SOFT_POWER_KEYWORDS = {
+    4: [
+        'iran lego', 'iran rap video', 'iran music video',
+        'iranian soft power', 'iran viral video', 'iran meme',
+        'iran propaganda video', 'iran influence operation',
+        'anti-war iran video', 'iran creative campaign',
+    ],
+    3: [
+        'resistance narrative', 'iran western audience',
+        'presstv viral', 'iran social media campaign',
+        'iran information war', 'iran narrative control',
+        'us aggressor iran', 'iran war crimes us',
+        'american imperialism iran', 'iran self defense',
+    ],
+    2: [
+        'resistance framing', 'zionist aggressor',
+        'us war criminal', 'martyred iran',
+        'iran innocent victims', 'iran civilians',
+        'axis of resistance message', 'iran anti-war',
+    ],
+    1: [
+        'resistance', 'oppressor', 'arrogance',
+        'great satan', 'zionist entity',
+        'iranian people resilient',
+    ],
+}
 
 # ============================================
 # SPECIFICITY SCORER
