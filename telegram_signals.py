@@ -209,6 +209,8 @@ IRAN_CHANNELS = [
     # Persian / domestic Iran signals
     'rodast_omiddana',      # Omid Dana — Farsi political commentary, domestic pressure signals
     'IranIntl_En',          # Iran International English — opposition/protest signals
+    'EnglishAlam',          # Al-Alam English — Iran state, softer narrative framing
+    'resistance_news',      # Resistance News Network — English, anti-war amplification
     # CENTCOM / US response
     'CentcomOfficial',      # CENTCOM — US strikes on Iran, force posture
     'kann_news',            # Kan News Hebrew — Israeli perspective on Iran
