@@ -2484,28 +2484,28 @@ ISRAEL_INCOMING_THREAT_KEYWORDS = {
     'hamas': {
         'weight': 3.5,
         'phrases': [
-            # Compound English
+            # Compound English — ACTIVE operational signals only
             'hamas attack israel', 'hamas rocket israel',
             'gaza rocket israel', 'hamas terror attack',
-            # Loosened English
-            'hamas attack', 'hamas rockets', 'hamas mortar',
-            'hamas infiltration', 'hamas tunnel',
-            'hamas drone', 'hamas ambush',
-            'hamas hostage', 'hostage crisis', 'hostages gaza',
-            'october 7', 'oct 7 attack',
-            'qassam rocket', 'qassam brigades',
-            'al-qassam', 'izz ad-din al-qassam', 'nukhba force',
-            'gaza rockets fired', 'rockets from gaza',
+            'hamas fires rockets', 'hamas launches rockets',
+            'hamas breaks ceasefire', 'hamas violates ceasefire',
+            'hamas resumes attacks', 'hamas renews attacks',
+            # Active rocket/mortar signals
+            'hamas mortar', 'hamas drone attack',
+            'hamas ambush idf', 'hamas infiltration attempt',
+            'rockets from gaza today', 'rockets fired from gaza',
             'rockets southern israel', 'rockets sderot',
             'rockets ashkelon', 'rockets beersheba',
             'sirens southern israel', 'red alert south',
-            'gaza ceasefire collapse', 'hamas violations',
-            # Hebrew
+            'hamas violations', 'ceasefire collapse',
+            # Hostage — only operational signals, not deal negotiations
+            'hostages executed', 'hostage killed', 'hostage rescued',
+            'hamas threatens hostages',
+            # Hebrew — active signals only
             'רקטות מעזה', 'חמאס יורה', 'חמאס מתקפה',
-            'אזעקות בדרום', 'חטופים',
-            # Arabic
-            'صواريخ من غزة', 'كتائب القسام', 'طوفان الأقصى',
-            'حماس تطلق', 'المقاومة تقصف'
+            'אזעקות בדרום',
+            # Arabic — active signals only
+            'صواريخ من غزة', 'حماس تطلق', 'المقاومة تقصف',
         ]
     },
     'west_bank_gaza': {
@@ -2702,16 +2702,154 @@ ISRAEL_OUTGOING_KEYWORDS = {
 
 def calculate_israel_incoming_threats(articles, days_analyzed=7):
     """
-    Calculate probability of kinetic action AGAINST Israel
-    
-    Threat vectors:
-    1. Iran direct (ballistic/cruise missiles, drones)
-    2. Hezbollah (rockets, missiles, ATGMs, drones)
-    3. Hamas (rockets, tunnels, infiltration)
-    4. West Bank / Gaza (shooting, stabbing, IEDs — distinct from Hamas)
-    5. Houthis (long-range ballistic/cruise missiles)
-    6. Syria-based threats (Iranian proxies, spillover)
+    Calculate probability of kinetic action AGAINST Israel.
+    v2.0 — now reads rhetoric tracker Redis fingerprints as primary boost,
+    article keyword scan as secondary signal.
     """
+    threat_scores = {
+        'iran_direct':    {'score': 0, 'indicators': [], 'articles': 0},
+        'hezbollah':      {'score': 0, 'indicators': [], 'articles': 0},
+        'hamas':          {'score': 0, 'indicators': [], 'articles': 0},
+        'west_bank_gaza': {'score': 0, 'indicators': [], 'articles': 0},
+        'houthis':        {'score': 0, 'indicators': [], 'articles': 0},
+        'syria_based':    {'score': 0, 'indicators': [], 'articles': 0},
+    }
+
+    # ── Article keyword scan (existing logic) ──
+    for article in articles:
+        content = f"{article.get('title', '')} {article.get('description', '')} {article.get('content', '')}".lower()
+        for category, data in ISRAEL_INCOMING_THREAT_KEYWORDS.items():
+            for phrase in data['phrases']:
+                if phrase in content:
+                    threat_scores[category]['score'] += data['weight']
+                    threat_scores[category]['articles'] += 1
+                    threat_scores[category]['indicators'].append({
+                        'phrase': phrase,
+                        'weight': data['weight'],
+                        'article': article.get('title', '')[:80],
+                        'article_url': article.get('url', '')
+                    })
+                    break
+
+    # ── Rhetoric tracker Redis boost (primary signal) ──
+    # Maps rhetoric tracker level (0-5) to score boost
+    RHETORIC_SCORE_BOOST = {0: 0, 1: 5, 2: 12, 3: 20, 4: 35, 5: 50}
+    try:
+        from rhetoric_tracker_israel import _redis_get as _ir_redis_get
+        CROSSTHEATER_KEY = 'rhetoric:crosstheater:fingerprints'
+        fingerprints = _ir_redis_get(CROSSTHEATER_KEY) or {}
+
+        # Yemen / Houthis — read from Yemen fingerprint level
+        yemen_fp = fingerprints.get('yemen', {})
+        if yemen_fp:
+            yemen_level = yemen_fp.get('level', 0)
+            boost = RHETORIC_SCORE_BOOST.get(yemen_level, 0)
+            if boost > 0:
+                threat_scores['houthis']['score'] += boost
+                threat_scores['houthis']['indicators'].append({
+                    'phrase': f'Yemen rhetoric tracker: L{yemen_level}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Israel Incoming] Houthi boost: +{boost} (Yemen L{yemen_level})")
+
+        # Lebanon / Hezbollah — read from Lebanon fingerprint
+        lebanon_fp = fingerprints.get('lebanon', {})
+        if lebanon_fp:
+            lebanon_level = lebanon_fp.get('level', 0)
+            boost = RHETORIC_SCORE_BOOST.get(lebanon_level, 0)
+            if boost > 0:
+                threat_scores['hezbollah']['score'] += boost
+                threat_scores['hezbollah']['indicators'].append({
+                    'phrase': f'Lebanon rhetoric tracker: L{lebanon_level}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Israel Incoming] Hezbollah boost: +{boost} (Lebanon L{lebanon_level})")
+
+        # Iran direct — read from Iran command node fingerprint
+        iran_fp = fingerprints.get('iran', {})
+        if iran_fp:
+            iran_level = iran_fp.get('level', 0)
+            irgc_level = iran_fp.get('irgc_level', iran_level)
+            boost = RHETORIC_SCORE_BOOST.get(irgc_level, 0)
+            if boost > 0:
+                threat_scores['iran_direct']['score'] += boost
+                threat_scores['iran_direct']['indicators'].append({
+                    'phrase': f'Iran rhetoric tracker: L{irgc_level}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Israel Incoming] Iran boost: +{boost} (IRGC L{irgc_level})")
+
+    except Exception as e:
+        print(f"[Israel Incoming] Rhetoric boost error: {str(e)[:100]}")
+
+    # ── Hamas ceasefire discount ──
+    # If ceasefire keywords outnumber attack keywords, discount Hamas score
+    try:
+        ceasefire_phrases = ['ceasefire', 'hostage deal', 'hostage release',
+                             'hamas agrees', 'truce', 'pause in fighting',
+                             'ceasefire holding', 'ceasefire extended']
+        attack_phrases = ['hamas rockets', 'hamas attack', 'hamas fires',
+                          'hamas launches', 'rockets from gaza', 'qassam']
+        ceasefire_count = sum(
+            1 for a in articles
+            for p in ceasefire_phrases
+            if p in f"{a.get('title','')} {a.get('description','')}".lower()
+        )
+        attack_count = sum(
+            1 for a in articles
+            for p in attack_phrases
+            if p in f"{a.get('title','')} {a.get('description','')}".lower()
+        )
+        if ceasefire_count > attack_count * 1.5:
+            discount = 0.4  # 60% discount during active ceasefire
+            threat_scores['hamas']['score'] *= discount
+            print(f"[Israel Incoming] Hamas ceasefire discount applied ({ceasefire_count} ceasefire vs {attack_count} attack signals)")
+    except Exception as e:
+        print(f"[Israel Incoming] Hamas discount error: {str(e)[:80]}")
+
+    # ── Convert scores to probabilities ──
+    results = {}
+    for key, data in threat_scores.items():
+        prob = min(data['score'] / 30.0, 0.75)
+        results[key] = {
+            'probability': prob,
+            'risk_level': (
+                'very_high' if prob > 0.50 else
+                'high'      if prob > 0.35 else
+                'moderate'  if prob > 0.20 else
+                'low'
+            ),
+            'indicators': sorted(
+                data['indicators'], key=lambda x: x['weight'], reverse=True
+            )[:5],
+            'total_indicators': len(data['indicators'])
+        }
+
+    # ── Combined incoming (independent events) ──
+    probs = [results[k]['probability'] for k in results]
+    combined = 1 - sum(1 for _ in probs)  # placeholder
+    combined = 1.0
+    for p in probs:
+        combined *= (1 - p)
+    combined = min(1 - combined, 0.95)
+
+    return {
+        'iran_direct':    results['iran_direct'],
+        'hezbollah':      results['hezbollah'],
+        'hamas':          results['hamas'],
+        'west_bank_gaza': results['west_bank_gaza'],
+        'houthis':        results['houthis'],
+        'syria_based':    results['syria_based'],
+        'combined': {
+            'probability': combined,
+            'risk_level': (
+                'very_high' if combined > 0.60 else
+                'high'      if combined > 0.40 else
+                'moderate'  if combined > 0.20 else
+                'low'
+            )
+        }
+    }
     
     threat_scores = {
         'iran_direct': {'score': 0, 'indicators': [], 'articles': 0},
