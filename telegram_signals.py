@@ -212,6 +212,10 @@ IRAN_CHANNELS = [
     # CENTCOM / US response
     'CentcomOfficial',      # CENTCOM — US strikes on Iran, force posture
     'kann_news',            # Kan News Hebrew — Israeli perspective on Iran
+    # Soft power / influence operations — Western-audience targeting
+    'EnglishAlam',          # Al-Alam English — Iran state, softer narrative framing
+    'IranianDiplomacy',     # Iranian diplomacy narratives, soft power framing  
+    'resistance_news',      # Resistance News Network — English, anti-war amplification
 ]
 
 EXTENDED_CHANNELS = [
