@@ -1257,6 +1257,7 @@ def classify_articles(articles, proxy_activation_level):
             'nuclear_score': 0,
             'domestic_score': 0,
             'regional_score': 0,
+            'soft_power_score': 0,
             'max_level': 0,
             'top_articles': [],
             'silence_alert': False,
@@ -1270,6 +1271,7 @@ def classify_articles(articles, proxy_activation_level):
         'nuclear_max': 0,
         'domestic_max': 0,
         'regional_max': 0,
+        'soft_power_max': 0,
         'total_articles': len(articles),
         'operation_true_promise_signals': [],
         'proxy_directive_signals': [],
@@ -1380,11 +1382,21 @@ def classify_articles(articles, proxy_activation_level):
                             theatre_summary['regional_max'] = level
                         break
 
+                # Soft Power / Influence Operations
+                for kw in SOFT_POWER_KEYWORDS.get(level, []):
+                    if kw in text:
+                        if level > ar['soft_power_score']:
+                            ar['soft_power_score'] = level
+                        if level > theatre_summary['soft_power_max']:
+                            theatre_summary['soft_power_max'] = level
+                        break
+
     # Per-actor finalization
     for actor_id, ar in actor_results.items():
         ar['max_level'] = max(
             ar['irgc_direct_score'], ar['nuclear_score'],
-            ar['domestic_score'], ar['regional_score']
+            ar['domestic_score'], ar['regional_score'],
+            ar['soft_power_score']
         )
         ar['escalation_level'] = ar['max_level']
         ar['escalation_label'] = ESCALATION_LEVELS.get(ar['max_level'], {}).get('label', 'Baseline')
@@ -1513,6 +1525,8 @@ def run_iran_rhetoric_scan(days=3):
         'domestic_label':         ESCALATION_LEVELS.get(max_domestic, {}).get('label', 'Baseline'),
         'regional_level':         max_regional,
         'regional_label':         ESCALATION_LEVELS.get(max_regional, {}).get('label', 'Baseline'),
+        'soft_power_level':       theatre_summary['soft_power_max'],
+        'soft_power_label':       ESCALATION_LEVELS.get(theatre_summary['soft_power_max'], {}).get('label', 'Baseline'),
 
         # Special signals
         'operation_true_promise_count': otp_count,
