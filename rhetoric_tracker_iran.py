@@ -681,7 +681,7 @@ def _compute_proxy_activation_index():
                 continue
             try:
                 age = (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600
-                if age <= 14:  # Fresh within 14 hours
+                if age <= 24:  # Fresh within 24 hours — covers all proxy scan cycles
                     fresh_proxies[name] = fp
             except Exception:
                 pass
