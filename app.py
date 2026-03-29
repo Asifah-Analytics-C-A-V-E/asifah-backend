@@ -5322,8 +5322,7 @@ def api_threat_matrix(target):
                         else ('very_high' if israel_prob > 0.70 else 'high' if israel_prob > 0.50 else 'moderate' if israel_prob > 0.30 else 'low')
                     ),
                     'flag': '🇮🇱',
-                    'indicators': (iran_incoming['israel_strike']['indicators'][:3] if (target == 'iran' and iran_incoming) else []),
-                    'indicators': israel_result.get('breakdown', {}).get('top_articles', [])[:3]
+                    'indicators': (iran_incoming['israel_strike']['indicators'][:3] if (target == 'iran' and iran_incoming) else israel_result.get('breakdown', {}).get('top_articles', [])[:3])
                 },
                 'us': {
                     'probability': round(us_prob * 100, 1),
@@ -5334,8 +5333,8 @@ def api_threat_matrix(target):
                         'low'
                     ),
                     'flag': '🇺🇸',
-                    'indicators': us_result.get('us_indicators', [])[:3],
-                    'adjustment': round(us_result.get('us_adjustment', 0) * 100, 1)
+                    'indicators': (iran_incoming['us_strike']['indicators'][:3] if (target == 'iran' and iran_incoming) else us_result.get('us_indicators', [])[:3]),
+                    'adjustment': round((0 if target == 'iran' else us_result.get('us_adjustment', 0)) * 100, 1)
                 }
             },
             
@@ -5367,8 +5366,8 @@ def api_threat_matrix(target):
             # TOP ARTICLES FOR "RECENT HEADLINES" DISPLAY
             # ========================================
             'recent_headlines': build_recent_headlines(
-                israel_result.get('top_contributors', []),
-                us_result.get('us_indicators', []),
+                (iran_incoming['israel_strike']['indicators'][:3] if (target == 'iran' and iran_incoming) else israel_result.get('top_contributors', [])),
+                (iran_incoming['us_strike']['indicators'][:3] if (target == 'iran' and iran_incoming) else us_result.get('us_indicators', [])),
                 reverse_israel.get('indicators', []),
                 reverse_us.get('indicators', []),
                 all_articles
