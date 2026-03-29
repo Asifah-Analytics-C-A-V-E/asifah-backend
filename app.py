@@ -3205,6 +3205,418 @@ JORDAN_DEFENSIVE_KEYWORDS = {
 }
 
 
+# ============================================
+# IRAN — INCOMING THREAT KEYWORDS
+# Threats AGAINST Iran from Israel + US
+# ============================================
+IRAN_INCOMING_THREAT_KEYWORDS = {
+    'israel_strike': {
+        'weight': 4.0,
+        'phrases': [
+            'israel strikes iran', 'israel attacks iran', 'israel bombing iran',
+            'israel hit iran', 'iaf strikes iran', 'israeli airstrike iran',
+            'israel nuclear strike', 'israel targets iran', 'israel iran war',
+            'israel bombs iran', 'f-35 iran strike', 'israeli jets iran',
+            'israel iran retaliation', 'israel preemptive iran',
+            'netanyahu orders iran strike', 'idf iran strike',
+            'israel attacks iranian', 'israel hits iranian',
+            'ישראל תוקפת איראן', 'מתקפה ישראלית על איראן',
+            'إسرائيل تضرب إيران', 'الضربة الإسرائيلية على إيران',
+        ]
+    },
+    'us_strike': {
+        'weight': 4.0,
+        'phrases': [
+            'us strikes iran', 'us attacks iran', 'us bombs iran',
+            'us airstrike iran', 'centcom strikes iran', 'pentagon iran strike',
+            'us military iran', 'american strike iran', 'b-52 iran',
+            'us carrier iran', 'us tomahawk iran', 'us war iran',
+            'biden orders iran', 'trump orders iran strike',
+            'us hits iran', 'us targets iran', 'us bombs iranian',
+            'us navy iran', 'us destroys iran', 'operation iran us',
+            'american bombing iran', 'us combat iran',
+        ]
+    },
+    'cyber_sabotage': {
+        'weight': 2.5,
+        'phrases': [
+            'iran cyberattack', 'iran nuclear sabotage', 'stuxnet iran',
+            'iran centrifuge sabotage', 'natanz explosion', 'iran facility explosion',
+            'iran power grid attack', 'iran infrastructure attack',
+            'mossad iran operation', 'iran assassination',
+            'iran scientist killed', 'iran general killed',
+            'iran ship attacked', 'iran tanker attacked',
+        ]
+    },
+}
+
+# ============================================
+# IRAN — OUTGOING RHETORIC-BOOSTED THREATS
+# Iran directing proxies + direct retaliation
+# ============================================
+IRAN_OUTGOING_THREAT_KEYWORDS = {
+    'iran_vs_israel': {
+        'weight': 4.0,
+        'phrases': [
+            'iran strike israel', 'iran attack israel', 'iran targets israel',
+            'iran missiles israel', 'iran retaliation israel',
+            'true promise israel', 'operation true promise',
+            'irgc targets israel', 'iran ballistic israel',
+            'iran wipes israel', 'iran threatens tel aviv',
+            'iran threatens haifa', 'iran threatens dimona',
+            'tehran threatens israel', 'khamenei threatens israel',
+            'iran destroy israel', 'erase israel iran',
+        ]
+    },
+    'iran_via_hezbollah': {
+        'weight': 3.5,
+        'phrases': [
+            'hezbollah orders iran', 'iran directs hezbollah',
+            'irgc hezbollah coordinate', 'iran activates hezbollah',
+            'hezbollah iran missiles', 'hezbollah precision missiles',
+            'iran hezbollah northern front', 'nasrallah iran orders',
+            'hezbollah full war', 'hezbollah multi-front',
+            'iran proxy hezbollah', 'quds force hezbollah',
+        ]
+    },
+    'iran_via_houthis': {
+        'weight': 3.0,
+        'phrases': [
+            'houthi iran orders', 'iran directs houthis',
+            'irgc houthi coordinate', 'iran activates houthis',
+            'houthi iran missiles', 'houthi ballistic iran',
+            'iran houthi red sea', 'iran houthi israel attack',
+            'houthi proxy iran', 'quds force houthi',
+            'ansar allah iran', 'iran houthi drone',
+        ]
+    },
+    'iran_via_iraq_pmf': {
+        'weight': 2.5,
+        'phrases': [
+            'iraq pmf iran orders', 'iran directs pmf',
+            'irgc pmf coordinate', 'iran activates iraq militia',
+            'kata ib hezbollah iran', 'iraq militia iran',
+            'hashd iran coordinate', 'iran iraq proxy',
+            'quds force iraq', 'iran pmf drone attack',
+            'iran backed militia iraq', 'sabreen news iran',
+        ]
+    },
+}
+
+
+def _compute_iran_threat_convergence_index(fingerprints):
+    """
+    Iran TCI — mirrors Israel TCI pattern.
+    Counts how many adversaries are simultaneously elevated against Iran.
+    Primary: Israel (strike actor) + US (strike actor)
+    Secondary: Saudi, Gulf states (less direct)
+    Returns 0-5 TCI score + convergence signal string.
+    """
+    try:
+        now = __import__('datetime').datetime.now(__import__('datetime').timezone.utc)
+        israel_fp = fingerprints.get('israel', {})
+        iran_fp   = fingerprints.get('iran', {})
+
+        israel_lv = 0
+        if israel_fp:
+            try:
+                age_h = (now - __import__('datetime').datetime.fromisoformat(
+                    israel_fp.get('ts', now.isoformat()))).total_seconds() / 3600
+                if age_h <= 24:
+                    israel_lv = israel_fp.get('level', 0)
+            except Exception:
+                pass
+
+        # US strike level inferred from Iran rhetoric cache
+        # If Iran IRGC at L4+ and US ops confirmed, US at high strike posture
+        us_lv = 0
+        if iran_fp:
+            irgc_lv = iran_fp.get('irgc_level', 0)
+            otp     = iran_fp.get('operation_true_promise_count', 0)
+            if otp > 0 or irgc_lv >= 4:
+                us_lv = min(irgc_lv, 4)  # proxy for US engagement
+
+        # TCI computation
+        primary_elevated   = sum(1 for lv in [israel_lv, us_lv] if lv >= 3)
+        combined_lv        = max(israel_lv, us_lv)
+
+        if primary_elevated >= 2 and combined_lv >= 4:
+            tci = 5
+            signal = 'Full adversary convergence — Israel + US both at high strike posture'
+        elif primary_elevated >= 2:
+            tci = 4
+            signal = 'Dual adversary threat — Israel and US simultaneously elevated'
+        elif primary_elevated == 1 and combined_lv >= 4:
+            tci = 3
+            signal = 'Single primary adversary at high strike posture'
+        elif primary_elevated == 1:
+            tci = 2
+            signal = 'Primary adversary elevated'
+        elif combined_lv >= 2:
+            tci = 1
+            signal = 'Low-level adversary signals detected'
+        else:
+            tci = 0
+            signal = ''
+
+        return tci, signal, israel_lv, us_lv
+    except Exception as e:
+        print(f"[Iran TCI] Error: {str(e)[:80]}")
+        return 0, '', 0, 0
+
+
+def calculate_iran_incoming_threats(articles, days_analyzed=7):
+    """
+    Calculate probability of kinetic action AGAINST Iran.
+    Mirrors calculate_israel_incoming_threats() pattern.
+    Primary input: cross-theater fingerprints (rhetoric trackers)
+    Secondary: article keyword scan
+    """
+    threat_scores = {
+        'israel_strike': {'score': 0, 'indicators': [], 'articles': 0},
+        'us_strike':     {'score': 0, 'indicators': [], 'articles': 0},
+        'cyber_sabotage':{'score': 0, 'indicators': [], 'articles': 0},
+    }
+
+    # ── Article keyword scan ──
+    for article in articles:
+        content = f"{article.get('title', '')} {article.get('description', '')} {article.get('content', '')}".lower()
+        for category, data in IRAN_INCOMING_THREAT_KEYWORDS.items():
+            for phrase in data['phrases']:
+                if phrase in content:
+                    threat_scores[category]['score']   += data['weight']
+                    threat_scores[category]['articles'] += 1
+                    threat_scores[category]['indicators'].append({
+                        'phrase':      phrase,
+                        'weight':      data['weight'],
+                        'article':     article.get('title', '')[:80],
+                        'article_url': article.get('url', '')
+                    })
+                    break
+
+    # ── Rhetoric tracker Redis boost ──
+    RHETORIC_SCORE_BOOST = {0: 0, 1: 5, 2: 12, 3: 22, 4: 38, 5: 55}
+    try:
+        from rhetoric_tracker_iran import _redis_get as _iran_redis_get
+        CROSSTHEATER_KEY = 'rhetoric:crosstheater:fingerprints'
+        fingerprints = _iran_redis_get(CROSSTHEATER_KEY) or {}
+
+        # Israel — reads Israel's is_strike_actor fingerprint
+        israel_fp = fingerprints.get('israel', {})
+        if israel_fp:
+            israel_level = israel_fp.get('level', 0)
+            # Israel has outbound score in fingerprint
+            outbound_score = israel_fp.get('outbound_score', 0)
+            # Use outbound_score if available (more precise), else level
+            if outbound_score > 60:
+                boost = RHETORIC_SCORE_BOOST.get(min(int(outbound_score / 20), 5), 0)
+            else:
+                boost = RHETORIC_SCORE_BOOST.get(israel_level, 0)
+            if boost > 0:
+                threat_scores['israel_strike']['score'] += boost
+                threat_scores['israel_strike']['indicators'].append({
+                    'phrase':      f'Israel rhetoric tracker: L{israel_level} (outbound {outbound_score})',
+                    'weight':      boost,
+                    'article':     'Cross-theater signal',
+                    'article_url': ''
+                })
+                print(f"[Iran Incoming] Israel boost: +{boost} (L{israel_level}, outbound {outbound_score})")
+
+        # US — inferred from Iran IRGC level + operation True Promise signals
+        iran_fp = fingerprints.get('iran', {})
+        if iran_fp:
+            irgc_level = iran_fp.get('irgc_level', 0)
+            otp_count  = iran_fp.get('operation_true_promise_count', 0)
+            # US strike posture correlates with Iranian escalation
+            us_inferred = min(irgc_level + (1 if otp_count > 0 else 0), 5)
+            boost = RHETORIC_SCORE_BOOST.get(us_inferred, 0)
+            if boost > 0:
+                threat_scores['us_strike']['score'] += boost
+                threat_scores['us_strike']['indicators'].append({
+                    'phrase':      f'US posture (inferred from IRGC L{irgc_level}, OTP count: {otp_count})',
+                    'weight':      boost,
+                    'article':     'Cross-theater signal',
+                    'article_url': ''
+                })
+                print(f"[Iran Incoming] US boost: +{boost} (IRGC L{irgc_level}, OTP {otp_count})")
+
+        # TCI
+        tci, tci_signal, israel_lv, us_lv = _compute_iran_threat_convergence_index(fingerprints)
+        print(f"[Iran Incoming] TCI: {tci} — {tci_signal}")
+
+    except Exception as e:
+        print(f"[Iran Incoming] Rhetoric boost error: {str(e)[:100]}")
+        tci, tci_signal, israel_lv, us_lv = 0, '', 0, 0
+        fingerprints = {}
+
+    # ── Convert scores to probabilities ──
+    results = {}
+    for key, data in threat_scores.items():
+        prob = min(data['score'] / 35.0, 0.95)
+        results[key] = {
+            'probability': prob,
+            'risk_level': (
+                'very_high' if prob > 0.60 else
+                'high'      if prob > 0.40 else
+                'moderate'  if prob > 0.20 else
+                'low'
+            ),
+            'indicators': sorted(
+                data['indicators'], key=lambda x: x['weight'], reverse=True
+            )[:5],
+            'total_indicators': len(data['indicators'])
+        }
+
+    # ── Combined incoming (independent events) ──
+    probs = [results[k]['probability'] for k in results]
+    combined = 1.0
+    for p in probs:
+        combined *= (1 - p)
+    combined = min(1 - combined, 0.95)
+
+    return {
+        'israel_strike':  results['israel_strike'],
+        'us_strike':      results['us_strike'],
+        'cyber_sabotage': results['cyber_sabotage'],
+        'tci':            tci,
+        'tci_signal':     tci_signal,
+        'israel_level':   israel_lv,
+        'us_level':       us_lv,
+        'combined': {
+            'probability': combined,
+            'risk_level': (
+                'very_high' if combined > 0.70 else
+                'high'      if combined > 0.50 else
+                'moderate'  if combined > 0.30 else
+                'low'
+            )
+        }
+    }
+
+
+def calculate_iran_outgoing_threats(articles, days_analyzed=7):
+    """
+    Calculate probability of Iran proxy + direct outgoing operations.
+    Reads rhetoric fingerprints for Hezbollah, Houthis, Iraq PMF.
+    Mirrors the outgoing threats section of api_threat_matrix.
+    """
+    threat_scores = {
+        'iran_vs_israel':     {'score': 0, 'indicators': [], 'articles': 0},
+        'iran_via_hezbollah': {'score': 0, 'indicators': [], 'articles': 0},
+        'iran_via_houthis':   {'score': 0, 'indicators': [], 'articles': 0},
+        'iran_via_iraq_pmf':  {'score': 0, 'indicators': [], 'articles': 0},
+    }
+
+    # ── Article keyword scan ──
+    for article in articles:
+        content = f"{article.get('title', '')} {article.get('description', '')}".lower()
+        for category, data in IRAN_OUTGOING_THREAT_KEYWORDS.items():
+            for phrase in data['phrases']:
+                if phrase in content:
+                    threat_scores[category]['score']   += data['weight']
+                    threat_scores[category]['articles'] += 1
+                    threat_scores[category]['indicators'].append({
+                        'phrase':      phrase,
+                        'weight':      data['weight'],
+                        'article':     article.get('title', '')[:80],
+                        'article_url': article.get('url', '')
+                    })
+                    break
+
+    # ── Rhetoric fingerprint boosts for proxies ──
+    PROXY_BOOST = {0: 0, 1: 5, 2: 12, 3: 20, 4: 32, 5: 45}
+    try:
+        from rhetoric_tracker_iran import _redis_get as _iran_redis_get
+        CROSSTHEATER_KEY = 'rhetoric:crosstheater:fingerprints'
+        fingerprints = _iran_redis_get(CROSSTHEATER_KEY) or {}
+
+        # Lebanon / Hezbollah
+        lebanon_fp = fingerprints.get('lebanon', {})
+        if lebanon_fp:
+            lv    = lebanon_fp.get('level', 0)
+            boost = PROXY_BOOST.get(lv, 0)
+            if boost > 0:
+                threat_scores['iran_via_hezbollah']['score'] += boost
+                threat_scores['iran_via_hezbollah']['indicators'].append({
+                    'phrase': f'Lebanon rhetoric tracker: L{lv}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Iran Outgoing] Hezbollah boost: +{boost} (Lebanon L{lv})")
+
+        # Yemen / Houthis
+        yemen_fp = fingerprints.get('yemen', {})
+        if yemen_fp:
+            lv    = yemen_fp.get('level', 0)
+            boost = PROXY_BOOST.get(lv, 0)
+            if boost > 0:
+                threat_scores['iran_via_houthis']['score'] += boost
+                threat_scores['iran_via_houthis']['indicators'].append({
+                    'phrase': f'Yemen rhetoric tracker: L{lv}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Iran Outgoing] Houthi boost: +{boost} (Yemen L{lv})")
+
+        # Iraq PMF
+        iraq_fp = fingerprints.get('iraq', {})
+        if iraq_fp:
+            lv    = iraq_fp.get('level', 0)
+            boost = PROXY_BOOST.get(lv, 0)
+            if boost > 0:
+                threat_scores['iran_via_iraq_pmf']['score'] += boost
+                threat_scores['iran_via_iraq_pmf']['indicators'].append({
+                    'phrase': f'Iraq rhetoric tracker: L{lv}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Iran Outgoing] Iraq PMF boost: +{boost} (Iraq L{lv})")
+
+        # Iran direct vs Israel — read from Iran command node
+        iran_fp = fingerprints.get('iran', {})
+        if iran_fp:
+            irgc_lv = iran_fp.get('irgc_level', 0)
+            boost   = PROXY_BOOST.get(irgc_lv, 0)
+            if boost > 0:
+                threat_scores['iran_vs_israel']['score'] += boost
+                threat_scores['iran_vs_israel']['indicators'].append({
+                    'phrase': f'Iran IRGC direct: L{irgc_lv}',
+                    'weight': boost, 'article': 'Cross-theater signal', 'article_url': ''
+                })
+                print(f"[Iran Outgoing] Iran direct boost: +{boost} (IRGC L{irgc_lv})")
+
+    except Exception as e:
+        print(f"[Iran Outgoing] Rhetoric boost error: {str(e)[:100]}")
+
+    # ── Convert scores to probabilities ──
+    results = {}
+    for key, data in threat_scores.items():
+        prob = min(data['score'] / 35.0, 0.95)
+        label_map = {
+            'iran_vs_israel':     ('🇮🇷 → 🇮🇱', 'Iran Direct → Israel', 'Incl. ballistic missiles, drones, cyber'),
+            'iran_via_hezbollah': ('🇮🇷 → 🇱🇧 → 🇮🇱', 'Iran via Hezbollah → Israel', 'Precision missiles, Radwan force, northern front'),
+            'iran_via_houthis':   ('🇮🇷 → 🇾🇪 → 🇮🇱', 'Iran via Houthis → Israel', 'Ballistic missiles, drones, Red Sea ops'),
+            'iran_via_iraq_pmf':  ('🇮🇷 → 🇮🇶 → 🇮🇱', 'Iran via Iraq PMF → Israel', 'Drone swarms, indirect fire, US base targeting'),
+        }
+        flags, label, detail = label_map.get(key, ('🇮🇷', key, ''))
+        results[key] = {
+            'probability': prob,
+            'risk_level': (
+                'very_high' if prob > 0.60 else
+                'high'      if prob > 0.40 else
+                'moderate'  if prob > 0.20 else
+                'low'
+            ),
+            'flags':      flags,
+            'label':      label,
+            'detail':     detail,
+            'indicators': sorted(
+                data['indicators'], key=lambda x: x['weight'], reverse=True
+            )[:5],
+            'total_indicators': len(data['indicators'])
+        }
+
+    return results
+
+
+
 def calculate_jordan_incoming_threats(articles, days_analyzed=7):
     """
     Calculate probability of kinetic action AGAINST Jordan
@@ -4818,24 +5230,55 @@ def api_threat_matrix(target):
         all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ar + 
                        articles_gdelt_he + articles_gdelt_fa + articles_reddit)
         
-        # Calculate Israel strike probability (existing algorithm)
-        israel_result = calculate_threat_probability(all_articles, days, target)
-        israel_prob = israel_result['probability'] / 100.0
-        
-        # Calculate US strike probability (new algorithm)
-        us_result = calculate_us_strike_probability(all_articles, days, target)
-        us_prob = us_result['probability']
-        
+        # ── IRAN: use fingerprint-boosted incoming + rich outgoing ──
+        if target == 'iran':
+            iran_incoming = calculate_iran_incoming_threats(all_articles, days)
+            iran_outgoing = calculate_iran_outgoing_threats(all_articles, days)
+            israel_prob   = iran_incoming['israel_strike']['probability']
+            us_prob       = iran_incoming['us_strike']['probability']
+            iran_tci      = iran_incoming.get('tci', 0)
+            iran_tci_signal = iran_incoming.get('tci_signal', '')
+        else:
+            # Non-Iran targets use existing algorithm
+            iran_incoming = None
+            iran_outgoing = None
+            iran_tci      = 0
+            iran_tci_signal = ''
+            # Calculate Israel strike probability (existing algorithm)
+            israel_result = calculate_threat_probability(all_articles, days, target)
+            israel_prob   = israel_result['probability'] / 100.0
+
+        if target != 'iran':
+            # Calculate US strike probability (new algorithm)
+            us_result = calculate_us_strike_probability(all_articles, days, target)
+            us_prob   = us_result['probability']
+
         # Detect coordination between US and Israel
         coordination = detect_coordination_signals(israel_prob, us_prob, all_articles)
-        
+
         # Calculate combined probability
         combined_result = calculate_combined_probability(israel_prob, us_prob, coordination)
-        
-        # Calculate reverse threats (target → Israel, target → US)
-        # Pass Israel/US probabilities for retaliation trigger bonus
-        reverse_israel = calculate_reverse_threat(all_articles, target, 'israel', israel_prob, us_prob)
-        reverse_us = calculate_reverse_threat(all_articles, target, 'us', israel_prob, us_prob)
+
+        # TCI coordination bonus for Iran
+        if target == 'iran' and iran_tci >= 3:
+            combined_val = min(combined_result['combined'] + (iran_tci * 0.03), 0.95)
+            combined_result = {**combined_result, 'combined': combined_val}
+
+        # Calculate reverse / outgoing threats
+        if target == 'iran' and iran_outgoing:
+            reverse_israel = {
+                'probability': iran_outgoing['iran_vs_israel']['probability'],
+                'risk_level':  iran_outgoing['iran_vs_israel']['risk_level'],
+                'indicators':  iran_outgoing['iran_vs_israel']['indicators'],
+            }
+            reverse_us = {
+                'probability': iran_outgoing.get('iran_via_houthis', {}).get('probability', 0),
+                'risk_level':  iran_outgoing.get('iran_via_houthis', {}).get('risk_level', 'low'),
+                'indicators':  [],
+            }
+        else:
+            reverse_israel = calculate_reverse_threat(all_articles, target, 'israel', israel_prob, us_prob)
+            reverse_us     = calculate_reverse_threat(all_articles, target, 'us', israel_prob, us_prob)
 
         # Build response
         response = {
@@ -4865,17 +5308,21 @@ def api_threat_matrix(target):
                 )
             },
             
-            # Incoming threats
+            # Incoming threats — Iran gets fingerprint-boosted version
             'incoming_threats': {
+                'tci': iran_tci if target == 'iran' else 0,
+                'tci_signal': iran_tci_signal if target == 'iran' else '',
                 'israel': {
-                    'probability': round(israel_prob * 100, 1),
+                    'probability': round(
+                        (iran_incoming['israel_strike']['probability'] * 100) if (target == 'iran' and iran_incoming) else israel_prob * 100,
+                        1
+                    ),
                     'risk_level': (
-                        'very_high' if israel_prob > 0.70 else
-                        'high' if israel_prob > 0.50 else
-                        'moderate' if israel_prob > 0.30 else
-                        'low'
+                        iran_incoming['israel_strike']['risk_level'] if (target == 'iran' and iran_incoming)
+                        else ('very_high' if israel_prob > 0.70 else 'high' if israel_prob > 0.50 else 'moderate' if israel_prob > 0.30 else 'low')
                     ),
                     'flag': '🇮🇱',
+                    'indicators': (iran_incoming['israel_strike']['indicators'][:3] if (target == 'iran' and iran_incoming) else []),
                     'indicators': israel_result.get('breakdown', {}).get('top_articles', [])[:3]
                 },
                 'us': {
@@ -4927,9 +5374,39 @@ def api_threat_matrix(target):
                 all_articles
             ),
             
+            # Iran proxy outgoing threats — Hezbollah, Houthis, Iraq PMF
+            'proxy_outgoing': (
+                {
+                    'iran_via_hezbollah': {
+                        'probability': round(iran_outgoing['iran_via_hezbollah']['probability'] * 100, 1),
+                        'risk_level':  iran_outgoing['iran_via_hezbollah']['risk_level'],
+                        'flags':       iran_outgoing['iran_via_hezbollah']['flags'],
+                        'label':       iran_outgoing['iran_via_hezbollah']['label'],
+                        'detail':      iran_outgoing['iran_via_hezbollah']['detail'],
+                        'indicators':  iran_outgoing['iran_via_hezbollah']['indicators'][:3],
+                    },
+                    'iran_via_houthis': {
+                        'probability': round(iran_outgoing['iran_via_houthis']['probability'] * 100, 1),
+                        'risk_level':  iran_outgoing['iran_via_houthis']['risk_level'],
+                        'flags':       iran_outgoing['iran_via_houthis']['flags'],
+                        'label':       iran_outgoing['iran_via_houthis']['label'],
+                        'detail':      iran_outgoing['iran_via_houthis']['detail'],
+                        'indicators':  iran_outgoing['iran_via_houthis']['indicators'][:3],
+                    },
+                    'iran_via_iraq_pmf': {
+                        'probability': round(iran_outgoing['iran_via_iraq_pmf']['probability'] * 100, 1),
+                        'risk_level':  iran_outgoing['iran_via_iraq_pmf']['risk_level'],
+                        'flags':       iran_outgoing['iran_via_iraq_pmf']['flags'],
+                        'label':       iran_outgoing['iran_via_iraq_pmf']['label'],
+                        'detail':      iran_outgoing['iran_via_iraq_pmf']['detail'],
+                        'indicators':  iran_outgoing['iran_via_iraq_pmf']['indicators'][:3],
+                    },
+                } if (target == 'iran' and iran_outgoing) else {}
+            ),
+
             'version': '2.8.0-multi-actor'
         }
-        
+
         return jsonify(response)
         
     except Exception as e:
