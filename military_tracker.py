@@ -1,19 +1,23 @@
 """
-Asifah Analytics — Military Asset & Deployment Tracker v2.7.0
-March 4, 2026
+Asifah Analytics — Military Asset & Deployment Tracker v3.0.0
+March 2026
 
 Tracks military asset movements across multiple actors and regions.
 Feeds deployment scores into existing threat probability calculations.
 
 ACTORS TRACKED:
+  Global / NORTHCOM:
+    - US (CENTCOM + SOUTHCOM + NORTHCOM — global actor)
   Tier 1 (Direct strike correlation):
-    - US / CENTCOM
     - Israel / IDF
   Tier 2 (Adversary / Active Theatre):
     - Iran / IRGC
     - Iraq (Active theatre — IRI militia attacks, ISIS, US withdrawal)
     - Russia
     - China / PLAN
+    - Venezuela (post-Maduro transition, US DEA/military involvement)
+    - Cuba (regime stability, Russian/Chinese naval visits)
+    - Haiti (MSS gang control, de facto military actor, failed state)
   Tier 3 (Regional — Middle East):
     - Saudi Arabia
     - UAE
@@ -26,18 +30,26 @@ ACTORS TRACKED:
     - Ukraine
     - Greenland / Denmark
     - Poland
+  Tier 3 (Regional — Western Hemisphere):
+    - Panama (Canal security, Chinese port presence)
+    - Colombia (ELN/FARC dissidents, functioning state)
+    - Mexico (Cartel military ops, inward-facing)
+    - Brazil (Regional power, Amazon military presence)
   Tier 4 (Alliance):
     - NATO (Europe / Arctic expansion)
 
 REGIONS:
   Primary: CENTCOM AOR (Persian Gulf, Red Sea, Eastern Med, Levant)
   Secondary: EUCOM (Europe, Arctic/Greenland, Black Sea, Ukraine)
+  Tertiary: SOUTHCOM/NORTHCOM (Caribbean, Central/South America, Gulf of Mexico)
   Planned: INDOPACOM
 
 REGIONAL GROUPINGS (for frontend display):
+  - Global / NORTHCOM (US anchor)
   - Asia & The Pacific Theatre
   - European Theatre
   - Middle East & North Africa
+  - Western Hemisphere
 
 OUTPUTS:
   - Per-target military posture scores
@@ -47,6 +59,23 @@ OUTPUTS:
   - Standalone page data for military.html
 
 CHANGELOG:
+  v3.0.0 - Western Hemisphere expansion:
+           * Added 'global_northcom' theatre — US as standalone global actor
+           * Moved 'us' theatre from 'middle_east' to 'global_northcom'
+           * Added 'western_hemisphere' theatre (order 5)
+           * Added 7 WHA actors: venezuela (Tier 2, post-Maduro transition),
+             cuba (Tier 2), haiti (Tier 2, MSS gang = de facto military),
+             panama (Tier 3), colombia (Tier 3), mexico (Tier 3), brazil (Tier 3)
+           * Added WHA location multipliers: Panama Canal, Soto Cano,
+             GTMO, NAS Key West, NAVBASE San Diego, SOUTHCOM HQ,
+             Caribbean Sea, Gulf of Mexico, Miraflores/Caracas,
+             Port-au-Prince, Bogota, Mexico City border zones
+           * Added 'southcom' block to ASSET_TARGET_MAPPING
+           * Added WHA GDELT English query block (wha_english_queries)
+           * Added WHA Spanish-language GDELT query block (spanish_queries)
+           * Added WHA RSS feeds to DEFENSE_RSS_FEEDS
+           * Added WHA queries to fetch_all_newsapi_military()
+           * Updated version strings throughout
   v2.5.0 - Iraq actor integration:
            * Added Iraq as Tier 2 active theatre actor (weight 0.7)
            * Comprehensive keyword coverage: IRI militias (Kata'ib Hezbollah,
@@ -157,6 +186,13 @@ _background_scan_lock = threading.Lock()
 # ========================================
 
 REGIONAL_THEATRES = {
+    'global_northcom': {
+        'label': 'Global / NORTHCOM',
+        'icon': '🌐',
+        'order': 0,
+        'actors': ['us'],
+        'description': 'United States — global actor spanning CENTCOM, SOUTHCOM, NORTHCOM, EUCOM, INDOPACOM'
+    },
     'asia_pacific': {
         'label': 'Asia & The Pacific Theatre',
         'icon': '🌏',
@@ -175,8 +211,15 @@ REGIONAL_THEATRES = {
         'label': 'Middle East & North Africa',
         'icon': '🕌',
         'order': 3,
-        'actors': ['us', 'israel', 'iran', 'iraq', 'bahrain', 'egypt', 'jordan', 'kuwait', 'oman', 'qatar', 'saudi_arabia', 'uae'],
+        'actors': ['israel', 'iran', 'iraq', 'bahrain', 'egypt', 'jordan', 'kuwait', 'oman', 'qatar', 'saudi_arabia', 'uae'],
         'description': 'CENTCOM area — Persian Gulf, Red Sea, Eastern Med, Levant, Iraq theatre'
+    },
+    'western_hemisphere': {
+        'label': 'Western Hemisphere',
+        'icon': '🌎',
+        'order': 5,
+        'actors': ['venezuela', 'cuba', 'haiti', 'panama', 'colombia', 'mexico', 'brazil'],
+        'description': 'SOUTHCOM area — Caribbean, Central America, South America, narco-military actors'
     }
 }
 
@@ -187,16 +230,17 @@ REGIONAL_THEATRES = {
 
 MILITARY_ACTORS = {
     # ------------------------------------------------
-    # TIER 1 — Direct strike correlation
+    # GLOBAL / NORTHCOM — United States (multi-theatre anchor)
     # ------------------------------------------------
     'us': {
         'name': 'United States',
         'flag': '🇺🇸',
         'tier': 1,
-        'theatre': 'middle_east',
+        'theatre': 'global_northcom',
         'weight': 1.0,
         'feeds_into': ['strike_probability'],
         'keywords': [
+            # CENTCOM / Middle East
             'centcom', 'us central command', 'pentagon deploys',
             'department of defense deployment', 'us forces middle east',
             'carrier strike group', 'uss ', 'us navy gulf', 'us navy middle east',
@@ -226,6 +270,24 @@ MILITARY_ACTORS = {
             'shelter in place embassy', 'us warships iran',
             'us carrier iran', 'us bomber iran',
             'b-2 iran', 'b-52 iran', 'tomahawk iran',
+            # SOUTHCOM / Western Hemisphere (v3.0.0)
+            'southcom', 'us southern command', 'us forces caribbean',
+            'us forces latin america', 'us military venezuela',
+            'us military cuba', 'us military haiti',
+            'us military panama', 'us navy caribbean',
+            'soto cano air base', 'joint task force bravo',
+            'us drug enforcement', 'dea military operation',
+            'us coast guard caribbean', 'us coast guard drug interdiction',
+            'naval station guantanamo', 'gtmo', 'guantanamo bay',
+            'nas key west', 'naval air station key west',
+            'us navy san diego', 'navbase san diego',
+            'naval base san diego', 'third fleet',
+            'operation martillo', 'drug interdiction caribbean',
+            'us troops central america', 'us forces honduras',
+            'us special forces colombia', 'us military advisors colombia',
+            'panama canal security', 'canal zone military',
+            'us venezuela sanctions military', 'us venezuela naval',
+            'us military haiti security mission',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=site:centcom.mil&hl=en&gl=US&ceid=US:en',
@@ -233,6 +295,9 @@ MILITARY_ACTORS = {
         ]
     },
 
+    # ------------------------------------------------
+    # TIER 1 — Direct strike correlation
+    # ------------------------------------------------
     'israel': {
         'name': 'Israel',
         'flag': '🇮🇱',
@@ -1526,7 +1591,312 @@ MILITARY_ACTORS = {
         'rss_feeds': [
             'https://news.google.com/rss/search?q=site:nato.int+news&hl=en&gl=US&ceid=US:en',
         ]
-    }
+    },
+
+    # ------------------------------------------------
+    # WESTERN HEMISPHERE ACTORS (v3.0.0)
+    # ------------------------------------------------
+
+    'venezuela': {
+        'name': 'Venezuela',
+        'flag': '🇻🇪',
+        'tier': 2,
+        'theatre': 'western_hemisphere',
+        'weight': 0.7,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Post-Maduro transition (v3.0.0 — regime change context)
+            'venezuela maduro', 'nicolas maduro', 'maduro arrested', 'maduro captured',
+            'maduro extradited', 'venezuela regime change', 'venezuela transition',
+            'venezuela interim government', 'venezuela opposition government',
+            'venezuela power vacuum', 'venezuela military faction',
+            'chavismo collapse', 'psuv military', 'venezuela military split',
+            'venezuela military defection', 'colectivos armed',
+            # Armed forces / military posture
+            'fanb venezuela', 'fuerzas armadas venezuela',
+            'venezuela military exercise', 'venezuela army deploy',
+            'venezuela navy caribbean', 'venezuela air force',
+            'venezuela national guard', 'guardia nacional venezuela',
+            # Narco-military nexus
+            'cartel de los soles', 'tren de aragua', 'venezuela drug trafficking',
+            'venezuela cocaine military', 'dea venezuela',
+            'colombia venezuela border military', 'eln venezuela',
+            'farc venezuela border', 'venezuela colombia smuggling',
+            # US involvement
+            'us military venezuela', 'us venezuela sanctions',
+            'us venezuela naval operation', 'dea arrests venezuela',
+            'us indictment venezuela military', 'us venezuela operation',
+            'trump venezuela military', 'venezuela designated terrorist',
+            # Cuba/Russia/China backing
+            'cuba venezuela military', 'russian military venezuela',
+            'russia venezuela arms', 'china venezuela military',
+            'iranian military venezuela', 'hezbollah venezuela',
+            # Crisis / instability signals
+            'venezuela protests military', 'venezuela crackdown',
+            'venezuela martial law', 'venezuela state of emergency',
+            'venezuela hyperinflation military', 'venezuela fuel shortage military',
+            'venezuela blackout military',
+            # Spanish keywords
+            'venezuela fuerzas armadas', 'ejército venezolano',
+            'crisis venezuela militares', 'transición venezuela',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=venezuela+military+OR+maduro+OR+transition+OR+armed+forces&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=venezuela+crisis+OR+tren+de+aragua+OR+colectivos+OR+dea+venezuela&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'cuba': {
+        'name': 'Cuba',
+        'flag': '🇨🇺',
+        'tier': 2,
+        'theatre': 'western_hemisphere',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Regime stability
+            'cuba military', 'cuban armed forces', 'far cuba',
+            'fuerzas armadas revolucionarias', 'cuba national security',
+            'cuba state security', 'cuba protests military',
+            'cuba crackdown', 'cuba repression', 'cuba dissidents military',
+            'cuba power outage instability', 'cuba economic collapse',
+            'miguel diaz-canel', 'cuba raul castro',
+            # Russian / Chinese military presence
+            'russia cuba military', 'russian warship cuba', 'russian navy cuba',
+            'russia signals intelligence cuba', 'russia cuba spy base',
+            'russia cuba electronic surveillance', 'lourdes cuba russia',
+            'china cuba military', 'china cuba spy base',
+            'china signals intelligence cuba', 'chinese warship cuba',
+            'iran cuba military', 'cuba venezuela military cooperation',
+            # US-Cuba tensions
+            'us cuba military', 'guantanamo bay military',
+            'gtmo military', 'us cuba relations military',
+            'cuba exile military', 'cuba embargo military',
+            'us navy cuba', 'florida straits military',
+            # Migration as instability signal
+            'cuba mass exodus military', 'cuba coast guard',
+            'cuba migration crisis', 'cuba boatlift',
+            # Spanish keywords
+            'cuba militares', 'fuerzas armadas cuba', 'crisis cuba',
+            'apagón cuba', 'protestas cuba represión',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=cuba+military+OR+russia+cuba+OR+china+cuba+spy+OR+protests+crackdown&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=cuba+armed+forces+OR+guantanamo+military+OR+cuba+russia+base&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'haiti': {
+        'name': 'Haiti',
+        'flag': '🇭🇹',
+        'tier': 2,
+        'theatre': 'western_hemisphere',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # MSS gang control — de facto military actor
+            'mss haiti', 'viv ansanm haiti', 'gran grif haiti',
+            'g9 haiti', 'g-9 gang haiti', 'barbeque haiti',
+            'jimmy cherizier', 'haitian gang military',
+            'haiti gang territory', 'haiti gang attack police',
+            'haiti gang seize', 'haiti gang control',
+            'haiti port-au-prince gang', 'cite soleil gang',
+            'haiti gang weapons', 'haiti gang massacre',
+            # International security mission
+            'mss kenya haiti', 'kenyan police haiti',
+            'multinational security support mission', 'mss mission haiti',
+            'binuh haiti', 'un haiti security',
+            'haiti security mission forces', 'kenya haiti mission',
+            'haitian national police', 'pnh haiti',
+            # State collapse / failed state signals
+            'haiti prime minister security', 'haiti government collapse',
+            'haiti presidential assassination', 'haiti state collapse',
+            'haiti martial law', 'haiti emergency',
+            'haiti coup', 'haiti political crisis military',
+            # US / Caribbean military involvement
+            'us military haiti', 'us coast guard haiti',
+            'us embassy haiti security', 'us evacuation haiti',
+            'us citizens haiti', 'ordered departure haiti',
+            'caribbean community haiti military', 'caricom haiti',
+            # Humanitarian-military overlap
+            'haiti fuel shortage gangs', 'haiti airport gangs',
+            'haiti hospital gangs', 'haiti hostage',
+            # French/Creole keywords
+            'haïti gangs armés', 'haïti sécurité militaire',
+            'mission sécurité haïti', 'crise haïti',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=haiti+gang+OR+mss+mission+OR+kenya+haiti+OR+security+mission&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=haiti+military+OR+viv+ansanm+OR+g9+gang+OR+port-au-prince+security&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'panama': {
+        'name': 'Panama',
+        'flag': '🇵🇦',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Panama Canal — strategic chokepoint
+            'panama canal military', 'canal zone security',
+            'panama canal sovereignty', 'us panama canal',
+            'trump panama canal', 'panama canal control',
+            'panama canal chinese', 'hutchison whampoa panama',
+            'china panama canal port', 'panama canal strategic',
+            'canal operations disrupted', 'canal closure military',
+            'canal transit warship', 'us warship panama canal',
+            # Chinese port presence / influence
+            'chinese port panama', 'china panama influence',
+            'china panama military', 'pla navy panama',
+            'china panama infrastructure', 'silk road panama',
+            # US SOUTHCOM / regional posture
+            'soto cano panama', 'us forces panama',
+            'us military panama', 'panama security forces',
+            'panama national police security', 'senan panama',
+            # Darien Gap — migration-military nexus
+            'darien gap military', 'darien gap colombia',
+            'darien migration military', 'gulf of darien',
+            'colombia panama border military',
+            # Narco-trafficking
+            'panama drug trafficking military', 'dea panama',
+            'cartel panama', 'narco panama military',
+            # Spanish keywords
+            'canal de panama seguridad', 'fuerzas panama',
+            'china canal panama', 'panama militares',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=panama+canal+military+OR+china+canal+OR+canal+sovereignty+OR+trump+panama&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'colombia': {
+        'name': 'Colombia',
+        'flag': '🇨🇴',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # ELN — primary active armed group
+            'eln colombia', 'ejercito liberacion nacional colombia',
+            'eln attack', 'eln bombing', 'eln pipeline',
+            'eln ceasefire', 'eln negotiations military',
+            'eln guerrilla colombia', 'eln front colombia',
+            # FARC dissidents / FARC-EP
+            'farc dissident colombia', 'farc-ep colombia',
+            'farc disidencias', 'estado mayor central colombia',
+            'ivan mordisco farc', 'farc attack colombia',
+            'farc dissident attack military',
+            # Colombian military operations
+            'colombia military operation', 'colombia armed forces',
+            'fuerzas militares colombia', 'ejercito colombia',
+            'colombia air force strike', 'colombia military attack',
+            'colombia special forces', 'colombia police military',
+            # Narco-trafficking military nexus
+            'colombia cocaine military', 'dea colombia',
+            'clan del golfo colombia', 'autodefensas gaitanistas',
+            'narco colombia military', 'colombia drug cartel military',
+            # Venezuela-Colombia border
+            'colombia venezuela border military', 'colombia venezuela tension',
+            'petro maduro military', 'colombia venezuela migration military',
+            # US involvement
+            'us military colombia', 'us advisors colombia',
+            'plan colombia military', 'colombia us drug war',
+            # Spanish keywords
+            'colombia militares eln', 'farc disidentes colombia',
+            'operación militar colombia', 'colombia fuerzas armadas',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=colombia+eln+OR+farc+dissident+OR+military+operation+OR+cartel&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'mexico': {
+        'name': 'Mexico',
+        'flag': '🇲🇽',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Cartel military operations — primary signal
+            'sinaloa cartel military', 'cjng military', 'jalisco cartel',
+            'cartel military mexico', 'cartel ambush military',
+            'cartel checkpoint mexico', 'cartel territorial control',
+            'cartel drone attack', 'narco drone mexico',
+            'narco roadblock military', 'narco convoy',
+            'mexico cartel gunfight military', 'mexico massacre cartel',
+            # Mexican military / state response
+            'mexico military operation cartel', 'sedena mexico',
+            'guardia nacional mexico cartel', 'marina mexico cartel',
+            'mexico army cartel', 'mexico special forces cartel',
+            'mexico military deployment', 'ejercito mexicano',
+            'fuerzas armadas mexico', 'mexico army operation',
+            # US-Mexico border military
+            'us mexico border military', 'us troops mexico border',
+            'us military mexico border', 'border patrol military',
+            'national guard mexico border', 'us mexico border operation',
+            'trump mexico military', 'designate cartel terrorist',
+            'cartel terrorist designation', 'us strikes mexico',
+            # Fentanyl / narco-trafficking
+            'fentanyl mexico military', 'mexico fentanyl operation',
+            'dea mexico cartel', 'us mexico drug military',
+            # State capture signals
+            'mexico police cartel corruption military',
+            'mexico governor cartel', 'mexico state capture',
+            # Spanish keywords
+            'cartel mexico militar', 'operación militar cartel',
+            'guardia nacional cartel', 'ejercito mexico cartel',
+            'narcos drones mexico',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=mexico+cartel+military+OR+cjng+OR+sinaloa+cartel+military+OR+mexico+army&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=mexico+border+military+OR+us+mexico+military+OR+cartel+drone+attack&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'brazil': {
+        'name': 'Brazil',
+        'flag': '🇧🇷',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.4,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Brazilian military posture
+            'brazil military', 'exercito brasileiro', 'marinha do brasil',
+            'forca aerea brasileira', 'brazil armed forces',
+            'brazil military exercise', 'brazil navy exercise',
+            'brazil air force exercise', 'brazil military deployment',
+            # Amazon military operations
+            'amazon military brazil', 'operacao verde brasil',
+            'brazil army amazon', 'amazon deforestation military',
+            'brazil amazon border military', 'brazil indigenous military',
+            # Regional power / political instability
+            'lula military brazil', 'brazil coup attempt military',
+            'brazil bolsonaro military', 'brazil military politics',
+            'brazil january 8 military', 'brazil democracy military',
+            # Venezuela / regional
+            'brazil venezuela military', 'brazil colombia military',
+            'brazil suriname military', 'brazil guyana military',
+            'brazil border military', 'brazil southcom',
+            # Organized crime / narco
+            'primeiro comando capital brazil', 'pcc brazil military',
+            'faction war brazil military', 'brazil organized crime military',
+            'rio de janeiro military', 'favela military brazil',
+            'brazil drug trafficking military',
+            # Chinese / strategic interest
+            'china brazil military', 'brics military brazil',
+            # Portuguese keywords
+            'brasil militares', 'exercito brasil operacao',
+            'marinha brasil', 'brasil fronteira militar',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=brazil+military+OR+amazon+military+OR+brazil+armed+forces+operation&hl=en&gl=US&ceid=US:en',
+        ]
+    },
 }
 
 
@@ -2073,6 +2443,43 @@ LOCATION_MULTIPLIERS = {
     'golan': 2.0,
     'iron dome': 2.0,
     'arrow': 2.0,
+    # Western Hemisphere — chokepoints and bases (v3.0.0)
+    'panama canal': 3.0,
+    'canal zone': 2.5,
+    'darien gap': 2.0,
+    'soto cano': 2.5,
+    'joint task force bravo': 2.5,
+    'naval station guantanamo': 2.5,
+    'guantanamo bay': 2.5,
+    'gtmo': 2.5,
+    'nas key west': 2.0,
+    'key west naval': 2.0,
+    'navbase san diego': 2.0,
+    'naval base san diego': 2.0,
+    'naval station san diego': 2.0,
+    'third fleet': 2.0,
+    'southcom': 2.0,
+    'us southern command': 2.0,
+    'florida straits': 2.0,
+    'caribbean sea military': 1.5,
+    'gulf of mexico military': 1.5,
+    'miraflores palace': 2.5,
+    'caracas military': 2.0,
+    'maracaibo': 1.5,
+    'havana military': 2.0,
+    'santiago de cuba': 1.5,
+    'port-au-prince': 2.0,
+    'cite soleil': 2.5,
+    'bogota military': 1.5,
+    'cali cartel': 2.0,
+    'medellin military': 2.0,
+    'mexico city military': 1.5,
+    'ciudad juarez': 2.0,
+    'tijuana military': 1.5,
+    'culiacan': 2.5,
+    'sinaloa military': 2.0,
+    'rio de janeiro military': 1.5,
+    'brasilia military': 1.5,
 }
 
 
@@ -2237,6 +2644,68 @@ ASSET_TARGET_MAPPING = {
             'location': 'Oman',
             'targets': ['oman'],
             'description': 'Remote air base. Indian Ocean patrol.'
+        },
+    },
+    'southcom': {
+        'Soto Cano Air Base': {
+            'location': 'Honduras',
+            'targets': ['honduras', 'central_america'],
+            'description': 'Joint Task Force Bravo. SOUTHCOM primary air hub for Central America.'
+        },
+        'Naval Station Guantanamo Bay': {
+            'location': 'Cuba',
+            'targets': ['cuba', 'caribbean'],
+            'description': 'US naval installation on Cuba. Strategic Caribbean presence. Detention facility.'
+        },
+        'NAS Key West': {
+            'location': 'Florida, USA',
+            'targets': ['cuba', 'caribbean'],
+            'description': 'Naval Air Station Key West. Drug interdiction and Caribbean surveillance hub.'
+        },
+        'NAVBASE San Diego': {
+            'location': 'California, USA',
+            'targets': ['pacific', 'western_hemisphere'],
+            'description': 'Naval Base San Diego. Third Fleet HQ. Largest US Navy surface fleet homeport.'
+        },
+        'SOUTHCOM HQ': {
+            'location': 'Doral, Florida',
+            'targets': ['western_hemisphere'],
+            'description': 'US Southern Command headquarters. Covers Central/South America and Caribbean.'
+        },
+        'Panama Canal': {
+            'location': 'Panama',
+            'targets': ['panama', 'western_hemisphere'],
+            'description': 'Strategic maritime chokepoint. US/international transit rights. Chinese port presence at both ends.'
+        },
+        'Caribbean Sea': {
+            'location': 'Maritime',
+            'targets': ['cuba', 'haiti', 'caribbean'],
+            'description': 'US Navy drug interdiction and Caribbean security patrols.'
+        },
+        'Gulf of Mexico': {
+            'location': 'Maritime',
+            'targets': ['mexico', 'western_hemisphere'],
+            'description': 'US Coast Guard and Navy drug interdiction operations.'
+        },
+        'Manta (former)': {
+            'location': 'Ecuador',
+            'targets': ['colombia', 'western_hemisphere'],
+            'description': 'Former US FOL. Regional ISR staging point for counter-narcotics.'
+        },
+        'Comalapa Air Base': {
+            'location': 'El Salvador',
+            'targets': ['central_america', 'western_hemisphere'],
+            'description': 'US Forward Operating Location. Drug interdiction ISR platform.'
+        },
+        'Reina Beatrix (Aruba)': {
+            'location': 'Aruba (Netherlands)',
+            'targets': ['venezuela', 'caribbean'],
+            'description': 'US/Dutch FOL. Venezuela-facing surveillance. Drug interdiction.'
+        },
+        'Hato Airport (Curacao)': {
+            'location': 'Curacao (Netherlands)',
+            'targets': ['venezuela', 'caribbean'],
+            'description': 'US/Dutch Forward Operating Location. Venezuela monitoring and drug interdiction.'
         },
     },
     'eucom': {
@@ -2461,6 +2930,15 @@ DEFENSE_RSS_FEEDS = {
     'Egypt Military (Google)': 'https://news.google.com/rss/search?q=egypt+military+OR+suez+OR+sinai+OR+defense&hl=en&gl=US&ceid=US:en',
     'Turkey Military (Google)': 'https://news.google.com/rss/search?q=turkey+military+OR+incirlik+OR+erdogan+defense+OR+attack&hl=en&gl=US&ceid=US:en',
     'Cyprus Military (Google)': 'https://news.google.com/rss/search?q=cyprus+military+OR+akrotiri+OR+attack+OR+evacuation&hl=en&gl=US&ceid=US:en',
+    # v3.0.0 additions — Western Hemisphere
+    'Venezuela Military (Google)': 'https://news.google.com/rss/search?q=venezuela+military+OR+maduro+transition+OR+colectivos+armed&hl=en&gl=US&ceid=US:en',
+    'Cuba Military (Google)': 'https://news.google.com/rss/search?q=cuba+military+OR+russia+cuba+OR+china+cuba+spy+base&hl=en&gl=US&ceid=US:en',
+    'Haiti Security (Google)': 'https://news.google.com/rss/search?q=haiti+gang+mss+mission+OR+kenya+haiti+OR+viv+ansanm+security&hl=en&gl=US&ceid=US:en',
+    'Panama Canal (Google)': 'https://news.google.com/rss/search?q=panama+canal+military+OR+china+panama+canal+OR+canal+sovereignty&hl=en&gl=US&ceid=US:en',
+    'Colombia Military (Google)': 'https://news.google.com/rss/search?q=colombia+eln+military+OR+farc+dissident+OR+colombia+army+operation&hl=en&gl=US&ceid=US:en',
+    'Mexico Cartel Military (Google)': 'https://news.google.com/rss/search?q=mexico+cartel+military+OR+cjng+attack+OR+sinaloa+cartel+army&hl=en&gl=US&ceid=US:en',
+    'Brazil Military (Google)': 'https://news.google.com/rss/search?q=brazil+military+OR+amazon+military+OR+brazil+armed+forces&hl=en&gl=US&ceid=US:en',
+    'SOUTHCOM (Google)': 'https://news.google.com/rss/search?q=southcom+military+OR+us+southern+command+OR+operation+martillo&hl=en&gl=US&ceid=US:en',
 }
 
 REDDIT_MILITARY_SUBREDDITS = [
@@ -2616,7 +3094,7 @@ def _build_empty_skeleton():
         'cached': False,
         'scan_in_progress': True,
         'message': 'Initial scan in progress. Data will appear shortly.',
-        'version': '2.7.0'
+        'version': '3.0.0'
     }
 
 
@@ -3176,11 +3654,114 @@ def fetch_all_gdelt_military(days=7):
         'پاکستان بھارت کنٹرول لائن',
     ]
 
+    # v3.0.0 — Western Hemisphere dedicated query blocks
+    wha_english_queries = [
+        # Venezuela — post-Maduro transition
+        'Venezuela military transition Maduro',
+        'Venezuela regime change armed forces',
+        'Venezuela military faction power vacuum',
+        'colectivos Venezuela armed',
+        'Venezuela DEA military operation',
+        'Venezuela US military sanctions',
+        'Tren de Aragua military Venezuela',
+        'Venezuela Cuba military cooperation',
+        'Russia military Venezuela Caribbean',
+        'China military Venezuela',
+        # Cuba
+        'Cuba Russia spy base signals intelligence',
+        'Russian warship Cuba Caribbean',
+        'China Cuba military intelligence base',
+        'Cuba protests military crackdown',
+        'Cuba armed forces stability',
+        'Guantanamo Bay military',
+        'Cuba economic collapse military',
+        # Haiti
+        'Haiti gang MSS mission Viv Ansanm',
+        'Haiti Kenyan security force mission',
+        'Haiti G9 gang armed territory',
+        'Haiti multinational security mission',
+        'Haiti police overwhelmed gang',
+        'Haiti port-au-prince gang control',
+        'Haiti security forces deploy',
+        'Haiti US embassy security',
+        # Panama
+        'Panama Canal military security',
+        'Panama Canal China port Hutchison',
+        'Trump Panama Canal sovereignty military',
+        'US warship Panama Canal transit',
+        'Panama Darien Gap military',
+        # Colombia
+        'Colombia ELN attack military',
+        'Colombia FARC dissident operation',
+        'Colombia military operation guerrilla',
+        'Colombia US military advisors',
+        'Colombia Venezuela border military',
+        # Mexico
+        'Mexico cartel military operation',
+        'CJNG Sinaloa cartel ambush military',
+        'Mexico army cartel operation',
+        'US Mexico border military deployment',
+        'Mexico cartel drone attack',
+        'Trump Mexico cartel terrorist designation',
+        'Mexico fentanyl military operation',
+        # Brazil
+        'Brazil Amazon military operation',
+        'Brazil armed forces exercise',
+        'Brazil navy military exercise',
+        'Brazil Colombia Venezuela border military',
+        # SOUTHCOM general
+        'SOUTHCOM military exercise Caribbean',
+        'US Southern Command deployment',
+        'Operation Martillo drug interdiction',
+        'US Coast Guard drug bust Caribbean',
+        'Joint Task Force Bravo Honduras',
+    ]
+
+    spanish_queries = [
+        # Venezuela
+        'venezuela fuerzas armadas transicion',
+        'venezuela militares faccion',
+        'venezuela colectivos armados',
+        'maduro detenido capturado',
+        'venezuela crisis militar',
+        'tren de aragua venezuela',
+        # Cuba
+        'cuba militares represion',
+        'cuba fuerzas armadas crisis',
+        'cuba protestas represion',
+        'rusia base cuba inteligencia',
+        # Haiti
+        'haiti pandillas armadas',
+        'haiti mision seguridad kenia',
+        'haiti policia pandillas',
+        # Panama
+        'canal panama seguridad militar',
+        'china canal panama control',
+        'soberania canal panama',
+        # Colombia
+        'colombia eln ataque militar',
+        'colombia farc disidencias operacion',
+        'colombia ejercito operacion',
+        'colombia venezuela frontera militar',
+        # Mexico
+        'mexico cartel operacion militar',
+        'cjng jalisco cartel militar',
+        'mexico ejercito cartel',
+        'guardia nacional mexico cartel',
+        'narco drones mexico',
+        'frontera mexico militar estados unidos',
+        # Brazil
+        'brasil militares operacao',
+        'exercito brasil amazonia operacao',
+        'brasil fronteira militar',
+    ]
+
     all_articles = []
 
     query_blocks = [
         (english_queries, 'eng', 'English'),
         (asia_english_queries, 'eng', 'Asia-English'),
+        (wha_english_queries, 'eng', 'WHA-English'),
         (hebrew_queries, 'heb', 'Hebrew'),
         (russian_queries, 'rus', 'Russian'),
         (arabic_queries, 'ara', 'Arabic'),
@@ -3193,6 +3774,7 @@ def fetch_all_gdelt_military(days=7):
         (danish_norwegian_queries, 'dan', 'Danish'),
         (korean_queries, 'kor', 'Korean'),
         (urdu_queries, 'urd', 'Urdu'),
+        (spanish_queries, 'spa', 'Spanish'),
     ]
 
     for queries, lang_code, lang_name in query_blocks:
@@ -3277,6 +3859,14 @@ def fetch_all_newsapi_military(days=7):
         'Israel iron dome intercept war siren',
         'Israel home front command alert casualties',
         'Israel Tel Aviv Haifa missile impact',
+        # v3.0.0 — Western Hemisphere
+        'Venezuela military transition Maduro regime',
+        'Cuba Russia military base Caribbean',
+        'Haiti gang MSS Kenya security mission',
+        'Panama Canal China port military sovereignty',
+        'Colombia ELN FARC military operation',
+        'Mexico cartel military army operation',
+        'SOUTHCOM US military Caribbean Latin America',
     ]
 
     all_articles = []
@@ -3756,7 +4346,7 @@ def _run_full_scan(days=7):
         },
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
-        'version': '2.7.0'
+        'version': '3.0.0'
     }
 
     save_military_cache(result)
