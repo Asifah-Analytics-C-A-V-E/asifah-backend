@@ -1,7 +1,6 @@
 """
 Asifah Analytics — Iran Rhetoric & Command Node Tracker
-v1.0.0 — March 2026
-
+v1.0.0 — April 4, 2026
 ANALYTICAL FRAME:
 Iran is not just an actor — it is the COMMAND NODE of the resistance axis.
 This tracker answers two questions:
