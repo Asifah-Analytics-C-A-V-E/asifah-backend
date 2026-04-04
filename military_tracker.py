@@ -1,6 +1,6 @@
 """
 Asifah Analytics — Military Asset & Deployment Tracker v3.0.0
-March 2026
+April 4, 2026
 
 Tracks military asset movements across multiple actors and regions.
 Feeds deployment scores into existing threat probability calculations.
