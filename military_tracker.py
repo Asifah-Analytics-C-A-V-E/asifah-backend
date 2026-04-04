@@ -204,7 +204,7 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia'],
+        'actors': ['nato', 'russia', 'denmark', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia'],
         'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Cyprus, Caucasus'
     },
     'middle_east': {
@@ -872,6 +872,20 @@ MILITARY_ACTORS = {
             'sevastopol naval base', 'crimea military',
             'russia arctic military', 'northern fleet',
             'russia arctic exercise',
+            # Russian Arctic submarine / deterrence posture (v3.1.0)
+            'borei class submarine', 'borei ssbn', 'russia ssbn patrol',
+            'russia submarine arctic patrol', 'russia submarine kola',
+            'severodvinsk submarine', 'yasen class submarine',
+            'northern fleet submarine', 'russian submarine nato',
+            'russian submarine norway', 'russian submarine atlantic',
+            'russia submarine deployment arctic', 'kola peninsula submarine',
+            'russian nuclear submarine', 'russia slbm patrol',
+            'russia ballistic missile submarine', 'russia strategic submarine',
+            'submarine exercise barents', 'barents sea exercise',
+            'arctic underwater', 'russia underwater drone',
+            # Kola Peninsula / Northern Fleet base
+            'murmansk military', 'severomorsk', 'gadzhiyevo',
+            'olenya airfield', 'russian arctic base',
             # Russian keywords (match GDELT Russian-language articles)
             'вооруженные силы', 'военная операция', 'ракетный удар',
             'черноморский флот', 'северный флот', 'мобилизация',
@@ -1590,6 +1604,57 @@ MILITARY_ACTORS = {
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=site:nato.int+news&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    # ------------------------------------------------
+    # DENMARK / ARCTIC COMMAND (v3.1.0)
+    # Tier 4 — sovereignty signaling actor
+    # Small kinetic footprint but analytically critical:
+    # Danish Arktisk Kommando deployments and P-8 patrols
+    # from Pituffik are direct proxies for Copenhagen's
+    # seriousness in responding to U.S. pressure on Greenland.
+    # ------------------------------------------------
+    'denmark': {
+        'name': 'Denmark',
+        'flag': '🇩🇰',
+        'tier': 4,
+        'theatre': 'europe',
+        'weight': 0.4,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Arctic Command / Greenland defense
+            'arktisk kommando', 'arctic command denmark',
+            'danish arctic command', 'danish armed forces greenland',
+            'denmark military greenland', 'danish defence greenland',
+            'danish frigate greenland', 'danish navy arctic',
+            'denmark greenland sovereignty', 'denmark greenland defense',
+            'danish patrol vessel greenland', 'denmark coast guard greenland',
+            'sirius patrol', 'sirius dog sled patrol',
+            # Pituffik / Thule
+            'pituffik space base danish', 'thule air base danish',
+            'denmark pituffik', 'denmark thule',
+            'danish personnel pituffik', 'danish sovereignty pituffik',
+            # P-8 / ISR patrols
+            'denmark p-8 poseidon', 'danish maritime patrol',
+            'danish air force arctic', 'danish isr greenland',
+            # Sovereignty response language
+            'denmark greenland us', 'denmark rejects us',
+            'denmark sovereignty greenland', 'danish foreign minister greenland',
+            'denmark nato greenland', 'lars lokke greenland',
+            'denmark trump greenland', 'denmark greenland response',
+            'frederik x greenland', 'denmark arctic strategy',
+            'danish defence bill', 'denmark defence spending',
+            'denmark military buildup arctic',
+            # Danish keywords (GDELT Danish-language)
+            'forsvaret grønland', 'arktisk kommando',
+            'dansk suverænitet grønland', 'dansk forsvar arktis',
+            'grønland forsvar styrkelse', 'dansk militær grønland',
+            'grønland beredskab', 'forsvarsminister grønland',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=denmark+military+greenland+OR+arctic+command+OR+danish+defence+greenland&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=arktisk+kommando+OR+grønland+forsvar+OR+dansk+forsvar+arktis&hl=da&gl=DK&ceid=DK:da',
         ]
     },
 
