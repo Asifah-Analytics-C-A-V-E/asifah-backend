@@ -296,17 +296,34 @@ ACTORS = {
         'icon': '🔷',
         'color': '#3b82f6',
         'role': 'Adversary / Strike Actor',
-        'description': 'Israeli government and IDF — strike posture against Iran, nuclear red lines',
+        'description': 'Israeli government and IDF — strike posture, shadow war ops, nuclear red lines',
         'keywords': [
+            # Direct kinetic / strike language
             'israel iran', 'israel strikes iran', 'idf iran',
             'netanyahu iran', 'israel nuclear iran', 'israel attack iran',
             'israel warns iran', 'israel threatens iran',
             'israel operation iran', 'f-35 iran', 'israeli jets iran',
             'dimona', 'natanz israel', 'israel iran nuclear',
             'israel operation rising lion',
+            # Shadow war / covert operations (v2.1)
+            'mossad iran', 'mossad operation iran',
+            'israel sabotage iran', 'explosion iran israel',
+            'iran scientist killed', 'iran nuclear scientist assassinated',
+            'israel all options iran', 'israel red line iran',
+            'israel preemptive iran', 'israel strike capability iran',
+            'iran enrichment israel', 'israel 90 percent iran',
+            'israel weapons grade iran', 'israel prevent iran bomb',
+            'gallant iran', 'katz iran', 'israel defense minister iran',
+            'israel will not allow iran nuclear',
+            'israel iran deal opposition', 'israel opposes iran deal',
+            'iran deal bad for israel', 'israel nuclear threshold iran',
+            # Hebrew
+            'מוסד איראן', 'ישראל קו אדום', 'ישראל מניעה איראן',
             'ישראל איראן', 'צה"ל איראן', 'ישראל תוקפת',
+            # Arabic
             'إسرائيل إيران', 'الغارات الإسرائيلية على إيران',
-            'إسرائيل تضرب إيران',
+            'إسرائيل تضرب إيران', 'الموساد إيران',
+            'إسرائيل الخط الأحمر النووي', 'إسرائيل تعارض الاتفاق',
         ],
         'baseline_statements_per_week': 12,
     },
@@ -316,15 +333,31 @@ ACTORS = {
         'icon': '🛡️',
         'color': '#2563eb',
         'role': 'Adversary / Strike Actor',
-        'description': 'US military and government — strike posture against Iran, force movements',
+        'description': 'US military, Trump, and government — strike posture, deal signals, Iran pressure',
         'keywords': [
+            # Military / CENTCOM
             'us strikes iran', 'us attack iran', 'centcom iran',
             'us iran war', 'pentagon iran', 'us military iran',
-            'us iran operation', 'trump iran', 'biden iran',
-            'us forces iran', 'b-2 iran', 'carrier iran',
-            'us iran nuclear', 'us iran deal',
+            'us iran operation', 'us forces iran', 'b-2 iran',
+            'carrier iran', 'b-52 iran', 'us bombers iran',
+            'us carrier strike group iran', 'us destroys iran',
+            # Trump direct statements (v2.1)
+            'trump iran', 'trump warns iran', 'trump threatens iran',
+            'trump iran deal', 'trump maximum pressure iran',
+            'trump bomb iran', 'trump attack iran',
+            'trump iran nuclear', 'trump iran sanctions',
+            'trump iran 60 days', 'trump iran ultimatum',
+            'trump iran letter', 'trump envoy iran',
+            'steve witkoff iran', 'witkoff iran deal',
+            'rubio iran', 'rubio iran deal', 'rubio iran sanctions',
+            # Deal / diplomatic pressure
+            'us iran deal', 'us iran nuclear deal', 'us iran talks',
+            'us iran negotiations', 'us iran agreement',
+            'us iran sanctions', 'snapback iran',
+            # Arabic
             'القوات الأمريكية في إيران', 'سنتكوم إيران',
-            'الضربات الأمريكية على إيران',
+            'الضربات الأمريكية على إيران', 'ترامب إيران',
+            'ترامب يهدد إيران', 'أمريكا إيران نووي',
         ],
         'baseline_statements_per_week': 10,
     },
@@ -1007,6 +1040,20 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=خامنه‌ای+بیانیه+2026&hl=fa&gl=IR&ceid=IR:fa", 0.95),
     # Hebrew — Israeli perspective on Iran
     ("https://news.google.com/rss/search?q=איראן+תקיפה+2026&hl=iw&gl=IL&ceid=IL:iw", 0.9),
+    # Israeli shadow war / nuclear red line signals (v2.1)
+    ("https://news.google.com/rss/search?q=Israel+Iran+nuclear+red+line+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Mossad+Iran+operation+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Israel+Iran+deal+opposition+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    # Trump / US Iran pressure signals (v2.1)
+    ("https://news.google.com/rss/search?q=Trump+Iran+nuclear+deal+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Trump+warns+Iran+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Trump+maximum+pressure+Iran+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Witkoff+Iran+deal+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Rubio+Iran+sanctions+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    # Truth Social — Trump direct statements (public RSS, no auth required)
+    ("https://truthsocial.com/@realDonaldTrump.rss", 1.1),
+    # Nitter — Trump Twitter/X mirror (RSS, no API key)
+    ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
 ]
 
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -1032,9 +1079,14 @@ ACTOR_KEYWORDS = {
     'pmf_iran':     ['pmf iran', 'iran pmf', 'quds force iraq', 'iran militia iraq',
                      'الحشد الشعبي وإيران', 'فيلق القدس يوجه'],
     'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
-                     'netanyahu iran', 'ישראל איראן', 'إسرائيل إيران'],
+                     'netanyahu iran', 'mossad iran', 'israel red line iran',
+                     'israel nuclear iran', 'israel sabotage iran',
+                     'ישראל איראן', 'מוסד איראן', 'إسرائيل إيران', 'الموساد إيران'],
     'us_iran':      ['us strikes iran', 'centcom iran', 'us iran war',
-                     'pentagon iran', 'القوات الأمريكية إيران'],
+                     'pentagon iran', 'trump iran', 'trump warns iran',
+                     'trump threatens iran', 'trump maximum pressure',
+                     'witkoff iran', 'rubio iran',
+                     'القوات الأمريكية إيران', 'ترامب إيران'],
 }
 
 
