@@ -162,33 +162,64 @@ ACTORS = {
         'flag': '🇱🇧', 'icon': '🔗',
         'color': '#16a34a',
         'role': 'Northern Front Inbound',
-        'description': 'Hezbollah rockets, missiles, drones targeting northern Israel',
+        'description': 'Hezbollah rockets, missiles, drones targeting northern Israel — daily operational claims',
         'keywords': [
+            # Direct attack language
             'hezbollah fires at israel', 'hezbollah rockets israel',
             'hezbollah missiles israel', 'hezbollah targets israel',
             'hezbollah attack haifa', 'hezbollah attack north',
             'hezbollah drones israel', 'katyusha north israel',
             'hezbollah claims attack israel',
-            'צפון ישראל ירי', 'חיזבאללה תוקף',
-            'حزب الله يقصف إسرائيل',
+            # Al-Manar / operational claim language (v2.2)
+            'rocket salvo israel', 'rocket salvo kiryat',
+            'rocket salvo kfar', 'targeted gathering iof',
+            'targeted iof vehicles', 'targeted israeli soldiers',
+            'hezbollah fighters targeted', 'islamic resistance fighters',
+            'hezbollah operation', 'hezbollah operation israel',
+            'kiryat shmona', 'kfar yuval', 'metula', 'nahariya',
+            'northern israel attack', 'northern command israel',
+            'hezbollah daily', 'hezbollah salvo',
+            'al-bayyada', 'avivim', 'beit hillel',
+            # Hebrew
+            'צפון ישראל ירי', 'חיזבאללה תוקף', 'קריית שמונה',
+            'כפר יובל', 'סלבו רקטות', 'כפר בלום',
+            # Arabic
+            'حزب الله يقصف إسرائيل', 'صاروخ على إسرائيل',
+            'المقاومة الإسلامية تستهدف', 'قصف شمال إسرائيل',
         ],
-        'baseline_statements_per_week': 12,
+        'baseline_statements_per_week': 25,
     },
     'houthi_threat': {
         'name': 'Houthi (Southern Threat)',
         'flag': '🇾🇪', 'icon': '🔗',
         'color': '#f59e0b',
         'role': 'Long-Range Inbound',
-        'description': 'Houthi ballistic missiles and drones targeting Israel from Yemen',
+        'description': 'Houthi ballistic missiles and drones targeting Israel — entered conflict in solidarity with Gaza',
         'keywords': [
+            # Direct attack language
             'houthi fires at israel', 'houthi missile israel',
             'houthi drone israel', 'houthi attack israel',
             'houthi targets tel aviv', 'houthi targets eilat',
-            'ansar allah missile israel',
-            'חות\'י ישראל', 'חות\'ים תוקפים',
-            'الحوثيون يقصفون إسرائيل',
+            'ansar allah missile israel', 'houthi ballistic israel',
+            'houthi hypersonic israel', 'houthi cruise missile israel',
+            # Conflict entry / solidarity language (v2.2)
+            'houthi entered conflict', 'houthi joins war israel',
+            'houthi support gaza', 'houthi in solidarity',
+            'houthi operation al-aqsa', 'houthi flood',
+            'ansar allah entered', 'ansar allah joins',
+            'yemen enters war', 'yemen conflict israel',
+            'houthi red sea israel', 'houthi bab el-mandeb israel',
+            'houthi military operation israel',
+            'houthi fifth military operation',
+            'houthi operation number', 'houthi announces operation',
+            # Hebrew
+            "חות'י ישראל", "חות'ים תוקפים", 'טיל חות"י',
+            # Arabic
+            'الحوثيون يقصفون إسرائيل', 'أنصار الله يستهدف',
+            'اليمن يدخل المعركة', 'عملية أنصار الله',
+            'الحوثيون يعلنون عملية', 'دعماً لغزة',
         ],
-        'baseline_statements_per_week': 8,
+        'baseline_statements_per_week': 12,
     },
     'hamas_gaza': {
         'name': 'Hamas / Gaza',
@@ -327,15 +358,36 @@ ACTORS = {
         'role': 'Greenlight / Brake Signal',
         'description': 'US coordination signals — authorization language = greenlight, pressure = brake',
         'keywords': [
+            # Classic coordination language
             'us israel coordination', 'us greenlight israel',
             'us authorizes israel', 'us backs israel strike',
-            'biden netanyahu', 'trump netanyahu', 'us israel iran',
+            'trump netanyahu', 'us israel iran',
             'us ceasefire pressure', 'us demands israel',
             'us veto un', 'us blocks resolution',
-            'אמריקה ישראל', 'ארה"ב מאשרת',
-            'أمريكا تضوء خضراء لإسرائيل',
+            # Trump direct statements (v2.2)
+            'trump israel', 'trump backs israel', 'trump warns israel',
+            'trump iran deal israel', 'trump hezbollah',
+            'trump hamas', 'trump hostages', 'trump ceasefire',
+            'trump middle east', 'trump supports israel',
+            'trump threatens iran israel', 'trump greenlight',
+            # CENTCOM / military coordination
+            'centcom israel', 'us carrier israel',
+            'us forces middle east israel', 'us military israel',
+            'us destroys houthi', 'us strikes houthi',
+            'us iron dome', 'us patriot israel',
+            'rubio israel', 'rubio iran israel',
+            'witkoff israel', 'witkoff ceasefire',
+            'us special envoy israel', 'us envoy hostage',
+            # International brake signals
+            'un security council israel', 'un ceasefire vote',
+            'france israel ceasefire', 'uk israel pressure',
+            'europe israel sanctions',
+            # Hebrew / Arabic
+            'אמריקה ישראל', 'ארה"ב מאשרת', 'טראמפ ישראל',
+            'أمريكا تضوء خضراء لإسرائيل', 'ترامب إسرائيل',
+            'سنتكوم إسرائيل',
         ],
-        'baseline_statements_per_week': 8,
+        'baseline_statements_per_week': 10,
     },
     'domestic_opposition': {
         'name': 'Domestic Opposition / Hostage Families',
@@ -1199,6 +1251,130 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=الضفة+الغربية+ضم+مستوطنات&hl=ar&gl=SA&ceid=SA:ar", 0.95),
 ]
 
+# Additional RSS feeds (v2.2)
+RHETORIC_RSS_FEEDS += [
+    # Hezbollah daily operational claims
+    ("https://news.google.com/rss/search?q=Hezbollah+rocket+salvo+Israel+2026&hl=en&gl=US&ceid=US:en", 1.1),
+    ("https://news.google.com/rss/search?q=Hezbollah+targets+northern+Israel+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Kiryat+Shmona+rocket+Hezbollah&hl=en&gl=US&ceid=US:en", 1.0),
+    # Houthi conflict entry / solidarity signals
+    ("https://news.google.com/rss/search?q=Houthi+operation+Israel+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Ansar+Allah+missile+Israel+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Yemen+enters+war+Israel+Gaza&hl=en&gl=US&ceid=US:en", 0.95),
+    # Israel Katz / Lebanon occupation
+    ("https://news.google.com/rss/search?q=Israel+Katz+Lebanon+occupation+2026&hl=en&gl=US&ceid=US:en", 1.1),
+    ("https://news.google.com/rss/search?q=Israel+south+Lebanon+buffer+zone+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Trump / US coordination
+    ("https://news.google.com/rss/search?q=Trump+Israel+Iran+2026&hl=en&gl=US&ceid=US:en", 1.1),
+    ("https://news.google.com/rss/search?q=Trump+Israel+ceasefire+hostages+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=CENTCOM+Israel+Middle+East+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Rubio+Israel+Iran+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    # Truth Social / Trump direct
+    ("https://truthsocial.com/@realDonaldTrump.rss", 1.2),
+]
+
+# ============================================
+# NITTER -- Primary source Twitter/X accounts
+# ============================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.tiekoetter.com",
+]
+
+NITTER_ACCOUNTS_ISRAEL = [
+    # US policy — greenlight/brake signals
+    ("realDonaldTrump", 1.2, "Trump — Israel/Iran/ceasefire direct statements"),
+    ("SecRubio",        1.1, "US SecState — Israel policy, Iran deal signals"),
+    ("CENTCOM",         1.0, "CENTCOM — regional force posture, Houthi strikes"),
+    ("StateDept",       1.0, "State Dept — ceasefire pressure, diplomatic signals"),
+    ("POTUS",           1.0, "White House — executive Israel statements"),
+    ("Witkoff",         1.1, "Steve Witkoff — hostage/ceasefire envoy"),
+    # IDF / Israeli official
+    ("IDF",             1.2, "IDF official — strike claims, operational language"),
+    ("AvichayAdraee",   1.1, "IDF Arabic spokesperson — Arabic-language claims"),
+    ("IsraeliPM",       1.1, "Israeli PM office — Netanyahu statements"),
+    # Hezbollah / inbound monitoring
+    ("ManarNewsEN",     1.1, "Al-Manar English — Hezbollah operational claims"),
+    ("AlMayadeenEng",   1.0, "Al Mayadeen — Hezbollah/resistance claims"),
+    # Houthi monitoring
+    ("YemenArmy1",      1.0, "Houthi military — operation announcements"),
+    ("AnsarAllahPK",    1.0, "Ansar Allah — conflict entry/operation claims"),
+    # Analysis
+    ("LongWarJournal",  0.9, "Long War Journal — operational analysis"),
+]
+
+
+def _fetch_nitter_israel(username, weight=1.0, timeout=8):
+    import re as _re
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                desc_el    = item.find("description")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                desc = ""
+                if desc_el is not None and desc_el.text:
+                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
+                posts.append({
+                    "title":       title,
+                    "url":         link,
+                    "published":   pub,
+                    "description": desc,
+                    "source":      f"Nitter @{username}",
+                    "weight":      weight,
+                })
+            if posts:
+                print(f"[Israel Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Israel Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Israel Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_israel(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_ISRAEL:
+        posts = _fetch_nitter_israel(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Israel Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
+
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 ISRAEL_SUBREDDITS = ['IsraelPalestine', 'geopolitics', 'CredibleDefense',
                      'worldnews', 'Israel', 'Palestine']
@@ -1318,6 +1494,13 @@ def fetch_rhetoric_articles(days=3):
     except Exception as e:
         print(f"[Israel Rhetoric] Reddit error: {e}")
 
+    # Nitter — primary source accounts (v2.2)
+    try:
+        nitter_posts = fetch_nitter_israel(days=days)
+        articles.extend(nitter_posts)
+    except Exception as e:
+        print(f"[Israel Rhetoric] Nitter error: {e}")
+
     seen = set()
     unique = []
     for a in articles:
@@ -1327,8 +1510,10 @@ def fetch_rhetoric_articles(days=3):
             unique.append(a)
 
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
+    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    print(f"[Israel Rhetoric] Total unique: {len(unique)} ({len(unique)-tg_c-red_c} RSS + {tg_c} TG + {red_c} Reddit)")
+    rss_c = len(unique) - tg_c - nit_c - red_c
+    print(f"[Israel Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
     return unique, tg_messages
 
 
