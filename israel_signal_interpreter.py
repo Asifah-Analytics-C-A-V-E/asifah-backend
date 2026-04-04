@@ -1,7 +1,7 @@
 """
 israel_signal_interpreter.py
 Asifah Analytics — ME Backend Module
-v1.0.0
+v1.0.0 - April 4, 2026
 
 Signal interpretation engine for the Israel Rhetoric Tracker.
 Provides three analytical outputs from current tracker state:
