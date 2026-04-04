@@ -1,6 +1,6 @@
 """
 Telegram Signal Source for Asifah Analytics
-v1.1.0 — March 2026
+v1.1.0 — April 4, 2026
 
 Bridges Telethon (async) with Flask (sync) to pull messages
 from monitored Telegram channels across theatres:
