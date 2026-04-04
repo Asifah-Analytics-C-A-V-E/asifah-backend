@@ -1,6 +1,6 @@
 """
 Asifah Analytics Backend v3.0.0
-February 8, 2026
+April 4, 2026
 
 All endpoints working:
 - /api/threat/<target> (hezbollah, iran, houthis, syria)
