@@ -214,10 +214,25 @@ IRAN_CHANNELS = [
     # CENTCOM / US response
     'CentcomOfficial',      # CENTCOM — US strikes on Iran, force posture
     'kann_news',            # Kan News Hebrew — Israeli perspective on Iran
-    # Soft power / influence operations — Western-audience targeting
-    'EnglishAlam',          # Al-Alam English — Iran state, softer narrative framing
-    'IranianDiplomacy',     # Iranian diplomacy narratives, soft power framing  
-    'resistance_news',      # Resistance News Network — English, anti-war amplification
+    'IranianDiplomacy',     # Iranian diplomacy narratives, soft power framing
+    # ── NEW: Persian-language state/IRGC sources ──
+    'farsna',               # Fars News Persian — IRGC-affiliated, Persian domestic signals (distinct from FarsNewsAgency EN)
+    'iribnews',             # IRIB News — Islamic Republic Broadcasting, official state TV
+    'mashreghnews',         # Mashregh News — IRGC-affiliated hardline outlet, operational signals
+    'mashreghnews_channel', # Mashregh News secondary channel — broader coverage
+    'snntv',                # SNN TV — Students News Network, Basij-linked, domestic mobilization signals
+    'TasminNews',           # Tasmin News Persian — IRGC-affiliated Persian (complements tasnimnews_en EN)
+    'roozplus_ir',          # Rooz Plus — reformist/news aggregator, domestic mood and dissent signals
+    'khabar_fouri',         # Khabar Fouri — Persian breaking news, high-speed domestic signal
+    # ── NEW: IRGC official and operational ──
+    'Sepah_Pasdaran',       # IRGC official Telegram — direct Sepah/Pasdaran announcements
+    'BisimchiMedia',        # Bisimchi Media — frontline IRGC/resistance axis operational coverage
+    'sepah_cyberi_iran',    # IRGC Cyber Army — cyber operations, electronic warfare signals
+    'qods_com',             # Qods (Jerusalem) — IRGC Quds Force affiliated outlet
+    # ── NEW: Supreme National Security Council mouthpiece ──
+    'nour_news',            # Nour News — SNSC mouthpiece, highest-level regime signaling
+    # ── NEW: OSINT ──
+    'GeoPWatch',            # Geopolitics Watch — OSINT, Iran regional operations tracking
 ]
 
 EXTENDED_CHANNELS = [
