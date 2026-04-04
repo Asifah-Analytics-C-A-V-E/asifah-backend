@@ -285,7 +285,40 @@ ACTORS = {
         ],
         'baseline_statements_per_week': 7,
     },
+    'us_envoy': {
+        'name': 'US Envoy / CENTCOM (Syria)',
+        'flag': '🇺🇸',
+        'icon': '🤝',
+        'color': '#0369a1',
+        'role': 'US Policy / Diplomatic Signal',
+        'description': 'Tom Barrack (Special Envoy), CENTCOM, State Dept — US Syria policy, SDF support, HTS engagement',
+        'spokespersons': [
+            'tom barrack', 'barrack syria', 'us special envoy syria',
+            'centcom syria', 'state department syria', 'rubio syria',
+            'trump syria', 'us envoy syria',
+        ],
+        'keywords': [
+            # Tom Barrack — Special Envoy, primary signal source
+            'tom barrack', 'barrack syria', 'barrack hts', 'barrack damascus',
+            'barrack jolani', 'barrack sharaa', 'barrack envoy',
+            'us special envoy syria', 'trump envoy syria',
+            # US policy / CENTCOM
+            'centcom syria', 'us forces syria', 'us troops syria',
+            'us military syria', 'operation inherent resolve',
+            'us sdf syria', 'us kurds syria', 'us backed sdf',
+            'us sanctions syria', 'us lift sanctions syria',
+            'us recognize syria', 'us engage hts', 'us hts designation',
+            'rubio syria', 'trump syria policy', 'us syria strategy',
+            'state department syria', 'us embassy syria',
+            'us aid syria', 'us reconstruction syria',
+            # Arabic
+            'توم باراك سوريا', 'المبعوث الأمريكي سوريا',
+            'القوات الأمريكية سوريا', 'السياسة الأمريكية سوريا',
+        ],
+        'baseline_statements_per_week': 5,
+    },
 }
+
 
 
 # ============================================
@@ -478,6 +511,12 @@ ACTOR_KEYWORDS = {
     'turkey': [
         'turkey syria', 'erdogan syria', 'turkish', 'ankara syria',
         'hakan fidan', 'تركيا سوريا', 'أردوغان',
+    ],
+    'us_envoy': [
+        'tom barrack', 'barrack syria', 'us special envoy syria',
+        'centcom syria', 'us forces syria', 'rubio syria',
+        'trump syria', 'us sdf', 'us sanctions syria',
+        'us hts', 'توم باراك', 'المبعوث الأمريكي سوريا',
     ],
 }
 
@@ -823,6 +862,115 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=חיזבאללה+נשק+סוריה&hl=iw&gl=IL&ceid=IL:iw", 0.95),
 ]
 
+# Additional RSS feeds (v2.1)
+RHETORIC_RSS_FEEDS += [
+    # Syria Direct
+    ("https://syriadirect.org/feed/", 1.0),
+    # SOHR
+    ("https://www.syriahr.com/en/feed/", 1.0),
+    # US Envoy / Barrack signals
+    ("https://news.google.com/rss/search?q=Tom+Barrack+Syria+2026&hl=en&gl=US&ceid=US:en", 1.1),
+    ("https://news.google.com/rss/search?q=US+special+envoy+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=CENTCOM+Syria+SDF+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=US+Syria+sanctions+HTS+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    # IDF Syria direct feeds
+    ("https://news.google.com/rss/search?q=IDF+strikes+Syria+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Israel+Hezbollah+arms+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
+]
+
+# ============================================
+# NITTER -- Primary source Twitter/X accounts
+# ============================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.tiekoetter.com",
+]
+
+NITTER_ACCOUNTS_SYRIA = [
+    ("TomBarrack",      1.3, "US Special Envoy -- primary Syria policy signal"),
+    ("StateDept",       1.0, "State Dept -- Syria sanctions, HTS engagement"),
+    ("CENTCOM",         1.0, "CENTCOM -- Syria force posture, SDF, ISIS strikes"),
+    ("SecRubio",        1.0, "US SecState -- Syria recognition/sanctions signals"),
+    ("realDonaldTrump", 1.1, "Trump -- Syria policy direction"),
+    ("IDF",             1.1, "IDF official -- Syria strike announcements"),
+    ("AvichayAdraee",   1.1, "IDF Arabic spokesperson -- Syria strike claims"),
+    ("MazloumAbdi",     1.1, "SDF Commander -- Kurdish forces statements"),
+    ("SyriaDirectNews", 0.9, "Syria Direct -- ground reporting"),
+    ("SOHR_News",       0.9, "SOHR -- strike/casualty reports"),
+]
+
+
+def _fetch_nitter_syria(username, weight=1.0, timeout=8):
+    import re as _re
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                desc_el    = item.find("description")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                desc = ""
+                if desc_el is not None and desc_el.text:
+                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
+                posts.append({
+                    "title":       title,
+                    "url":         link,
+                    "published":   pub,
+                    "description": desc,
+                    "source":      f"Nitter @{username}",
+                    "weight":      weight,
+                })
+            if posts:
+                print(f"[Syria Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Syria Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Syria Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_syria(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_SYRIA:
+        posts = _fetch_nitter_syria(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Syria Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
+
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 SYRIA_SUBREDDITS = ['syriancivilwar', 'geopolitics', 'CredibleDefense', 'worldnews', 'Syria']
 SYRIA_REDDIT_KEYWORDS = [
@@ -987,6 +1135,14 @@ def fetch_rhetoric_articles(days=3):
     except Exception as e:
         print(f"[Syria Rhetoric] Reddit error: {e}")
 
+    # Nitter — executive & primary source accounts (v2.1)
+    try:
+        nitter_posts = fetch_nitter_syria(days=days)
+        articles.extend(nitter_posts)
+        print(f"[Syria Rhetoric] Nitter: {len(nitter_posts)} posts")
+    except Exception as e:
+        print(f"[Syria Rhetoric] Nitter error: {e}")
+
     seen = set()
     unique = []
     for a in articles:
@@ -996,9 +1152,10 @@ def fetch_rhetoric_articles(days=3):
             unique.append(a)
 
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
+    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    rss_c = len(unique) - tg_c - red_c
-    print(f"[Syria Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {red_c} Reddit)")
+    rss_c = len(unique) - tg_c - nit_c - red_c
+    print(f"[Syria Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
     return unique
 
 
