@@ -94,7 +94,7 @@ SYRIA_CHANNELS = [
     'QudsN',                # Quds News Network — resistance-axis, covers Syria/Lebanon/Gaza nexus
     # Syria-specific OSINT
     'syrianinfowar',        # Syrian Information War — OSINT, conflict tracking
-    'SyriaNewsNow',         # Syria News Now — general Syria updates
+    # Syria News Now username invalid — removed
     # Kurdish / SDF coverage
     'kurdistan24english',   # Kurdistan 24 English — SDF/Kurdish affairs
     # HTS / Islamist monitoring
@@ -166,8 +166,8 @@ ISRAEL_CHANNELS = [
     'kann_news',            # Kan News — Hebrew breaking, fast on military
     'channel14news',        # Channel 14 — right-leaning, fast on military ops
     # Israeli political — War Cabinet, annexation rhetoric
-    'Netanyahu_War_Room',   # Netanyahu official Telegram
-    'Israel_HaYom',         # Israel Hayom — right-wing, settler/annexation signals
+    'NetanyahuFCB',         # Netanyahu verified Telegram channel
+    'IsraelHayomHeb',       # Israel Hayom Hebrew — right-wing, settler/annexation signals
     # Threat actors — inbound signals
     'ManarNewsEN',          # Al-Manar English — Hezbollah ops against Israel
     'almayadeenenglish',    # Al-Mayadeen — resistance axis ops
