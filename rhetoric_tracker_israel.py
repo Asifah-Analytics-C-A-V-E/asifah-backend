@@ -76,15 +76,6 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
 
-# Signal interpreter — So What, Red Lines, Historical Patterns
-try:
-    from israel_signal_interpreter import interpret_signals
-    INTERPRETER_AVAILABLE = True
-    print("[Israel Rhetoric] ✅ Signal interpreter loaded")
-except ImportError:
-    INTERPRETER_AVAILABLE = False
-    print("[Israel Rhetoric] ⚠️ Signal interpreter not available")
-
 # ============================================
 # CONFIG
 # ============================================
@@ -107,7 +98,7 @@ OREF_HEADERS = {
 }
 
 # Tzeva Adom English Telegram channel — Layer 1 fallback (no geo-block)
-TZEVA_ADOM_CHANNELS = ['tzevaadom_en', 'tzevaadom']
+TZEVA_ADOM_CHANNELS = ['tzevaadom_en']  # tzevaadom (bare) invalid — removed
 
 try:
     from telegram_signals import fetch_telegram_signals_israel
@@ -1909,14 +1900,6 @@ def run_israel_rhetoric_scan(days=3):
 
     # Write fingerprint
     _write_crosstheater_signal(result)
-
-    # Signal interpretation — So What, Red Lines, Historical Patterns
-    if INTERPRETER_AVAILABLE:
-        try:
-            result['interpretation'] = interpret_signals(result)
-            print(f"[Israel Rhetoric] ✅ Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {result['interpretation']['historical_matches'][0]['similarity'] if result['interpretation']['historical_matches'] else 'none'}%")
-        except Exception as e:
-            print(f"[Israel Rhetoric] ⚠️ Interpreter error (non-fatal): {e}")
 
     # Re-save
     _redis_set(RHETORIC_CACHE_KEY, result)
