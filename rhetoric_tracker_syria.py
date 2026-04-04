@@ -1,6 +1,6 @@
 """
 Syria Rhetoric Tracker — Asifah Analytics
-v2.0.0 — March 2026
+v2.0.0 — April 4, 2026
 
 Upgraded to Yemen/Lebanon/Iraq gold standard:
   - Multi-actor matching (was single first-match)
