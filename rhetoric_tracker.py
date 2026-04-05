@@ -73,6 +73,15 @@ import os
 import threading
 from collections import defaultdict
 
+# Signal interpreter -- So What, Red Lines, Historical Patterns
+try:
+    from lebanon_signal_interpreter import interpret_signals as lebanon_interpret_signals
+    INTERPRETER_AVAILABLE = True
+    print("[Lebanon Rhetoric] Signal interpreter loaded")
+except ImportError:
+    INTERPRETER_AVAILABLE = False
+    print("[Lebanon Rhetoric] Warning: Signal interpreter not available")
+
 # Telegram signal source
 try:
     from telegram_signals import fetch_telegram_signals
@@ -1204,7 +1213,21 @@ def fetch_lebanon_articles(days=3):
             seen.add(a['url'])
             unique.append(a)
 
-    print(f"[Rhetoric] Total unique articles: {len(unique)}")
+    # Nitter -- primary source accounts
+    try:
+        nitter_posts = fetch_nitter_lebanon(days=days)
+        for p in nitter_posts:
+            u = p.get('url', '')
+            if u and u not in seen:
+                seen.add(u)
+                unique.append(p)
+    except Exception as e:
+        print(f"[Lebanon Rhetoric] Nitter error: {e}")
+
+    tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
+    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
+    rss_c = len(unique) - tg_c - nit_c
+    print(f"[Rhetoric] Total unique articles: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter)")
     return unique
 
 
@@ -1547,6 +1570,96 @@ def _build_empty_result():
 
 
 # ========================================
+# NITTER -- Primary source accounts
+# Lebanon: IDF, Israeli leadership, LAF, UNIFIL, France
+# ========================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.woodland.cafe",
+]
+
+NITTER_ACCOUNTS_LEBANON = [
+    ("IDF",                 1.3, "IDF -- Lebanon strike claims, Hezbollah warnings, GOL ultimatums"),
+    ("AvichayAdraee",       1.2, "IDF Arabic spokesperson -- operational claims vs Hezbollah"),
+    ("IsraeliPM",           1.1, "Israeli PM -- Lebanon red line statements"),
+    ("KatzIsrael",          1.1, "Defense Minister Katz -- Hezbollah/Lebanon ultimatums"),
+    ("CENTCOM",             1.0, "CENTCOM -- Lebanon/Hezbollah operations"),
+    ("StateDept",           1.0, "State Dept -- Lebanon diplomatic signals"),
+    ("LebarmyOfficial",     1.1, "Lebanese Armed Forces -- LAF deployment signals"),
+    ("UNIFIL_Southlebanon", 1.0, "UNIFIL -- Blue Line incidents, withdrawal signals"),
+    ("francediplo_EN",      0.9, "French MFA -- Lebanon diplomatic push"),
+    ("LongWarJournal",      0.9, "Long War Journal -- Hezbollah/Lebanon analysis"),
+    ("ElintNews",           0.9, "ELINT News -- Lebanon/Hezbollah OSINT"),
+]
+
+
+def _fetch_nitter_lebanon(username, weight=1.0, timeout=8):
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                posts.append({
+                    "title":     title,
+                    "url":       link,
+                    "published": pub,
+                    "source":    f"Nitter @{username}",
+                    "weight":    weight,
+                })
+            if posts:
+                print(f"[Lebanon Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Lebanon Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Lebanon Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_lebanon(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_LEBANON:
+        posts = _fetch_nitter_lebanon(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Lebanon Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
+
+
+# ========================================
 # CORE SCAN FUNCTION
 # ========================================
 
@@ -1869,10 +1982,23 @@ def run_rhetoric_scan(days=3):
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
+    # Signal interpretation -- So What, Red Lines, Historical Patterns
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = lebanon_interpret_signals(result)
+            best = result['interpretation']['historical_matches']
+            best_pct = best[0]['similarity'] if best else 'none'
+            laf_gap = result['interpretation']['so_what'].get('laf_enforcement_gap', False)
+            iran_dir = result['interpretation']['so_what'].get('iran_directing', False)
+            print(f"[Lebanon Rhetoric] Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%"
+                  f"{' | LAF GAP' if laf_gap else ''}{' | IRAN DIRECTING' if iran_dir else ''}")
+        except Exception as e:
+            print(f"[Lebanon Rhetoric] Warning: Interpreter error (non-fatal): {e}")
+
     # ── Re-save with all enriched fields ──
     _redis_set(RHETORIC_CACHE_KEY, result, ttl=24 * 3600)
 
-    print(f"[Rhetoric Scan] ✅ Complete in {scan_time}s — "
+    print(f"[Rhetoric Scan] Complete in {scan_time}s -- "
           f"level: {theatre_info['label']} ({theatre_level}), "
           f"score: {rhetoric_score}, specificity: {theatre_specificity}/10, "
           f"delta: {result.get('delta', {}).get('direction', 'n/a') if result.get('delta') else 'n/a'}")
