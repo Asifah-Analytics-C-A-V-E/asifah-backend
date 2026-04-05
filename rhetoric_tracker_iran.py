@@ -1072,7 +1072,6 @@ RHETORIC_RSS_FEEDS = [
 NITTER_MIRRORS = [
     "nitter.poast.org",
     "nitter.privacydev.net",
-    "nitter.tiekoetter.com",
     "nitter.woodland.cafe",
 ]
 
