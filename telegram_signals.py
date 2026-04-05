@@ -65,8 +65,8 @@ LEBANON_CHANNELS = [
 YEMEN_CHANNELS = [
     # Houthi / Ansar Allah
     'YemenMonitor',         # Yemen Monitor — conflict tracking
-    'ansarallah_en',        # Ansar Allah English
-    'almasirah_net',        # Al-Masirah TV — Houthi-affiliated
+    'QudsN',                # Quds News Network -- covers Houthi/Yemen ops
+    'almayadeenenglish',    # Al-Mayadeen -- Houthi resistance axis
     # Israeli/IDF — watching IDF actions against Houthis
     'avichay_adraee',       # IDF Arabic spokesperson
     'idfonline',            # IDF English
@@ -120,20 +120,15 @@ IRAQ_CHANNELS = [
     # Palestinian / Resistance axis breaking news
     'QudsN',                # Quds News Network — resistance-axis, covers Iraq/PMF nexus
     # Iraqi state / official
-    'IraqiNewsAgency',      # INA — Iraqi News Agency, official Baghdad positionsIRAQ_CHANNELS = [
-    # Iraqi state / official
-    'IraqiNewsAgency',      # INA — Iraqi News Agency, official Baghdad positions
-    # PMF / Hashd al-Shaabi — Shi'a militia rhetoric (highest priority for escalation)
-    'SabreenNews',          # Sabreen News — PMF/Hashd-affiliated, direct militia statements
-    'kataibmedia',          # Kata'ib Hezbollah official media wing — direct statements
-    'alwahdapress',         # Al-Wahda Press — carries Kata'ib/PMF formal statements
-    'almanarnews',          # Al-Manar Arabic — direct militia/resistance axis coverage
+    'IraqiNewsAgency',      # INA -- Iraqi News Agency (may need handle verification)
+    # PMF / Hashd al-Shaabi
+    # SabreenNews, kataibmedia, alwahdapress -- handles unverified, removed
+    'almanarnews',          # Al-Manar Arabic -- militia/resistance axis coverage
     'nayaforiraq',          # Naya For Iraq — Iraq/Levant, covers PMF activity
     # Kurdish / KRG
     'kurdistan24english',   # Kurdistan 24 English — KRG, Peshmerga, Kirkuk tensions
-    'BasNews_Arabic',       # Bas News Arabic — Sulaymaniyah/PUK perspective
-    # Independent Iraqi English OSINT
-    'Shafaq_News',          # Shafaq News — best multilingual Iraq security coverage
+    'BasNewsKurdish',       # Bas News -- Kurdish perspective (handle needs verification)
+    # Shafaq_News -- handle unverified, removed
     # Iran nexus — IRGC/Quds Force direction of Iraqi militias
     'IranIntl_En',          # Iran International EN — Iran-PMF nexus
     'ManarNewsEN',          # Al-Manar EN — axis of resistance, Iraq ops
@@ -153,8 +148,7 @@ ASIA_PACIFIC_CHANNELS = [
 
 ISRAEL_CHANNELS = [
     # Tzeva Adom / Alert channels — real-time rocket/missile alerts
-    'tzevaadom_en',         # Tzeva Adom English — every Pikud HaOref alert in real time
-    'tzevaadom',            # Tzeva Adom Hebrew — primary alert feed
+    'tzevaadom_en',         # Tzeva Adom English -- every Pikud HaOref alert in real time
     'pikudHaoref',          # Pikud HaOref official channel
     # IDF / Military
     'idfonline',            # IDF English spokesperson — official strike/ops announcements
@@ -166,8 +160,7 @@ ISRAEL_CHANNELS = [
     'kann_news',            # Kan News — Hebrew breaking, fast on military
     'channel14news',        # Channel 14 — right-leaning, fast on military ops
     # Israeli political — War Cabinet, annexation rhetoric
-    'NetanyahuFCB',         # Netanyahu verified Telegram channel
-    'IsraelHayomHeb',       # Israel Hayom Hebrew — right-wing, settler/annexation signals
+    'IsraelHayomHeb',       # Israel Hayom Hebrew -- settler/annexation signals
     # Threat actors — inbound signals
     'ManarNewsEN',          # Al-Manar English — Hezbollah ops against Israel
     'almayadeenenglish',    # Al-Mayadeen — resistance axis ops
@@ -198,8 +191,8 @@ IRAN_CHANNELS = [
     'YemenMonitor',         # Yemen Monitor — Houthi operations
     'WarMonitors',          # War Monitor — Houthi/PMF strikes
     # Proxy network — Iraq PMF
-    'SabreenNews',          # Sabreen News — PMF/Hashd statements
-    'kataibmedia',          # Kata'ib Hezbollah — direct IRGC proxy statements
+    # SabreenNews, kataibmedia -- handles unverified, removed
+    'almanarnews',          # Al-Manar Arabic -- IRGC proxy statements
     'nayaforiraq',          # Naya For Iraq — Iraq/Iran nexus
     # OSINT — Iran operations
     'OSINTdefender',        # OSINT Defender — Iran strikes, Operation True Promise tracking
