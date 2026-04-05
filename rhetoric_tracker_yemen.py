@@ -40,7 +40,16 @@ try:
     print("[Yemen Rhetoric] ✅ Telegram signals available")
 except ImportError:
     TELEGRAM_AVAILABLE = False
-    print("[Yemen Rhetoric] ⚠️ Telegram signals not available — RSS only")
+    print("[Yemen Rhetoric] Warning: Telegram signals not available -- RSS only")
+
+# Signal interpreter -- So What, Red Lines, Historical Patterns
+try:
+    from yemen_signal_interpreter import interpret_signals as yemen_interpret_signals
+    INTERPRETER_AVAILABLE = True
+    print("[Yemen Rhetoric] Signal interpreter loaded")
+except ImportError:
+    INTERPRETER_AVAILABLE = False
+    print("[Yemen Rhetoric] Warning: Signal interpreter not available")
 
 RHETORIC_CACHE_KEY  = 'yemen_rhetoric_cache'
 RHETORIC_CACHE_TTL  = 6 * 3600  # 6 hours
@@ -260,6 +269,97 @@ YEMEN_REDDIT_KEYWORDS = [
     'yemen war', 'houthi missile', 'houthi drone',
     'somaliland israel', 'shipping attack',
 ]
+
+
+# ============================================
+# NITTER -- Primary source accounts
+# Yemen/Red Sea: CENTCOM, Trump, IDF, Houthi OSINT
+# ============================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.woodland.cafe",
+]
+
+NITTER_ACCOUNTS_YEMEN = [
+    ("CENTCOM",          1.2, "CENTCOM -- Red Sea operations, Houthi strikes"),
+    ("realDonaldTrump",  1.2, "Trump -- Hormuz/Houthi ultimatum language"),
+    ("SecRubio",         1.1, "Rubio -- Iran/Houthi policy signals"),
+    ("IDF",              1.1, "IDF -- strikes on Houthi assets, Yemen operations"),
+    ("AvichayAdraee",    1.0, "IDF Arabic -- strike claims vs Houthi"),
+    ("OSINTdefender",    1.0, "OSINT Defender -- Red Sea/Houthi maritime tracking"),
+    ("YemenMonitor1",    1.0, "Yemen Monitor -- conflict tracking"),
+    ("LongWarJournal",   0.9, "Long War Journal -- Houthi/proxy analysis"),
+    ("ElintNews",        0.9, "ELINT News -- Red Sea missile/drone OSINT"),
+]
+
+
+def _fetch_nitter_yemen(username, weight=1.0, timeout=8):
+    import re as _re
+    from email.utils import parsedate_to_datetime
+    import xml.etree.ElementTree as _ET
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = _ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                posts.append({
+                    "title":     title,
+                    "url":       link,
+                    "published": pub,
+                    "source":    f"Nitter @{username}",
+                    "weight":    weight,
+                })
+            if posts:
+                print(f"[Yemen Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Yemen Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Yemen Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_yemen(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_YEMEN:
+        posts = _fetch_nitter_yemen(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Yemen Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
 
 
 def fetch_reddit_yemen(days=3):
@@ -573,10 +673,22 @@ def fetch_rhetoric_articles(days=3):
             seen.add(a['url'])
             unique.append(a)
 
-    tg_count = sum(1 for a in unique if 'Telegram' in a.get('source',''))
+    # Nitter -- primary source accounts
+    try:
+        nitter_posts = fetch_nitter_yemen(days=days)
+        for p in nitter_posts:
+            u = p.get('url', '')
+            if u and u not in seen:
+                seen.add(u)
+                unique.append(p)
+    except Exception as e:
+        print(f"[Yemen Rhetoric] Nitter error: {e}")
+
+    tg_count     = sum(1 for a in unique if 'Telegram' in a.get('source',''))
+    nit_count    = sum(1 for a in unique if 'Nitter' in a.get('source',''))
     reddit_count = sum(1 for a in unique if a.get('source','').startswith('r/'))
-    rss_final = len(unique) - tg_count - reddit_count
-    print(f"[Yemen Rhetoric] Total unique: {len(unique)} ({rss_final} RSS + {tg_count} Telegram + {reddit_count} Reddit)")
+    rss_final    = len(unique) - tg_count - nit_count - reddit_count
+    print(f"[Yemen Rhetoric] Total unique: {len(unique)} ({rss_final} RSS + {tg_count} Telegram + {nit_count} Nitter + {reddit_count} Reddit)")
     return unique
 
 
@@ -1125,10 +1237,21 @@ def run_houthi_rhetoric_scan(days=3):
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
+    # Signal interpretation -- So What, Red Lines, Historical Patterns
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = yemen_interpret_signals(result)
+            best = result['interpretation']['historical_matches']
+            best_pct = best[0]['similarity'] if best else 'none'
+            dual = result['interpretation']['so_what'].get('dual_chokepoint', False)
+            print(f"[Yemen Rhetoric] Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%{' | DUAL CHOKEPOINT ACTIVE' if dual else ''}")
+        except Exception as e:
+            print(f"[Yemen Rhetoric] Warning: Interpreter error (non-fatal): {e}")
+
     # ── Re-save with all enriched fields ──
     _redis_set(RHETORIC_CACHE_KEY, result)
 
-    print(f"[Yemen Rhetoric] ✅ Complete. Theatre level: {result['theatre_level']} | Specificity: {theatre_specificity}/10 | Delta: {result.get('delta', {}).get('direction', 'n/a')}")
+    print(f"[Yemen Rhetoric] Complete. Theatre level: {result['theatre_level']} | Specificity: {theatre_specificity}/10 | Delta: {result.get('delta', {}).get('direction', 'n/a')}")
     return result
 
 def _bg_rhetoric_scan():
