@@ -83,6 +83,15 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
 
+# Signal interpreter — So What, Red Lines, Historical Patterns
+try:
+    from iran_signal_interpreter import interpret_signals as iran_interpret_signals
+    INTERPRETER_AVAILABLE = True
+    print("[Iran Rhetoric] ✅ Signal interpreter loaded")
+except ImportError:
+    INTERPRETER_AVAILABLE = False
+    print("[Iran Rhetoric] ⚠️ Signal interpreter not available")
+
 # ============================================
 # CONFIG
 # ============================================
@@ -1055,6 +1064,106 @@ RHETORIC_RSS_FEEDS = [
     ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
 ]
 
+# ============================================
+# NITTER -- Primary source Twitter/X accounts
+# Iran-specific: Trump, Rubio, CENTCOM, IDF, Witkoff
+# Mirror fallback — no API key required.
+# ============================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.tiekoetter.com",
+    "nitter.woodland.cafe",
+]
+
+NITTER_ACCOUNTS_IRAN = [
+    ("realDonaldTrump", 1.3, "Trump — Iran ultimatum, deal, maximum pressure direct statements"),
+    ("SecRubio",        1.2, "US SecState — Iran sanctions, deal signals, red lines"),
+    ("CENTCOM",         1.1, "CENTCOM — force posture, Houthi strikes, carrier deployments"),
+    ("POTUS",           1.0, "White House — executive Iran policy"),
+    ("StateDept",       1.0, "State Dept — diplomatic signals, sanctions"),
+    ("Witkoff",         1.1, "Steve Witkoff — Iran nuclear deal envoy"),
+    ("IDF",             1.1, "IDF — strike posture, Iran targeting language"),
+    ("AvichayAdraee",   1.0, "IDF Arabic spokesperson — strike claims vs Iran/proxies"),
+    ("IsraeliPM",       1.1, "Israeli PM — Iran red line statements"),
+    ("IranIntl",        1.0, "Iran International — opposition, domestic signals"),
+    ("AlinejadMasih",   0.9, "Iranian activist — domestic pressure signals"),
+    ("ElintNews",       0.9, "ELINT News — Iran missile/nuclear OSINT"),
+    ("LongWarJournal",  0.9, "Long War Journal — proxy network analysis"),
+]
+
+
+def _fetch_nitter_iran(username, weight=1.0, timeout=8):
+    import re as _re
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                desc_el    = item.find("description")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                desc = ""
+                if desc_el is not None and desc_el.text:
+                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
+                posts.append({
+                    "title":       title,
+                    "url":         link,
+                    "published":   pub,
+                    "description": desc,
+                    "source":      f"Nitter @{username}",
+                    "weight":      weight,
+                })
+            if posts:
+                print(f"[Iran Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Iran Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Iran Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_iran(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_IRAN:
+        posts = _fetch_nitter_iran(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Iran Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
+
+
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 IRAN_SUBREDDITS = ['iran', 'geopolitics', 'CredibleDefense', 'worldnews', 'IRG']
 IRAN_REDDIT_KEYWORDS = [
@@ -1280,10 +1389,22 @@ def fetch_rhetoric_articles(days=3):
             seen.add(u)
             unique.append(a)
 
+    # Nitter — primary source accounts (v2.1)
+    try:
+        nitter_posts = fetch_nitter_iran(days=days)
+        for p in nitter_posts:
+            u = p.get('url', '')
+            if u and u not in seen:
+                seen.add(u)
+                unique.append(p)
+    except Exception as e:
+        print(f"[Iran Rhetoric] Nitter error: {e}")
+
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
+    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    rss_c = len(unique) - tg_c - red_c
-    print(f"[Iran Rhetoric] Total unique: {len(unique)} ({rss_c} RSS/GDELT + {tg_c} TG + {red_c} Reddit)")
+    rss_c = len(unique) - tg_c - nit_c - red_c
+    print(f"[Iran Rhetoric] Total unique: {len(unique)} ({rss_c} RSS/GDELT + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
     return unique
 
 
@@ -1643,6 +1764,16 @@ def run_iran_rhetoric_scan(days=3):
     result['crosstheater_coordination'] = _detect_crosstheater_coordination(
         proxy_activation_level, proxy_detail
     )
+
+    # Signal interpretation — So What, Red Lines, Historical Patterns
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = iran_interpret_signals(result)
+            best = result['interpretation']['historical_matches']
+            best_pct = best[0]['similarity'] if best else 'none'
+            print(f"[Iran Rhetoric] ✅ Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%")
+        except Exception as e:
+            print(f"[Iran Rhetoric] ⚠️ Interpreter error (non-fatal): {e}")
 
     # Re-save with all enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
