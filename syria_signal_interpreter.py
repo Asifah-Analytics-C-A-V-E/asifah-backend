@@ -287,7 +287,9 @@ def _score_red_lines(scan_data):
     ])
     normalization = _scan(['israel', 'us_envoy', 'hts'], [
         'normalize', 'normalization', 'peace deal', 'recognition israel',
-        'abraham accords', 'syria israel talks', 'diplomatic relations'
+        'abraham accords', 'syria israel talks', 'diplomatic relations',
+        'partnership with syria', 'unprecedented partnership', 'syria against hezbollah',
+        'israel syria cooperation', 'security cooperation syria', 'syria israel deal',
     ])
     sanctions_lift = _scan(['us_envoy', 'hts'], [
         'sanctions lifted', 'caesar act', 'sanctions relief',
