@@ -73,6 +73,15 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
     print("[Syria Rhetoric] ⚠️ Telegram signals not available — RSS only")
 
+# Signal interpreter -- So What, Red Lines, Historical Patterns
+try:
+    from syria_signal_interpreter import interpret_signals as syria_interpret_signals
+    INTERPRETER_AVAILABLE = True
+    print("[Syria Rhetoric] Signal interpreter loaded")
+except ImportError:
+    INTERPRETER_AVAILABLE = False
+    print("[Syria Rhetoric] Warning: Signal interpreter not available")
+
 RHETORIC_CACHE_KEY        = 'rhetoric:syria:latest'      # v2.0 unified key
 RHETORIC_CACHE_KEY_LEGACY = 'syria_rhetoric_cache'        # backward compat
 HISTORY_KEY               = 'rhetoric:syria:history'
@@ -841,41 +850,55 @@ def _detect_crosstheater_coordination():
 # RSS FEEDS
 # ============================================
 RHETORIC_RSS_FEEDS = [
+    # HTS / Post-Assad governance
+    ("https://news.google.com/rss/search?q=HTS+Syria+governance+Sharaa+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Ahmad+al-Sharaa+Syria+Jolani+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Hayat+Tahrir+al-Sham+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=HTS+Syria+conflict+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Syria+SDF+HTS+factions&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Israel+strikes+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Israeli strikes on Syria
+    ("https://news.google.com/rss/search?q=Israel+strikes+Syria+IDF+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Israel+Hezbollah+weapons+Syria&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=ISIS+Syria+resurgence+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Druze+Suwayda+Syria&hl=en&gl=US&ceid=US:en", 0.9),
-    ("https://news.google.com/rss/search?q=Turkey+SDF+Syria+Rojava&hl=en&gl=US&ceid=US:en", 0.9),
-    ("https://news.google.com/rss/search?q=Syria+Kurdish+forces+2026&hl=en&gl=US&ceid=US:en", 0.85),
-    ("https://news.google.com/rss/search?q=Syria+war+2026+factions&hl=en&gl=US&ceid=US:en", 0.85),
+    ("https://news.google.com/rss/search?q=IDF+strikes+Syria+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Israel+Hezbollah+arms+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Golan+Heights+Israel+Syria+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    # Arabic
-    ("https://news.google.com/rss/search?q=هيئة+تحرير+الشام+سوريا&hl=ar&gl=SA&ceid=SA:ar", 0.95),
-    ("https://news.google.com/rss/search?q=داعش+سوريا+2026&hl=ar&gl=SA&ceid=SA:ar", 0.9),
-    ("https://news.google.com/rss/search?q=إسرائيل+غارات+سوريا&hl=ar&gl=SA&ceid=SA:ar", 0.95),
-    ("https://news.google.com/rss/search?q=السويداء+الدروز+سوريا&hl=ar&gl=SA&ceid=SA:ar", 0.9),
-    ("https://news.google.com/rss/search?q=حزب+الله+سوريا+أسلحة&hl=ar&gl=SA&ceid=SA:ar", 0.9),
-    # Hebrew
-    ("https://news.google.com/rss/search?q=ישראל+סוריה+תקיפה&hl=iw&gl=IL&ceid=IL:iw", 0.95),
-    ("https://news.google.com/rss/search?q=חיזבאללה+נשק+סוריה&hl=iw&gl=IL&ceid=IL:iw", 0.95),
-]
-
-# Additional RSS feeds (v2.1)
-RHETORIC_RSS_FEEDS += [
-    # Syria Direct
-    ("https://syriadirect.org/feed/", 1.0),
-    # SOHR
-    ("https://www.syriahr.com/en/feed/", 1.0),
-    # US Envoy / Barrack signals
+    # Turkey / SDF / Kurdish
+    ("https://news.google.com/rss/search?q=Turkey+SDF+Syria+Rojava&hl=en&gl=US&ceid=US:en", 0.9),
+    ("https://news.google.com/rss/search?q=Turkey+SDF+Syria+Kurdish+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Turkey+Syria+military+operation+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Syria+Kurdish+forces+2026&hl=en&gl=US&ceid=US:en", 0.85),
+    ("https://news.google.com/rss/search?q=Erdogan+Syria+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    # ISIS resurgence
+    ("https://news.google.com/rss/search?q=ISIS+Syria+resurgence+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=ISIS+Deir+ez-Zor+Syria+desert+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Syria+war+2026+factions&hl=en&gl=US&ceid=US:en", 0.85),
+    # Iran expulsion / re-entry
+    ("https://news.google.com/rss/search?q=Iran+Syria+IRGC+expelled+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+proxy+Syria+Hezbollah+corridor+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Druze / Suwayda
+    ("https://news.google.com/rss/search?q=Druze+Suwayda+Syria&hl=en&gl=US&ceid=US:en", 0.9),
+    ("https://news.google.com/rss/search?q=Druze+Suwayda+Syria+autonomy+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Normalization / sanctions
+    ("https://news.google.com/rss/search?q=Syria+Israel+normalization+recognition+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Syria+sanctions+Caesar+Act+US+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # US Envoy / Barrack
     ("https://news.google.com/rss/search?q=Tom+Barrack+Syria+2026&hl=en&gl=US&ceid=US:en", 1.1),
     ("https://news.google.com/rss/search?q=US+special+envoy+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=CENTCOM+Syria+SDF+2026&hl=en&gl=US&ceid=US:en", 0.95),
     ("https://news.google.com/rss/search?q=US+Syria+sanctions+HTS+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    # IDF Syria direct feeds
-    ("https://news.google.com/rss/search?q=IDF+strikes+Syria+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Israel+Hezbollah+arms+Syria+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Arabic
+    ("https://news.google.com/rss/search?q=\u0647\u064a\u0626\u0629+\u062a\u062d\u0631\u064a\u0631+\u0627\u0644\u0634\u0627\u0645+\u0633\u0648\u0631\u064a\u0627&hl=ar&gl=SA&ceid=SA:ar", 0.95),
+    ("https://news.google.com/rss/search?q=\u0623\u062d\u0645\u062f+\u0627\u0644\u0634\u0631\u0639+\u0633\u0648\u0631\u064a\u0627+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
+    ("https://news.google.com/rss/search?q=\u062f\u0627\u0639\u0634+\u0633\u0648\u0631\u064a\u0627+2026&hl=ar&gl=SA&ceid=SA:ar", 0.9),
+    ("https://news.google.com/rss/search?q=\u0625\u0633\u0631\u0627\u0626\u064a\u0644+\u063a\u0627\u0631\u0627\u062a+\u0633\u0648\u0631\u064a\u0627&hl=ar&gl=SA&ceid=SA:ar", 0.95),
+    ("https://news.google.com/rss/search?q=\u0627\u0644\u0633\u0648\u064a\u062f\u0627\u0621+\u0627\u0644\u062f\u0631\u0648\u0632+\u0633\u0648\u0631\u064a\u0627&hl=ar&gl=SA&ceid=SA:ar", 0.9),
+    ("https://news.google.com/rss/search?q=\u062d\u0632\u0628+\u0627\u0644\u0644\u0647+\u0633\u0648\u0631\u064a\u0627+\u0623\u0633\u0644\u062d\u0629&hl=ar&gl=SA&ceid=SA:ar", 0.9),
+    # Hebrew
+    ("https://news.google.com/rss/search?q=\u05d9\u05e9\u05e8\u05d0\u05dc+\u05e1\u05d5\u05e8\u05d9\u05d4+\u05ea\u05e7\u05d9\u05e4\u05d4&hl=iw&gl=IL&ceid=IL:iw", 0.95),
+    ("https://news.google.com/rss/search?q=\u05d7\u05d9\u05d6\u05d1\u05d0\u05dc\u05dc\u05d4+\u05e0\u05e9\u05e7+\u05e1\u05d5\u05e8\u05d9\u05d4&hl=iw&gl=IL&ceid=IL:iw", 0.95),
+    # Direct sources
+    ("https://syriadirect.org/feed/", 1.0),
+    ("https://www.syriahr.com/en/feed/", 1.0),
 ]
 
 # ============================================
@@ -1478,6 +1501,21 @@ def run_syria_rhetoric_scan(days=3):
     # Cross-theater
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
+
+    # Signal interpretation -- So What, Red Lines, Historical Patterns
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = syria_interpret_signals(result)
+            best = result['interpretation']['historical_matches']
+            best_pct = best[0]['similarity'] if best else 'none'
+            low_sig = result['interpretation']['so_what'].get('low_signal_is_positive', False)
+            iran_exp = result['interpretation']['so_what'].get('iran_expelled', False)
+            print(f"[Syria Rhetoric] Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, "
+                  f"best match: {best_pct}%"
+                  f"{' | LOW-SIG-POSITIVE' if low_sig else ''}"
+                  f"{' | IRAN-EXPELLED' if iran_exp else ''}")
+        except Exception as e:
+            print(f"[Syria Rhetoric] Warning: Interpreter error (non-fatal): {e}")
 
     # Re-save with enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
