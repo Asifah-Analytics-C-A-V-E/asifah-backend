@@ -1,6 +1,6 @@
 """
 Asifah Analytics Backend v3.0.0
-April 4, 2026
+February 8, 2026
 
 All endpoints working:
 - /api/threat/<target> (hezbollah, iran, houthis, syria)
@@ -864,6 +864,7 @@ if SYRIA_HUMANITARIAN_AVAILABLE:
 if YEMEN_AVAILABLE:
     register_yemen_routes(app)
     register_houthi_rhetoric_routes(app)
+if SYRIA_RHETORIC_AVAILABLE:
     register_syria_rhetoric_routes(app)
 if IRAQ_RHETORIC_AVAILABLE:
     register_iraq_rhetoric_routes(app)
