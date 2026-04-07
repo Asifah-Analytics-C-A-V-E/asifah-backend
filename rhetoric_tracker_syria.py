@@ -88,7 +88,7 @@ HISTORY_KEY               = 'rhetoric:syria:history'
 BASELINE_KEY              = 'rhetoric_baseline:syria'
 CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'  # shared
 
-RHETORIC_CACHE_TTL = 6 * 3600
+RHETORIC_CACHE_TTL = 13 * 3600  # 13h -- covers 12h scan cycle + 1h buffer
 
 _rhetoric_running = False
 _rhetoric_lock    = threading.Lock()
@@ -1544,7 +1544,7 @@ def _bg_rhetoric_scan():
 
 def _start_periodic_scan(interval_hours=12):
     def _loop():
-        time.sleep(45)  # Stagger vs Lebanon/Yemen/Iraq
+        time.sleep(120)  # Stagger startup -- give backend time to stabilize
         while True:
             try:
                 run_syria_rhetoric_scan()
