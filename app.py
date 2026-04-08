@@ -60,6 +60,13 @@ try:
 except ImportError:
     IRAQ_RHETORIC_AVAILABLE = False
     print("[ME Backend] ⚠️ Iraq rhetoric module not available")
+try:
+    from me_regional_bluf import register_me_bluf_routes
+    ME_BLUF_AVAILABLE = True
+    print("[ME Backend] ✅ ME Regional BLUF engine loaded")
+except ImportError:
+    ME_BLUF_AVAILABLE = False
+    print("[ME Backend] ⚠️ ME Regional BLUF engine not available")
 
 try:
     from rhetoric_tracker_iran import register_iran_rhetoric_routes
@@ -864,10 +871,11 @@ if SYRIA_HUMANITARIAN_AVAILABLE:
 if YEMEN_AVAILABLE:
     register_yemen_routes(app)
     register_houthi_rhetoric_routes(app)
-if SYRIA_RHETORIC_AVAILABLE:
     register_syria_rhetoric_routes(app)
 if IRAQ_RHETORIC_AVAILABLE:
     register_iraq_rhetoric_routes(app)
+if ME_BLUF_AVAILABLE:
+    register_me_bluf_routes(app)
 
 if register_iran_rhetoric_routes:
     register_iran_rhetoric_routes(app)
