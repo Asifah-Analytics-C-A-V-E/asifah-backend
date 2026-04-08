@@ -81,7 +81,16 @@ HISTORY_KEY         = 'rhetoric:iraq:history'
 BASELINE_KEY        = 'rhetoric_baseline:iraq'
 CROSSTHEATER_KEY    = 'rhetoric:crosstheater:fingerprints'  # shared with Yemen/Lebanon/Syria
 
-RHETORIC_CACHE_TTL  = 6 * 3600
+RHETORIC_CACHE_TTL  = 13 * 3600  # 13h -- covers scan cycle + buffer
+
+# Signal interpreter
+try:
+    from iraq_signal_interpreter import interpret_signals as iraq_interpret_signals
+    INTERPRETER_AVAILABLE = True
+    print("[Iraq Rhetoric] Signal interpreter loaded")
+except ImportError:
+    INTERPRETER_AVAILABLE = False
+    print("[Iraq Rhetoric] Warning: Signal interpreter not available")
 SCAN_INTERVAL_HOURS = 6
 
 _rhetoric_running = False
@@ -869,6 +878,95 @@ def _detect_crosstheater_coordination():
 # ============================================
 # RSS FEEDS
 # ============================================
+# ============================================
+# NITTER -- Primary source accounts for Iraq
+# ============================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.woodland.cafe",
+]
+
+NITTER_ACCOUNTS_IRAQ = [
+    ("CENTCOM",         1.1, "CENTCOM -- Iraq operations, base attacks, ISIS strikes"),
+    ("StateDept",       1.0, "State Dept -- Iraq diplomatic signals, ceasefire"),
+    ("realDonaldTrump", 1.1, "Trump -- Iran ceasefire, Iraq policy"),
+    ("SecRubio",        1.0, "SecState -- Iraq/Iran diplomatic signals"),
+    ("IDF",             0.9, "IDF -- Iraq-Iran corridor signals"),
+    ("OSINTdefender",   0.9, "OSINT Defender -- Iraq incidents"),
+    ("ElintNews",       0.9, "ELINT News -- Iraq/PMF incidents"),
+    ("WarMonitors",     0.85, "War Monitors -- Iraq attack reports"),
+    ("MazloumAbdi",     0.85, "SDF commander -- Kurdish Iraq/Syria coordination"),
+]
+
+
+def _fetch_nitter_iraq(username, weight=1.0, timeout=8):
+    import xml.etree.ElementTree as _ET
+    from email.utils import parsedate_to_datetime as _ptd
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = _ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = _ptd(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                posts.append({
+                    "title":     title,
+                    "url":       link,
+                    "published": pub,
+                    "source":    f"Nitter @{username}",
+                    "weight":    weight,
+                })
+            if posts:
+                print(f"[Iraq Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Iraq Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Iraq Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_iraq(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_IRAQ:
+        posts = _fetch_nitter_iraq(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Iraq Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
+
+
 RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=PMF+Iraq+Iran+militia+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Hashd+al-Shaabi+Iraq&hl=en&gl=US&ceid=US:en", 1.0),
@@ -1104,6 +1202,18 @@ def fetch_rhetoric_articles(days=3):
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
     rss_c = len(unique) - tg_c - red_c
+    # Nitter
+    try:
+        nitter_posts = fetch_nitter_iraq(days=days)
+        for p in nitter_posts:
+            u = p.get('url', '')
+            if u and u not in seen_urls:
+                seen_urls.add(u)
+                unique.append(p)
+    except Exception as e:
+        print(f"[Iraq Rhetoric] Nitter error: {e}")
+
+    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     print(f"[Iraq Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {red_c} Reddit)")
     return unique
 
@@ -1411,6 +1521,21 @@ def run_iraq_rhetoric_scan(days=3):
     # Cross-theater
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
+
+    # Signal interpretation
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = iraq_interpret_signals(result)
+            best = result['interpretation']['historical_matches']
+            best_pct = best[0]['similarity'] if best else 'none'
+            sadr_s = result['interpretation']['so_what'].get('sadr_silent', False)
+            katai = result['interpretation']['so_what'].get('kataib_active', False)
+            print(f"[Iraq Rhetoric] Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, "
+                  f"best match: {best_pct}%"
+                  f"{' | SADR-SILENT' if sadr_s else ''}"
+                  f"{' | KATAIB-ACTIVE' if katai else ''}")
+        except Exception as e:
+            print(f"[Iraq Rhetoric] Warning: Interpreter error (non-fatal): {e}")
 
     # Re-save with enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
