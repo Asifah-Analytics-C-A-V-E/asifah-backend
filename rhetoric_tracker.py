@@ -280,17 +280,47 @@ LEBANON_ACTORS = {
         'flag': '🇮🇷',
         'icon': '🕌',
         'color': '#b91c1c',
-        'role': 'Houthi Patron / Hezbollah Patron',
+        'role': 'Hezbollah Patron / IRGC Director',
         'keywords': [
+            # Core Iran-Hezbollah relationship
             'iran hezbollah', 'iran lebanon', 'iran supports hezbollah',
             'iran arms hezbollah', 'iran weapons lebanon',
             'tehran hezbollah', 'tehran lebanon',
-            'quds force lebanon', 'irgc hezbollah',
+            'quds force lebanon', 'irgc hezbollah', 'irgc lebanon',
             'khamenei hezbollah', 'khamenei resistance', 'khamenei lebanon',
             'axis of resistance', 'resistance axis',
             'iranian proxy', 'iran proxy', 'iranian-backed', 'iran-backed',
+            # v2.2: IRGC directing Hezbollah — current analytical reality
+            'irgc directing hezbollah', 'irgc commands hezbollah',
+            'iran directing hezbollah', 'iran ordered hezbollah',
+            'quds force directing', 'quds force commands',
+            'irgc calling shots', 'iran calling shots lebanon',
+            'irgc officers lebanon', 'quds force officers beirut',
+            'irgc adviser hezbollah', 'iran adviser hezbollah',
+            # v2.2: IRGC personnel killed in Lebanon (IDF targeting)
+            'irgc killed beirut', 'quds force killed lebanon',
+            'irgc commander killed', 'quds force commander killed',
+            'iran commander beirut', 'irgc officer killed',
+            # v2.2: Lebanese government expelling Iran
+            'iran ambassador expelled lebanon', 'persona non grata iran',
+            'lebanon expels iran', 'iranian ambassador beirut',
+            'nawaf salam irgc', 'salam iran hezbollah',
+            # v2.2: Ceasefire / Iran-US deal Lebanon dimension
+            'iran ceasefire lebanon', 'iran demands ceasefire lebanon',
+            'tehran ceasefire hezbollah', 'iran us ceasefire lebanon',
+            'pezeshkian lebanon', 'iran parliament lebanon',
+            # v2.2: Resupply signals
+            'iran resupply hezbollah', 'weapons transfer hezbollah iran',
+            'iran rearming hezbollah', 'bekaa valley weapons iran',
+            # Farsi
             'ایران حزب‌الله', 'محور مقاومت',
+            'سپاه قدس لبنان', 'فرماندهی ایران لبنان',
+            'دستور ایران حزب‌الله',
+            # Arabic
             'إيران حزب الله', 'محور المقاومة',
+            'الحرس الثوري لبنان', 'فيلق القدس لبنان',
+            'إيران تأمر حزب الله', 'الحرس الثوري يوجه',
+            'ضباط إيرانيون بيروت', 'مستشارو الحرس الثوري',
         ],
         'baseline_statements_per_week': 5,
     },
@@ -317,6 +347,24 @@ LEBANON_ACTORS = {
             'ישראל חיזבאללה', 'ישראל לבנון', 'צה"ל לבנון',
             'גבול צפון', 'פיקוד צפון', 'חזית צפון',
             'לבנון', 'חיזבאללה',
+            # v2.2: Beirut strikes + casualties (Hebrew)
+            'תקיפה בביירות', 'הפצצה בביירות', 'ביירות',
+            'פגיעה בביירות', 'תקיפה ישראלית ביירות',
+            'הרוגים בלבנון', 'נפגעים בלבנון',
+            'צה"ל תקף', 'צה"ל הפציץ', 'מטוסי קרב לבנון',
+            'דהיה', 'הדהיה', 'פרברי ביירות',
+            # v2.2: IDF strike on central Beirut (April 8 event keywords)
+            'ביירות מרכז', 'לב ביירות', 'רובע ביירות',
+            # v2.2: IDF ground + Bint Jbeil
+            'בנת ג\'בייל', 'בינת ג\'בייל', 'דרום לבנון קרקעי',
+            'כוחות צה"ל חדרו', 'כניסה לאדמות לבנון',
+            # v2.2: Negotiations / ceasefire (Israeli side)
+            'שיחות ישירות לבנון', 'הסכם לבנון', 'הפסקת אש לבנון',
+            'תנאים ישראל לבנון', 'נסיגה מלבנון',
+            # v2.2: Hezbollah military confirmed via Hebrew
+            'פגיעה בחיזבאללה', 'חיסול מפקד', 'סגן מזכ"ל',
+            'רקטות מלבנון', 'ירי רקטות', 'כיפת ברזל',
+            'קריית שמונה', 'מטולה', 'גליל עליון',
         ],
         'baseline_statements_per_week': 10,
     },
@@ -1127,9 +1175,52 @@ def fetch_lebanon_articles(days=3):
             'כיבוש דרום לבנון',
             'נוכחות צבאית לבנון',
             'צה"ל שוהה בלבנון',
+            # v2.2: Beirut strikes — IDF airstrikes on Beirut/Dahiyeh
+            'תקיפה בביירות',
+            'ביירות הפצצה',
+            'צה"ל תקף ביירות',
+            'פגיעה בדהיה',
+            'ביירות מרכז תקיפה',
+            # v2.2: Casualties + healthcare (Hebrew MoPH reporting via Hebrew OSINT)
+            'הרוגים ופצועים לבנון',
+            'קורבנות לבנון',
+            'בית חולים לבנון תקיפה',
+            'עובדי בריאות נהרגו',
+            # v2.2: Ceasefire / negotiations Hebrew signals
+            'הפסקת אש לבנון',
+            'שיחות ישירות ישראל לבנון',
+            'הסכם לבנון ישראל',
+            'נסיגת צה"ל לבנון',
+            # v2.2: Hezbollah rockets into Israel (Hebrew alert sources)
+            'רקטות מלבנון לישראל',
+            'ירי מלבנון',
+            'קריית שמונה רקטות',
+            'אזעקות בצפון',
         ],
         'fas': [
+            # v2.0: original
             'حزب‌الله OR لبنان',
+            # v2.2: IRGC direction + Quds Force Lebanon signals
+            'سپاه قدس لبنان',           # Quds Force Lebanon
+            'سپاه پاسداران لبنان',      # IRGC Lebanon
+            'فرماندهی حزب‌الله',         # Hezbollah command
+            'محور مقاومت لبنان',         # Axis of Resistance Lebanon
+            # v2.2: Operational direction signals
+            'دستور ایران حزب‌الله',      # Iran orders Hezbollah
+            'هدایت ایران لبنان',          # Iran directing Lebanon
+            'عملیات لبنان ایران',         # Lebanon Iran operations
+            'پشتیبانی ایران مقاومت',     # Iran support resistance
+            # v2.2: Martyrdom / commander killed signals (IDF kills IRGC in Lebanon)
+            'شهادت فرمانده قدس',         # Martyrdom Quds commander
+            'فرمانده سپاه لبنان',         # IRGC commander Lebanon
+            'شهید لبنان سپاه',            # Martyr Lebanon IRGC
+            # v2.2: Ceasefire / negotiations Iranian framing
+            'آتش‌بس لبنان',              # Lebanon ceasefire
+            'مذاکرات لبنان ایران',        # Lebanon Iran negotiations
+            'حمایت ایران لبنان',          # Iran support Lebanon
+            # v2.2: Hezbollah rearmament / resupply signals
+            'تسلیح حزب‌الله',            # Hezbollah arming
+            'تجهیز مقاومت لبنان',        # Equipping Lebanon resistance
         ],
     }
 
