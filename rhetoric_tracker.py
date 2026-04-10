@@ -1034,6 +1034,17 @@ def fetch_lebanon_articles(days=3):
 
     # RSS Feeds — expanded for France, Cyprus, Syria border
     rss_feeds = {
+        # ── Lebanese domestic sources (NEW) ──────────────────────
+        'Naharnet':           'https://www.naharnet.com/stories/en/rss',
+        'LBCI (EN)':          'https://www.lbcgroup.tv/rss/en',
+        'MTV Lebanon':        'https://www.mtv.com.lb/en/rss',
+        'L\'Orient Today':    'https://today.lorientlejour.com/rss',
+        'The961':             'https://www.the961.com/feed/',
+        'An-Nahar (AR)':      'https://www.annahar.com/rss',
+        # ── Regional Arabic (NEW) ─────────────────────────────────
+        'Lebanon24 (AR)':     'https://www.lebanon24.com/rss',
+        'NNA Lebanon':        'https://www.nna-leb.gov.lb/en/rss',
+        # ── Existing sources ──────────────────────────────────────
         'Al-Manar (EN)':      'https://english.almanar.com.lb/rss',
         'Al-Manar (AR)':      'https://almanar.com.lb/rss',
         'UN News (Lebanon)':  'https://news.un.org/feed/subscribe/en/news/region/middle-east/feed/rss.xml',
@@ -1091,6 +1102,16 @@ def fetch_lebanon_articles(days=3):
             'نقاط إسرائيلية جنوب لبنان',
             'قوات الاحتلال لبنان',
             'الجيش الإسرائيلي داخل لبنان',
+            # v2.2: Internal security / coup plot signals (NEW)
+            'انقلاب لبنان حزب الله',
+            'السراي الحكومي بيروت حصار',
+            'نواف سلام اغتيال OR اعتقال',
+            'الحرس الثوري بيروت',
+            'حزب الله بيروت احتلال',
+            'أمن الدولة لبنان تواطؤ',
+            'جوزيف عون استقالة OR اغتيال',
+            'انتفاضة شيعية لبنان',
+            'فرنجية الحرس الثوري رئاسة',
         ],
         'heb': [
             'חיזבאללה OR לבנון',
