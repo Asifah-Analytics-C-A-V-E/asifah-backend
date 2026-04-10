@@ -226,55 +226,59 @@ def fetch_reliefweb_updates():
 #   IOM global displacement update, March 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-03-24',
-    'data_period': 'March 2 – 21, 2026 (renewed hostilities)',
-    'note': 'Static figures compiled from OCHA Flash Updates #1–10 and DRM Unit daily reports. Updated manually.',
+    'last_manual_update': '2026-04-10',
+    'data_period': 'March 2 – April 10, 2026 (active war)',
+    'note': 'Static figures compiled from IOM DTM SitRep Update 5 (Mar 28-Apr 2), Lebanese MoPH, and OCHA reporting. April 8 strikes (deadliest single day of war) not yet fully captured in IOM figures. Updated manually.',
 
     'casualties': {
-        'killed': 1024,
-        'injured': 2740,
-        'children_killed': 118,
-        'children_injured': 332,
-        'women_killed': None,
-        'rescue_workers_killed': 31,
-        'source': 'DRM Unit / Lebanese PM Office & MoPH',
-        'source_url': 'https://www.unocha.org/lebanon',
-        'as_of': '2026-03-21',
-        'note': 'Cumulative since renewed hostilities March 2, 2026. UNICEF: equivalent of one classroom of children killed or wounded daily. 31 healthcare workers killed since March 2.'
+        'killed': 1739,
+        'injured': 5873,
+        'children_killed': 130,
+        'children_injured': None,
+        'women_killed': 102,
+        'rescue_workers_killed': 57,
+        'april8_single_day_killed': 203,
+        'april8_single_day_wounded': 1150,
+        'source': 'Lebanese Ministry of Public Health / Al Arabiya / AP',
+        'source_url': 'https://www.moph.gov.lb/',
+        'as_of': '2026-04-09',
+        'note': 'Cumulative since March 2, 2026. April 8 was the deadliest single day of the war — 203 killed, 1,150+ wounded in strikes on central Beirut without warning. Toll includes 102 women, 130 children, 57 healthcare workers. Death toll still rising as rescue workers pull victims from rubble.'
     },
 
     'displacement': {
-        'total_displaced_registered': 1200000,
-        'total_displaced_pct_population': 19,
-        'in_government_shelters': 134439,
-        'shelters_opened': 636,
-        'shelters_at_capacity': 'Majority overcrowded — limited electricity, heating, and WASH',
-        'cross_border_to_syria': 37000,
+        'total_displaced_registered': 1000000,
+        'total_displaced_pct_population': 20,
+        'in_government_shelters': 136156,
+        'shelters_opened': 669,
+        'shelters_at_capacity': 'Near full capacity — 90% of IDPs outside formal shelters',
+        'cross_border_to_syria': 196654,
+        'cross_border_to_jordan': 1800,
         'previously_displaced_2024': 65000,
         'children_displaced': 300000,
-        'source': 'OCHA Flash Update #10 / DRM Unit',
+        'pct_idps_outside_formal_shelter': 90,
+        'source': 'IOM DTM SitRep Update 5 / DTM Syria cross-border tracking',
         'source_urls': [
-            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-10-escalation-hostilities-lebanon-19-march-2026',
+            'https://crisisresponse.iom.int/sites/g/files/tmzbdl1481/files/appeal/documents/IOM-Lebanon-External-Sitrep-Update-5-28-March-2-April.pdf',
             'https://dtm.iom.int/lebanon',
         ],
-        'as_of': '2026-03-19',
-        'note': '1.2M+ displaced — roughly 1 in 5 people in Lebanon. Only ~12.5% in formal collective shelters; majority with host families or in informal sites. Displacement orders now cover ~14% of Lebanese territory (1,470 sq km).'
+        'as_of': '2026-04-06',
+        'note': '1M+ displaced — ~20% of Lebanon\'s population. 90% rely on host families or informal sites; 669 collective sites near full capacity. Nabatieh governorate: 98% of IDPs relocated outside the governorate. 196,654 individuals crossed into Syria via 3 PoEs since March 2. IOM emergency transportation funding fully exhausted.'
     },
 
     'shelters': {
-        'total_shelters': 636,
-        'at_full_capacity': 'Majority exceeding safe standards',
+        'total_shelters': 669,
+        'at_full_capacity': 'Near full capacity — operating at limits',
         'capacity_percentage': 98,
         'schools_as_shelters': 472,
         'children_education_affected': None,
         'school_aged_idps': None,
         'government_designated_sites': None,
-        'source': 'OCHA Flash Update #10',
+        'source': 'IOM DTM SitRep Update 5',
         'source_urls': [
-            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-10-escalation-hostilities-lebanon-19-march-2026',
+            'https://crisisresponse.iom.int/sites/g/files/tmzbdl1481/files/appeal/documents/IOM-Lebanon-External-Sitrep-Update-5-28-March-2-April.pdf',
         ],
-        'as_of': '2026-03-19',
-        'note': '472 schools (public, private, TVET) converted to shelters. Many IDPs in cars, streets, unfinished buildings. Overcrowding raising disease, fire, and GBV risks. Flash Appeal requests $308.3M for March–May 2026.'
+        'as_of': '2026-04-02',
+        'note': '669 collective sites near full capacity. 472 schools converted to shelters. 90% of IDPs outside formal shelters — with relatives, in unfinished buildings, or informal sites. Overcrowding raising disease, fire, and GBV risks. Flash Appeal: $308.3M for March-May 2026.'
     },
 
     'evacuation_orders': {
@@ -284,28 +288,31 @@ STATIC_HUMANITARIAN = {
         'areas': [
             'Entire area south of the Litani River (~850 sq km, 500,000+ people)',
             'Litani to Zahrani river zone (expanded order)',
-            'Beirut Southern Suburbs (issued multiple times since March 2)',
+            'Beirut Southern Suburbs — multiple orders since March 2',
+            'Central Beirut neighborhoods — April 8 orders (without warning)',
             '110+ towns and locations near the Blue Line',
-            'Tyre district including Palestinian camps (March 17)',
-            'Localized building/neighborhood orders in Beirut (ongoing)'
+            'Tyre district including Palestinian camps',
+            'Masnaa Border Crossing area (April 3-8, now reopened)',
         ],
-        'source': 'OCHA Flash Update #9 / DRM Unit',
-        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-9-escalation-hostilities-lebanon-16-march-2026',
-        'as_of': '2026-03-19',
-        'note': 'Displacement orders now cover ~14% of Lebanon\'s territory. Many families displaced multiple times as orders expand geographically.'
+        'source': 'IOM DTM / Lebanese Civil Defence / IDF statements',
+        'source_url': 'https://dtm.iom.int/lebanon',
+        'as_of': '2026-04-09',
+        'note': 'Displacement orders cover ~14% of Lebanese territory. April 8 strikes hit central Beirut residential areas without warning during rush hour — new displacement pattern expanding beyond south/Dahiyeh. Many families displaced multiple times.'
     },
 
     'healthcare': {
-        'health_workers_killed_since_mar2': 31,
+        'health_workers_killed_since_mar2': 57,
         'health_workers_injured_since_mar2': None,
         'healthcare_attacks_since_mar2': 25,
         'hospitals_closed': 5,
         'phccs_closed': 49,
         'phccs_emergency_only': None,
-        'source': 'OCHA Security Council briefing / MoPH / WHO',
-        'source_url': 'https://www.unocha.org/news/un-relief-chief-tells-security-council-exhausted-lebanon-not-asking-help-oxygen',
-        'as_of': '2026-03-19',
-        'note': '5 hospitals and 49+ PHCCs closed in South and Beirut southern suburbs. WHO recorded 25 attacks on healthcare since Feb 28. Fuel shortages threatening hospital operations and water pumping.'
+        'iom_patients_reached': 5922,
+        'iom_tb_screening': 3173,
+        'source': 'Lebanese MoPH / IOM SitRep Update 5 / WHO',
+        'source_url': 'https://www.moph.gov.lb/',
+        'as_of': '2026-04-02',
+        'note': '57 healthcare workers killed since March 2. 5 hospitals and 49+ PHCCs closed. IOM has supported 5,922 IDPs with primary healthcare access since March 2; TB screening ongoing. IOM emergency transportation funding exhausted — critical service gap. Hospitals overwhelmed after April 8 mass casualty event.'
     },
 
     'flash_appeal': {
