@@ -53,13 +53,20 @@ LEBANON_CHANNELS = [
     'AbuAliExpress',        # Abu Ali Express — bilingual Hebrew/Arabic OSINT
     'kann_news',            # Kann News — Hebrew breaking alerts
     'channel14news',        # Channel 14 — right-leaning, fast on military
-    # Lebanese sources
+    # Lebanese sources — existing
     'ManarNewsEN',          # Al-Manar English (FIXED: was almanar_tv)
     'almanarnews',          # Al-Manar Arabic (FIXED: was almanar_tv)
     'almayadeenenglish',    # Al-Mayadeen English (FIXED: was almayadeen_net)
     'LBCI_Lebanon',         # LBCI — Lebanese broadcast news
     'MTVLebanonNews',       # MTV Lebanon — Christian perspective
     'nayaforiraq',          # Naya For Iraq — Iraq/Levant coverage
+    # Lebanese sources — Arabic breaking news (NEW v1.2.0)
+    'lebanonkhabar',        # Lebanon Khabar — Arabic breaking news, WhatsApp mirror source
+    'Lebanon_24',           # Lebanon24 — major Arabic news channel, 2M+ followers
+    'LebUpdate',            # Lebanese News and Updates — EN/AR mix, 75K subs, fast OSINT
+    'lebanonnews2',         # Lebanon News 2 — Arabic, ground reporters across Lebanon
+    'UNIFIL_Lebanon',       # UNIFIL official — bilingual, key for 1701 enforcement signals
+    'almanarnews',          # Al-Manar Arabic (duplicate guard handled by dedup logic)
 ]
 
 YEMEN_CHANNELS = [
