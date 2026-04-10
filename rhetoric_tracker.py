@@ -1133,6 +1133,10 @@ def fetch_lebanon_articles(days=3):
             'hezbollah OR nasrallah OR "naim qassem"',
             'israel hezbollah OR idf lebanon',
             'unifil OR "resolution 1701"',
+            # v2.2: Direct Israel-Lebanon talks (April 2026 breakthrough)
+            'israel lebanon direct talks washington',
+            'leiter issa hamadeh state department lebanon',
+            'israel lebanon negotiations peace washington',
             'hezbollah rockets volley barrage israel',
             'israel infrastructure strike lebanon threat',
             'israel warns lebanon government posture',
@@ -1149,6 +1153,13 @@ def fetch_lebanon_articles(days=3):
             'cyprus talks lebanon negotiations',
             'france mediates hezbollah israel',
             'paris initiative lebanon peace',
+            # v2.2: Direct talks
+            'israel lebanon direct talks state department',
+            'ambassador leiter lebanon talks',
+            'michel issa lebanon negotiations',
+            'nawaf hamadeh washington talks',
+            'israel open peace negotiations lebanon',
+            'netanyahu authorize direct talks lebanon',
         ],
         'ara': [
             'حزب الله OR لبنان',
