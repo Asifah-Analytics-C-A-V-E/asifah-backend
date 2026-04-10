@@ -605,6 +605,13 @@ CEASEFIRE_TRIGGERS = {
         'france broker deal', 'cyprus talks successful',
         'us mediates ceasefire', 'ceasefire terms agreed',
         'withdrawal agreement', 'hezbollah withdrawal',
+        # v2.2: Direct Israel-Lebanon talks (April 2026 breakthrough)
+        'direct talks israel lebanon', 'israel lebanon negotiations',
+        'state department lebanon talks', 'washington talks lebanon',
+        'direct negotiations israel lebanon', 'israel lebanon peace talks',
+        'leiter lebanon', 'michel issa lebanon', 'hamadeh israel',
+        'ambassador talks lebanon', 'us brokered talks lebanon',
+        'israel lebanon washington', 'talks state department',
     ],
     3: [
         'ceasefire proposal', 'ceasefire offer', 'france proposes',
@@ -612,6 +619,13 @@ CEASEFIRE_TRIGGERS = {
         'macron proposes ceasefire', 'french ceasefire plan',
         'us envoy ceasefire', 'envoy visits beirut',
         'negotiate ceasefire', 'diplomatic solution',
+        # v2.2: Ambassador-level contact signals
+        'israel ambassador lebanon', 'us ambassador lebanon talks',
+        'lebanese ambassador washington', 'phone call israel lebanon',
+        'first contact israel lebanon', 'direct contact israel lebanon',
+        'yechiel leiter', 'nawaf hamadeh', 'michel issa beirut',
+        'israel open to talks lebanon', 'netanyahu direct talks lebanon',
+        'مفاوضات مباشرة إسرائيل لبنان', 'محادثات واشنطن لبنان',
     ],
     2: [
         'ceasefire talks', 'peace negotiations', 'diplomatic push',
@@ -1692,15 +1706,24 @@ NITTER_MIRRORS = [
 ]
 
 NITTER_ACCOUNTS_LEBANON = [
+    # ── IDF / Israeli officials ──────────────────────────────────
     ("IDF",                 1.3, "IDF -- Lebanon strike claims, Hezbollah warnings, GOL ultimatums"),
+    ("idfonline",           1.3, "IDF English -- primary strike/ops announcements"),
     ("AvichayAdraee",       1.2, "IDF Arabic spokesperson -- operational claims vs Hezbollah"),
     ("IsraeliPM",           1.1, "Israeli PM -- Lebanon red line statements"),
     ("KatzIsrael",          1.1, "Defense Minister Katz -- Hezbollah/Lebanon ultimatums"),
+    # ── US diplomatic (key for Israel-Lebanon talks) ─────────────
     ("CENTCOM",             1.0, "CENTCOM -- Lebanon/Hezbollah operations"),
     ("StateDept",           1.0, "State Dept -- Lebanon diplomatic signals"),
+    ("USAmbLebanon",        1.2, "Michel Issa -- US Ambassador to Lebanon, direct talks broker"),
+    ("RubioState",          1.0, "SecState Rubio -- US Lebanon/ceasefire policy"),
+    # ── Lebanese government / diplomacy ──────────────────────────
     ("LebarmyOfficial",     1.1, "Lebanese Armed Forces -- LAF deployment signals"),
+    ("LebanonMFA",          1.1, "Lebanese MFA -- Hamadeh, diplomatic signals, talks"),
+    # ── International ────────────────────────────────────────────
     ("UNIFIL_Southlebanon", 1.0, "UNIFIL -- Blue Line incidents, withdrawal signals"),
     ("francediplo_EN",      0.9, "French MFA -- Lebanon diplomatic push"),
+    # ── OSINT ────────────────────────────────────────────────────
     ("LongWarJournal",      0.9, "Long War Journal -- Hezbollah/Lebanon analysis"),
     ("ElintNews",           0.9, "ELINT News -- Lebanon/Hezbollah OSINT"),
 ]
