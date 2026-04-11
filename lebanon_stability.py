@@ -129,7 +129,7 @@ CACHE_FILE = '/tmp/lebanon_stability_cache.json'
 # RATE LIMITING
 # ========================================
 
-RATE_LIMIT = 100
+RATE_LIMIT = 500           # Raised — cached responses no longer counted
 RATE_LIMIT_WINDOW = 86400  # 24 hours
 rate_limit_data = {
     'requests': 0,
@@ -1024,8 +1024,16 @@ def scan_security_situation(days=7):
 
     # ── 1. Gather articles ──
     search_queries = [
+        # Military / security
         'Israel ground troops Lebanon',
         'IDF operation southern Lebanon',
+        # ── NEW: Civil unrest / protests ──
+        'Lebanon protests demonstrations 2026',
+        'Lebanon street protests political',
+        'Lebanon civil unrest demonstrations Beirut',
+        'Lebanon anti-government protest',
+        'Lebanon economic protest march',
+        'Lebanon parliament protest',
         'ceasefire Lebanon Israel',
         'UNIFIL Lebanon',
         'UNIFIL attacked OR wounded peacekeepers Lebanon',
@@ -1429,6 +1437,19 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
     # Chronic crisis drag: power, water, healthcare, brain drain
     humanitarian_drag = -5
 
+    # ── Civil unrest / protest penalty (v3.2.0) ──
+    # Lebanon street protests are a leading indicator of political collapse
+    protest_penalty = 0
+    if security_data and 'protest_signals' in security_data:
+        protest_level = security_data['protest_signals'].get('level', 0)
+        if protest_level >= 3:
+            protest_penalty = 12   # Mass protests — systemic signal
+        elif protest_level >= 2:
+            protest_penalty = 7    # Significant demonstrations
+        elif protest_level >= 1:
+            protest_penalty = 3    # Scattered protests — watch signal
+        print(f"[Lebanon Stability] Protest penalty: -{protest_penalty} (level {protest_level})")
+
     # ── Rhetoric penalty (v3.1.0) ──
     RHETORIC_PENALTY = {0: 0, 1: -2, 2: -5, 3: -10, 4: -18, 5: -25}
     rhetoric_penalty = 0
@@ -1449,6 +1470,7 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
                       - hezbollah_impact 
                       - ground_ops_penalty
                       - unifil_penalty
+                      - protest_penalty
                       + presidential_bonus 
                       + election_bonus
                       + ceasefire_bonus
@@ -1795,14 +1817,11 @@ def _background_lebanon_refresh():
 def scan_lebanon_stability():
     """Main stability endpoint — stale-while-revalidate pattern."""
     try:
-        if not check_rate_limit():
-            return jsonify({'error': 'Rate limit exceeded'}), 429
-
         force_refresh = request.args.get('refresh', '').lower() == 'true'
         STALE_TTL = 14400   # 4 hours — serve cache without revalidating
         REFRESH_TTL = 1800  # 30 min — trigger background refresh but still serve cache
 
-        # ── Stale-while-revalidate cache check ──
+        # ── Stale-while-revalidate cache check (BEFORE rate limit) ──
         if not force_refresh and _redis_available():
             cached = _redis_get(REDIS_CACHE_KEY)
             if cached and cached.get('last_updated'):
@@ -1821,6 +1840,10 @@ def scan_lebanon_stability():
                         return jsonify(cached)
                 except Exception:
                     pass  # Age check failed — fall through to live scan
+
+        # Only rate-limit live scans — cached responses are free
+        if not check_rate_limit():
+            return jsonify({'error': 'Rate limit exceeded'}), 429
 
         print("[Lebanon] No fresh cache — running live scan...")
         currency_data = fetch_lebanon_currency()
