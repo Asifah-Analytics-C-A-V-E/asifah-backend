@@ -298,6 +298,50 @@ ACTORS = {
         ],
         'baseline_statements_per_week': 8,
     },
+    'china_russia_axis': {
+        'name': 'China / Russia (Iran Axis)',
+        'flag': '🌐',
+        'icon': '🔗',
+        'color': '#dc2626',
+        'role': 'External Military Supporters — Supply / Intelligence',
+        'description': (
+            'China and Russia as active supporters of Iran. '
+            'China: dual-use components, chemicals, fuel, possible MANPADS (NYT, Apr 2026). '
+            'Russia: satellite targeting intelligence for IRGC strikes on US ships/installations. '
+            'Track escalation of their support as a key Iran capability signal.'
+        ),
+        'keywords': [
+            # China → Iran military support
+            'china iran missiles', 'china ships missiles iran',
+            'china manpads iran', 'chinese missiles iran',
+            'china arms iran', 'china weapons iran',
+            'china military aid iran', 'china supplies iran war',
+            'china dual use iran', 'china components iran',
+            'china chemicals iran military', 'china fuel iran military',
+            'china intelligence iran', 'beijing tehran military',
+            'china iran military cooperation', 'china iran axis',
+            'china backs iran', 'beijing backs tehran',
+            'china iran shipment', 'chinese shoulder fired iran',
+            # Russia → Iran operational support
+            'russia satellite iran', 'russia targeting iran',
+            'russia intelligence iran', 'russia helps iran',
+            'russia iran targeting us ships', 'russia satellite irgc',
+            'russia targets us iran', 'moscow tehran military',
+            'russia iran military coordination', 'russia backs iran war',
+            'russia supplies iran', 'russia food aid iran',
+            'russia nonlethal iran', 'russia iran cooperation war',
+            # Combined axis signals
+            'china russia iran axis', 'adversaries support iran',
+            'beijing moscow tehran', 'axis of resistance external',
+            'third party arms iran', 'external support iran war',
+            # Arabic / Farsi
+            'الصين تسلح إيران', 'روسيا تدعم إيران',
+            'محور الصين وروسيا وإيران',
+            'چین ایران موشک', 'روسیه ایران حمایت',
+        ],
+        'baseline_statements_per_week': 5,
+    },
+
     'israel_iran': {
         'name': 'Israel (re: Iran)',
         'flag': '🇮🇱',
@@ -944,10 +988,13 @@ def _write_crosstheater_signal(result):
                     if geo in title_lower and geo not in named_targets:
                         named_targets.append(geo)
 
+        # China/Russia axis level from new actor
+        axis_level = actors.get('china_russia_axis', {}).get('max_level', 0)
+
         existing['iran'] = {
             'ts': datetime.now(timezone.utc).isoformat(),
             'theatre': 'Iran',
-            'is_command_node': True,               # ← Key flag for other trackers
+            'is_command_node': True,
             'level': result.get('theatre_escalation_level', 0),
             'score': result.get('theatre_score', 0),
             'theatre_score': result.get('theatre_score', 0),
@@ -963,6 +1010,10 @@ def _write_crosstheater_signal(result):
             },
             'specificity_score': result.get('specificity_score', 0),
             'proxy_detail': result.get('proxy_activation_detail', {}),
+            # ── China/Russia axis flags (v1.1.0 — April 2026) ──
+            'china_iran_active':  axis_level >= 2,
+            'russia_iran_active': axis_level >= 2,
+            'axis_support_level': axis_level,
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
