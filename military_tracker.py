@@ -204,7 +204,7 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'denmark', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia'],
+        'actors': ['nato', 'russia', 'denmark', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary'],
         'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Cyprus, Caucasus'
     },
     'middle_east': {
@@ -1550,6 +1550,36 @@ MILITARY_ACTORS = {
             'https://news.google.com/rss/search?q=azerbaijan+military+OR+nakhchivan+OR+drone+OR+mobilization+OR+iran&hl=en&gl=US&ceid=US:en',
         ]
     },
+    'hungary': {
+        'name': 'Hungary',
+        'flag': '🇭🇺',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.4,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # ── Democratic transition / internal ─────────────────
+            'hungary military', 'hungarian army', 'hungarian defense',
+            'hungary defence', 'hungary nato', 'hungary armed forces',
+            'honved', 'hungarian honved',
+            # ── Russian interference / hybrid ─────────────────────
+            'russia hungary military', 'russian interference hungary',
+            'hungary hybrid attack', 'hungary cyber attack',
+            'hungary disinformation', 'fidesz military',
+            # ── EU / NATO re-integration signals ──────────────────
+            'hungary nato reintegration', 'hungary ukraine weapons',
+            'hungary ukraine aid military', 'paks nuclear hungary',
+            'rosatom hungary', 'hungary defense spending',
+            # ── Regional / border ─────────────────────────────────
+            'hungary border', 'hungary serbia border',
+            'hungary ukraine border', 'hungary slovakia border',
+            'budapest military', 'hungary airspace',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=hungary+military+OR+nato+OR+defense+OR+armed+forces&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
     'armenia': {
         'name': 'Armenia',
         'flag': '🇦🇲',
