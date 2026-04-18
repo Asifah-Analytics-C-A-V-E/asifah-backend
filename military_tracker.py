@@ -4666,8 +4666,18 @@ def get_military_posture(target):
 # FLASK ENDPOINT REGISTRATION
 # ========================================
 
-def register_military_endpoints(app):
-    """Register military tracker endpoints with the Flask app."""
+def register_military_endpoints(app, start_background=True):
+    """
+    Register military tracker endpoints with the Flask app.
+
+    Parameters:
+        app: Flask app instance
+        start_background: If True (default), spawn a periodic scan thread
+                          that refreshes the military cache every 12 hours.
+                          Set to False on read-only backends that share
+                          Redis with a primary scanner (prevents duplicate
+                          scans on backup/read replicas).
+    """
 
     @app.route('/api/military-posture', methods=['GET', 'OPTIONS'])
     def api_military_posture():
@@ -4732,6 +4742,12 @@ def register_military_endpoints(app):
     print("[Military Tracker] ✅ Endpoints registered: /api/military-posture, /api/military-posture/<target>")
 
     # PERIODIC BACKGROUND SCAN (every 12 hours)
+    # start_background=False → skip the scan thread entirely
+    # (used by read-only backends that share Redis with a primary scanner)
+    if not start_background:
+        print("[Military Tracker] ℹ️ Background scan disabled on this instance (read-only via Redis)")
+        return
+
     def _periodic_scan():
         time.sleep(10)
         while True:
@@ -4741,8 +4757,8 @@ def register_military_endpoints(app):
                 time.sleep(60)
                 while _background_scan_running:
                     time.sleep(30)
-                print("[Military Tracker] Periodic scan complete. Sleeping 4 hours (war footing).")
-                time.sleep(14400)
+                print("[Military Tracker] Periodic scan complete. Sleeping 12 hours.")
+                time.sleep(43200)  # 12 hours (was 14400 / 4 hours)
             except Exception as e:
                 print(f"[Military Tracker] Periodic scan error: {e}")
                 time.sleep(3600)
