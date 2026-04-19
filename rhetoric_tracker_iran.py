@@ -1112,7 +1112,28 @@ RHETORIC_RSS_FEEDS = [
     # Truth Social — Trump direct statements (public RSS, no auth required)
     ("https://truthsocial.com/@realDonaldTrump.rss", 1.1),
     # Nitter — Trump Twitter/X mirror (RSS, no API key)
+    # TODO: Nitter dead platform-wide — replace with Bluesky/govmirrors next session
     ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
+    # ============================================
+    # v2.2.0 (April 2026) — Israeli + ME investigative feeds
+    # Same augmentation as China/Taiwan trackers. Catches stories
+    # like FT TEE-01B satellite fusion story that Iranian state
+    # media will NEVER break but IDF-adjacent press and premier
+    # investigative outlets surface first.
+    # ============================================
+    # Israeli press — breaks China/Russia-Iran cooperation stories first
+    ("https://rss.jpost.com/rss/rssfeedsheadlines.aspx", 0.95),
+    ("https://www.timesofisrael.com/feed/", 0.95),
+    # ME regional analysis — China/Russia engagement in Gulf & Levant
+    ("https://www.al-monitor.com/rss", 0.90),
+    ("https://www.middleeasteye.net/rss.xml", 0.85),
+    # Premier investigative — intelligence/finance scoops (FT, Reuters)
+    ("https://www.ft.com/world?format=rss", 1.0),
+    ("https://feeds.reuters.com/Reuters/worldNews", 1.0),
+    # Targeted queries for China-Iran axis specifically
+    ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+2026&hl=en&gl=US&ceid=US:en", 1.0),
 ]
 
 # ============================================
