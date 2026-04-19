@@ -298,48 +298,101 @@ ACTORS = {
         ],
         'baseline_statements_per_week': 8,
     },
-    'china_russia_axis': {
-        'name': 'China / Russia (Iran Axis)',
-        'flag': '🌐',
-        'icon': '🔗',
+    # ============================================
+    # v1.2.0 (April 2026) — Axis actors SPLIT.
+    # Previous single 'china_russia_axis' actor has been split
+    # into two dedicated actors because China and Russia play
+    # architecturally different roles in supporting Iran:
+    #   - China: ISR/logistics enabler (satellites, ground stations,
+    #     dual-use components). More covert, harder to detect.
+    #   - Russia: Strategic partner (satellite launches, arms,
+    #     military coordination). More overt, publicly signaled.
+    # Splitting allows accurate attribution and separate
+    # cross-theater fingerprint fields per partner.
+    # ============================================
+    'china_iran_axis': {
+        'name': 'China → Iran (Axis Support)',
+        'flag': '🇨🇳',
+        'icon': '🛰️',
         'color': '#dc2626',
-        'role': 'External Military Supporters — Supply / Intelligence',
+        'role': 'External Military Supporter — China (ISR / Logistics)',
         'description': (
-            'China and Russia as active supporters of Iran. '
-            'China: dual-use components, chemicals, fuel, possible MANPADS (NYT, Apr 2026). '
-            'Russia: satellite targeting intelligence for IRGC strikes on US ships/installations. '
-            'Track escalation of their support as a key Iran capability signal.'
+            'China as active supporter of Iran. Sub-categorized across '
+            'four dimensions: weapons transfer, ISR/satellite cooperation, '
+            'dual-use components, and diplomatic cover. The ISR dimension '
+            '(e.g. TEE-01B satellite, Emposat ground stations — FT Apr 2026) '
+            'is particularly consequential as it enables kinetic targeting.'
         ),
         'keywords': [
-            # China → Iran military support
+            # China → Iran — weapons / hardware
             'china iran missiles', 'china ships missiles iran',
             'china manpads iran', 'chinese missiles iran',
             'china arms iran', 'china weapons iran',
             'china military aid iran', 'china supplies iran war',
+            'china iran shipment', 'chinese shoulder fired iran',
+            # China → Iran — ISR / satellite / space cooperation
+            'china satellite iran', 'chinese satellite iran',
+            'tee-01b', 'emposat', 'earth eye co',
+            'chinese spy satellite iran', 'china ground station iran',
+            'irgc chinese satellite', 'chinese imagery iran',
+            'china targeting data iran', 'chinese isr iran',
+            'china space cooperation iran', 'in-orbit transfer iran',
+            'chinese satellite irgc', 'belt and road iran space',
+            # China → Iran — dual-use
             'china dual use iran', 'china components iran',
             'china chemicals iran military', 'china fuel iran military',
+            'china electronics iran', 'china semiconductor iran military',
+            # China → Iran — diplomatic cover
             'china intelligence iran', 'beijing tehran military',
             'china iran military cooperation', 'china iran axis',
             'china backs iran', 'beijing backs tehran',
-            'china iran shipment', 'chinese shoulder fired iran',
-            # Russia → Iran operational support
+            'china shields iran un', 'china blocks iran sanctions',
+            # Arabic / Farsi
+            'الصين تسلح إيران', 'الصين تدعم إيران',
+            'چین ایران موشک', 'چین ماهواره ایران',
+        ],
+        'baseline_statements_per_week': 3,
+    },
+
+    'russia_iran_axis': {
+        'name': 'Russia → Iran (Axis Support)',
+        'flag': '🇷🇺',
+        'icon': '🚀',
+        'color': '#dc2626',
+        'role': 'External Military Supporter — Russia (Launch / Arms / Coordination)',
+        'description': (
+            'Russia as active supporter of Iran. Sub-categorized across '
+            'four dimensions: launch partnership (Russian rockets carrying '
+            'Iranian satellites), arms/hardware, intelligence sharing, '
+            'and strategic coordination. Russia has launched several '
+            'Iranian satellites in recent years and provides targeting '
+            'data for IRGC strikes on US installations.'
+        ),
+        'keywords': [
+            # Russia → Iran — launch partnership / space
+            'russia launches iranian satellite', 'russian rocket iran',
+            'russia iran satellite launch', 'soyuz iran satellite',
+            'iranian satellite russian launch', 'noor russia launch',
+            # Russia → Iran — intelligence / targeting
             'russia satellite iran', 'russia targeting iran',
             'russia intelligence iran', 'russia helps iran',
             'russia iran targeting us ships', 'russia satellite irgc',
-            'russia targets us iran', 'moscow tehran military',
-            'russia iran military coordination', 'russia backs iran war',
-            'russia supplies iran', 'russia food aid iran',
-            'russia nonlethal iran', 'russia iran cooperation war',
-            # Combined axis signals
-            'china russia iran axis', 'adversaries support iran',
-            'beijing moscow tehran', 'axis of resistance external',
-            'third party arms iran', 'external support iran war',
+            'russia targets us iran', 'russian targeting data iran',
+            # Russia → Iran — arms / hardware
+            'russia arms iran', 'russia weapons iran',
+            'russia supplies iran', 'russia iran military supplies',
+            'russia air defense iran', 'russian s-400 iran',
+            'russian jets iran', 'sukhoi iran',
+            # Russia → Iran — strategic coordination
+            'moscow tehran military', 'russia iran military coordination',
+            'russia backs iran war', 'russia iran cooperation war',
+            'russia food aid iran', 'russia nonlethal iran',
+            'russia iran defense pact', 'comprehensive partnership iran russia',
             # Arabic / Farsi
-            'الصين تسلح إيران', 'روسيا تدعم إيران',
-            'محور الصين وروسيا وإيران',
-            'چین ایران موشک', 'روسیه ایران حمایت',
+            'روسيا تدعم إيران', 'روسیه ایران حمایت',
+            'پرتاب ماهواره ایرانی روسیه',
         ],
-        'baseline_statements_per_week': 5,
+        'baseline_statements_per_week': 3,
     },
 
     'israel_iran': {
@@ -988,8 +1041,11 @@ def _write_crosstheater_signal(result):
                     if geo in title_lower and geo not in named_targets:
                         named_targets.append(geo)
 
-        # China/Russia axis level from new actor
-        axis_level = actors.get('china_russia_axis', {}).get('max_level', 0)
+        # Axis levels — split into per-partner fields (v1.2.0, April 2026)
+        china_iran_level  = actors.get('china_iran_axis',  {}).get('max_level', 0)
+        russia_iran_level = actors.get('russia_iran_axis', {}).get('max_level', 0)
+        # Combined level for readers that want aggregate (highest wins)
+        axis_level = max(china_iran_level, russia_iran_level)
 
         existing['iran'] = {
             'ts': datetime.now(timezone.utc).isoformat(),
@@ -1010,10 +1066,15 @@ def _write_crosstheater_signal(result):
             },
             'specificity_score': result.get('specificity_score', 0),
             'proxy_detail': result.get('proxy_activation_detail', {}),
-            # ── China/Russia axis flags (v1.1.0 — April 2026) ──
-            'china_iran_active':  axis_level >= 2,
-            'russia_iran_active': axis_level >= 2,
-            'axis_support_level': axis_level,
+            # ── v1.2.0 Axis fingerprint (SPLIT — April 2026) ──
+            # Written from Iran's perspective: what Iran is RECEIVING.
+            # Severity levels (0-5) per partner:
+            'china_iran_perspective_level':  china_iran_level,
+            'russia_iran_perspective_level': russia_iran_level,
+            # Binary flags preserved for backwards-compat with existing consumers:
+            'china_iran_active':  china_iran_level >= 2,
+            'russia_iran_active': russia_iran_level >= 2,
+            'axis_support_level': axis_level,  # combined MAX — legacy consumers
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
@@ -1111,9 +1172,11 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=Rubio+Iran+sanctions+2026&hl=en&gl=US&ceid=US:en", 0.9),
     # Truth Social — Trump direct statements (public RSS, no auth required)
     ("https://truthsocial.com/@realDonaldTrump.rss", 1.1),
-    # Nitter — Trump Twitter/X mirror (RSS, no API key)
-    # TODO: Nitter dead platform-wide — replace with Bluesky/govmirrors next session
-    ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
+    # Nitter deprecated platform-wide. Trump direct still captured via
+    # Truth Social RSS (above, weight 1.1). Leaving this commented out
+    # as a marker — replace with Bluesky mirror (@realdonaldtrump.govmirrors.com)
+    # in a future session when we port Bluesky to the ME backend.
+    # ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
     # ============================================
     # v2.2.0 (April 2026) — Israeli + ME investigative feeds
     # Same augmentation as China/Taiwan trackers. Catches stories
@@ -1257,6 +1320,19 @@ ACTOR_KEYWORDS = {
                      'الحوثيون وإيران', 'iran red sea'],
     'pmf_iran':     ['pmf iran', 'iran pmf', 'quds force iraq', 'iran militia iraq',
                      'الحشد الشعبي وإيران', 'فيلق القدس يوجه'],
+    # v1.2.0 — Axis actors split into China and Russia tracks
+    'china_iran_axis': ['china iran', 'chinese iran', 'beijing tehran',
+                        'china arms iran', 'china backs iran',
+                        'chinese satellite iran', 'irgc chinese',
+                        'china military aid iran', 'china iran axis',
+                        'tee-01b', 'emposat', 'earth eye co',
+                        'چین ایران', 'الصين إيران'],
+    'russia_iran_axis': ['russia iran', 'moscow tehran', 'russian iran',
+                         'russia arms iran', 'russia backs iran',
+                         'russian satellite iran', 'russia launches iran',
+                         'russia supplies iran', 'russia iran military',
+                         'russian targeting iran', 'russian rocket iran',
+                         'روسیه ایران', 'روسيا إيران'],
     'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
                      'netanyahu iran', 'mossad iran', 'israel red line iran',
                      'israel nuclear iran', 'israel sabotage iran',
