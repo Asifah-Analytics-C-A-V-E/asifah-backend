@@ -1321,12 +1321,23 @@ ACTOR_KEYWORDS = {
     'pmf_iran':     ['pmf iran', 'iran pmf', 'quds force iraq', 'iran militia iraq',
                      'الحشد الشعبي وإيران', 'فيلق القدس يوجه'],
     # v1.2.0 — Axis actors split into China and Russia tracks
-    'china_iran_axis': ['china iran', 'chinese iran', 'beijing tehran',
-                        'china arms iran', 'china backs iran',
-                        'chinese satellite iran', 'irgc chinese',
-                        'china military aid iran', 'china iran axis',
-                        'tee-01b', 'emposat', 'earth eye co',
-                        'چین ایران', 'الصين إيران'],
+    'china_iran_axis': [
+        # Direct mentions (both orders)
+        'china iran', 'iran china', 'chinese iran', 'iran chinese',
+        'beijing tehran', 'tehran beijing', 'china tehran', 'beijing iran',
+        # Material/capability transfers
+        'china arms iran', 'china backs iran', 'china supplies iran',
+        'china military aid iran', 'china iran axis',
+        # ISR / satellite (multiple word orders for FT-style headlines)
+        'chinese satellite', 'chinese spy satellite', 'china satellite iran',
+        'chinese satellite iran', 'iran chinese satellite',
+        'irgc chinese', 'chinese isr', 'china ground station iran',
+        # Named entities from TEE-01B story
+        'tee-01b', 'tee01b', 'emposat', 'earth eye co', 'earth eye',
+        # Cross-language
+        'چین ایران', 'ایران چین',
+        'الصين إيران', 'إيران الصين',
+    ],
     'russia_iran_axis': ['russia iran', 'moscow tehran', 'russian iran',
                          'russia arms iran', 'russia backs iran',
                          'russian satellite iran', 'russia launches iran',
