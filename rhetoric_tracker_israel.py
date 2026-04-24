@@ -648,6 +648,20 @@ US_BRAKE_PATTERNS = [
     'washington ceasefire demand israel',
     'us pressure on israel to halt',
     'us conditions military aid israel',
+    # ── v1.1: Expanded brake signals (Apr 2026) ──
+    # Trump-era de-escalation patterns + third-party mediation
+    'trump extends ceasefire', 'trump 90-day waiver',
+    'trump israel restraint', 'trump tells israel',
+    'trump halts israel', 'trump hostage deal pressure',
+    'jones act waiver', 'jones act extension',
+    'us extends ceasefire iran', 'us iran ceasefire extended',
+    'pakistan mediates', 'pakistan brokers', 'pakistan diplomacy iran',
+    'oman mediates iran', 'oman brokers',
+    'qatar mediates israel', 'qatar brokers ceasefire',
+    'egypt mediates ceasefire', 'egypt brokers gaza',
+    'israel halts strikes pending talks', 'israel pauses operations',
+    'witkoff ceasefire push', 'envoy presses israel',
+    'rubio israel pressure', 'state dept israel restraint',
 ]
 
 EU_SANCTION_PATTERNS = [
@@ -989,6 +1003,9 @@ def _compute_inbound_threat_from_fingerprints():
         'threat_convergence_index': 0,
         'convergence_signal': '',
         'fingerprints_age': {},
+        # ── v1.1: Cross-theater diplomatic tracks ──
+        'theaters_in_diplomacy': [],   # list of dicts: {theater, ceasefire_level, modifier, label}
+        'inbound_diplomatic_modifier': 0,  # aggregate downward pressure on inbound score
     }
     try:
         fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
@@ -1015,8 +1032,25 @@ def _compute_inbound_threat_from_fingerprints():
                     result['fingerprints_age'][theater] = round(age_h, 1)
                     if theater == 'iran' and fp.get('is_command_node'):
                         result['iran_is_command_node'] = True
+                    # ── v1.1: Capture diplomatic track from this theater ──
+                    if fp.get('diplomatic_active'):
+                        result['theaters_in_diplomacy'].append({
+                            'theater':         theater,
+                            'theater_display': theater.capitalize(),
+                            'ceasefire_level': fp.get('ceasefire_level', 0),
+                            'modifier':        fp.get('diplomatic_modifier', 0),
+                            'label':           fp.get('diplomatic_label', 'Quiet'),
+                        })
             except Exception:
                 pass
+
+        # Aggregate inbound diplomatic modifier — capped so we never zero out inbound
+        # even when every Iran-axis theater is in talks. Real threats can still be present.
+        total_modifier = sum(
+            t['modifier'] for t in result['theaters_in_diplomacy']
+        )
+        # Cap at -25 (max realistic dampening on a 0-100 inbound score)
+        result['inbound_diplomatic_modifier'] = max(-25, total_modifier)
 
         # Threat convergence index — how many Iran-controlled theaters
         # are simultaneously elevated against Israel
@@ -1744,6 +1778,13 @@ def _calculate_scores(theatre_summary, inbound_from_fingerprints,
 
     inbound_score = min(100, int((inbound_weighted / 5) * 80 +
                                   min(alert_counts.get('total', 0), 50) * 0.3))
+
+    # ── v1.1: Apply cross-theater diplomatic modifier ──
+    # When Iran/Lebanon/Yemen are in active diplomatic tracks, inbound pressure
+    # on Israel is reduced. Floor at 0 — we never go negative.
+    inbound_diplomatic_modifier = inbound_from_fingerprints.get('inbound_diplomatic_modifier', 0)
+    inbound_score = max(0, inbound_score + inbound_diplomatic_modifier)
+
     inbound_max = max(iran_lv, lebanon_lv, yemen_lv, alert_lv,
                       ballistic_art, northern_art)
 
@@ -1857,6 +1898,10 @@ def run_israel_rhetoric_scan(days=3):
         'iraq_threat_level':      inbound_fp['iraq_level'],
         'iran_is_command_node':   inbound_fp['iran_is_command_node'],
         'fingerprints_age':       inbound_fp['fingerprints_age'],
+        # ── v1.1: Cross-theater diplomatic tracks ──
+        'theaters_in_diplomacy':       inbound_fp.get('theaters_in_diplomacy', []),
+        'inbound_diplomatic_modifier': inbound_fp.get('inbound_diplomatic_modifier', 0),
+        'inbound_diplomatic_active':   len(inbound_fp.get('theaters_in_diplomacy', [])) > 0,
         # Alert vectors
         'alerts_24h': alert_counts,
         'alert_level': _score_inbound_from_alerts(alert_counts),
@@ -2031,6 +2076,10 @@ def register_israel_rhetoric_routes(app):
                 'alerts_24h':             cached.get('alerts_24h', {}),
                 'ballistic_level':        cached.get('ballistic_level', 0),
                 'northern_front_level':   cached.get('northern_front_level', 0),
+                # v1.1: Cross-theater diplomatic tracks
+                'theaters_in_diplomacy':       cached.get('theaters_in_diplomacy', []),
+                'inbound_diplomatic_modifier': cached.get('inbound_diplomatic_modifier', 0),
+                'inbound_diplomatic_active':   cached.get('inbound_diplomatic_active', False),
                 # Outbound dashboard
                 'outbound_score':         cached.get('outbound_score', 0),
                 'outbound_max_level':     cached.get('outbound_max_level', 0),
