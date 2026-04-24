@@ -614,6 +614,59 @@ DOMESTIC_TRIGGERS = {
 }
 
 # Vector 5: Regional Retaliation (Hormuz, Gulf states, energy infrastructure)
+# Vector 6: Diplomatic Track (de-escalation signals — REDUCES pressure)
+# Catches Araghchi shuttles, Pakistan/Oman/Russia mediation, Trump waivers,
+# Witkoff envoy activity, JCPOA / nuclear deal language.
+DIPLOMATIC_TRIGGERS = {
+    5: [
+        # Active deal / agreement
+        'iran us deal signed', 'iran nuclear deal signed',
+        'iran ceasefire signed', 'jcpoa restored',
+        'iran agreement reached', 'iran us framework agreed',
+        'توافق ایران آمریکا', 'اتفاق نووي إيران أمريكا',
+    ],
+    4: [
+        # Active negotiations / direct talks
+        'araghchi pakistan', 'araghchi oman', 'araghchi russia',
+        'iran second round talks', 'iran direct talks us',
+        'iran nuclear deal talks', 'iran us negotiations',
+        'witkoff iran', 'witkoff tehran', 'witkoff araghchi',
+        'iran ceasefire negotiations', 'iran us second round',
+        'us iran ceasefire talks', 'iran us framework',
+        'pakistan iran us mediator', 'oman iran us mediator',
+        'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
+    ],
+    3: [
+        # Mediator activity
+        'pakistan mediates iran', 'oman mediates iran',
+        'russia mediates iran', 'pakistan brokers iran',
+        'envoy visits tehran', 'us envoy iran', 'iran nuclear envoy',
+        'islamabad iran us', 'oman shuttle iran',
+        'iran nuclear talks resume', 'iran nuclear talks restart',
+        'trump extends iran ceasefire', 'trump 90-day waiver',
+        'trump iran ceasefire extension', 'jones act waiver',
+        'us extends iran ceasefire', 'iran ceasefire extension',
+        'iran nuclear envoy', 'special envoy iran',
+        'پاکستان وساطت', 'وساطة باكستانية',
+    ],
+    2: [
+        # Diplomatic push
+        'iran nuclear talks', 'iran nuclear negotiations',
+        'iran us diplomacy', 'iran nuclear diplomacy',
+        'iran diplomatic outreach', 'iran ceasefire offer',
+        'pakistan iran diplomacy', 'oman iran diplomacy',
+        'tehran offers talks', 'iran open to talks',
+        'مذاکرات هسته‌ای ایران', 'دبلوماسية إيرانية',
+    ],
+    1: [
+        # Background diplomatic mentions
+        'iran diplomacy', 'jcpoa', 'iran deal',
+        'iran nuclear program negotiation',
+        'دیپلماسی ایران', 'دبلوماسية إيران',
+    ],
+}
+
+
 REGIONAL_TRIGGERS = {
     5: [
         'iran closes hormuz', 'iran blockades hormuz',
@@ -1075,6 +1128,13 @@ def _write_crosstheater_signal(result):
             'china_iran_active':  china_iran_level >= 2,
             'russia_iran_active': russia_iran_level >= 2,
             'axis_support_level': axis_level,  # combined MAX — legacy consumers
+            # ── v1.1: Diplomatic Track Fingerprint ──
+            # Israel's tracker reads these to factor Iran's diplomatic posture
+            # into its inbound score (mirrors Lebanon pattern).
+            'diplomatic_active':   result.get('diplomatic_track_active', False),
+            'ceasefire_level':     result.get('ceasefire_level', 0),
+            'diplomatic_modifier': result.get('diplomatic_modifier', 0),
+            'diplomatic_label':    result.get('diplomatic_label_detailed', 'Quiet'),
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
@@ -1607,6 +1667,7 @@ def classify_articles(articles, proxy_activation_level):
         'domestic_max': 0,
         'regional_max': 0,
         'soft_power_max': 0,
+        'diplomatic_max': 0,   # v1.1: De-escalation signals
         'total_articles': len(articles),
         'operation_true_promise_signals': [],
         'proxy_directive_signals': [],
@@ -1726,6 +1787,13 @@ def classify_articles(articles, proxy_activation_level):
                             theatre_summary['soft_power_max'] = level
                         break
 
+                # ── v1.1: Diplomatic Track (de-escalation, REDUCES pressure) ──
+                for kw in DIPLOMATIC_TRIGGERS.get(level, []):
+                    if kw in text:
+                        if level > theatre_summary['diplomatic_max']:
+                            theatre_summary['diplomatic_max'] = level
+                        break
+
     # Per-actor finalization
     for actor_id, ar in actor_results.items():
         ar['max_level'] = max(
@@ -1786,7 +1854,19 @@ def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
     if operation_true_promise_count > 0:
         base += min(operation_true_promise_count * 3, 12)
 
-    return min(100, int(base))
+    # ── v1.1: Diplomatic Track Modifier (active negotiations REDUCE pressure) ──
+    diplomatic_level = theatre_summary.get('diplomatic_max', 0)
+    diplomatic_modifier_map = {
+        0: 0,    # Quiet
+        1: -1,   # Background diplomatic mentions
+        2: -3,   # Diplomatic push
+        3: -6,   # Mediator activity (Pakistan/Oman/Russia shuttle)
+        4: -10,  # Active negotiations / direct talks
+        5: -15,  # Agreement reached / signed
+    }
+    base += diplomatic_modifier_map.get(diplomatic_level, 0)
+
+    return max(0, min(100, int(base)))
 
 
 # ============================================
@@ -1862,6 +1942,20 @@ def run_iran_rhetoric_scan(days=3):
         'regional_label':         ESCALATION_LEVELS.get(max_regional, {}).get('label', 'Baseline'),
         'soft_power_level':       theatre_summary['soft_power_max'],
         'soft_power_label':       ESCALATION_LEVELS.get(theatre_summary['soft_power_max'], {}).get('label', 'Baseline'),
+
+        # ── v1.1: Diplomatic Track (de-escalation signals) ──
+        'ceasefire_level':           theatre_summary['diplomatic_max'],
+        'ceasefire_label':           ESCALATION_LEVELS.get(theatre_summary['diplomatic_max'], {}).get('label', 'Baseline'),
+        'diplomatic_track_active':   theatre_summary['diplomatic_max'] >= 2,
+        'diplomatic_modifier':       {0:0, 1:-1, 2:-3, 3:-6, 4:-10, 5:-15}.get(theatre_summary['diplomatic_max'], 0),
+        'diplomatic_label_detailed': {
+            0: 'Quiet',
+            1: 'Background Mentions',
+            2: 'Diplomatic Push',
+            3: 'Mediator Activity',
+            4: 'Active Negotiations',
+            5: 'Agreement Reached',
+        }.get(theatre_summary['diplomatic_max'], 'Quiet'),
 
         # Special signals
         'operation_true_promise_count': otp_count,
@@ -2049,6 +2143,12 @@ def register_iran_rhetoric_routes(app):
                 'domestic_label':         cached.get('domestic_label', 'Baseline'),
                 'regional_level':         cached.get('regional_level', 0),
                 'regional_label':         cached.get('regional_label', 'Baseline'),
+                # ── v1.1: Diplomatic Track ──
+                'ceasefire_level':           cached.get('ceasefire_level', 0),
+                'ceasefire_label':           cached.get('ceasefire_label', 'Baseline'),
+                'diplomatic_track_active':   cached.get('diplomatic_track_active', False),
+                'diplomatic_modifier':       cached.get('diplomatic_modifier', 0),
+                'diplomatic_label_detailed': cached.get('diplomatic_label_detailed', 'Quiet'),
                 # Iran-specific
                 'operation_true_promise_count':   cached.get('operation_true_promise_count', 0),
                 'operation_true_promise_signals': cached.get('operation_true_promise_signals', [])[:3],
