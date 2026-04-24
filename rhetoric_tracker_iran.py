@@ -1197,6 +1197,11 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Barak Ravid — first-mover Israel/Iran OSINT journalist (v2.3)
+    # 2 queries — Ravid covers Iran less centrally than Israel/Lebanon
+    # but his US-Iran ceasefire + nuclear deal scoops are high-value
+    ('https://news.google.com/rss/search?q=%22Barak+Ravid%22+Iran&hl=en&gl=US&ceid=US:en', 1.2),
+    ('https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%90%D7%99%D7%A8%D7%90%D7%9F&hl=iw&gl=IL&ceid=IL:iw', 1.2),
 ]
 
 # ============================================
