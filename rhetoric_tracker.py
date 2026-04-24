@@ -1117,6 +1117,15 @@ def fetch_lebanon_articles(days=3):
         'Jerusalem Post':     'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
         'Le Monde (FR)':      'https://www.lemonde.fr/rss/une.xml',
         'France24 (EN)':      'https://www.france24.com/en/rss',
+        # ── Barak Ravid — first-mover Lebanon/Hezbollah journalist (v2.1) ──
+        # Google News RSS targeting his bylines + Hebrew translations.
+        # Ravid consistently breaks Lebanon ceasefire / Hezbollah / US-Lebanon
+        # diplomatic scoops hours before wire services pick them up.
+        'Ravid — Axios General':      'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Axios&hl=en&gl=US&ceid=US:en',
+        'Ravid — Hezbollah Lebanon':  'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Hezbollah+Lebanon&hl=en&gl=US&ceid=US:en',
+        'Ravid — Ceasefire':          'https://news.google.com/rss/search?q=%22Barak+Ravid%22+ceasefire&hl=en&gl=US&ceid=US:en',
+        'Ravid — Trump Lebanon':      'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Trump+Lebanon&hl=en&gl=US&ceid=US:en',
+        'Ravid — Hebrew Lebanon':     'https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%9C%D7%91%D7%A0%D7%95%D7%9F&hl=iw&gl=IL&ceid=IL:iw',
     }
 
     for name, url in rss_feeds.items():
