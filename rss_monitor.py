@@ -72,8 +72,34 @@ IRAQ_RSS_FEEDS = {
     'kirkuk_now':       'https://news.google.com/rss/search?q=%22Kirkuk%22+OR+%22disputed+territories%22+iraq&hl=en&gl=US&ceid=US:en',
 }
 
+# ========================================
+# v3.3.0 — Diplomatic + Journalist Signal Feeds (April 2026)
+# These amplify the network by catching articles referencing key
+# diplomats and first-mover journalists across the ME.
+# All feeds use Google News RSS (proven-working pattern).
+# ========================================
+DIPLOMATIC_RSS_FEEDS = {
+    # ── Barak Ravid (Axios, CNN, Channel 12) — first-mover OSINT journalist ──
+    'ravid_general':        'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Axios&hl=en&gl=US&ceid=US:en',
+    'ravid_israel_iran':    'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Israel+Iran&hl=en&gl=US&ceid=US:en',
+    'ravid_hezbollah':      'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Hezbollah+Lebanon&hl=en&gl=US&ceid=US:en',
+    'ravid_ceasefire':      'https://news.google.com/rss/search?q=%22Barak+Ravid%22+ceasefire&hl=en&gl=US&ceid=US:en',
+    'ravid_hebrew':         'https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22&hl=iw&gl=IL&ceid=IL:iw',
+    # ── US ME diplomatic corps ──
+    'huckabee_israel':      'https://news.google.com/rss/search?q=%22Mike+Huckabee%22+ambassador+Israel&hl=en&gl=US&ceid=US:en',
+    'barrack_diplomatic':   'https://news.google.com/rss/search?q=%22Tom+Barrack%22+ambassador+Lebanon+OR+Syria+OR+Turkey&hl=en&gl=US&ceid=US:en',
+    'boulos_me':            'https://news.google.com/rss/search?q=%22Massad+Boulos%22+Lebanon+OR+%22Middle+East%22&hl=en&gl=US&ceid=US:en',
+    # ── Israeli diplomatic voices ──
+    'dermer_strategic':     'https://news.google.com/rss/search?q=%22Ron+Dermer%22+Israel+strategic&hl=en&gl=US&ceid=US:en',
+    'leiter_ambassador':    'https://news.google.com/rss/search?q=%22Yechiel+Leiter%22+ambassador&hl=en&gl=US&ceid=US:en',
+    # ── Lebanese diplomatic voices ──
+    'issa_ambassador':      'https://news.google.com/rss/search?q=%22Michel+Issa%22+ambassador+Lebanon&hl=en&gl=US&ceid=US:en',
+    'hamadeh_ambassador':   'https://news.google.com/rss/search?q=%22Nada+Hamadeh%22+ambassador&hl=en&gl=US&ceid=US:en',
+    'karam_lebanon':        'https://news.google.com/rss/search?q=%22Simon+Karam%22+Lebanon&hl=en&gl=US&ceid=US:en',
+}
+
 # Combine all feeds
-ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS}
+ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS, **DIPLOMATIC_RSS_FEEDS}
 
 
 # ========================================
@@ -125,6 +151,108 @@ LEADERSHIP_NAMES = {
         ],
         'titles': ['IDF Chief of Staff', 'Chief of Staff', 'IDF Commander'],
         'organization': 'israel'
+    },
+    # ========================================
+    # v3.3.0 (April 2026) — Diplomatic corps + first-mover journalist
+    # These amplify the scoring network via the existing leadership-
+    # quote detection + weight-multiplier pipeline.
+    # ========================================
+    # ── Barak Ravid (journalist — first-mover OSINT) ──
+    'barak_ravid': {
+        'names': [
+            'Barak Ravid', 'Ravid (Axios)',
+            'ברק רביד',    # Hebrew
+        ],
+        'titles': [
+            'Axios correspondent', 'CNN analyst',
+            'Channel 12 Washington correspondent', 'Walla correspondent',
+        ],
+        'organization': 'journalist_axios'
+    },
+    # ── US ME diplomatic corps ──
+    'huckabee': {
+        'names': [
+            'Mike Huckabee', 'Huckabee',
+            'Ambassador Huckabee',
+        ],
+        'titles': [
+            'US Ambassador to Israel', 'Ambassador to Israel',
+        ],
+        'organization': 'us_diplomatic'
+    },
+    'barrack': {
+        'names': [
+            'Tom Barrack', 'Thomas Barrack', 'Barrack',
+            'Ambassador Barrack',
+        ],
+        'titles': [
+            'US Ambassador', 'Ambassador to Turkey',
+            'Special envoy',
+        ],
+        'organization': 'us_diplomatic'
+    },
+    'boulos': {
+        'names': [
+            'Massad Boulos', 'Boulos',
+        ],
+        'titles': [
+            'Senior advisor', 'Middle East advisor',
+            'Trump advisor',
+        ],
+        'organization': 'us_diplomatic'
+    },
+    # ── Israeli diplomatic voices ──
+    'dermer': {
+        'names': [
+            'Ron Dermer', 'Dermer',
+            'רון דרמר',    # Hebrew
+        ],
+        'titles': [
+            'Strategic Affairs Minister', 'Minister for Strategic Affairs',
+            'Strategic Affairs',
+        ],
+        'organization': 'israel_diplomatic'
+    },
+    'leiter': {
+        'names': [
+            'Yechiel Leiter', 'Leiter',
+            'Ambassador Leiter',
+            'יחיאל לייטר',    # Hebrew
+        ],
+        'titles': [
+            'Israeli Ambassador to the United States',
+            'Israeli Ambassador to Washington',
+            'Ambassador to the US',
+        ],
+        'organization': 'israel_diplomatic'
+    },
+    # ── Lebanese diplomatic voices ──
+    'issa': {
+        'names': [
+            'Michel Issa', 'Ambassador Issa',
+        ],
+        'titles': [
+            'Lebanese Ambassador',
+        ],
+        'organization': 'lebanon_diplomatic'
+    },
+    'hamadeh': {
+        'names': [
+            'Nada Hamadeh', 'Ambassador Hamadeh',
+        ],
+        'titles': [
+            'Lebanese Ambassador',
+        ],
+        'organization': 'lebanon_diplomatic'
+    },
+    'karam': {
+        'names': [
+            'Simon Karam',
+        ],
+        'titles': [
+            'Former Lebanese Ambassador', 'Lebanese Ambassador',
+        ],
+        'organization': 'lebanon_diplomatic'
     }
 }
 
