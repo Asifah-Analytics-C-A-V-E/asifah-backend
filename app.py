@@ -338,6 +338,15 @@ def _refresh_target(target):
         except Exception as e:
             print(f"[Background Refresh] RSS error for {target}: {e}")
 
+        # v3.3 — Ravid first-mover OSINT (target-specific English + Hebrew)
+        try:
+            ravid_articles = fetch_ravid_articles(target)
+            for article in ravid_articles:
+                article['leadership'] = enhance_article_with_leadership(article)
+            all_articles.extend(ravid_articles)
+        except Exception as e:
+            print(f"[Background Refresh] Ravid error for {target}: {e}")
+
         scoring_result = calculate_threat_probability(all_articles, days, target)
         probability = scoring_result['probability']
         momentum = scoring_result['momentum']
@@ -562,9 +571,16 @@ def _refresh_target(target):
 
         print(f"[Israel] Google News war RSS: {len(google_war_articles)} articles")
 
+        # v3.3 — Ravid first-mover OSINT (English + Hebrew)
+        try:
+            ravid_articles = fetch_ravid_articles('israel')
+        except Exception as e:
+            print(f"[Israel] Ravid fetch error: {e}")
+            ravid_articles = []
+
         all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ar +
                        articles_gdelt_he + articles_gdelt_fa + articles_reddit + 
-                       israel_rss + google_war_articles)
+                       israel_rss + google_war_articles + ravid_articles)
 
         scoring_result = calculate_threat_probability(all_articles, days, 'israel')
         probability = scoring_result['probability']
@@ -1265,11 +1281,26 @@ ESCALATION_KEYWORDS = [
 
 TARGET_KEYWORDS = {
     'hezbollah': {
-        'keywords': ['hezbollah', 'hizbollah', 'hizballah', 'lebanon', 'lebanese', 'nasrallah'],
+        'keywords': [
+            'hezbollah', 'hizbollah', 'hizballah', 'lebanon', 'lebanese', 'nasrallah',
+            # v3.3 — diplomat amplifier keywords (Ravid-style wider net)
+            'michel issa', 'nada hamadeh', 'simon karam',
+            'tom barrack', 'massad boulos', 'boulos',
+            'mike huckabee', 'huckabee ambassador',
+            'barak ravid', 'axios lebanon',
+            'ברק רביד',  # Hebrew Ravid
+        ],
         'reddit_keywords': ['Hezbollah', 'Lebanon', 'Israel', 'IDF', 'Lebanese', 'border', 'missile', 'strike']
     },
     'iran': {
-        'keywords': ['iran', 'iranian', 'tehran', 'irgc', 'revolutionary guard', 'khamenei'],
+        'keywords': [
+            'iran', 'iranian', 'tehran', 'irgc', 'revolutionary guard', 'khamenei',
+            # v3.3 — diplomat amplifier keywords (Ravid-style wider net)
+            'tom barrack', 'massad boulos', 'boulos',
+            'ron dermer', 'dermer', 'yechiel leiter', 'leiter',
+            'barak ravid', 'axios iran',
+            'ברק רביד',  # Hebrew Ravid
+        ],
         'reddit_keywords': ['Iran', 'Israel', 'IRGC', 'nuclear', 'Tehran', 'strike', 'sanctions']
     },
     'iraq': {
@@ -1334,7 +1365,13 @@ TARGET_KEYWORDS = {
             'מלחמה', 'מצב חירום', 'פינוי', 'נפגעים',
             'صواريخ على إسرائيل', 'هجوم إيراني على إسرائيل',
             'القبة الحديدية', 'صافرات الإنذار', 'قصف تل أبيب',
-            'حرب إسرائيل إيران', 'عملية إيبك فيوري'
+            'حرب إسرائيل إيران', 'عملية إيبك فيوري',
+            # v3.3 — diplomat amplifier keywords (Ravid-style wider net)
+            'ron dermer', 'dermer', 'yechiel leiter', 'leiter ambassador',
+            'mike huckabee', 'huckabee ambassador',
+            'tom barrack', 'massad boulos',
+            'barak ravid', 'axios israel',
+            'ברק רביד', 'רון דרמר', 'יחיאל לייטר',  # Hebrew names
         ],
         'reddit_keywords': [
             'Israel', 'IDF', 'Netanyahu', 'Iron Dome', 'Gaza',
@@ -3085,6 +3122,100 @@ def build_israel_headlines(incoming_threats, outgoing_ops, all_articles):
     
     headlines.sort(key=lambda x: x['weight'], reverse=True)
     return headlines[:15]
+
+
+def fetch_ravid_articles(target='general'):
+    """
+    v3.3 — Centralized Ravid-focused Google News RSS fetcher.
+    
+    Barak Ravid (Axios/CNN/Channel 12) is a first-mover OSINT journalist
+    whose bylines consistently break US-Israel-Iran-Lebanon policy scoops
+    hours-to-days before wire services pick them up.
+    
+    Catches English + Hebrew articles mentioning his name via Google News RSS.
+    Called from multiple target paths (Israel + Iran/Hezbollah/Houthis/Syria).
+    
+    Args:
+        target: 'general', 'israel', 'iran', 'hezbollah', 'houthis', 'syria'
+                Determines which supplementary Ravid queries to run.
+    
+    Returns: List of articles in standard format.
+    """
+    articles = []
+    
+    # Base queries run for every target
+    queries = [
+        '%22Barak+Ravid%22+Axios',
+        '%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22',   # Hebrew: "ברק רביד"
+    ]
+    
+    # Target-specific supplementary queries
+    target_queries = {
+        'israel':    ['%22Barak+Ravid%22+Israel+Iran',
+                      '%22Barak+Ravid%22+Netanyahu',
+                      '%22Barak+Ravid%22+hostage'],
+        'iran':      ['%22Barak+Ravid%22+Iran',
+                      '%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%90%D7%99%D7%A8%D7%90%D7%9F'],  # "ברק רביד" איראן
+        'hezbollah': ['%22Barak+Ravid%22+Hezbollah+Lebanon',
+                      '%22Barak+Ravid%22+ceasefire',
+                      '%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%9C%D7%91%D7%A0%D7%95%D7%9F'],  # "ברק רביד" לבנון
+        'houthis':   ['%22Barak+Ravid%22+Houthi+OR+Yemen'],
+        'syria':     ['%22Barak+Ravid%22+Syria'],
+        'general':   [],
+    }
+    
+    queries += target_queries.get(target, [])
+    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    
+    for query in queries:
+        try:
+            feed_url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
+            # Hebrew queries use IL locale
+            if '%D7%' in query:
+                feed_url = f"https://news.google.com/rss/search?q={query}&hl=iw&gl=IL&ceid=IL:iw"
+            
+            resp = requests.get(feed_url, timeout=10, headers=headers)
+            if resp.status_code != 200:
+                continue
+            
+            try:
+                root = ET.fromstring(resp.content)
+            except ET.ParseError:
+                continue
+            
+            for item in root.findall('.//item')[:10]:
+                title_elem = item.find('title')
+                link_elem = item.find('link')
+                pubDate_elem = item.find('pubDate')
+                description_elem = item.find('description')
+                
+                if title_elem is None or link_elem is None:
+                    continue
+                
+                pub_date = pubDate_elem.text if pubDate_elem is not None else datetime.now(timezone.utc).isoformat()
+                description = ''
+                if description_elem is not None and description_elem.text:
+                    description = description_elem.text[:500]
+                
+                # Determine language by query encoding
+                lang = 'he' if '%D7%' in query else 'en'
+                
+                articles.append({
+                    'title': title_elem.text or '',
+                    'description': description,
+                    'url': link_elem.text or '',
+                    'publishedAt': pub_date,
+                    'source': {'name': 'Ravid (via Google News)'},
+                    'content': description,
+                    'language': lang,
+                    'ravid_sourced': True,  # Provenance flag for future weighting
+                })
+        except Exception as e:
+            print(f"[Ravid RSS {target}] Error: {str(e)[:80]}")
+    
+    print(f"[Ravid] {target}: {len(articles)} articles")
+    return articles
 
 
 def fetch_israel_news_rss():
