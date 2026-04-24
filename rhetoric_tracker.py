@@ -955,6 +955,13 @@ def _write_crosstheater_signal(result):
                 for aid in ['hezbollah_political', 'hezbollah_military', 'iran_lebanon']
             },
             'specificity_score': result.get('specificity_score', 0),
+            # ── DIPLOMATIC TRACK FINGERPRINT ──
+            # Other trackers (Israel, Iran) read this to factor Lebanon's
+            # diplomatic posture into their own scores.
+            'diplomatic_active': result.get('diplomatic_track_active', False),
+            'ceasefire_level': result.get('ceasefire_level', 0),
+            'diplomatic_modifier': result.get('diplomatic_modifier', 0),
+            'diplomatic_label': result.get('diplomatic_label_detailed', 'Quiet'),
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
@@ -1601,19 +1608,18 @@ def _calculate_rhetoric_score(actor_results, coordination_alerts,
                                ceasefire_level, crossborder_level):
     """
     0-100 rhetoric tension score.
-    Weighted combination of vector scores + actor escalation + coordination.
+    Weighted combination of vector scores + actor escalation + coordination,
+    minus diplomatic track modifier (active negotiations REDUCE pressure).
     """
     score = 0
 
-    # Vector contributions (max 60)
+    # Vector contributions (max 75) — threat-only vectors
     score += ground_ops_level * 5    # max 25
     score += rockets_level * 7       # max 35 — rockets are the most acute signal
     score += crossborder_level * 3   # max 15
-    # Ceasefire is inverse — higher ceasefire signal = de-escalatory, small positive contribution
-    score += ceasefire_level * 1     # max 5
 
-    # Cap vector contribution at 60
-    score = min(score, 60)
+    # Cap threat vector contribution at 75
+    score = min(score, 75)
 
     # Actors at level 3+: 5 pts each (max 20)
     hot_actors = sum(
@@ -1632,7 +1638,21 @@ def _calculate_rhetoric_score(actor_results, coordination_alerts,
     )
     score += min(silence_count * 5, 5)
 
-    return min(score, 100)
+    # ── DIPLOMATIC TRACK MODIFIER ──
+    # Active negotiations reduce the threat score. Agreements reduce it more.
+    # Floor at 0 — we never go negative even during full ceasefire signing.
+    diplomatic_modifier_map = {
+        0: 0,    # Quiet
+        1: -1,   # Background diplomatic mentions
+        2: -3,   # Diplomatic push
+        3: -6,   # Mediator activity / envoy visits
+        4: -10,  # Active negotiations / direct talks
+        5: -15,  # Agreement reached / signed
+    }
+    diplomatic_modifier = diplomatic_modifier_map.get(ceasefire_level, 0)
+    score += diplomatic_modifier
+
+    return max(0, min(score, 100))
 
 
 def _build_alerts(actor_results, coordination_alerts):
@@ -2029,7 +2049,7 @@ def run_rhetoric_scan(days=3):
         'total_articles': len(articles),
         'articles_classified': total_classified,
 
-        # Theatre-level summary — dual field names for backward compat
+# Theatre-level summary — dual field names for backward compat
         'theatre_escalation_level': theatre_level,
         'theatre_escalation_label': theatre_info['label'],
         'theatre_escalation_color': theatre_info['color'],
@@ -2037,7 +2057,6 @@ def run_rhetoric_scan(days=3):
         'theatre_score': rhetoric_score,         # for index page (mirrors Yemen)
         'theatre_color': theatre_info['color'],  # for index page
         'rhetoric_score': rhetoric_score,
-
         # Vectors
         'ground_ops_level':  ground_ops_level,
         'ground_ops_label':  ESCALATION_LEVELS[ground_ops_level]['label'],
@@ -2047,6 +2066,20 @@ def run_rhetoric_scan(days=3):
         'ceasefire_label':   ESCALATION_LEVELS[ceasefire_level]['label'],
         'crossborder_level': crossborder_level,
         'crossborder_label': ESCALATION_LEVELS[crossborder_level]['label'],
+        # ── DIPLOMATIC TRACK FIELDS ──
+        # Active negotiations REDUCE the threat score (see _calculate_rhetoric_score).
+        # These fields expose the diplomatic posture to the frontend sidebar
+        # and to other trackers via the cross-theater fingerprint.
+        'diplomatic_track_active':   ceasefire_level >= 2,
+        'diplomatic_modifier':       {0:0, 1:-1, 2:-3, 3:-6, 4:-10, 5:-15}.get(ceasefire_level, 0),
+        'diplomatic_label_detailed': {
+            0: 'Quiet',
+            1: 'Background Mentions',
+            2: 'Diplomatic Push',
+            3: 'Mediator Activity',
+            4: 'Active Negotiations',
+            5: 'Agreement Reached',
+        }.get(ceasefire_level, 'Quiet'),
 
         # v2.0 enriched fields
         'specificity_score': theatre_specificity,
@@ -2323,6 +2356,12 @@ def register_rhetoric_endpoints(app):
                 'delta':             cached.get('delta'),
                 'silence_anomalies': cached.get('silence_anomalies', []),
                 'total_articles':    cached.get('total_articles', 0),
+                # ── DIPLOMATIC TRACK (v2.3) ──
+                # Active negotiations reduce the threat score; these fields
+                # expose the modifier and label to the frontend sidebar.
+                'diplomatic_track_active':   cached.get('diplomatic_track_active', False),
+                'diplomatic_modifier':       cached.get('diplomatic_modifier', 0),
+                'diplomatic_label_detailed': cached.get('diplomatic_label_detailed', 'Quiet'),
                 # Alerts
                 'alerts':      cached.get('alerts', [])[:3],
                 'scanned_at':  cached.get('scanned_at', ''),
