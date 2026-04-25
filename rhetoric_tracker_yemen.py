@@ -1,6 +1,6 @@
 """
 Houthi Rhetoric Tracker — Asifah Analytics
-v1.1.0 — March 2026
+'version': '2.1.1 - April 2026'
 
 Tracks escalation rhetoric from Ansar Allah (Houthis) and responses
 from KSA, UAE, US, Israel across two primary threat vectors:
@@ -26,6 +26,16 @@ import time
 import requests
 from datetime import datetime, timezone, timedelta
 from flask import jsonify, request
+
+# ── v2.1: Signal interpreter (so_what, red_lines, historical_matches) ──
+# Optional — tracker continues to function if import fails (graceful degradation).
+try:
+    from yemen_signal_interpreter import interpret_signals as _yemen_interpret_signals
+    _INTERPRETER_AVAILABLE = True
+except ImportError as _e:
+    print(f"[Yemen Rhetoric] ⚠️  Signal interpreter not available: {_e}")
+    _yemen_interpret_signals = None
+    _INTERPRETER_AVAILABLE = False
 
 # ============================================
 # CONFIG
@@ -1436,12 +1446,26 @@ def run_houthi_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'conditional_threats': theatre_summary.get('conditional_threats', [])[:8],
         'specificity_score': theatre_specificity,
-        'version': '2.1.0-yemen-canonical-lift'
+        'version': '2.1.1-yemen-interpreter-wired'
     }
 
     # ── Baseline + silence detection ──
     baselines = _update_actor_baselines(actor_results)
     result['silence_anomalies'] = _detect_silence_anomalies(actor_results, baselines)
+
+    # ── v2.1: Signal interpretation (so_what, red_lines, historical_matches) ──
+    # Wraps in try/except so a bad interpretation never breaks the scan.
+    if _INTERPRETER_AVAILABLE and _yemen_interpret_signals:
+        try:
+            interpretation = _yemen_interpret_signals(result)
+            result['interpretation'] = interpretation
+            print(f"[Yemen Rhetoric] ✅ Interpretation generated — scenario: "
+                  f"{interpretation.get('so_what', {}).get('scenario', 'unknown')}")
+        except Exception as e:
+            print(f"[Yemen Rhetoric] ⚠️  Interpreter failed: {e}")
+            result['interpretation'] = None
+    else:
+        result['interpretation'] = None
 
     # ── Delta vs prior scans ──
     _redis_set(RHETORIC_CACHE_KEY, result)  # Save first so history is up to date
