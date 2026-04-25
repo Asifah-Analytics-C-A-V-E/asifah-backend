@@ -110,29 +110,66 @@ ESCALATION_LEVELS = {
 # ============================================
 
 # Vector 1: Maritime
+# Vector 1: Maritime / Bab el-Mandeb / Red Sea
+# Depth-matched to Iran-Hormuz tracker. Tracks:
+# - Strike actions (vessels hit/sunk/seized)
+# - Mining / mine-laying language (the friction-tax escalation)
+# - Closure declarations / exclusion zones
+# - Specific ship/cargo classes targeted
+# - Insurance market signals
 MARITIME_TRIGGERS = {
-    5: [  # Active Strike
-        'sank', 'destroyed vessel', 'ship sunk', 'tanker destroyed',
-        'port struck', 'hodeidah hit', 'shipping lane closed',
+    5: [  # Active Strike — vessel struck / sunk / seized
+        'sank', 'ship sunk', 'tanker sunk', 'vessel sunk',
+        'destroyed vessel', 'tanker destroyed', 'ship destroyed',
+        'vessel seized', 'ship seized', 'crew taken', 'crew kidnapped',
+        'port struck', 'hodeidah hit', 'al-hudaydah struck',
+        'shipping lane closed', 'red sea closed',
+        'lng carrier hit', 'container ship sunk', 'bulk carrier hit',
+        'mines detonated', 'mine struck ship', 'vessel struck mine',
+        'ارسلنا الصاروخ',  # "We sent the missile" Arabic
+        'استهدفنا السفينة',  # "We targeted the ship"
     ],
-    4: [  # Attack Declared
+    4: [  # Attack Declared / In Progress / Mining
         'launching attack', 'firing on', 'drone strike ship',
         'missile hits ship', 'anti-ship missile fired',
-        'bab el-mandeb closure', 'red sea blockade declared',
+        'targeted vessel', 'attacking ship', 'engaged vessel',
+        'bab el-mandeb closure', 'bab el mandab closure',
+        'red sea blockade declared', 'naval blockade activated',
+        'we have laid mines', 'placing mines', 'mines deployed',
+        'mining the strait', 'mined shipping lane',
+        'shoot and kill small boats', 'small boat threat red sea',
+        'attack on us navy', 'targeting us warship',
+        'سنغرق السفن',  # "We will sink ships"
+        'حصار البحر الأحمر',  # "Red Sea blockade"
     ],
-    3: [  # Direct Threat
-        'will target ships', 'threaten shipping', 'close the strait',
-        'ban israeli ships', 'all ships warned', 'maritime exclusion zone',
-        'houthi naval operation', 'naval blockade',
+    3: [  # Direct Threat — named targets, time-bounded
+        'will target ships', 'will sink', 'will mine',
+        'threaten shipping', 'threaten to mine', 'threaten to close',
+        'close the strait', 'block bab el-mandeb', 'block bab el mandab',
+        'ban israeli ships', 'ban us ships', 'ban uk ships',
+        'all ships warned', 'maritime exclusion zone',
+        'houthi naval operation', 'houthi naval forces',
+        'target lng carriers', 'target oil tankers',
+        'no safe passage', 'passage denied',
+        'سنستهدف السفن',  # "We will target ships"
     ],
-    2: [  # Warning
+    2: [  # Warning / Market Signal / Friction Tax
         'red sea warning', 'shipping risk elevated', 'vessels advised',
-        'insurance premiums surge', 'rerouting via cape',
+        'insurance premiums surge', 'war risk premium',
+        'rerouting via cape', 'cape of good hope reroute',
         'avoid red sea', 'gulf of aden alert',
+        'maersk suspends', 'hapag-lloyd suspends', 'cma cgm suspends',
+        'shipping companies pause', 'cargo diverted',
+        'lloyd\'s war risk', 'p&i club warning',
+        'qatar lng disrupted', 'lng route disrupted',
+        'oman gulf rerouting',
     ],
-    1: [  # Rhetoric
-        'red sea', 'bab el-mandeb', 'suez', 'shipping lane',
-        'houthi naval', 'maritime', 'vessel', 'tanker',
+    1: [  # Background / Geographic Mention
+        'red sea', 'bab el-mandeb', 'bab el mandab', 'suez',
+        'shipping lane', 'houthi naval', 'maritime', 'vessel', 'tanker',
+        'gulf of aden', 'arabian sea', 'hodeidah port',
+        'البحر الأحمر',  # "Red Sea"
+        'باب المندب',  # "Bab el-Mandeb"
     ],
 }
 
@@ -183,6 +220,118 @@ SOMALILAND_TRIGGERS = {
 }
 
 # Conditional Threats — "if X then Y" tripwire language
+# Vector: Migration / Population Movement
+# Yemenis moving INTO Oman = humanitarian / safety pressure (people fleeing)
+# Yemenis moving OUT of Oman = potentially concerning (return to Yemen,
+#   or onward movement signaling something changed)
+# Tracks the Oman corridor as a stability pressure indicator.
+MIGRATION_TRIGGERS = {
+    5: [  # Major surge / forced mass movement
+        'mass exodus yemen', 'yemenis flee in thousands',
+        'oman closes border yemen', 'yemen-oman border crisis',
+        'humanitarian corridor collapsed',
+    ],
+    4: [  # Significant flow / crisis indicator
+        'yemenis cross into oman', 'yemenis fleeing to oman',
+        'yemen refugees oman surge', 'mhd al-mazyunah influx',
+        'al-ghaydah border crossing surge', 'yemenis seeking refuge oman',
+        'yemen humanitarian collapse',
+    ],
+    3: [  # Notable movement / pattern shift
+        'yemenis arriving oman', 'oman receives yemeni refugees',
+        'yemen displacement increase', 'idp surge yemen',
+        'yemenis return from oman', 'reverse migration yemen',
+        'yemen-oman migration', 'salalah yemen refugees',
+    ],
+    2: [  # Awareness / monitoring
+        'yemen displacement', 'yemen refugee', 'yemeni refugees',
+        'oman yemeni population', 'humanitarian situation yemen',
+        'yemen idp', 'displaced yemenis',
+        'لاجئين يمنيين',  # "Yemeni refugees"
+        'النازحين اليمنيين',  # "Displaced Yemenis"
+    ],
+    1: [  # Background mention
+        'yemen oman border', 'oman yemen', 'al-mazyunah',
+        'al-ghaydah', 'mahra governorate', 'salalah',
+    ],
+}
+
+
+# Vector: Migration / Population Movement (BIDIRECTIONAL)
+# Yemen has two opposing migration pressures:
+#   OUTBOUND  (Yemen → Oman/Saudi) = escalatory — people fleeing instability
+#   RETURNING (Oman/Saudi → Yemen) = de-escalatory — confidence in stability returning
+# Net effect contributes to rhetoric score. Same pattern can be applied to Syria,
+# Sudan, Lebanon, and other unstable theaters.
+
+MIGRATION_OUT_TRIGGERS = {
+    5: [  # Mass exodus / forced movement
+        'mass exodus yemen', 'yemenis flee in thousands',
+        'oman closes border yemen', 'yemen-oman border crisis',
+        'humanitarian corridor collapsed', 'yemenis trapped at border',
+        'saudi yemen border surge',
+        'هروب جماعي من اليمن',  # "Mass flight from Yemen"
+    ],
+    4: [  # Significant outbound flow
+        'yemenis cross into oman', 'yemenis fleeing to oman',
+        'yemen refugees oman surge', 'al-mazyunah influx',
+        'al-ghaydah border crossing surge', 'yemenis seeking refuge oman',
+        'yemen humanitarian collapse', 'yemenis flee to saudi',
+        'idp surge yemen', 'displacement spike yemen',
+        'يمنيون يفرون',  # "Yemenis flee"
+        'نزوح جماعي',  # "Mass displacement"
+    ],
+    3: [  # Notable outbound movement
+        'yemenis arriving oman', 'oman receives yemeni refugees',
+        'yemen displacement increase', 'yemenis seek asylum oman',
+        'yemen idp camps growing', 'yemenis cross border',
+        'salalah yemen refugees',
+        'لاجئون يمنيون جدد',  # "New Yemeni refugees"
+    ],
+    2: [  # Awareness / monitoring (outbound)
+        'yemen displacement', 'yemen refugee', 'yemeni refugees',
+        'oman yemeni population', 'humanitarian situation yemen worsens',
+        'yemen idp', 'displaced yemenis',
+        'لاجئين يمنيين',  # "Yemeni refugees"
+        'النازحين اليمنيين',  # "Displaced Yemenis"
+    ],
+    1: [  # Background outbound mention
+        'yemen oman border', 'oman yemen border', 'al-mazyunah',
+        'al-ghaydah', 'mahra governorate', 'salalah refugees',
+    ],
+}
+
+MIGRATION_RETURN_TRIGGERS = {
+    5: [  # Mass return / large-scale repatriation
+        'mass return yemen', 'yemenis return in thousands',
+        'large-scale repatriation yemen', 'yemenis go home',
+        'refugees return yemen', 'organized return yemen',
+        'عودة جماعية لليمن',  # "Mass return to Yemen"
+    ],
+    4: [  # Significant return flow
+        'yemenis return from oman', 'reverse migration yemen',
+        'yemenis return from saudi', 'unhcr facilitates return yemen',
+        'iom yemen return', 'voluntary return yemen',
+        'displaced yemenis return home',
+        'يمنيون يعودون',  # "Yemenis return"
+    ],
+    3: [  # Notable return / pattern shift
+        'yemen returnees increase', 'yemenis returning home',
+        'oman yemenis go back', 'pilot return yemen',
+        'idp return yemen', 'returnee assistance yemen',
+        'يمنيون يرجعون',  # "Yemenis return back"
+    ],
+    2: [  # Awareness / early signals
+        'yemen return planning', 'return assessment yemen',
+        'conditions for return yemen', 'yemen reconstruction',
+        'reintegration yemen',
+    ],
+    1: [  # Background return mention
+        'yemen return', 'returnees yemen', 'home yemen',
+    ],
+}
+
+
 CONDITIONAL_TRIGGERS = {
     3: [
         'if the strikes continue', 'if israel attacks', 'if us forces',
@@ -203,11 +352,50 @@ CONDITIONAL_TRIGGERS = {
 }
 
 # KSA-Houthi Ceasefire Signals
-CEASEFIRE_TRIGGERS = {
-    3: ['ceasefire agreement signed', 'peace deal yemen', 'houthi agrees ceasefire'],
-    2: ['peace talks', 'ceasefire negotiations', 'houthi saudi talks',
-        'diplomatic solution', 'yemen negotiations', 'un mediator yemen'],
-    1: ['ceasefire', 'truce', 'negotiations', 'dialogue', 'talks'],
+# Vector: Diplomatic Track (de-escalation — REDUCES pressure)
+# Same canonical pattern as Lebanon/Iran trackers. Tracks Yemen/Houthi-specific
+# diplomatic channels: KSA-Houthi talks (Riyadh), UN mediator (Grundberg),
+# Oman shuttle diplomacy, US-Houthi back channels.
+DIPLOMATIC_TRIGGERS = {
+    5: [  # Agreement reached / signed
+        'ceasefire agreement signed yemen', 'yemen peace deal signed',
+        'houthi saudi agreement signed', 'yemen war ends',
+        'red sea ceasefire signed', 'houthi truce signed',
+        'roadmap signed yemen', 'comprehensive ceasefire yemen',
+    ],
+    4: [  # Active negotiations / direct talks
+        'houthi saudi direct talks', 'riyadh houthi delegation',
+        'houthi saudi second round', 'saudi yemen framework',
+        'us houthi back channel', 'us houthi talks',
+        'oman houthi shuttle', 'oman mediates yemen',
+        'grundberg meets houthi', 'un envoy houthi talks',
+        'yemen ceasefire framework', 'yemen roadmap discussions',
+        'houthi delegation muscat', 'houthi delegation riyadh',
+        'مفاوضات مباشرة الحوثي',  # "Direct Houthi negotiations"
+    ],
+    3: [  # Mediator activity
+        'oman mediates houthi', 'oman brokers yemen',
+        'un envoy yemen', 'grundberg yemen', 'special envoy yemen',
+        'saudi mediates yemen', 'kuwait mediates yemen',
+        'houthi political committee saudi',
+        'us envoy yemen', 'lenderking yemen',
+        'extends yemen ceasefire', 'yemen ceasefire extension',
+        'houthi prisoner exchange', 'prisoner swap yemen',
+        'وساطة عمانية اليمن',  # "Omani mediation Yemen"
+    ],
+    2: [  # Diplomatic push
+        'peace talks yemen', 'ceasefire negotiations yemen',
+        'houthi saudi talks', 'diplomatic solution yemen',
+        'yemen negotiations', 'un mediator yemen',
+        'ksa yemen diplomacy', 'tehran offers yemen mediation',
+        'houthi open to talks', 'saudi open to yemen talks',
+        'مفاوضات اليمن',  # "Yemen negotiations"
+    ],
+    1: [  # Background mentions
+        'ceasefire', 'truce', 'yemen dialogue', 'yemen talks',
+        'yemen diplomacy', 'yemen peace', 'roadmap',
+        'وقف اطلاق النار',  # "ceasefire"
+    ],
 }
 
 # Actor-keyword mapping
@@ -608,10 +796,16 @@ def classify_articles(articles):
         'direct_strike_max_level': 0,
         'somaliland_max_level': 0,
         'ceasefire_max_level': 0,
-        'total_articles': len(articles),
+        # ── v2.1: New vectors ──
+        'diplomatic_max': 0,                 # canonical diplomatic level (0-5)
+        'migration_out_max': 0,              # outbound flow (escalatory)
+        'migration_return_max': 0,           # return flow (de-escalatory)
+        'migration_out_signals': [],         # outbound article snippets
+        'migration_return_signals': [],      # return article snippets
+        'specificity_scores': [],
         'coordination_signals': [],
         'conditional_threats': [],
-        'specificity_scores': [],  # Collect per-article scores for theatre avg
+        'iran_houthi_signals': [],
     }
 
     for article in articles:
@@ -665,12 +859,46 @@ def classify_articles(articles):
                         theatre_summary['somaliland_max_level'] = level
                     break
 
-            for kw in CEASEFIRE_TRIGGERS.get(level, []):
+            # ── v2.1: Diplomatic Track (canonical, REDUCES pressure) ──
+            # Replaces old CEASEFIRE_TRIGGERS — same field name kept for backward compat
+            for kw in DIPLOMATIC_TRIGGERS.get(level, []):
                 if kw in text:
                     if level > ar['ceasefire_score']:
                         ar['ceasefire_score'] = level
                     if level > theatre_summary['ceasefire_max_level']:
                         theatre_summary['ceasefire_max_level'] = level
+                    if level > theatre_summary['diplomatic_max']:
+                        theatre_summary['diplomatic_max'] = level
+                    break
+
+            # ── v2.1: Migration OUT (Yemen → Oman/Saudi, escalatory) ──
+            for kw in MIGRATION_OUT_TRIGGERS.get(level, []):
+                if kw in text:
+                    if level > theatre_summary['migration_out_max']:
+                        theatre_summary['migration_out_max'] = level
+                    if len(theatre_summary['migration_out_signals']) < 5:
+                        theatre_summary['migration_out_signals'].append({
+                            'phrase': kw,
+                            'level': level,
+                            'direction': 'out',
+                            'article': article.get('title', '')[:100],
+                            'published': pub_date if isinstance(pub_date, str) else '',
+                        })
+                    break
+
+            # ── v2.1: Migration RETURN (Oman/Saudi → Yemen, de-escalatory) ──
+            for kw in MIGRATION_RETURN_TRIGGERS.get(level, []):
+                if kw in text:
+                    if level > theatre_summary['migration_return_max']:
+                        theatre_summary['migration_return_max'] = level
+                    if len(theatre_summary['migration_return_signals']) < 5:
+                        theatre_summary['migration_return_signals'].append({
+                            'phrase': kw,
+                            'level': level,
+                            'direction': 'return',
+                            'article': article.get('title', '')[:100],
+                            'published': pub_date if isinstance(pub_date, str) else '',
+                        })
                     break
 
         # ── Specificity scoring (runs once per article, not per actor) ──
@@ -917,9 +1145,13 @@ def _write_crosstheater_signal(result):
         existing['yemen'] = {
             'ts': datetime.now(timezone.utc).isoformat(),
             'theatre': 'Yemen / Red Sea',
-            'level': result.get('theatre_score', 0) // 20,
-            'score': result.get('theatre_score', 0),
+            # v2.1: level now derived from theatre_escalation_level (max threat vector),
+            # not from score (which is dampened by diplomatic / migration modifiers)
+            'level': result.get('theatre_escalation_level', 0),
+            'score': result.get('rhetoric_score', 0),
+            'theatre_score': result.get('rhetoric_score', 0),
             'maritime_level': result.get('maritime_level', 0),
+            'direct_strike_level': result.get('direct_strike_level', 0),
             'top_phrases': top_phrases[:5],
             'named_targets': named_targets[:8],
             'actor_levels': {
@@ -930,6 +1162,19 @@ def _write_crosstheater_signal(result):
                 for aid in ['houthis', 'iran', 'usa']
             },
             'specificity_score': result.get('specificity_score', 0),
+            # ── v2.1: Diplomatic fingerprint (Israel/Iran read this) ──
+            'diplomatic_active':   result.get('diplomatic_track_active', False),
+            'ceasefire_level':     result.get('ceasefire_level', 0),
+            'diplomatic_modifier': result.get('diplomatic_modifier', 0),
+            'diplomatic_label':    result.get('diplomatic_label_detailed', 'Quiet'),
+            # ── v2.1: Maritime escalation flag (Iran/Hormuz convergence detection) ──
+            # When set + Iran maritime active = global supply chain risk signal.
+            'red_sea_friction_active': result.get('maritime_level', 0) >= 3,
+            'bab_el_mandeb_status':    result.get('maritime_level', 0),  # 0-5
+            # ── v2.1: Bidirectional migration corridor ──
+            'migration_out_level':    result.get('migration_out_level', 0),
+            'migration_return_level': result.get('migration_return_level', 0),
+            'migration_net_modifier': result.get('migration_net_modifier', 0),
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=14 * 3600)  # 14h TTL — covers 12h scan cycle
@@ -1047,14 +1292,96 @@ def run_houthi_rhetoric_scan(days=3):
     articles = fetch_rhetoric_articles(days)
     actor_results, theatre_summary = classify_articles(articles)
 
-    # Overall escalation level (max of all vectors)
-    max_maritime = theatre_summary['maritime_max_level']
-    max_strike   = theatre_summary['direct_strike_max_level']
-    max_level    = max(max_maritime, max_strike)
+    # Overall escalation level (max of all THREAT vectors — diplomacy excluded)
+    max_maritime   = theatre_summary['maritime_max_level']
+    max_strike     = theatre_summary['direct_strike_max_level']
+    max_somaliland = theatre_summary['somaliland_max_level']
+    max_level      = max(max_maritime, max_strike, max_somaliland)
 
     # ── Compute theatre-level specificity score (avg of scored articles) ──
     spec_scores = theatre_summary.get('specificity_scores', [])
     theatre_specificity = round(sum(spec_scores) / len(spec_scores), 1) if spec_scores else 0
+
+    # ══════════════════════════════════════════════════════════════
+    # v2.1: NUANCED RHETORIC SCORE (0-100)
+    # Lifted from old max_level*20 to canonical Lebanon/Iran-style scoring:
+    # - Threat vectors contribute weighted points (max 75)
+    # - Hot actors at L3+ add bonus (max 15)
+    # - Coordination signals add bonus (max 10)
+    # - Migration OUT (escalatory) adds points (max +8)
+    # - Migration RETURN (de-escalatory) subtracts points (max -8)
+    # - Diplomatic track REDUCES score (modifier -1 to -15)
+    # - Final score floored at 0, capped at 100
+    # ══════════════════════════════════════════════════════════════
+    score = 0
+
+    # Threat vectors — Maritime weighted highest (Bab el-Mandeb is THE signal)
+    score += max_maritime   * 8    # max 40 — primary signal
+    score += max_strike     * 6    # max 30 — direct strike on UAE/KSA/Israel
+    score += max_somaliland * 1    # max 5  — peripheral signal
+
+    # Cap threat vectors at 75
+    score = min(score, 75)
+
+    # Hot actor bonus: actors at level 3+ contribute escalation pressure
+    hot_actors = sum(
+        1 for ar in actor_results.values()
+        if ar.get('max_escalation_level', 0) >= 3
+    )
+    score += min(hot_actors * 5, 15)
+
+    # Coordination bonus (Iran-Houthi signal coupling)
+    coord_count = len(theatre_summary.get('coordination_signals', []))
+    score += min(coord_count * 5, 10)
+
+    # ── BIDIRECTIONAL MIGRATION MODIFIER ──
+    # Out  = people fleeing → conditions worsening → +pressure
+    # Return = people coming back → confidence returning → -pressure
+    # Net effect can cancel (e.g., displacement + organized return = roughly stable).
+    migration_out_level    = theatre_summary.get('migration_out_max', 0)
+    migration_return_level = theatre_summary.get('migration_return_max', 0)
+
+    migration_out_modifier_map = {
+        0: 0, 1: 1, 2: 2, 3: 4, 4: 6, 5: 8,    # adds pressure
+    }
+    migration_return_modifier_map = {
+        0: 0, 1: -1, 2: -2, 3: -4, 4: -6, 5: -8,    # reduces pressure
+    }
+
+    migration_out_modifier    = migration_out_modifier_map.get(migration_out_level, 0)
+    migration_return_modifier = migration_return_modifier_map.get(migration_return_level, 0)
+    migration_net_modifier    = migration_out_modifier + migration_return_modifier
+
+    score += migration_net_modifier
+
+    # ── DIPLOMATIC TRACK MODIFIER (canonical pattern) ──
+    # Active negotiations REDUCE the threat score. Floored at 0.
+    diplomatic_level = theatre_summary.get('diplomatic_max', 0)
+    diplomatic_modifier_map = {
+        0: 0,    # Quiet
+        1: -1,   # Background diplomatic mentions
+        2: -3,   # Diplomatic push (peace talks language)
+        3: -6,   # Mediator activity (Oman, UN envoy, Saudi brokerage)
+        4: -10,  # Active negotiations / direct talks (Riyadh delegation)
+        5: -15,  # Agreement reached / signed (ceasefire roadmap)
+    }
+    diplomatic_modifier = diplomatic_modifier_map.get(diplomatic_level, 0)
+    score += diplomatic_modifier
+
+    # Final clamp
+    rhetoric_score = max(0, min(100, int(score)))
+
+    # ── v2.1: Determine net migration label for display ──
+    if migration_out_level >= 3 and migration_return_level >= 3:
+        migration_net_label = 'Mixed Flows'
+    elif migration_out_level >= 3:
+        migration_net_label = 'Outbound Pressure'
+    elif migration_return_level >= 3:
+        migration_net_label = 'Return Activity'
+    elif migration_out_level >= 1 or migration_return_level >= 1:
+        migration_net_label = 'Background Movement'
+    else:
+        migration_net_label = 'Quiet'
 
     result = {
         'success': True,
@@ -1062,9 +1389,15 @@ def run_houthi_rhetoric_scan(days=3):
         'days_analyzed': days,
         'total_articles': len(articles),
         'theatre': 'Yemen / Red Sea',
-        'theatre_score': max_level * 20,  # 0-100
+        # v2.1: Nuanced score (replaces max_level*20)
+        'rhetoric_score': rhetoric_score,
+        'theatre_score': rhetoric_score,    # backward compat field
         'theatre_level': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Unknown'),
+        'theatre_escalation_level': max_level,
+        'theatre_escalation_label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Baseline'),
+        'theatre_escalation_color': ESCALATION_LEVELS.get(max_level, {}).get('color', '#6b7280'),
         'theatre_color': ESCALATION_LEVELS.get(max_level, {}).get('color', '#6b7280'),
+        # Threat vectors
         'maritime_level': max_maritime,
         'maritime_label': ESCALATION_LEVELS.get(max_maritime, {}).get('label', 'Monitoring'),
         'direct_strike_level': max_strike,
@@ -1072,14 +1405,38 @@ def run_houthi_rhetoric_scan(days=3):
         'somaliland_level': theatre_summary['somaliland_max_level'],
         'somaliland_label': ESCALATION_LEVELS.get(
             theatre_summary['somaliland_max_level'], {}).get('label', 'Baseline'),
+        # Backward-compat ceasefire fields
         'ceasefire_level': theatre_summary['ceasefire_max_level'],
         'ceasefire_label': ESCALATION_LEVELS.get(
             theatre_summary['ceasefire_max_level'], {}).get('label', 'None'),
+        # ── v2.1: Diplomatic Track (canonical) ──
+        'diplomatic_track_active':   theatre_summary['diplomatic_max'] >= 2,
+        'diplomatic_modifier':       diplomatic_modifier,
+        'diplomatic_label_detailed': {
+            0: 'Quiet',
+            1: 'Background Mentions',
+            2: 'Diplomatic Push',
+            3: 'Mediator Activity',
+            4: 'Active Negotiations',
+            5: 'Agreement Reached',
+        }.get(diplomatic_level, 'Quiet'),
+        # ── v2.1: Bidirectional Migration ──
+        'migration_out_level':       migration_out_level,
+        'migration_out_label':       ESCALATION_LEVELS.get(migration_out_level, {}).get('label', 'Baseline'),
+        'migration_return_level':    migration_return_level,
+        'migration_return_label':    ESCALATION_LEVELS.get(migration_return_level, {}).get('label', 'Baseline'),
+        'migration_out_modifier':    migration_out_modifier,
+        'migration_return_modifier': migration_return_modifier,
+        'migration_net_modifier':    migration_net_modifier,
+        'migration_net_label':       migration_net_label,
+        'migration_out_signals':     theatre_summary.get('migration_out_signals', [])[:5],
+        'migration_return_signals':  theatre_summary.get('migration_return_signals', [])[:5],
+        # Actors / signals / specificity
         'actors': actor_results,
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'conditional_threats': theatre_summary.get('conditional_threats', [])[:8],
         'specificity_score': theatre_specificity,
-        'version': '2.0.0-yemen-rhetoric-enhanced'
+        'version': '2.1.0-yemen-canonical-lift'
     }
 
     # ── Baseline + silence detection ──
@@ -1093,12 +1450,18 @@ def run_houthi_rhetoric_scan(days=3):
     try:
         snapshot = json.dumps({
             'ts': datetime.now(timezone.utc).isoformat(),
-            'score': max_level * 20,
+            'score': rhetoric_score,           # v2.1: nuanced score (was max_level*20)
             'level': max_level,
             'label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Unknown'),
             'maritime': max_maritime,
             'strikes': max_strike,
             'specificity': theatre_specificity,
+            # v2.1: track diplomatic + bidirectional migration in history for trend analysis
+            'diplomatic_modifier':     diplomatic_modifier,
+            'diplomatic_level':        diplomatic_level,
+            'migration_out':           migration_out_level,
+            'migration_return':        migration_return_level,
+            'migration_net_modifier':  migration_net_modifier,
         })
         HISTORY_KEY = 'rhetoric:yemen:history'
         if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
@@ -1213,13 +1576,28 @@ def register_houthi_rhetoric_routes(app):
         if cached:
             return jsonify({
                 'success': True,
-                'theatre_score': cached.get('theatre_score', 0),
-                'theatre_level': cached.get('theatre_level', 'Unknown'),
-                'theatre_color': cached.get('theatre_color', '#6b7280'),
-                'maritime_level': cached.get('maritime_level', 0),
+                # v2.1: Nuanced score
+                'rhetoric_score': cached.get('rhetoric_score', 0),
+                'theatre_score':  cached.get('theatre_score', 0),
+                'theatre_level':  cached.get('theatre_level', 'Unknown'),
+                'theatre_escalation_level': cached.get('theatre_escalation_level', 0),
+                'theatre_color':  cached.get('theatre_color', '#6b7280'),
+                # Threat vectors
+                'maritime_level':      cached.get('maritime_level', 0),
                 'direct_strike_level': cached.get('direct_strike_level', 0),
-                'somaliland_level': cached.get('somaliland_level', 0),
-                'ceasefire_level': cached.get('ceasefire_level', 0),
+                'somaliland_level':    cached.get('somaliland_level', 0),
+                # Diplomatic
+                'ceasefire_level':           cached.get('ceasefire_level', 0),
+                'diplomatic_track_active':   cached.get('diplomatic_track_active', False),
+                'diplomatic_modifier':       cached.get('diplomatic_modifier', 0),
+                'diplomatic_label_detailed': cached.get('diplomatic_label_detailed', 'Quiet'),
+                # Migration (bidirectional)
+                'migration_out_level':    cached.get('migration_out_level', 0),
+                'migration_out_label':    cached.get('migration_out_label', 'Baseline'),
+                'migration_return_level': cached.get('migration_return_level', 0),
+                'migration_return_label': cached.get('migration_return_label', 'Baseline'),
+                'migration_net_modifier': cached.get('migration_net_modifier', 0),
+                'migration_net_label':    cached.get('migration_net_label', 'Quiet'),
                 'timestamp': cached.get('timestamp'),
                 'cached': True
             })
