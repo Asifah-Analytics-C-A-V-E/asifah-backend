@@ -1,6 +1,7 @@
 """
 Asifah Analytics — Iran Rhetoric & Command Node Tracker
-v1.0.0 — April 4, 2026
+v1.0.0 — March 2026
+
 ANALYTICAL FRAME:
 Iran is not just an actor — it is the COMMAND NODE of the resistance axis.
 This tracker answers two questions:
@@ -82,15 +83,6 @@ import urllib.parse
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
-
-# Signal interpreter — So What, Red Lines, Historical Patterns
-try:
-    from iran_signal_interpreter import interpret_signals as iran_interpret_signals
-    INTERPRETER_AVAILABLE = True
-    print("[Iran Rhetoric] ✅ Signal interpreter loaded")
-except ImportError:
-    INTERPRETER_AVAILABLE = False
-    print("[Iran Rhetoric] ⚠️ Signal interpreter not available")
 
 # ============================================
 # CONFIG
@@ -243,41 +235,16 @@ ACTORS = {
         'role': 'Yemen Proxy — Activation Signal',
         'description': 'Houthis as Iran proxy — escalation signals coordinated with IRGC',
         'keywords': [
-            # Iran-Houthi coordination
             'houthi iran', 'iran houthi', 'iran directs houthi',
             'iran ansar allah', 'houthi coordination iran',
             'iran red sea', 'iran shipping attacks',
             'houthi missile iran', 'houthi drone iran',
             'iran proxy yemen', 'houthi operation',
             'ansar allah iran coordination',
-            # Standalone Houthi operational signals
-            'houthi missile', 'houthi ballistic', 'houthi attack',
-            'houthi launches', 'houthi fired', 'houthi strike',
-            'houthi drone attack', 'houthi targets israel',
-            'houthi targets red sea', 'houthi ship attack',
-            'ansar allah missile', 'ansar allah attack',
-            'ansar allah launches', 'ansar allah strike',
-            'houthi israel', 'houthi tel aviv', 'houthi ben gurion',
-            'houthi hypersonic', 'houthi ballistic missile israel',
-            'true promise', 'wave 84', 'operation yemen',
-            'yemen missile israel', 'yemen attack israel',
-            'red sea attack', 'bab el-mandeb attack',
-            'houthi navy', 'houthi naval', 'houthi blockade',
-            # Arabic
             'الحوثيون وإيران', 'توجيهات إيران للحوثيين',
             'إيران والبحر الأحمر', 'عمليات الحوثيين بدعم إيراني',
-            'الحوثيون يطلقون', 'صاروخ الحوثيين',
-            'هجوم الحوثيين', 'أنصار الله يهاجم',
         ],
         'baseline_statements_per_week': 8,
-        'tripwires': [
-            'houthi ballistic missile israel',
-            'houthi targets tel aviv',
-            'houthi hypersonic missile',
-            'ansar allah declares war',
-            'wave 84',
-            'true promise 4',
-        ],
     },
     'pmf_iran': {
         'name': 'PMF Iraq (Iran-directed)',
@@ -298,137 +265,23 @@ ACTORS = {
         ],
         'baseline_statements_per_week': 8,
     },
-    # ============================================
-    # v1.2.0 (April 2026) — Axis actors SPLIT.
-    # Previous single 'china_russia_axis' actor has been split
-    # into two dedicated actors because China and Russia play
-    # architecturally different roles in supporting Iran:
-    #   - China: ISR/logistics enabler (satellites, ground stations,
-    #     dual-use components). More covert, harder to detect.
-    #   - Russia: Strategic partner (satellite launches, arms,
-    #     military coordination). More overt, publicly signaled.
-    # Splitting allows accurate attribution and separate
-    # cross-theater fingerprint fields per partner.
-    # ============================================
-    'china_iran_axis': {
-        'name': 'China → Iran (Axis Support)',
-        'flag': '🇨🇳',
-        'icon': '🛰️',
-        'color': '#dc2626',
-        'role': 'External Military Supporter — China (ISR / Logistics)',
-        'description': (
-            'China as active supporter of Iran. Sub-categorized across '
-            'four dimensions: weapons transfer, ISR/satellite cooperation, '
-            'dual-use components, and diplomatic cover. The ISR dimension '
-            '(e.g. TEE-01B satellite, Emposat ground stations — FT Apr 2026) '
-            'is particularly consequential as it enables kinetic targeting.'
-        ),
-        'keywords': [
-            # China → Iran — weapons / hardware
-            'china iran missiles', 'china ships missiles iran',
-            'china manpads iran', 'chinese missiles iran',
-            'china arms iran', 'china weapons iran',
-            'china military aid iran', 'china supplies iran war',
-            'china iran shipment', 'chinese shoulder fired iran',
-            # China → Iran — ISR / satellite / space cooperation
-            'china satellite iran', 'chinese satellite iran',
-            'tee-01b', 'emposat', 'earth eye co',
-            'chinese spy satellite iran', 'china ground station iran',
-            'irgc chinese satellite', 'chinese imagery iran',
-            'china targeting data iran', 'chinese isr iran',
-            'china space cooperation iran', 'in-orbit transfer iran',
-            'chinese satellite irgc', 'belt and road iran space',
-            # China → Iran — dual-use
-            'china dual use iran', 'china components iran',
-            'china chemicals iran military', 'china fuel iran military',
-            'china electronics iran', 'china semiconductor iran military',
-            # China → Iran — diplomatic cover
-            'china intelligence iran', 'beijing tehran military',
-            'china iran military cooperation', 'china iran axis',
-            'china backs iran', 'beijing backs tehran',
-            'china shields iran un', 'china blocks iran sanctions',
-            # Arabic / Farsi
-            'الصين تسلح إيران', 'الصين تدعم إيران',
-            'چین ایران موشک', 'چین ماهواره ایران',
-        ],
-        'baseline_statements_per_week': 3,
-    },
-
-    'russia_iran_axis': {
-        'name': 'Russia → Iran (Axis Support)',
-        'flag': '🇷🇺',
-        'icon': '🚀',
-        'color': '#dc2626',
-        'role': 'External Military Supporter — Russia (Launch / Arms / Coordination)',
-        'description': (
-            'Russia as active supporter of Iran. Sub-categorized across '
-            'four dimensions: launch partnership (Russian rockets carrying '
-            'Iranian satellites), arms/hardware, intelligence sharing, '
-            'and strategic coordination. Russia has launched several '
-            'Iranian satellites in recent years and provides targeting '
-            'data for IRGC strikes on US installations.'
-        ),
-        'keywords': [
-            # Russia → Iran — launch partnership / space
-            'russia launches iranian satellite', 'russian rocket iran',
-            'russia iran satellite launch', 'soyuz iran satellite',
-            'iranian satellite russian launch', 'noor russia launch',
-            # Russia → Iran — intelligence / targeting
-            'russia satellite iran', 'russia targeting iran',
-            'russia intelligence iran', 'russia helps iran',
-            'russia iran targeting us ships', 'russia satellite irgc',
-            'russia targets us iran', 'russian targeting data iran',
-            # Russia → Iran — arms / hardware
-            'russia arms iran', 'russia weapons iran',
-            'russia supplies iran', 'russia iran military supplies',
-            'russia air defense iran', 'russian s-400 iran',
-            'russian jets iran', 'sukhoi iran',
-            # Russia → Iran — strategic coordination
-            'moscow tehran military', 'russia iran military coordination',
-            'russia backs iran war', 'russia iran cooperation war',
-            'russia food aid iran', 'russia nonlethal iran',
-            'russia iran defense pact', 'comprehensive partnership iran russia',
-            # Arabic / Farsi
-            'روسيا تدعم إيران', 'روسیه ایران حمایت',
-            'پرتاب ماهواره ایرانی روسیه',
-        ],
-        'baseline_statements_per_week': 3,
-    },
-
     'israel_iran': {
         'name': 'Israel (re: Iran)',
         'flag': '🇮🇱',
         'icon': '🔷',
         'color': '#3b82f6',
         'role': 'Adversary / Strike Actor',
-        'description': 'Israeli government and IDF — strike posture, shadow war ops, nuclear red lines',
+        'description': 'Israeli government and IDF — strike posture against Iran, nuclear red lines',
         'keywords': [
-            # Direct kinetic / strike language
             'israel iran', 'israel strikes iran', 'idf iran',
             'netanyahu iran', 'israel nuclear iran', 'israel attack iran',
             'israel warns iran', 'israel threatens iran',
             'israel operation iran', 'f-35 iran', 'israeli jets iran',
             'dimona', 'natanz israel', 'israel iran nuclear',
             'israel operation rising lion',
-            # Shadow war / covert operations (v2.1)
-            'mossad iran', 'mossad operation iran',
-            'israel sabotage iran', 'explosion iran israel',
-            'iran scientist killed', 'iran nuclear scientist assassinated',
-            'israel all options iran', 'israel red line iran',
-            'israel preemptive iran', 'israel strike capability iran',
-            'iran enrichment israel', 'israel 90 percent iran',
-            'israel weapons grade iran', 'israel prevent iran bomb',
-            'gallant iran', 'katz iran', 'israel defense minister iran',
-            'israel will not allow iran nuclear',
-            'israel iran deal opposition', 'israel opposes iran deal',
-            'iran deal bad for israel', 'israel nuclear threshold iran',
-            # Hebrew
-            'מוסד איראן', 'ישראל קו אדום', 'ישראל מניעה איראן',
             'ישראל איראן', 'צה"ל איראן', 'ישראל תוקפת',
-            # Arabic
             'إسرائيل إيران', 'الغارات الإسرائيلية على إيران',
-            'إسرائيل تضرب إيران', 'الموساد إيران',
-            'إسرائيل الخط الأحمر النووي', 'إسرائيل تعارض الاتفاق',
+            'إسرائيل تضرب إيران',
         ],
         'baseline_statements_per_week': 12,
     },
@@ -438,31 +291,15 @@ ACTORS = {
         'icon': '🛡️',
         'color': '#2563eb',
         'role': 'Adversary / Strike Actor',
-        'description': 'US military, Trump, and government — strike posture, deal signals, Iran pressure',
+        'description': 'US military and government — strike posture against Iran, force movements',
         'keywords': [
-            # Military / CENTCOM
             'us strikes iran', 'us attack iran', 'centcom iran',
             'us iran war', 'pentagon iran', 'us military iran',
-            'us iran operation', 'us forces iran', 'b-2 iran',
-            'carrier iran', 'b-52 iran', 'us bombers iran',
-            'us carrier strike group iran', 'us destroys iran',
-            # Trump direct statements (v2.1)
-            'trump iran', 'trump warns iran', 'trump threatens iran',
-            'trump iran deal', 'trump maximum pressure iran',
-            'trump bomb iran', 'trump attack iran',
-            'trump iran nuclear', 'trump iran sanctions',
-            'trump iran 60 days', 'trump iran ultimatum',
-            'trump iran letter', 'trump envoy iran',
-            'steve witkoff iran', 'witkoff iran deal',
-            'rubio iran', 'rubio iran deal', 'rubio iran sanctions',
-            # Deal / diplomatic pressure
-            'us iran deal', 'us iran nuclear deal', 'us iran talks',
-            'us iran negotiations', 'us iran agreement',
-            'us iran sanctions', 'snapback iran',
-            # Arabic
+            'us iran operation', 'trump iran', 'biden iran',
+            'us forces iran', 'b-2 iran', 'carrier iran',
+            'us iran nuclear', 'us iran deal',
             'القوات الأمريكية في إيران', 'سنتكوم إيران',
-            'الضربات الأمريكية على إيران', 'ترامب إيران',
-            'ترامب يهدد إيران', 'أمريكا إيران نووي',
+            'الضربات الأمريكية على إيران',
         ],
         'baseline_statements_per_week': 10,
     },
@@ -614,59 +451,6 @@ DOMESTIC_TRIGGERS = {
 }
 
 # Vector 5: Regional Retaliation (Hormuz, Gulf states, energy infrastructure)
-# Vector 6: Diplomatic Track (de-escalation signals — REDUCES pressure)
-# Catches Araghchi shuttles, Pakistan/Oman/Russia mediation, Trump waivers,
-# Witkoff envoy activity, JCPOA / nuclear deal language.
-DIPLOMATIC_TRIGGERS = {
-    5: [
-        # Active deal / agreement
-        'iran us deal signed', 'iran nuclear deal signed',
-        'iran ceasefire signed', 'jcpoa restored',
-        'iran agreement reached', 'iran us framework agreed',
-        'توافق ایران آمریکا', 'اتفاق نووي إيران أمريكا',
-    ],
-    4: [
-        # Active negotiations / direct talks
-        'araghchi pakistan', 'araghchi oman', 'araghchi russia',
-        'iran second round talks', 'iran direct talks us',
-        'iran nuclear deal talks', 'iran us negotiations',
-        'witkoff iran', 'witkoff tehran', 'witkoff araghchi',
-        'iran ceasefire negotiations', 'iran us second round',
-        'us iran ceasefire talks', 'iran us framework',
-        'pakistan iran us mediator', 'oman iran us mediator',
-        'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
-    ],
-    3: [
-        # Mediator activity
-        'pakistan mediates iran', 'oman mediates iran',
-        'russia mediates iran', 'pakistan brokers iran',
-        'envoy visits tehran', 'us envoy iran', 'iran nuclear envoy',
-        'islamabad iran us', 'oman shuttle iran',
-        'iran nuclear talks resume', 'iran nuclear talks restart',
-        'trump extends iran ceasefire', 'trump 90-day waiver',
-        'trump iran ceasefire extension', 'jones act waiver',
-        'us extends iran ceasefire', 'iran ceasefire extension',
-        'iran nuclear envoy', 'special envoy iran',
-        'پاکستان وساطت', 'وساطة باكستانية',
-    ],
-    2: [
-        # Diplomatic push
-        'iran nuclear talks', 'iran nuclear negotiations',
-        'iran us diplomacy', 'iran nuclear diplomacy',
-        'iran diplomatic outreach', 'iran ceasefire offer',
-        'pakistan iran diplomacy', 'oman iran diplomacy',
-        'tehran offers talks', 'iran open to talks',
-        'مذاکرات هسته‌ای ایران', 'دبلوماسية إيرانية',
-    ],
-    1: [
-        # Background diplomatic mentions
-        'iran diplomacy', 'jcpoa', 'iran deal',
-        'iran nuclear program negotiation',
-        'دیپلماسی ایران', 'دبلوماسية إيران',
-    ],
-}
-
-
 REGIONAL_TRIGGERS = {
     5: [
         'iran closes hormuz', 'iran blockades hormuz',
@@ -726,32 +510,6 @@ PROXY_DIRECTIVE_LANGUAGE = [
     'تنسيق المحور', 'به دستور ایران', 'با هماهنگی سپاه',
 ]
 
-SOFT_POWER_KEYWORDS = {
-    4: [
-        'iran lego', 'iran rap video', 'iran music video',
-        'iranian soft power', 'iran viral video', 'iran meme',
-        'iran propaganda video', 'iran influence operation',
-        'anti-war iran video', 'iran creative campaign',
-    ],
-    3: [
-        'resistance narrative', 'iran western audience',
-        'presstv viral', 'iran social media campaign',
-        'iran information war', 'iran narrative control',
-        'us aggressor iran', 'iran war crimes us',
-        'american imperialism iran', 'iran self defense',
-    ],
-    2: [
-        'resistance framing', 'zionist aggressor',
-        'us war criminal', 'martyred iran',
-        'iran innocent victims', 'iran civilians',
-        'axis of resistance message', 'iran anti-war',
-    ],
-    1: [
-        'resistance', 'oppressor', 'arrogance',
-        'great satan', 'zionist entity',
-        'iranian people resilient',
-    ],
-}
 
 # ============================================
 # SPECIFICITY SCORER
@@ -772,6 +530,8 @@ SPECIFIC_GEOGRAPHIES_IRAN = [
     # US targets Iran mentions
     'al asad', 'ain al-asad', 'us embassy baghdad',
     'diego garcia', 'us carrier',
+    # Omani targets — added v2.4 for cross-theater Oman tracker
+    'salalah', 'duqm', 'muscat', 'dhofar', 'sohar',
 ]
 
 SPECIFIC_ASSETS_IRAN = [
@@ -898,7 +658,7 @@ def _compute_proxy_activation_index():
                 continue
             try:
                 age = (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600
-                if age <= 24:  # Fresh within 24 hours — covers all proxy scan cycles
+                if age <= 14:  # Fresh within 14 hours
                     fresh_proxies[name] = fp
             except Exception:
                 pass
@@ -1094,16 +854,39 @@ def _write_crosstheater_signal(result):
                     if geo in title_lower and geo not in named_targets:
                         named_targets.append(geo)
 
-        # Axis levels — split into per-partner fields (v1.2.0, April 2026)
-        china_iran_level  = actors.get('china_iran_axis',  {}).get('max_level', 0)
-        russia_iran_level = actors.get('russia_iran_axis', {}).get('max_level', 0)
-        # Combined level for readers that want aggregate (highest wins)
-        axis_level = max(china_iran_level, russia_iran_level)
+        # ── v2.4: Oman-specific signal extraction (for Oman tracker reads) ──
+        # Detect Iran rhetoric specifically targeting Omani territory/logistics.
+        # Salalah = US/UK logistics hub on Indian Ocean coast.
+        # Duqm = expanding UK base + dry dock + outside Hormuz, strategically critical.
+        # Dhofar = southern Oman governorate, Yemen border, Salalah's province.
+        # Muscat = capital, MOFA hosts US-Iran back-channel.
+        salalah_targeted = False
+        duqm_logistics_active = False
+        oman_diplomatic_active = False
+        for actor_id in ['khamenei', 'irgc', 'iran_gov']:
+            for art in actors.get(actor_id, {}).get('top_articles', [])[:5]:
+                title_lower = art.get('title', '').lower()
+                desc_lower = art.get('description', '').lower()
+                full_text = f"{title_lower} {desc_lower}"
+                # Hostile signals toward Omani territory
+                if 'salalah' in full_text and any(kw in full_text for kw in
+                        ['threat', 'strike', 'target', 'missile', 'attack', 'mining', 'mine',
+                         'تهديد', 'استهداف', 'ضربة', 'تهدید', 'هدف', 'حمله']):
+                    salalah_targeted = True
+                if any(kw in full_text for kw in ['duqm']) and any(kw in full_text for kw in
+                        ['british', 'uk', 'logistics', 'base', 'naval',
+                         'بريطاني', 'بریتانیا', 'لوجستي', 'قاعدة']):
+                    duqm_logistics_active = True
+                # Oman as diplomatic channel signal (de-escalatory)
+                if 'muscat' in full_text and any(kw in full_text for kw in
+                        ['talks', 'mediation', 'channel', 'back-channel', 'witkoff',
+                         'محادثات', 'وساطة', 'مفاوضات', 'گفتگو']):
+                    oman_diplomatic_active = True
 
         existing['iran'] = {
             'ts': datetime.now(timezone.utc).isoformat(),
             'theatre': 'Iran',
-            'is_command_node': True,
+            'is_command_node': True,               # ← Key flag for other trackers
             'level': result.get('theatre_escalation_level', 0),
             'score': result.get('theatre_score', 0),
             'theatre_score': result.get('theatre_score', 0),
@@ -1119,26 +902,17 @@ def _write_crosstheater_signal(result):
             },
             'specificity_score': result.get('specificity_score', 0),
             'proxy_detail': result.get('proxy_activation_detail', {}),
-            # ── v1.2.0 Axis fingerprint (SPLIT — April 2026) ──
-            # Written from Iran's perspective: what Iran is RECEIVING.
-            # Severity levels (0-5) per partner:
-            'china_iran_perspective_level':  china_iran_level,
-            'russia_iran_perspective_level': russia_iran_level,
-            # Binary flags preserved for backwards-compat with existing consumers:
-            'china_iran_active':  china_iran_level >= 2,
-            'russia_iran_active': russia_iran_level >= 2,
-            'axis_support_level': axis_level,  # combined MAX — legacy consumers
-            # ── v1.1: Diplomatic Track Fingerprint ──
-            # Israel's tracker reads these to factor Iran's diplomatic posture
-            # into its inbound score (mirrors Lebanon pattern).
-            'diplomatic_active':   result.get('diplomatic_track_active', False),
-            'ceasefire_level':     result.get('ceasefire_level', 0),
-            'diplomatic_modifier': result.get('diplomatic_modifier', 0),
-            'diplomatic_label':    result.get('diplomatic_label_detailed', 'Quiet'),
+            # ── v2.4 Oman cross-theater signals ──
+            'salalah_targeted':       salalah_targeted,
+            'duqm_logistics_active':  duqm_logistics_active,
+            'oman_diplomatic_active': oman_diplomatic_active,
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
         print(f"[Iran Rhetoric] ✅ Command node fingerprint written (is_command_node: True)")
+        if salalah_targeted or duqm_logistics_active or oman_diplomatic_active:
+            print(f"[Iran Rhetoric] 🇴🇲 Oman signals: salalah={salalah_targeted}, "
+                  f"duqm={duqm_logistics_active}, diplomatic={oman_diplomatic_active}")
     except Exception as e:
         print(f"[Iran Rhetoric] Cross-theater write error: {e}")
 
@@ -1220,148 +994,7 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=خامنه‌ای+بیانیه+2026&hl=fa&gl=IR&ceid=IR:fa", 0.95),
     # Hebrew — Israeli perspective on Iran
     ("https://news.google.com/rss/search?q=איראן+תקיפה+2026&hl=iw&gl=IL&ceid=IL:iw", 0.9),
-    # Israeli shadow war / nuclear red line signals (v2.1)
-    ("https://news.google.com/rss/search?q=Israel+Iran+nuclear+red+line+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Mossad+Iran+operation+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Israel+Iran+deal+opposition+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    # Trump / US Iran pressure signals (v2.1)
-    ("https://news.google.com/rss/search?q=Trump+Iran+nuclear+deal+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Trump+warns+Iran+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Trump+maximum+pressure+Iran+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Witkoff+Iran+deal+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Rubio+Iran+sanctions+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    # Truth Social — Trump direct statements (public RSS, no auth required)
-    ("https://truthsocial.com/@realDonaldTrump.rss", 1.1),
-    # Nitter deprecated platform-wide. Trump direct still captured via
-    # Truth Social RSS (above, weight 1.1). Leaving this commented out
-    # as a marker — replace with Bluesky mirror (@realdonaldtrump.govmirrors.com)
-    # in a future session when we port Bluesky to the ME backend.
-    # ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
-    # ============================================
-    # v2.2.0 (April 2026) — Israeli + ME investigative feeds
-    # Same augmentation as China/Taiwan trackers. Catches stories
-    # like FT TEE-01B satellite fusion story that Iranian state
-    # media will NEVER break but IDF-adjacent press and premier
-    # investigative outlets surface first.
-    # ============================================
-    # Israeli press — breaks China/Russia-Iran cooperation stories first
-    ("https://rss.jpost.com/rss/rssfeedsheadlines.aspx", 0.95),
-    ("https://www.timesofisrael.com/feed/", 0.95),
-    # ME regional analysis — China/Russia engagement in Gulf & Levant
-    ("https://www.al-monitor.com/rss", 0.90),
-    ("https://www.middleeasteye.net/rss.xml", 0.85),
-    # Premier investigative — intelligence/finance scoops (FT, Reuters)
-    ("https://www.ft.com/world?format=rss", 1.0),
-    ("https://feeds.reuters.com/Reuters/worldNews", 1.0),
-    # Targeted queries for China-Iran axis specifically
-    ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    # Barak Ravid — first-mover Israel/Iran OSINT journalist (v2.3)
-    # 2 queries — Ravid covers Iran less centrally than Israel/Lebanon
-    # but his US-Iran ceasefire + nuclear deal scoops are high-value
-    ('https://news.google.com/rss/search?q=%22Barak+Ravid%22+Iran&hl=en&gl=US&ceid=US:en', 1.2),
-    ('https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%90%D7%99%D7%A8%D7%90%D7%9F&hl=iw&gl=IL&ceid=IL:iw', 1.2),
 ]
-
-# ============================================
-# NITTER -- Primary source Twitter/X accounts
-# Iran-specific: Trump, Rubio, CENTCOM, IDF, Witkoff
-# Mirror fallback — no API key required.
-# ============================================
-NITTER_MIRRORS = [
-    "nitter.poast.org",
-    "nitter.privacydev.net",
-    "nitter.woodland.cafe",
-]
-
-NITTER_ACCOUNTS_IRAN = [
-    ("realDonaldTrump", 1.3, "Trump — Iran ultimatum, deal, maximum pressure direct statements"),
-    ("SecRubio",        1.2, "US SecState — Iran sanctions, deal signals, red lines"),
-    ("CENTCOM",         1.1, "CENTCOM — force posture, Houthi strikes, carrier deployments"),
-    ("POTUS",           1.0, "White House — executive Iran policy"),
-    ("StateDept",       1.0, "State Dept — diplomatic signals, sanctions"),
-    ("Witkoff",         1.1, "Steve Witkoff — Iran nuclear deal envoy"),
-    ("IDF",             1.1, "IDF — strike posture, Iran targeting language"),
-    ("AvichayAdraee",   1.0, "IDF Arabic spokesperson — strike claims vs Iran/proxies"),
-    ("IsraeliPM",       1.1, "Israeli PM — Iran red line statements"),
-    ("IranIntl",        1.0, "Iran International — opposition, domestic signals"),
-    ("AlinejadMasih",   0.9, "Iranian activist — domestic pressure signals"),
-    ("ElintNews",       0.9, "ELINT News — Iran missile/nuclear OSINT"),
-    ("LongWarJournal",  0.9, "Long War Journal — proxy network analysis"),
-]
-
-
-def _fetch_nitter_iran(username, weight=1.0, timeout=8):
-    import re as _re
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
-    for mirror in NITTER_MIRRORS:
-        url = f"https://{mirror}/{username}/rss"
-        try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code != 200:
-                continue
-            root = ET.fromstring(resp.content)
-            posts = []
-            for item in root.findall(".//item")[:20]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                pubdate_el = item.find("pubDate")
-                desc_el    = item.find("description")
-                if title_el is None:
-                    continue
-                title = title_el.text or ""
-                link  = link_el.text if link_el is not None else ""
-                pub   = ""
-                if pubdate_el is not None and pubdate_el.text:
-                    try:
-                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
-                    except Exception:
-                        pub = pubdate_el.text
-                desc = ""
-                if desc_el is not None and desc_el.text:
-                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
-                posts.append({
-                    "title":       title,
-                    "url":         link,
-                    "published":   pub,
-                    "description": desc,
-                    "source":      f"Nitter @{username}",
-                    "weight":      weight,
-                })
-            if posts:
-                print(f"[Iran Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
-                return posts
-        except Exception as e:
-            print(f"[Iran Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
-            continue
-    print(f"[Iran Rhetoric/Nitter] @{username}: all mirrors failed")
-    return []
-
-
-def fetch_nitter_iran(days=3):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    all_posts = []
-    seen = set()
-    for username, weight, desc in NITTER_ACCOUNTS_IRAN:
-        posts = _fetch_nitter_iran(username, weight=weight)
-        for p in posts:
-            if p["url"] in seen:
-                continue
-            try:
-                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub < cutoff:
-                    continue
-            except Exception:
-                pass
-            seen.add(p["url"])
-            all_posts.append(p)
-        time.sleep(0.3)
-    print(f"[Iran Rhetoric/Nitter] Total: {len(all_posts)} posts")
-    return all_posts
-
 
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 IRAN_SUBREDDITS = ['iran', 'geopolitics', 'CredibleDefense', 'worldnews', 'IRG']
@@ -1385,39 +1018,10 @@ ACTOR_KEYWORDS = {
                      'الحوثيون وإيران', 'iran red sea'],
     'pmf_iran':     ['pmf iran', 'iran pmf', 'quds force iraq', 'iran militia iraq',
                      'الحشد الشعبي وإيران', 'فيلق القدس يوجه'],
-    # v1.2.0 — Axis actors split into China and Russia tracks
-    'china_iran_axis': [
-        # Direct mentions (both orders)
-        'china iran', 'iran china', 'chinese iran', 'iran chinese',
-        'beijing tehran', 'tehran beijing', 'china tehran', 'beijing iran',
-        # Material/capability transfers
-        'china arms iran', 'china backs iran', 'china supplies iran',
-        'china military aid iran', 'china iran axis',
-        # ISR / satellite (multiple word orders for FT-style headlines)
-        'chinese satellite', 'chinese spy satellite', 'china satellite iran',
-        'chinese satellite iran', 'iran chinese satellite',
-        'irgc chinese', 'chinese isr', 'china ground station iran',
-        # Named entities from TEE-01B story
-        'tee-01b', 'tee01b', 'emposat', 'earth eye co', 'earth eye',
-        # Cross-language
-        'چین ایران', 'ایران چین',
-        'الصين إيران', 'إيران الصين',
-    ],
-    'russia_iran_axis': ['russia iran', 'moscow tehran', 'russian iran',
-                         'russia arms iran', 'russia backs iran',
-                         'russian satellite iran', 'russia launches iran',
-                         'russia supplies iran', 'russia iran military',
-                         'russian targeting iran', 'russian rocket iran',
-                         'روسیه ایران', 'روسيا إيران'],
     'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
-                     'netanyahu iran', 'mossad iran', 'israel red line iran',
-                     'israel nuclear iran', 'israel sabotage iran',
-                     'ישראל איראן', 'מוסד איראן', 'إسرائيل إيران', 'الموساد إيران'],
+                     'netanyahu iran', 'ישראל איראן', 'إسرائيل إيران'],
     'us_iran':      ['us strikes iran', 'centcom iran', 'us iran war',
-                     'pentagon iran', 'trump iran', 'trump warns iran',
-                     'trump threatens iran', 'trump maximum pressure',
-                     'witkoff iran', 'rubio iran',
-                     'القوات الأمريكية إيران', 'ترامب إيران'],
+                     'pentagon iran', 'القوات الأمريكية إيران'],
 }
 
 
@@ -1612,22 +1216,10 @@ def fetch_rhetoric_articles(days=3):
             seen.add(u)
             unique.append(a)
 
-    # Nitter — primary source accounts (v2.1)
-    try:
-        nitter_posts = fetch_nitter_iran(days=days)
-        for p in nitter_posts:
-            u = p.get('url', '')
-            if u and u not in seen:
-                seen.add(u)
-                unique.append(p)
-    except Exception as e:
-        print(f"[Iran Rhetoric] Nitter error: {e}")
-
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
-    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    rss_c = len(unique) - tg_c - nit_c - red_c
-    print(f"[Iran Rhetoric] Total unique: {len(unique)} ({rss_c} RSS/GDELT + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
+    rss_c = len(unique) - tg_c - red_c
+    print(f"[Iran Rhetoric] Total unique: {len(unique)} ({rss_c} RSS/GDELT + {tg_c} TG + {red_c} Reddit)")
     return unique
 
 
@@ -1652,7 +1244,6 @@ def classify_articles(articles, proxy_activation_level):
             'nuclear_score': 0,
             'domestic_score': 0,
             'regional_score': 0,
-            'soft_power_score': 0,
             'max_level': 0,
             'top_articles': [],
             'silence_alert': False,
@@ -1666,8 +1257,6 @@ def classify_articles(articles, proxy_activation_level):
         'nuclear_max': 0,
         'domestic_max': 0,
         'regional_max': 0,
-        'soft_power_max': 0,
-        'diplomatic_max': 0,   # v1.1: De-escalation signals
         'total_articles': len(articles),
         'operation_true_promise_signals': [],
         'proxy_directive_signals': [],
@@ -1778,28 +1367,11 @@ def classify_articles(articles, proxy_activation_level):
                             theatre_summary['regional_max'] = level
                         break
 
-                # Soft Power / Influence Operations
-                for kw in SOFT_POWER_KEYWORDS.get(level, []):
-                    if kw in text:
-                        if level > ar['soft_power_score']:
-                            ar['soft_power_score'] = level
-                        if level > theatre_summary['soft_power_max']:
-                            theatre_summary['soft_power_max'] = level
-                        break
-
-                # ── v1.1: Diplomatic Track (de-escalation, REDUCES pressure) ──
-                for kw in DIPLOMATIC_TRIGGERS.get(level, []):
-                    if kw in text:
-                        if level > theatre_summary['diplomatic_max']:
-                            theatre_summary['diplomatic_max'] = level
-                        break
-
     # Per-actor finalization
     for actor_id, ar in actor_results.items():
         ar['max_level'] = max(
             ar['irgc_direct_score'], ar['nuclear_score'],
-            ar['domestic_score'], ar['regional_score'],
-            ar['soft_power_score']
+            ar['domestic_score'], ar['regional_score']
         )
         ar['escalation_level'] = ar['max_level']
         ar['escalation_label'] = ESCALATION_LEVELS.get(ar['max_level'], {}).get('label', 'Baseline')
@@ -1854,19 +1426,7 @@ def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
     if operation_true_promise_count > 0:
         base += min(operation_true_promise_count * 3, 12)
 
-    # ── v1.1: Diplomatic Track Modifier (active negotiations REDUCE pressure) ──
-    diplomatic_level = theatre_summary.get('diplomatic_max', 0)
-    diplomatic_modifier_map = {
-        0: 0,    # Quiet
-        1: -1,   # Background diplomatic mentions
-        2: -3,   # Diplomatic push
-        3: -6,   # Mediator activity (Pakistan/Oman/Russia shuttle)
-        4: -10,  # Active negotiations / direct talks
-        5: -15,  # Agreement reached / signed
-    }
-    base += diplomatic_modifier_map.get(diplomatic_level, 0)
-
-    return max(0, min(100, int(base)))
+    return min(100, int(base))
 
 
 # ============================================
@@ -1940,22 +1500,6 @@ def run_iran_rhetoric_scan(days=3):
         'domestic_label':         ESCALATION_LEVELS.get(max_domestic, {}).get('label', 'Baseline'),
         'regional_level':         max_regional,
         'regional_label':         ESCALATION_LEVELS.get(max_regional, {}).get('label', 'Baseline'),
-        'soft_power_level':       theatre_summary['soft_power_max'],
-        'soft_power_label':       ESCALATION_LEVELS.get(theatre_summary['soft_power_max'], {}).get('label', 'Baseline'),
-
-        # ── v1.1: Diplomatic Track (de-escalation signals) ──
-        'ceasefire_level':           theatre_summary['diplomatic_max'],
-        'ceasefire_label':           ESCALATION_LEVELS.get(theatre_summary['diplomatic_max'], {}).get('label', 'Baseline'),
-        'diplomatic_track_active':   theatre_summary['diplomatic_max'] >= 2,
-        'diplomatic_modifier':       {0:0, 1:-1, 2:-3, 3:-6, 4:-10, 5:-15}.get(theatre_summary['diplomatic_max'], 0),
-        'diplomatic_label_detailed': {
-            0: 'Quiet',
-            1: 'Background Mentions',
-            2: 'Diplomatic Push',
-            3: 'Mediator Activity',
-            4: 'Active Negotiations',
-            5: 'Agreement Reached',
-        }.get(theatre_summary['diplomatic_max'], 'Quiet'),
 
         # Special signals
         'operation_true_promise_count': otp_count,
@@ -2021,16 +1565,6 @@ def run_iran_rhetoric_scan(days=3):
     result['crosstheater_coordination'] = _detect_crosstheater_coordination(
         proxy_activation_level, proxy_detail
     )
-
-    # Signal interpretation — So What, Red Lines, Historical Patterns
-    if INTERPRETER_AVAILABLE:
-        try:
-            result['interpretation'] = iran_interpret_signals(result)
-            best = result['interpretation']['historical_matches']
-            best_pct = best[0]['similarity'] if best else 'none'
-            print(f"[Iran Rhetoric] ✅ Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%")
-        except Exception as e:
-            print(f"[Iran Rhetoric] ⚠️ Interpreter error (non-fatal): {e}")
 
     # Re-save with all enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
@@ -2143,12 +1677,6 @@ def register_iran_rhetoric_routes(app):
                 'domestic_label':         cached.get('domestic_label', 'Baseline'),
                 'regional_level':         cached.get('regional_level', 0),
                 'regional_label':         cached.get('regional_label', 'Baseline'),
-                # ── v1.1: Diplomatic Track ──
-                'ceasefire_level':           cached.get('ceasefire_level', 0),
-                'ceasefire_label':           cached.get('ceasefire_label', 'Baseline'),
-                'diplomatic_track_active':   cached.get('diplomatic_track_active', False),
-                'diplomatic_modifier':       cached.get('diplomatic_modifier', 0),
-                'diplomatic_label_detailed': cached.get('diplomatic_label_detailed', 'Quiet'),
                 # Iran-specific
                 'operation_true_promise_count':   cached.get('operation_true_promise_count', 0),
                 'operation_true_promise_signals': cached.get('operation_true_promise_signals', [])[:3],
