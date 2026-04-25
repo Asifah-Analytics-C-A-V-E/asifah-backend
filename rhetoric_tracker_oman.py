@@ -168,13 +168,25 @@ ACTORS = {
             'Sultan public appearance patterns, foreign policy posture changes.'
         ),
         'keywords': [
+            # English — names + institutions
             'sultan haitham', 'haitham bin tariq', 'sultan of oman',
             'diwan oman', 'ministry of foreign affairs oman', 'mofa oman',
             'royal office oman', 'oman news agency', 'ona oman',
-            'سلطان هيثم', 'هيثم بن طارق', 'الديوان السلطاني',
-            'سلطان عمان',
+            'badr al-busaidi', 'sayyid badr', 'fahd bin mahmoud',
+            'majlis al-dawla', 'majlis al-shura', 'state council oman',
+            'shura council oman',
             'omani statement', 'muscat statement', 'oman declared',
-            'oman position', 'royal decree oman', 'مرسوم سلطاني',
+            'oman position', 'royal decree oman', 'oman cabinet',
+            # Arabic
+            'سلطان هيثم', 'هيثم بن طارق', 'الديوان السلطاني',
+            'سلطان عمان', 'مرسوم سلطاني', 'وكالة الأنباء العمانية',
+            'بدر البوسعيدي', 'سيد بدر', 'فهد بن محمود',
+            'مجلس الدولة', 'مجلس الشورى',
+            'بيان عماني', 'موقف عمان', 'الحكومة العمانية',
+            # Farsi
+            'سلطان هیثم', 'هیثم بن طارق', 'سلطان عمان',
+            'وزارت خارجه عمان', 'بدر البوسعیدی',
+            'مسقط بیانیه', 'دولت عمان',
         ],
         'tripwires': [
             'sultan dies', 'sultan dead', 'sultan haitham passes',
@@ -198,13 +210,26 @@ ACTORS = {
             'Crossing from baseline to active suppression is a major signal.'
         ),
         'keywords': [
+            # English
             'royal oman police', 'rop oman', 'ross oman',
             'internal security service oman', 'iss oman',
             'oman security forces', 'oman coast guard',
-            'الشرطة العمانية', 'الأمن الداخلي',
             'oman arrest', 'oman detained', 'oman dissident',
             'omani activist', 'oman crackdown', 'oman protest',
             'salalah security', 'dhofar security',
+            # Arabic
+            'الشرطة العمانية', 'الأمن الداخلي',
+            'الشرطة السلطانية', 'خفر السواحل العماني',
+            'اعتقال في عمان', 'احتجاز عمان',
+            'ناشط عماني', 'معارض عماني',
+            'احتجاج عمان', 'تظاهرة عمان',
+            'أمن صلالة', 'أمن ظفار',
+            # Farsi
+            'پلیس عمان', 'نیروهای امنیتی عمان',
+            'دستگیری عمان', 'بازداشت عمان',
+            'فعال عمانی', 'معترضان عمان',
+            'امنیت صلاله', 'ظفار',
+        ],
         ],
         'tripwires': [
             'mass arrests oman', 'protest dispersed muscat',
@@ -228,15 +253,36 @@ ACTORS = {
             'unrest in Pakistan can spill into Omani Baloch communities.'
         ),
         'keywords': [
+            # English — direct threats
             'iran threatens oman', 'iran target oman',
             'salalah strike', 'salalah missile', 'salalah attack',
             'duqm strike', 'duqm attack', 'duqm british base',
             'houthi missile oman', 'yemen border oman', 'dhofar spillover',
             'tanker attack salalah', 'tanker attack duqm', 'tanker attack gulf of oman',
             'limpet mine oman', 'mine gulf of oman',
-            'استهداف صلالة', 'استهداف الدقم', 'هجوم على عمان',
-            'تهدید عمان', 'حمله به عمان',
+            # English — Hormuz mining (specific kinetic indicator)
+            'iran mining hormuz', 'iran lays mines hormuz', 'mine layer iran',
+            'iran small boats hormuz', 'shoot and kill iran',
+            # English — Baloch / Pakistan spillover (specific organizations)
             'baloch attack oman', 'baloch unrest dhofar',
+            'baloch liberation army', 'bla pakistan',
+            'baloch insurgency oman', 'baloch fighters oman',
+            'gwadar baloch', 'cpec baloch attack',
+            # English — Yemen border specifics
+            'mahra yemen oman', 'yemen oman crossing',
+            'yemeni refugees oman', 'al ghaydah yemen',
+            # Arabic
+            'استهداف صلالة', 'استهداف الدقم', 'هجوم على عمان',
+            'صاروخ على صلالة', 'هجوم بالطائرات المسيرة عمان',
+            'لغم خليج عمان', 'تلغيم مضيق هرمز',
+            'البلوش عمان', 'جيش تحرير بلوشستان',
+            'لاجئون يمنيون عمان', 'حدود اليمن عمان',
+            'هجوم على ناقلة خليج عمان',
+            # Farsi
+            'تهدید عمان', 'حمله به عمان', 'هدف صلاله',
+            'حمله به الدقم', 'تنگه هرمز مین گذاری',
+            'قایق‌های کوچک هرمز', 'پایگاه بریتانیا الدقم',
+            'بلوچستان عمان', 'پناهندگان یمنی عمان',
         ],
         'tripwires': [
             'salalah hit', 'duqm hit', 'oman struck',
@@ -264,7 +310,33 @@ ACTORS = {
         'keywords': [
             'theyazin bin haitham', 'crown prince oman', 'crown prince theyazin',
             'asad bin tariq', 'asaad bin tariq',
+            'sultan haitham health', 'sultan oman hospital','keywords': [
+            # English — primary heir + alternative dynastic figures
+            'theyazin bin haitham', 'crown prince oman', 'crown prince theyazin',
+            'asad bin tariq', 'asaad bin tariq',
             'sultan haitham health', 'sultan oman hospital',
+            'sultan oman illness', 'sultan oman travel',
+            'oman succession', 'oman dynasty', 'oman royal family',
+            'oman royal decree', 'royal court oman', 'sayyid theyazin',
+            'sayyida mona bint fahd', 'mona bint fahd',
+            'al said dynasty', 'al busaid dynasty',
+            # English — visibility / absence patterns
+            'sultan haitham absent', 'sultan undisclosed',
+            'royal birthday oman', 'national day oman',
+            'sultan public appearance',
+            # Arabic
+            'ولي العهد عمان', 'صحة السلطان',
+            'سيد ذي يزن', 'ذي يزن بن هيثم',
+            'أسعد بن طارق', 'منى بنت فهد',
+            'أسرة آل سعيد', 'العائلة المالكة العمانية',
+            'وراثة عمان', 'صحة سلطان عمان',
+            'السلطان غائب', 'يوم وطني عمان',
+            # Farsi
+            'ولیعهد عمان', 'سلامتی سلطان عمان',
+            'ذی یزن بن هیثم', 'اسعد بن طارق',
+            'خاندان سلطنتی عمان', 'جانشینی عمان',
+            'سلطان عمان بیمار', 'غیبت سلطان',
+        ],
             'sultan oman illness', 'sultan oman travel',
             'oman succession', 'oman dynasty', 'oman royal family',
             'ولي العهد عمان', 'صحة السلطان',
@@ -293,14 +365,37 @@ ACTORS = {
             'Iran tracker reads oman:mediation_active as a de-escalation modifier.'
         ),
         'keywords': [
+            # English
             'oman mediation', 'omani mediation', 'oman brokered',
             'muscat talks', 'muscat channel', 'muscat back-channel',
             'oman us iran', 'witkoff muscat', 'witkoff oman',
             'oman hostage release', 'oman houthi release', 'omani envoy',
             'oman delegation tehran', 'iranian delegation muscat',
-            'وساطة عمانية', 'محادثات مسقط',
             'oman yemen mediation', 'oman hamas channel',
             'oman saudi yemen', 'omani diplomacy',
+            # English — specific named individuals + scenarios
+            'araghchi muscat', 'araghchi oman',
+            'witkoff araghchi muscat', 'witkoff iran muscat',
+            'oman released american', 'oman freed american',
+            'oman freed prisoner iran', 'oman swap iran',
+            'oman israel hamas indirect',
+            # Arabic
+            'وساطة عمانية', 'محادثات مسقط',
+            'القناة العمانية', 'مسقط قناة خلفية',
+            'مفاوضات مسقط', 'وفد إيراني مسقط',
+            'وفد عماني طهران', 'مبعوث عماني',
+            'الإفراج بوساطة عمانية', 'إطلاق سراح بوساطة مسقط',
+            'وساطة عمانية يمن', 'دبلوماسية عمانية',
+            'عراقجي مسقط', 'ويتكوف مسقط',
+            # Farsi (CRITICAL — Iran International, Tasnim, Press TV cover this constantly)
+            'میانجیگری عمان', 'مسقط مذاکرات',
+            'کانال مسقط', 'گفتگوهای مسقط',
+            'هیئت ایرانی مسقط', 'هیئت عمان تهران',
+            'فرستاده عمانی', 'دیپلماسی عمانی',
+            'عراقچی مسقط', 'عراقچی عمان',
+            'ویتکاف مسقط', 'ویتکاف عراقچی',
+            'آزادی زندانی توسط عمان', 'مبادله زندانی عمان',
+            'وساطت عمان', 'مسقط ایران آمریکا',
         ],
         'tripwires': [
             'oman brokers ceasefire', 'oman secures release',
@@ -322,14 +417,32 @@ ACTORS = {
             'Saudi-UAE blockade of Qatar 2017-2021) reinforces convening credibility.'
         ),
         'keywords': [
+            # English
             'gcc summit muscat', 'oman hosts summit',
             'india oman strategic', 'oman china strategic',
             'oman uk defense', 'oman japan', 'oman korea',
             'visit muscat', 'visit oman', 'state visit oman',
             'oman foreign minister visit', 'sayyid badr',
-            'بدر البوسعيدي',
             'oman convening', 'oman dialogue', 'oman conference',
             'oman india partnership', 'oman gulf cooperation',
+            # English — specific bilateral patterns
+            'oman russia talks', 'oman china talks',
+            'oman india modi', 'oman pakistan',
+            'oman uk talks', 'oman uae cooperation',
+            # Arabic
+            'بدر البوسعيدي',
+            'قمة خليجية مسقط', 'عمان تستضيف قمة',
+            'زيارة دولة عمان', 'وزير خارجية عمان',
+            'حوار عماني', 'مؤتمر مسقط',
+            'عمان الهند', 'عمان الصين',
+            'عمان روسيا', 'عمان بريطانيا',
+            'تعاون خليجي عماني',
+            # Farsi
+            'بدر البوسعیدی', 'وزیر خارجه عمان',
+            'سفر به مسقط', 'دیدار مسقط',
+            'عمان هند', 'عمان چین',
+            'عمان روسیه', 'گفتگوهای عمان',
+            'همکاری خلیج عمان',
         ],
         'tripwires': [
             'historic summit muscat', 'oman hosts unprecedented',
@@ -567,12 +680,22 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
     articles = []
     try:
         r = requests.get(url, timeout=(5, 10), headers={
-            'User-Agent': 'Mozilla/5.0 Asifah Analytics OSINT'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
         })
         if not r.ok:
+            print(f"[Oman RSS] ❌ {source_name}: HTTP {r.status_code}")
             return []
-        root = ET.fromstring(r.content)
+        try:
+            root = ET.fromstring(r.content)
+        except ET.ParseError as pe:
+            print(f"[Oman RSS] ❌ {source_name}: XML parse error: {str(pe)[:80]}")
+            return []
         items = root.findall('.//item') or root.findall('.//{http://www.w3.org/2005/Atom}entry')
+        if not items:
+            print(f"[Oman RSS] ⚠️  {source_name}: HTTP 200 but 0 items in feed (size={len(r.content)})")
+            return []
         for item in items[:30]:
             title_el = item.find('title') or item.find('{http://www.w3.org/2005/Atom}title')
             link_el  = item.find('link')  or item.find('{http://www.w3.org/2005/Atom}link')
@@ -596,7 +719,10 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
                     'source_weight_override': weight,
                 })
     except Exception as e:
-        print(f"[Oman RSS] {source_name} error: {str(e)[:100]}")
+        print(f"[Oman RSS] ❌ {source_name} unexpected error: {type(e).__name__}: {str(e)[:100]}")
+        return []
+    if articles:
+        print(f"[Oman RSS] ✅ {source_name}: {len(articles)} articles")
     return articles
 
 
@@ -680,6 +806,7 @@ def _fetch_all_articles():
     articles = []
 
     # RSS feeds
+    rss_count = 0
     for src in RHETORIC_RSS_FEEDS:
         try:
             fetched = _fetch_rss(
@@ -689,8 +816,10 @@ def _fetch_all_articles():
                 lang=src.get('lang', 'en'),
             )
             articles.extend(fetched)
+            rss_count += len(fetched)
         except Exception as e:
             print(f"[Oman RSS] {src.get('name', 'unknown')} error: {str(e)[:80]}")
+    print(f"[Oman RSS] 📊 Total RSS articles: {rss_count} from {len(RHETORIC_RSS_FEEDS)} feeds")
 
     # GDELT — all language queries
     gdelt_count = 0
@@ -723,9 +852,20 @@ def _fetch_all_articles():
 
     # ── Brave Search fallback (multi-language) ──
     # Per Rachel: EN + AR + FA + HE
+    # v1.1 threshold: fires when RSS is starving OR primary sources are thin.
+    # The RSS=0 condition catches scenarios where datacenter IPs are blocked
+    # by major outlets but English news still works via NewsAPI.
     brave_count = 0
-    if _BRAVE_AVAILABLE and _fetch_brave and (gdelt_count + newsapi_count) < 15:
-        print(f"[Oman Brave] GDELT+NewsAPI returned {gdelt_count + newsapi_count} -- triggering Brave multi-lang fallback")
+    primary_total = gdelt_count + newsapi_count
+    brave_should_fire = (
+        _BRAVE_AVAILABLE and _fetch_brave and (
+            primary_total < 15 or
+            (rss_count == 0 and primary_total < 30)  # RSS dead = need multilingual coverage
+        )
+    )
+    if brave_should_fire:
+        reason = f"primary={primary_total}, rss={rss_count}"
+        print(f"[Oman Brave] Triggering Brave multi-lang fallback ({reason})")
         # English
         for q in ['Oman Sultan Haitham mediation', 'Salalah Duqm Oman security']:
             try:
