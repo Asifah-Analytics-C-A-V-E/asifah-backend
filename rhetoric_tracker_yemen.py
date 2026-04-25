@@ -1,5 +1,5 @@
 """
-Houthi Rhetoric Tracker — Asifah Analytics
+Yeme (Houthi) Rhetoric Tracker — Asifah Analytics
 'version': '2.1.1 - April 2026'
 
 Tracks escalation rhetoric from Ansar Allah (Houthis) and responses
