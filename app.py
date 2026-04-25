@@ -81,6 +81,15 @@ try:
 except Exception as e:
     register_israel_rhetoric_routes = None
     print(f"[ME Backend] ⚠️ Israel rhetoric module not available: {e}")
+
+try:
+    from rhetoric_tracker_oman import register_oman_rhetoric_routes, start_background_refresh as start_oman_rhetoric_refresh
+    print("[ME Backend] ✅ Oman rhetoric (dual-axis stability anchor) module loaded")
+except Exception as e:
+    register_oman_rhetoric_routes = None
+    start_oman_rhetoric_refresh = None
+    print(f"[ME Backend] ⚠️ Oman rhetoric module not available: {e}")
+    
 try:
     from iraq_humanitarian import register_iraq_humanitarian_endpoints
     IRAQ_HUMANITARIAN_AVAILABLE = True
@@ -898,6 +907,9 @@ if register_iran_rhetoric_routes:
 
 if register_israel_rhetoric_routes:
     register_israel_rhetoric_routes(app)
+
+if register_oman_rhetoric_routes:
+    register_oman_rhetoric_routes(app)
 if IRAQ_HUMANITARIAN_AVAILABLE:
     register_iraq_humanitarian_endpoints(app)
 if IRAQ_STABILITY_AVAILABLE:
@@ -7588,6 +7600,9 @@ def parse_notam(notam_data, location_info):
 # ========================================
 start_background_refresh()
 
+# Start Oman rhetoric background refresh (separate scan loop)
+if start_oman_rhetoric_refresh:
+    start_oman_rhetoric_refresh()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
