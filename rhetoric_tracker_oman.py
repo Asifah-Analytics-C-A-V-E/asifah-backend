@@ -230,7 +230,6 @@ ACTORS = {
             'فعال عمانی', 'معترضان عمان',
             'امنیت صلاله', 'ظفار',
         ],
-        ],
         'tripwires': [
             'mass arrests oman', 'protest dispersed muscat',
             'oman dissident jailed', 'oman activist detained',
@@ -308,9 +307,6 @@ ACTORS = {
             'or eclipse, Asad bin Tariq mentions, decree volume drops (silence pattern).'
         ),
         'keywords': [
-            'theyazin bin haitham', 'crown prince oman', 'crown prince theyazin',
-            'asad bin tariq', 'asaad bin tariq',
-            'sultan haitham health', 'sultan oman hospital','keywords': [
             # English — primary heir + alternative dynastic figures
             'theyazin bin haitham', 'crown prince oman', 'crown prince theyazin',
             'asad bin tariq', 'asaad bin tariq',
@@ -336,11 +332,6 @@ ACTORS = {
             'ذی یزن بن هیثم', 'اسعد بن طارق',
             'خاندان سلطنتی عمان', 'جانشینی عمان',
             'سلطان عمان بیمار', 'غیبت سلطان',
-        ],
-            'sultan oman illness', 'sultan oman travel',
-            'oman succession', 'oman dynasty', 'oman royal family',
-            'ولي العهد عمان', 'صحة السلطان',
-            'oman royal decree', 'royal court oman', 'sayyid theyazin',
         ],
         'tripwires': [
             'sultan haitham hospitalized', 'sultan unwell',
@@ -680,22 +671,12 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
     articles = []
     try:
         r = requests.get(url, timeout=(5, 10), headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+            'User-Agent': 'Mozilla/5.0 Asifah Analytics OSINT'
         })
         if not r.ok:
-            print(f"[Oman RSS] ❌ {source_name}: HTTP {r.status_code}")
             return []
-        try:
-            root = ET.fromstring(r.content)
-        except ET.ParseError as pe:
-            print(f"[Oman RSS] ❌ {source_name}: XML parse error: {str(pe)[:80]}")
-            return []
+        root = ET.fromstring(r.content)
         items = root.findall('.//item') or root.findall('.//{http://www.w3.org/2005/Atom}entry')
-        if not items:
-            print(f"[Oman RSS] ⚠️  {source_name}: HTTP 200 but 0 items in feed (size={len(r.content)})")
-            return []
         for item in items[:30]:
             title_el = item.find('title') or item.find('{http://www.w3.org/2005/Atom}title')
             link_el  = item.find('link')  or item.find('{http://www.w3.org/2005/Atom}link')
@@ -719,10 +700,7 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
                     'source_weight_override': weight,
                 })
     except Exception as e:
-        print(f"[Oman RSS] ❌ {source_name} unexpected error: {type(e).__name__}: {str(e)[:100]}")
-        return []
-    if articles:
-        print(f"[Oman RSS] ✅ {source_name}: {len(articles)} articles")
+        print(f"[Oman RSS] {source_name} error: {str(e)[:100]}")
     return articles
 
 
