@@ -77,14 +77,20 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
 
-# Signal interpreter — So What, Red Lines, Historical Patterns
+# Signal interpreter — So What, Red Lines, Historical Patterns + canonical top_signals
 try:
-    from israel_signal_interpreter import interpret_signals
+    from israel_signal_interpreter import (
+        interpret_signals,
+        build_top_signals as israel_build_top_signals,
+    )
     INTERPRETER_AVAILABLE = True
-    print("[Israel Rhetoric] ✅ Signal interpreter loaded")
-except ImportError:
+    print("[Israel Rhetoric] ✅ Signal interpreter loaded (incl. build_top_signals v2.0)")
+except Exception as e:
+    import traceback as _tb
     INTERPRETER_AVAILABLE = False
-    print("[Israel Rhetoric] ⚠️ Signal interpreter not available")
+    israel_build_top_signals = None
+    print(f"[Israel Rhetoric] ⚠️ Signal interpreter not available: {e}")
+    _tb.print_exc()
 
 # ============================================
 # CONFIG
@@ -1976,6 +1982,17 @@ def run_israel_rhetoric_scan(days=3):
             print(f"[Israel Rhetoric] ✅ Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%")
         except Exception as e:
             print(f"[Israel Rhetoric] ⚠️ Interpreter error (non-fatal): {e}")
+
+    # Canonical top_signals[] for ME regional BLUF + GPI consumption
+    if israel_build_top_signals:
+        try:
+            result['top_signals'] = israel_build_top_signals(result)
+            print(f"[Israel Rhetoric] ✅ Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+        except Exception as e:
+            print(f"[Israel Rhetoric] ⚠️ build_top_signals error: {str(e)[:120]}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
 
     # Re-save
     _redis_set(RHETORIC_CACHE_KEY, result)
