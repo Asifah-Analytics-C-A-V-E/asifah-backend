@@ -68,6 +68,22 @@ except ImportError:
     ME_BLUF_AVAILABLE = False
     print("[ME Backend] ⚠️ ME Regional BLUF engine not available")
 
+# ────────────────────────────────────────────────────────────
+# GLOBAL PRESSURE INDEX — top of the analytical pyramid
+# Synthesizes ME + Asia + Europe + WHA regional BLUFs into a
+# single global level + cross-theater convergence narrative.
+# Hosted on ME backend (largest). Endpoints: /api/gpi, /api/gpi/level
+# ────────────────────────────────────────────────────────────
+try:
+    from global_pressure_index import register_gpi_routes
+    GPI_AVAILABLE = True
+    print("[ME Backend] ✅ Global Pressure Index engine loaded")
+except Exception as e:
+    GPI_AVAILABLE = False
+    import traceback as _gpi_tb
+    print(f"[ME Backend] ⚠️ GPI module not available: {e}")
+    _gpi_tb.print_exc()
+
 try:
     from rhetoric_tracker_iran import register_iran_rhetoric_routes
     print("[ME Backend] ✅ Iran rhetoric (command node) module loaded")
@@ -902,6 +918,11 @@ if IRAQ_RHETORIC_AVAILABLE:
 if ME_BLUF_AVAILABLE:
     register_me_bluf_routes(app)
 
+# Global Pressure Index — register after all regional BLUFs/rhetoric so it can read them
+if GPI_AVAILABLE:
+    register_gpi_routes(app)
+    print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+
 if register_iran_rhetoric_routes:
     register_iran_rhetoric_routes(app)
 
@@ -914,6 +935,29 @@ if IRAQ_HUMANITARIAN_AVAILABLE:
     register_iraq_humanitarian_endpoints(app)
 if IRAQ_STABILITY_AVAILABLE:
     register_iraq_stability_endpoints(app)
+
+
+# ──────────────────────────────────────────────────────────────
+# /debug/routes — diagnostic hygiene endpoint (Taiwan-bug lesson)
+# Lists all registered routes. Useful for verifying deploy correctness
+# without grepping logs. Costs nothing if nobody hits it.
+# ──────────────────────────────────────────────────────────────
+@app.route('/debug/routes', methods=['GET'])
+def debug_list_routes():
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods':  sorted([m for m in rule.methods if m not in ('HEAD', 'OPTIONS')]),
+            'path':     str(rule),
+        })
+    routes.sort(key=lambda r: r['path'])
+    return jsonify({
+        'total_routes': len(routes),
+        'gpi_present':  any('/api/gpi' in r['path'] for r in routes),
+        'bluf_present': any('/bluf' in r['path'] for r in routes),
+        'routes':       routes,
+    })
 
 # ========================================
 # CONFIGURATION
