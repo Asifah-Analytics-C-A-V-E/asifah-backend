@@ -635,6 +635,405 @@ def interpret_signals(scan_data):
 
 
 # ============================================================
+# CANONICAL SIGNAL EMITTER (v2.0)
+# ============================================================
+# Israel is the STRIKE ACTOR + dual-dashboard tracker — it both reads
+# cross-theater fingerprints from Iran (command node), Lebanon, Yemen,
+# Syria, Iraq AND emits its own outbound strike posture. It carries the
+# richest cross-theater context of any tracker in the platform.
+#
+# This emitter maps Israel's dual-dashboard scan into canonical signal
+# categories consumed by me_regional_bluf.py and global_pressure_index.py.
+#
+# Categories Israel emits:
+#   red_line_breached            -- severity 3 red lines (multi-axis,
+#                                   nuclear facility, mass-cas crossing)
+#   multi_axis_convergence       -- TCI >= 3 AND ≥2 inbound theaters L3+
+#                                   (high-leverage GPI signal — feeds the
+#                                   ME regional BLUF's most urgent narrative)
+#   kinetic_pressure             -- alerts_24h significant (ballistic >= 1
+#                                   or rockets >= 20) or ballistic_level L4+
+#   theatre_high                 -- composite L4+ catch-all
+#   inbound_threat_high          -- inbound_max_level >= 4
+#   outbound_strike_posture      -- strike_posture_level >= 4
+#                                   (Israel preparing to strike)
+#   crosstheater_iran_israel     -- iran_threat_level >= 4
+#   crosstheater_lebanon_israel  -- hezbollah_threat_level >= 4
+#   crosstheater_yemen_israel    -- houthi_threat_level >= 4
+#   crosstheater_syria_israel    -- syria_threat_level >= 3
+#   crosstheater_iraq_israel     -- iraq_threat_level >= 3
+#   silence_anomaly              -- war_cabinet/US-coord quiet during
+#                                   high tempo (operational planning)
+#   diplomatic_active            -- inbound_diplomatic_active (cross-theater
+#                                   off-ramps active in Lebanon/Iran/etc.)
+# ============================================================
+
+ISRAEL_FLAG = '\U0001f1ee\U0001f1f1'  # 🇮🇱
+
+_ISR_ESC_LABELS = {
+    0: 'Monitoring',
+    1: 'Routine',
+    2: 'Elevated Rhetoric',
+    3: 'Heightened Posture',
+    4: 'Active Signaling',
+    5: 'Active Conflict',
+}
+
+
+def build_top_signals(scan_data):
+    """
+    Convert Israel scan_data into canonical top_signals[] for ME regional
+    BLUF and Global Pressure Index. Returns a list (possibly empty),
+    sorted by priority desc.
+
+    Signal schema (canonical platform-wide):
+        priority   int 0-15  (higher == more urgent)
+        category   str       (canonical bucket)
+        theatre    'israel'
+        level      int 0-5
+        icon       str (emoji)
+        color      str (hex)
+        short_text str (<=80 char)
+        long_text  str (<=200 char)
+    """
+    signals = []
+
+    interp        = scan_data.get('interpretation') or {}
+    so_what       = interp.get('so_what') or {}
+    rl_block      = interp.get('red_lines') or {}
+    triggered_rls = rl_block.get('triggered') or []
+
+    # Theatre composite
+    theatre_level   = int(scan_data.get('theatre_level', 0) or 0)
+    theatre_score   = int(scan_data.get('theatre_score', 0) or 0)
+
+    # Inbound dashboard
+    inbound_lvl     = int(scan_data.get('inbound_max_level', 0) or 0)
+    iran_lvl        = int(scan_data.get('iran_threat_level', 0) or 0)
+    hez_lvl         = int(scan_data.get('hezbollah_threat_level', 0) or 0)
+    houthi_lvl      = int(scan_data.get('houthi_threat_level', 0) or 0)
+    syria_lvl       = int(scan_data.get('syria_threat_level', 0) or 0)
+    iraq_lvl        = int(scan_data.get('iraq_threat_level', 0) or 0)
+    tci             = int(scan_data.get('threat_convergence_index', 0) or 0)
+    convergence_msg = str(scan_data.get('convergence_signal', '') or '')[:120]
+    iran_cmd_node   = bool(scan_data.get('iran_is_command_node', False))
+
+    # Alerts (Pikud HaOref / Telegram-detected)
+    alerts          = scan_data.get('alerts_24h') or {}
+    alerts_total    = int(alerts.get('total', 0) or 0)
+    alerts_rockets  = int(alerts.get('rockets', 0) or 0)
+    alerts_ballistic= int(alerts.get('ballistic', 0) or 0)
+    alerts_recent_1h= int(alerts.get('recent_1h', 0) or 0)
+
+    # Article-detected vectors
+    ballistic_lvl   = int(scan_data.get('ballistic_level', 0) or 0)
+    asymmetric_lvl  = int(scan_data.get('asymmetric_level', 0) or 0)
+
+    # Outbound dashboard
+    outbound_lvl    = int(scan_data.get('outbound_max_level', 0) or 0)
+    strike_lvl      = int(scan_data.get('strike_posture_level', 0) or 0)
+    annex_lvl       = int(scan_data.get('annexation_level', 0) or 0)
+
+    # Diplomatic shim (cross-theater off-ramps)
+    dipl_active     = bool(scan_data.get('inbound_diplomatic_active', False))
+    dipl_modifier   = int(scan_data.get('inbound_diplomatic_modifier', 0) or 0)
+    theaters_in_dipl= scan_data.get('theaters_in_diplomacy') or []
+
+    actors          = scan_data.get('actors') or {}
+    silence_alerts  = scan_data.get('silence_anomalies') or []
+
+    # ── Color helper ─────────────────────────────────────────────────
+    def lvl_color(lvl):
+        return {0:'#6b7280', 1:'#16a34a', 2:'#facc15', 3:'#f59e0b',
+                4:'#f97316', 5:'#dc2626'}.get(int(lvl), '#6b7280')
+
+    # ── 1. Red lines BREACHED ────────────────────────────────────────
+    for rl in triggered_rls:
+        if not isinstance(rl, dict):
+            continue
+        if rl.get('status') != 'BREACHED':
+            continue
+        sev   = int(rl.get('severity', 0) or 0)
+        label = str(rl.get('label', 'Red line'))[:55]
+        rl_id = str(rl.get('id', '')).lower()
+        # Multi-axis attack red line gets special multi_axis_convergence flavor
+        if 'multi_axis' in rl_id or 'multi-axis' in label.lower() or 'simultaneous' in rl_id:
+            signals.append({
+                'priority':   14,   # highest possible — this is the strategic alarm
+                'category':   'multi_axis_convergence',
+                'theatre':    'israel',
+                'level':      max(theatre_level, 4),
+                'icon':       '⚡',
+                'color':      '#dc2626',
+                'short_text': (f'{ISRAEL_FLAG} ISRAEL: Multi-axis convergence '
+                               f'breached (TCI {tci})'),
+                'long_text':  (f'{ISRAEL_FLAG} ISRAEL multi-axis red line breached '
+                               f'— Iran L{iran_lvl}, Hezbollah L{hez_lvl}, Houthi '
+                               f'L{houthi_lvl} elevated simultaneously. '
+                               f'{convergence_msg}.'),
+            })
+            continue
+        # Nuclear facility targeting red line
+        if 'nuclear' in rl_id:
+            signals.append({
+                'priority':   14,
+                'category':   'red_line_breached',
+                'theatre':    'israel',
+                'level':      max(theatre_level, 4),
+                'icon':       '☢️',
+                'color':      '#dc2626',
+                'short_text': (f'{ISRAEL_FLAG} ISRAEL: Nuclear facility '
+                               f'targeting — {label[:30]}'),
+                'long_text':  (f'{ISRAEL_FLAG} ISRAEL nuclear facility red line '
+                               f'breached: {rl.get("label", "")[:140]}'),
+            })
+            continue
+        # Generic breach
+        signals.append({
+            'priority':   12 if sev >= 3 else 10,
+            'category':   'red_line_breached',
+            'theatre':    'israel',
+            'level':      max(theatre_level, 4),
+            'icon':       rl.get('icon', '🚨'),
+            'color':      '#dc2626',
+            'short_text': f'{ISRAEL_FLAG} ISRAEL: BREACH — {label}',
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL red line breached: '
+                           f'{rl.get("label", "")[:140]}'),
+        })
+
+    # ── 2. Multi-axis convergence (even without explicit red line) ──
+    # If TCI >= 3 AND we haven't already emitted a multi_axis signal,
+    # surface this as a soft (not breach) convergence signal.
+    has_multi_axis_signal = any(s.get('category') == 'multi_axis_convergence'
+                                 for s in signals)
+    if tci >= 3 and not has_multi_axis_signal:
+        signals.append({
+            'priority':   11,
+            'category':   'multi_axis_convergence',
+            'theatre':    'israel',
+            'level':      max(inbound_lvl, 3),
+            'icon':       '⚡',
+            'color':      lvl_color(max(inbound_lvl, 3)),
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Multi-axis convergence '
+                           f'(TCI {tci})'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL Threat Convergence Index '
+                           f'{tci}/5 — {convergence_msg or "multiple Iran-axis theaters elevated simultaneously"}.'),
+        })
+
+    # ── 3. Kinetic pressure: live alerts (Pikud HaOref + ballistic) ──
+    if alerts_ballistic >= 1:
+        signals.append({
+            'priority':   13,   # ballistic = strategic — even one is huge
+            'category':   'kinetic_pressure',
+            'theatre':    'israel',
+            'level':      5,
+            'icon':       '☄️',
+            'color':      '#dc2626',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: {alerts_ballistic} ballistic '
+                           f'alert(s) in 24h'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL Pikud HaOref: '
+                           f'{alerts_ballistic} ballistic missile alert(s) in '
+                           f'last 24h, {alerts_rockets} rocket alerts. '
+                           f'Recent 1h: {alerts_recent_1h}.'),
+        })
+    elif alerts_rockets >= 20 or alerts_total >= 30:
+        signals.append({
+            'priority':   12,
+            'category':   'kinetic_pressure',
+            'theatre':    'israel',
+            'level':      4,
+            'icon':       '🚀',
+            'color':      '#dc2626',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: {alerts_total} alerts in 24h '
+                           f'({alerts_rockets} rockets)'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL elevated alert tempo — '
+                           f'{alerts_total} total alerts in 24h, '
+                           f'{alerts_rockets} rocket alerts, recent 1h: '
+                           f'{alerts_recent_1h}.'),
+        })
+    elif ballistic_lvl >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'kinetic_pressure',
+            'theatre':    'israel',
+            'level':      ballistic_lvl,
+            'icon':       '☄️',
+            'color':      lvl_color(ballistic_lvl),
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Ballistic vector '
+                           f'L{ballistic_lvl} (article-detected)'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL ballistic missile language '
+                           f'L{ballistic_lvl} {_ISR_ESC_LABELS.get(ballistic_lvl, "")} — '
+                           f'detected in article corpus.'),
+        })
+
+    # ── 4. Outbound strike posture (Israel preparing to strike) ──────
+    if strike_lvl >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'outbound_strike_posture',
+            'theatre':    'israel',
+            'level':      strike_lvl,
+            'icon':       '🎯',
+            'color':      lvl_color(strike_lvl),
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Outbound strike posture '
+                           f'L{strike_lvl}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL IDF outbound strike posture '
+                           f'L{strike_lvl} {_ISR_ESC_LABELS.get(strike_lvl, "")} — '
+                           f'mobilization, target language, strike '
+                           f'authorizations elevated.'),
+        })
+
+    # ── 5. Inbound threat composite high (when no specific actor surfaces) ──
+    if inbound_lvl >= 4:
+        signals.append({
+            'priority':   10,
+            'category':   'inbound_threat_high',
+            'theatre':    'israel',
+            'level':      inbound_lvl,
+            'icon':       '🛡️',
+            'color':      lvl_color(inbound_lvl),
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Inbound threat composite '
+                           f'L{inbound_lvl}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound threat L{inbound_lvl} '
+                           f'{_ISR_ESC_LABELS.get(inbound_lvl, "")} — composite '
+                           f'across Iran, Lebanon, Yemen, Syria, Iraq '
+                           f'fingerprints.'),
+        })
+
+    # ── 6-10. Cross-theater per-actor signals ───────────────────────
+    if iran_lvl >= 4:
+        signals.append({
+            'priority':   11 if iran_cmd_node else 10,
+            'category':   'crosstheater_iran_israel',
+            'theatre':    'israel',
+            'level':      iran_lvl,
+            'icon':       '🇮🇷',
+            'color':      '#7c3aed',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Iran threat L{iran_lvl}'
+                           f'{" (command node)" if iran_cmd_node else ""}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Iran L{iran_lvl} — '
+                           f'IRGC / Khamenei / OTP signaling read from Iran '
+                           f'command node fingerprint.'),
+        })
+    if hez_lvl >= 4:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_lebanon_israel',
+            'theatre':    'israel',
+            'level':      hez_lvl,
+            'icon':       '🇱🇧',
+            'color':      '#7c3aed',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Hezbollah (Hizbullah) threat '
+                           f'L{hez_lvl}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Lebanon L{hez_lvl} — '
+                           f'Hezbollah kinetic / rocket / cross-border activity '
+                           f'read from Lebanon fingerprint.'),
+        })
+    if houthi_lvl >= 4:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_yemen_israel',
+            'theatre':    'israel',
+            'level':      houthi_lvl,
+            'icon':       '🇾🇪',
+            'color':      '#7c3aed',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Houthi threat L{houthi_lvl}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Yemen L{houthi_lvl} — '
+                           f'Houthi missile / drone / Bab el-Mandeb activity '
+                           f'read from Yemen fingerprint.'),
+        })
+    if syria_lvl >= 3:
+        signals.append({
+            'priority':   9,
+            'category':   'crosstheater_syria_israel',
+            'theatre':    'israel',
+            'level':      syria_lvl,
+            'icon':       '🇸🇾',
+            'color':      '#7c3aed',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Syria threat L{syria_lvl}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Syria L{syria_lvl} — '
+                           f'corridor / weapons-transfer / HTS activity read '
+                           f'from Syria fingerprint.'),
+        })
+    if iraq_lvl >= 3:
+        signals.append({
+            'priority':   9,
+            'category':   'crosstheater_iraq_israel',
+            'theatre':    'israel',
+            'level':      iraq_lvl,
+            'icon':       '🇮🇶',
+            'color':      '#7c3aed',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Iraq threat L{iraq_lvl}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Iraq L{iraq_lvl} — '
+                           f'PMF / Kataib Hezbollah / Iran-aligned militia '
+                           f'activity read from Iraq fingerprint.'),
+        })
+
+    # ── 11. Theatre composite high (catch-all) ──────────────────────
+    if theatre_level >= 4 or theatre_score >= 70:
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'israel',
+            'level':      theatre_level,
+            'icon':       '🔴' if theatre_level >= 4 else '🟠',
+            'color':      lvl_color(theatre_level),
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL L{theatre_level} — '
+                           f'{_ISR_ESC_LABELS.get(theatre_level, "")}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL theatre composite L{theatre_level} '
+                           f'{_ISR_ESC_LABELS.get(theatre_level, "")} '
+                           f'(score {theatre_score}/100). Inbound L{inbound_lvl}, '
+                           f'outbound L{outbound_lvl}.'),
+        })
+
+    # ── 12. Silence anomalies (war cabinet / US coord quiet) ────────
+    for sa in silence_alerts[:2]:
+        if not isinstance(sa, dict):
+            continue
+        actor_id   = sa.get('actor_id', 'actor')
+        actor_name = sa.get('actor_name', actor_id)
+        # War cabinet / US coordination silence is the most operationally significant
+        is_critical = ('war_cabinet' in str(actor_id).lower() or
+                       'us_coordination' in str(actor_id).lower() or
+                       'idf_military' in str(actor_id).lower())
+        signals.append({
+            'priority':   11 if is_critical else 9,
+            'category':   'silence_anomaly',
+            'theatre':    'israel',
+            'level':      4 if is_critical else 3,
+            'icon':       '🔇',
+            'color':      '#dc2626' if is_critical else '#f59e0b',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Silence anomaly — '
+                           f'{actor_name[:35]}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL unusual silence from '
+                           f'{actor_name}. '
+                           f'{"Pre-strike comms blackout indicator." if is_critical else "May indicate message coordination."}'),
+        })
+
+    # ── 13. Diplomatic active (cross-theater off-ramps) ─────────────
+    if dipl_active:
+        n_theaters = len(theaters_in_dipl)
+        theater_list = ', '.join(theaters_in_dipl[:3]).title() if theaters_in_dipl else 'multiple'
+        signals.append({
+            'priority':   8,
+            'category':   'diplomatic_active',
+            'theatre':    'israel',
+            'level':      3,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Cross-theater diplomacy '
+                           f'({n_theaters} theaters)'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound diplomatic shim active — '
+                           f'{theater_list} in negotiation track. Aggregate '
+                           f'modifier: {dipl_modifier} pts.'),
+        })
+
+    # ── Sort and return ─────────────────────────────────────────────
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 if __name__ == '__main__':
