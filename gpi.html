@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Asifah Analytics — Global Pressure Index v2.0.0 — April 2026 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-Z9114D1Z5C"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-Z9114D1Z5C');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Pressure Index | Asifah Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+    --bg-color:       #e8f0f8;
+    --container-bg:   #ffffff;
+    --card-bg:        #ffffff;
+    --card-border:    #b0c8e0;
+    --text-primary:   #0a1628;
+    --text-secondary: #1e3a5f;
+    --text-muted:     #4a6080;
+    --article-bg:     #f0f6fc;
+    --article-hover:  #e1ecf7;
+    --header-gradient-start: #1e3a5f;
+    --header-gradient-end:   #0ea5e9;
+    --header-text:    #ffffff;
+    --accent:         #0ea5e9;
+    --accent-glow:    rgba(14,165,233,0.2);
+}
+[data-theme="dark"] {
+    --bg-color:       #060d1a;
+    --container-bg:   #0d1b2e;
+    --card-bg:        #0d1b2e;
+    --card-border:    #1e3a5f;
+    --text-primary:   #e2f0fb;
+    --text-secondary: #93c5fd;
+    --text-muted:     #4a7090;
+    --article-bg:     #0a1525;
+    --article-hover:  #112038;
+    --header-gradient-start: #060d1a;
+    --header-gradient-end:   #1e3a5f;
+    --header-text:    #e2f0fb;
+    --accent:         #38bdf8;
+    --accent-glow:    rgba(56,189,248,0.2);
+}
+
+body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    transition: background 0.3s, color 0.3s;
+}
+
+.container { max-width: 1500px; margin: 0 auto; padding: 0 20px; }
+
+header {
+    background: linear-gradient(135deg, var(--header-gradient-start) 0%, var(--header-gradient-end) 100%);
+    color: var(--header-text);
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+    text-align: center;
+    position: relative;
+}
+header h1 { font-family: 'Cinzel', serif; font-size: 26px; margin-bottom: 6px; letter-spacing: 4px; font-weight: 900; }
+.subtitle { font-size: 15px; opacity: 0.95; letter-spacing: 1px; font-weight: 300; }
+.last-updated { font-size: 12px; opacity: 0.85; margin-top: 8px; font-family: 'Courier New', monospace; }
+.header-controls { position: absolute; top: 18px; right: 22px; display: flex; gap: 10px; align-items: center; }
+.theme-toggle { display: flex; align-items: center; gap: 6px; color: white; font-size: 12px; cursor: pointer; }
+.theme-toggle input { width: 36px; height: 20px; appearance: none; background: rgba(255,255,255,0.2); border-radius: 10px; position: relative; cursor: pointer; }
+.theme-toggle input::after { content: ''; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: 0.3s; }
+.theme-toggle input:checked::after { left: 18px; }
+.home-btn { display: inline-block; padding: 8px 16px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: white; text-decoration: none; font-size: 13px; font-weight: bold; position: absolute; top: 18px; left: 22px; }
+.home-btn:hover { background: rgba(255,255,255,0.3); }
+
+.page-with-sidebar { display: flex; flex-direction: row; align-items: flex-start; gap: 20px; }
+.nav-sidebar { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 4px; position: sticky; top: 20px; height: fit-content; }
+.nav-sidebar-label { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: rgba(56,189,248,0.5); font-family: 'Courier New', monospace; margin-bottom: 4px; padding-left: 2px; }
+.nav-btn { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-family: 'Times New Roman', Times, serif; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; transition: all 0.3s ease; cursor: pointer; overflow: hidden; border: 1.5px solid rgba(56,189,248,0.2); background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(14,165,233,0.04) 100%); color: rgba(255,255,255,0.7); }
+[data-theme="light"] .nav-btn, :root:not([data-theme="dark"]) .nav-btn { color: var(--text-secondary); }
+.nav-btn .nav-btn-label { font-size: 12px; line-height: 1.3; z-index: 2; }
+.nav-btn .nav-btn-status { font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px; opacity: 0.7; color: #38bdf8; z-index: 2; }
+.nav-btn.active-nav { background: linear-gradient(135deg, rgba(56,189,248,0.15) 0%, rgba(14,165,233,0.10) 100%); border-color: rgba(56,189,248,0.5); color: #ffffff; box-shadow: 0 0 14px rgba(56,189,248,0.12); }
+[data-theme="light"] .nav-btn.active-nav, :root:not([data-theme="dark"]) .nav-btn.active-nav { color: var(--text-primary); }
+.nav-btn.current-page { background: linear-gradient(135deg, rgba(34,197,94,0.18) 0%, rgba(22,163,74,0.12) 100%); border-color: rgba(34,197,94,0.6); color: #ffffff; box-shadow: 0 0 18px rgba(34,197,94,0.2); }
+[data-theme="light"] .nav-btn.current-page, :root:not([data-theme="dark"]) .nav-btn.current-page { color: var(--text-primary); }
+.nav-btn.current-page .nav-btn-status { color: #4ade80; }
+.nav-btn.inactive-nav { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.25); cursor: default; }
+[data-theme="light"] .nav-btn.inactive-nav, :root:not([data-theme="dark"]) .nav-btn.inactive-nav { color: rgba(0,0,0,0.3); border-color: rgba(0,0,0,0.08); background: rgba(0,0,0,0.02); }
+.nav-divider { height: 1px; background: rgba(56,189,248,0.15); margin: 4px 0; }
+.nav-btn.rhetoric-btn { border-color: rgba(34,197,94,0.35); background: linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(22,163,74,0.05) 100%); }
+.nav-btn.rhetoric-btn .nav-btn-status { color: #4ade80; }
+.nav-btn.military-btn { border-color: rgba(100,116,139,0.4); background: linear-gradient(135deg, rgba(100,116,139,0.08) 0%, rgba(51,65,85,0.05) 100%); }
+.nav-btn.military-btn .nav-btn-status { color: #94a3b8; }
+.nav-btn.gpi-btn { border-color: rgba(56,189,248,0.7); background: linear-gradient(135deg, rgba(56,189,248,0.20) 0%, rgba(14,165,233,0.14) 100%); box-shadow: 0 0 16px rgba(56,189,248,0.18); color: #ffffff; }
+[data-theme="light"] .nav-btn.gpi-btn, :root:not([data-theme="dark"]) .nav-btn.gpi-btn { color: var(--text-primary); }
+@media (max-width: 1199px) { .nav-sidebar { display: none; } .page-with-sidebar { display: block; } }
+
+.gpi-banner {
+    background: linear-gradient(135deg, var(--container-bg) 0%, var(--article-bg) 100%);
+    border: 2px solid var(--card-border);
+    border-radius: 16px;
+    padding: 32px 40px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 24px;
+    position: relative;
+    overflow: hidden;
+}
+.gpi-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at top right, var(--accent-glow), transparent 60%);
+    pointer-events: none;
+    opacity: 0.5;
+}
+.gpi-banner-left { position: relative; z-index: 2; }
+.gpi-label { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); font-family: 'Courier New', monospace; margin-bottom: 8px; }
+.gpi-title { font-family: 'Cinzel', serif; font-size: 36px; font-weight: 900; letter-spacing: 3px; margin-bottom: 4px; color: var(--text-primary); line-height: 1; }
+.gpi-tagline { font-size: 14px; color: var(--text-muted); letter-spacing: 0.5px; }
+.gpi-banner-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; position: relative; z-index: 2; }
+.gpi-level-display { font-family: 'Cinzel', serif; font-size: 92px; font-weight: 900; line-height: 0.9; letter-spacing: -2px; text-shadow: 0 0 30px currentColor; }
+.gpi-level-badge { display: inline-block; padding: 8px 22px; border-radius: 8px; font-family: 'Cinzel', serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #ffffff; margin-top: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+.gpi-stats { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--text-muted); font-family: 'Courier New', monospace; }
+.gpi-stats span { letter-spacing: 1px; }
+
+.bluf-card { background: var(--container-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 26px 32px; margin-bottom: 24px; box-shadow: 0 4px 14px rgba(0,0,0,0.04); }
+.bluf-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--card-border); }
+.bluf-pill { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; background: var(--accent); color: #ffffff; }
+.bluf-title { font-family: 'Cinzel', serif; font-size: 16px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--text-primary); }
+.bluf-prose { font-size: 16px; line-height: 1.75; color: var(--text-primary); margin-bottom: 16px; white-space: pre-wrap; }
+.bluf-signals { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--card-border); }
+.bluf-signal-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--article-bg); border-left: 4px solid var(--accent); border-radius: 6px; font-size: 13px; }
+.bluf-signal-icon { font-size: 18px; flex-shrink: 0; }
+.bluf-signal-text { font-weight: 600; }
+.bluf-timestamp { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-muted); margin-top: 12px; letter-spacing: 1px; }
+
+.regional-cards-section { margin-top: 30px; }
+.regional-cards-title { font-family: 'Cinzel', serif; font-size: 14px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--card-border); }
+.regional-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.regional-card { background: var(--container-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px 22px; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; text-decoration: none; color: var(--text-primary); display: flex; flex-direction: column; }
+.regional-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 8px 22px rgba(14,165,233,0.12); }
+.regional-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.regional-card-title-group { display: flex; align-items: center; gap: 10px; }
+.regional-card-flag { font-size: 26px; }
+.regional-card-name { font-family: 'Cinzel', serif; font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.regional-card-pill { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; color: #ffffff; flex-shrink: 0; }
+.regional-card-excerpt { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 14px; flex: 1; }
+.regional-card-signals { margin: 12px 0; display: flex; flex-direction: column; gap: 4px; }
+.regional-card-signal { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); }
+.regional-card-signal-icon { font-size: 14px; }
+.regional-card-cta { font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-top: auto; padding-top: 12px; border-top: 1px solid var(--card-border); }
+
+.loading-shimmer { background: linear-gradient(90deg, var(--article-bg) 0%, var(--article-hover) 50%, var(--article-bg) 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; color: transparent !important; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+@media (max-width: 768px) {
+    .gpi-title { font-size: 26px; letter-spacing: 2px; }
+    .gpi-level-display { font-size: 64px; }
+    .home-btn, .header-controls { position: static; margin-bottom: 10px; justify-content: center; }
+    header { text-align: left; }
+    .gpi-banner { flex-direction: column; align-items: flex-start; }
+    .gpi-banner-right { align-items: flex-start; }
+}
+</style>
+</head>
+
+<body data-theme="dark">
+
+<div class="container">
+
+    <header>
+        <a href="index.html" class="home-btn">← Home</a>
+        <div class="header-controls">
+            <label class="theme-toggle">
+                <span>Theme</span>
+                <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+            </label>
+        </div>
+        <h1>GLOBAL PRESSURE INDEX</h1>
+        <div class="subtitle">Cross-Theater Synthesis · Open-Source Convergence Detection</div>
+        <div class="last-updated" id="lastUpdated">Loading...</div>
+    </header>
+
+    <div class="page-with-sidebar">
+
+        <nav class="nav-sidebar">
+            <div class="nav-sidebar-label">Dashboards</div>
+            <div class="nav-btn inactive-nav">
+                <span class="nav-btn-label">🌍 Africa</span>
+                <span class="nav-btn-status">🔒 Future</span>
+            </div>
+            <a href="asia.html" class="nav-btn active-nav">
+                <span class="nav-btn-label">🌏 Asia &amp; Pacific</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <a href="europe.html" class="nav-btn active-nav">
+                <span class="nav-btn-label">🌍 Europe</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <a href="middle-east.html" class="nav-btn active-nav">
+                <span class="nav-btn-label">🕌 Middle East</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <a href="wha.html" class="nav-btn active-nav">
+                <span class="nav-btn-label">🌎 W. Hemisphere</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="military.html" class="nav-btn military-btn">
+                <span class="nav-btn-label">🎖️ Military Tracker</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <div class="nav-divider"></div>
+            <div class="nav-sidebar-label">Regional Rhetoric</div>
+            <a href="rhetoric-index.html" class="nav-btn rhetoric-btn">
+                <span class="nav-btn-label">🕌 Middle East</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <a href="rhetoric-asia.html" class="nav-btn rhetoric-btn">
+                <span class="nav-btn-label">🌏 Asia</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <a href="rhetoric-europe.html" class="nav-btn rhetoric-btn">
+                <span class="nav-btn-label">🌍 Europe</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <a href="rhetoric-wha.html" class="nav-btn rhetoric-btn">
+                <span class="nav-btn-label">🌎 W. Hemisphere</span>
+                <span class="nav-btn-status">● Live</span>
+            </a>
+            <div class="nav-divider"></div>
+            <div class="nav-btn gpi-btn current-page">
+                <span class="nav-btn-label">🌐 Global Pressure Index</span>
+                <span class="nav-btn-status">◉ You are here</span>
+            </div>
+        </nav>
+
+        <div style="flex:1; min-width:0;">
+
+            <div class="gpi-banner" id="gpiBanner">
+                <div class="gpi-banner-left">
+                    <div class="gpi-label">Synthesis · 4-Region Rollup</div>
+                    <div class="gpi-title">GLOBAL PRESSURE</div>
+                    <div class="gpi-tagline">Cross-theater convergence + dynamic narrative detection</div>
+                    <div class="gpi-stats">
+                        <span id="gpiRegionsLive">Regions: --/4</span>
+                        <span id="gpiNarrativesCount">Narratives: --</span>
+                        <span id="gpiSignalsCount">Signals: --</span>
+                    </div>
+                </div>
+                <div class="gpi-banner-right">
+                    <div class="gpi-level-display loading-shimmer" id="gpiLevelDisplay" style="color:#6b7280;">L--</div>
+                    <div class="gpi-level-badge" id="gpiLevelBadge" style="background:#6b7280;">LOADING</div>
+                </div>
+            </div>
+
+            <div class="bluf-card">
+                <div class="bluf-header">
+                    <span class="bluf-pill" id="blufPill">SYNTHESIS</span>
+                    <span class="bluf-title">Bottom Line Up Front</span>
+                </div>
+                <div class="bluf-prose loading-shimmer" id="blufProse" style="min-height:60px;">Loading global synthesis...</div>
+                <div class="bluf-signals" id="blufSignals"></div>
+                <div class="bluf-timestamp" id="blufTimestamp"></div>
+            </div>
+
+            <div class="regional-cards-section">
+                <div class="regional-cards-title">Regional Theaters · Alphabetical</div>
+                <div class="regional-cards-grid" id="regionalCardsGrid"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <footer style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:30px;margin-top:30px;margin-bottom:30px;font-size:13px;color:var(--text-secondary);">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-bottom:20px;">
+            <div>
+                <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px;">Synthesis Layer</h4>
+                <p style="font-size:12px;line-height:1.5;">The Global Pressure Index rolls up four regional BLUFs (Asia, Europe, Middle East, Western Hemisphere) into a single analyst-prose narrative. Cross-theater convergence detection runs on each refresh; new narrative patterns slot in as the platform evolves.</p>
+            </div>
+            <div>
+                <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px;">Methodology</h4>
+                <p style="font-size:12px;line-height:1.5;">Source-weighted OSINT aggregation with time-decay scoring. Open-source signals only — no classified data. Synthesis is analytical estimate, not prediction.</p>
+            </div>
+            <div>
+                <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px;">Contact</h4>
+                <p style="font-size:12px;line-height:1.5;">Asifah Analytics — <a href="https://asifahanalytics.com" style="color:var(--accent);">asifahanalytics.com</a></p>
+            </div>
+        </div>
+        <div style="margin-top:20px;padding:14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-size:12px;line-height:1.5;">
+            <strong style="color:#f59e0b;">⚠️ DISCLAIMER</strong> &mdash; This page provides analytical estimates based on open-source intelligence aggregation. It does not constitute intelligence assessments, military advice, or policy recommendations. Always consult authoritative sources for decision-making. Not for operational use.
+        </div>
+        <div style="margin-top:20px;padding:14px 18px;background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.2);border-radius:8px;text-align:center;font-size:13px;">
+            If you find Asifah Analytics useful and want to support ongoing development, you can ☕ <a href="https://buymeacoffee.com/asifahanalytics" target="_blank" style="color:#8b5cf6;text-decoration:none;font-weight:bold;">buy me a coffee</a>
+        </div>
+        <div style="text-align:center;margin-top:20px;padding-top:15px;border-top:1px solid var(--card-border);font-size:12px;">
+            <a href="privacy.html" style="color:var(--accent);text-decoration:none;">Privacy Policy</a>
+            <span style="color:var(--text-muted);margin:0 12px;">|</span>
+            <a href="contact.html" style="color:var(--accent);text-decoration:none;">Contact</a>
+        </div>
+        <div style="text-align:center;margin-top:15px;font-size:11px;color:var(--text-muted);">
+            © 2025-2026 RCGG. All Rights Reserved. Global Pressure Index v2.0.0 — Proprietary and Confidential.
+        </div>
+    </footer>
+
+</div>
+
+<script>
+const ME_BACKEND = 'https://asifah-backend.onrender.com';
+
+function initTheme() {
+    const stored = localStorage.getItem('asifah-theme') || 'dark';
+    document.body.setAttribute('data-theme', stored);
+    document.documentElement.setAttribute('data-theme', stored);
+    document.getElementById('themeToggle').checked = (stored === 'light');
+}
+function toggleTheme() {
+    const next = document.getElementById('themeToggle').checked ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', next);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('asifah-theme', next);
+}
+initTheme();
+
+async function loadGpi() {
+    try {
+        const resp = await fetch(ME_BACKEND + '/api/gpi');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (!data.success) {
+            document.getElementById('blufProse').textContent = data.bluf || 'GPI temporarily unavailable.';
+            document.getElementById('blufProse').classList.remove('loading-shimmer');
+            document.getElementById('gpiLevelDisplay').classList.remove('loading-shimmer');
+            return;
+        }
+
+        const levelEl = document.getElementById('gpiLevelDisplay');
+        levelEl.textContent = `L${data.global_level}`;
+        levelEl.style.color = data.global_color;
+        levelEl.classList.remove('loading-shimmer');
+
+        const badge = document.getElementById('gpiLevelBadge');
+        badge.textContent = data.global_label;
+        badge.style.background = data.global_color;
+
+        document.getElementById('gpiRegionsLive').textContent    = `Regions: ${data.regions_live}/${data.regions_total}`;
+        document.getElementById('gpiNarrativesCount').textContent = `Narratives: ${(data.narratives || []).length}`;
+        document.getElementById('gpiSignalsCount').textContent    = `Signals: ${(data.top_signals || []).length}`;
+
+        const proseEl = document.getElementById('blufProse');
+        proseEl.textContent = data.bluf || '';
+        proseEl.classList.remove('loading-shimmer');
+
+        const sigsEl = document.getElementById('blufSignals');
+        sigsEl.innerHTML = '';
+        (data.top_signals || []).forEach(sig => {
+            const div = document.createElement('div');
+            div.className = 'bluf-signal-item';
+            div.style.borderLeftColor = sig.color || 'var(--accent)';
+            const text     = sig.short_text || sig.text || '';
+            const longText = (sig.long_text || '').replace(/"/g, '&quot;');
+            div.innerHTML = `<span class="bluf-signal-icon">${sig.icon || '⚡'}</span>
+                <span class="bluf-signal-text" style="color:${sig.color || 'var(--text-primary)'};" title="${longText}">${text}</span>`;
+            sigsEl.appendChild(div);
+        });
+
+        if (data.generated_at) {
+            const dt = new Date(data.generated_at);
+            const fromCache = data.from_cache ? ' (cached)' : '';
+            document.getElementById('blufTimestamp').textContent =
+                `Generated: ${dt.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true})}${fromCache}`;
+            document.getElementById('lastUpdated').textContent = `Last synthesis: ${dt.toLocaleString()}`;
+        }
+
+        const grid = document.getElementById('regionalCardsGrid');
+        grid.innerHTML = '';
+        (data.regional_cards || []).forEach(card => {
+            const a = document.createElement('a');
+            a.className = 'regional-card';
+            a.href = card.hub_url;
+            const pillBg = card.level_color || '#6b7280';
+            const sigList = (card.top_signals || []).slice(0, 3).map(s =>
+                `<div class="regional-card-signal">
+                    <span class="regional-card-signal-icon">${s.icon || '⚡'}</span>
+                    <span>${(s.short_text || s.text || '').replace(/</g, '&lt;')}</span>
+                </div>`
+            ).join('');
+            a.innerHTML = `
+                <div class="regional-card-header">
+                    <div class="regional-card-title-group">
+                        <span class="regional-card-flag">${card.flag}</span>
+                        <span class="regional-card-name">${card.name}</span>
+                    </div>
+                    <span class="regional-card-pill" style="background:${pillBg};">L${card.level} · ${(card.posture_label || card.level_label || '').slice(0,18)}</span>
+                </div>
+                <div class="regional-card-excerpt">${card.bluf_excerpt || ''}</div>
+                ${sigList ? `<div class="regional-card-signals">${sigList}</div>` : ''}
+                <div class="regional-card-cta">→ Open ${card.name} BLUF</div>
+            `;
+            grid.appendChild(a);
+        });
+
+    } catch (e) {
+        console.error('GPI load error:', e);
+        document.getElementById('blufProse').textContent = 'GPI synthesis temporarily unavailable. Please refresh in a moment.';
+        document.getElementById('blufProse').classList.remove('loading-shimmer');
+        document.getElementById('gpiLevelDisplay').classList.remove('loading-shimmer');
+        document.getElementById('gpiLevelDisplay').textContent = 'L?';
+    }
+}
+
+loadGpi();
+</script>
+
+</body>
+</html>
