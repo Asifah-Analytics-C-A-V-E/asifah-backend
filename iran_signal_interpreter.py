@@ -686,6 +686,323 @@ def interpret_signals(scan_data):
 
 
 # ============================================================
+# CANONICAL SIGNAL EMITTER (v2.0)
+# ============================================================
+# Iran is the COMMAND NODE — its signals carry the richest cross-theater
+# weight in the platform. This emitter maps Iran's six-vector matrix
+# (irgc_direct / proxy_activation / nuclear / domestic / regional /
+# soft_power) plus the diplomatic track plus axis posture (China-Iran,
+# Russia-Iran) into canonical platform-wide signal categories consumed
+# by me_regional_bluf.py and global_pressure_index.py.
+#
+# Categories Iran emits:
+#   red_line_breached            -- severity 3 red lines triggered
+#   nuclear_signaling            -- nuclear_level >= 3 (GPI cross-theater)
+#   dual_chokepoint              -- Hormuz mining/closure language (paired
+#                                   with Yemen BAM = global supply-chain risk)
+#   kinetic_pressure             -- IRGC direct L4+ or active OTP wave
+#   crosstheater_iran_proxies    -- proxy_activation_level >= 4
+#                                   (Hezbollah/Houthi/IRGC orchestration)
+#   crosstheater_russia_iran     -- russia_iran axis activation
+#   crosstheater_china_iran      -- china_iran axis activation
+#   theatre_high                 -- composite L4+ catch-all
+#   regime_fracture              -- domestic stress L4+
+#   influence_high               -- soft_power / influence ops L3+
+#                                   (PressTV, Lego/rap viral, "resistance" framing)
+#   silence_anomaly              -- IRGC/Khamenei suspicious quiet
+#   diplomatic_active            -- ceasefire_level >= 2 (off-ramp)
+# ============================================================
+
+IRAN_FLAG = '\U0001f1ee\U0001f1f7'  # 🇮🇷
+
+_IRAN_ESC_LABELS = {
+    0: 'Monitoring',
+    1: 'Routine',
+    2: 'Elevated Rhetoric',
+    3: 'Heightened Posture',
+    4: 'Active Signaling',
+    5: 'Active Conflict',
+}
+
+
+def build_top_signals(scan_data):
+    """
+    Convert Iran scan_data into canonical top_signals[] for ME regional BLUF
+    and Global Pressure Index. Returns a list (possibly empty), sorted by
+    priority desc.
+
+    Signal schema (canonical platform-wide):
+        priority   int 0-15  (higher == more urgent)
+        category   str       (canonical bucket)
+        theatre    'iran'
+        level      int 0-5
+        icon       str (emoji)
+        color      str (hex)
+        short_text str (<=80 char)
+        long_text  str (<=200 char)
+    """
+    signals = []
+
+    interp        = scan_data.get('interpretation') or {}
+    so_what       = interp.get('so_what') or {}
+    rl_block      = interp.get('red_lines') or {}
+    triggered_rls = rl_block.get('triggered') or []
+
+    theatre_level   = int(scan_data.get('theatre_level', 0) or 0)
+    theatre_score   = int(scan_data.get('theatre_score', 0) or 0)
+    irgc_lvl        = int(scan_data.get('irgc_direct_level', 0) or 0)
+    proxy_lvl       = int(scan_data.get('proxy_activation_level', 0) or 0)
+    nuclear_lvl     = int(scan_data.get('nuclear_level', 0) or 0)
+    domestic_lvl    = int(scan_data.get('domestic_level', 0) or 0)
+    regional_lvl    = int(scan_data.get('regional_level', 0) or 0)
+    soft_power_lvl  = int(scan_data.get('soft_power_level', 0) or 0)
+    ceasefire_lvl   = int(scan_data.get('ceasefire_level', 0) or 0)
+    otp_count       = int(scan_data.get('operation_true_promise_count', 0) or 0)
+
+    actors          = scan_data.get('actors') or {}
+    silence_alerts  = scan_data.get('silence_anomalies') or []
+
+    # ── Color helpers ────────────────────────────────────────────────
+    def lvl_color(lvl):
+        return {0:'#6b7280', 1:'#16a34a', 2:'#facc15', 3:'#f59e0b',
+                4:'#f97316', 5:'#dc2626'}.get(int(lvl), '#6b7280')
+
+    # ── 1. Red lines BREACHED ────────────────────────────────────────
+    for rl in triggered_rls:
+        if not isinstance(rl, dict):
+            continue
+        if rl.get('status') != 'BREACHED':
+            continue
+        sev   = int(rl.get('severity', 0) or 0)
+        label = str(rl.get('label', 'Red line'))[:55]
+        # Hormuz red line gets special dual_chokepoint flavor
+        rl_id = str(rl.get('id', '')).lower()
+        if 'hormuz' in rl_id or 'hormuz' in label.lower():
+            signals.append({
+                'priority':   13,
+                'category':   'dual_chokepoint',
+                'theatre':    'iran',
+                'level':      max(theatre_level, 4),
+                'icon':       '⚓',
+                'color':      '#dc2626',
+                'short_text': (f'{IRAN_FLAG} IRAN: Hormuz chokepoint pressure — '
+                               f'{label[:35]}'),
+                'long_text':  (f'{IRAN_FLAG} IRAN Strait of Hormuz pressure language '
+                               f'detected: {rl.get("label", "")[:130]}. '
+                               f'Watch Yemen BAM for paired chokepoint risk.'),
+            })
+            continue
+        # Nuclear red line gets nuclear_signaling category
+        if 'nuclear' in rl_id or 'nuclear' in label.lower():
+            signals.append({
+                'priority':   13,
+                'category':   'nuclear_signaling',
+                'theatre':    'iran',
+                'level':      max(theatre_level, 4),
+                'icon':       '☢️',
+                'color':      '#dc2626',
+                'short_text': (f'{IRAN_FLAG} IRAN: Nuclear red line — {label[:40]}'),
+                'long_text':  (f'{IRAN_FLAG} IRAN nuclear red line breached: '
+                               f'{rl.get("label", "")[:130]}'),
+            })
+            continue
+        # Generic breach
+        signals.append({
+            'priority':   12 if sev >= 3 else 10,
+            'category':   'red_line_breached',
+            'theatre':    'iran',
+            'level':      max(theatre_level, 4),
+            'icon':       rl.get('icon', '🚨'),
+            'color':      '#dc2626',
+            'short_text': f'{IRAN_FLAG} IRAN: BREACH — {label}',
+            'long_text':  (f'{IRAN_FLAG} IRAN red line breached: '
+                           f'{rl.get("label", "")[:140]}'),
+        })
+
+    # ── 2. Nuclear signaling (vector >= 3, even without red-line breach) ──
+    if nuclear_lvl >= 3:
+        signals.append({
+            'priority':   10 + nuclear_lvl,   # L3=13, L4=14, L5=15
+            'category':   'nuclear_signaling',
+            'theatre':    'iran',
+            'level':      nuclear_lvl,
+            'icon':       '☢️',
+            'color':      lvl_color(nuclear_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: Nuclear posture L{nuclear_lvl} '
+                           f'({_IRAN_ESC_LABELS.get(nuclear_lvl, "")})'),
+            'long_text':  (f'{IRAN_FLAG} IRAN nuclear vector L{nuclear_lvl} — '
+                           f'enrichment / breakout / facility signaling above '
+                           f'baseline. JCPOA / Natanz / Fordow language elevated.'),
+        })
+
+    # ── 3. Kinetic pressure: IRGC direct L4+ or OTP wave ─────────────
+    if irgc_lvl >= 4 or otp_count >= 5:
+        kinetic_lvl = max(irgc_lvl, 4 if otp_count >= 5 else 0)
+        otp_note = f' OTP wave at {otp_count} signals.' if otp_count >= 5 else ''
+        signals.append({
+            'priority':   9 + kinetic_lvl,    # L4=13, L5=14
+            'category':   'kinetic_pressure',
+            'theatre':    'iran',
+            'level':      kinetic_lvl,
+            'icon':       '🚀',
+            'color':      lvl_color(kinetic_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: IRGC direct L{irgc_lvl}'
+                           f'{" + OTP wave" if otp_count >= 5 else ""}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN IRGC direct vector L{irgc_lvl} '
+                           f'({_IRAN_ESC_LABELS.get(irgc_lvl, "")}).{otp_note} '
+                           f'Operation True Promise = direct missile/drone '
+                           f'retaliation signaling.'),
+        })
+
+    # ── 4. Cross-theater proxy orchestration (axis activation) ───────
+    if proxy_lvl >= 4:
+        signals.append({
+            'priority':   10 + (proxy_lvl - 4),  # L4=10, L5=11
+            'category':   'crosstheater_iran_proxies',
+            'theatre':    'iran',
+            'level':      proxy_lvl,
+            'icon':       '🕸️',
+            'color':      '#7c3aed',
+            'short_text': (f'{IRAN_FLAG} IRAN: Proxy activation L{proxy_lvl} '
+                           f'(axis orchestrating)'),
+            'long_text':  (f'{IRAN_FLAG} IRAN proxy activation L{proxy_lvl} — '
+                           f'Hezbollah (Hizbullah), Houthis, Iraqi militias, '
+                           f'PMF coordinated directive language detected. '
+                           f'Command node tempo elevated.'),
+        })
+
+    # ── 5. Cross-theater axis: Russia-Iran ───────────────────────────
+    russia_actor = actors.get('russia_iran_axis') or {}
+    russia_lvl   = int(russia_actor.get('max_level',
+                       russia_actor.get('escalation_level', 0)) or 0)
+    if russia_lvl >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_russia_iran',
+            'theatre':    'iran',
+            'level':      russia_lvl,
+            'icon':       '🇷🇺',
+            'color':      '#7c3aed',
+            'short_text': (f'{IRAN_FLAG} IRAN: Russia-Iran axis L{russia_lvl}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN Russia-Iran axis L{russia_lvl} '
+                           f'— Moscow-Tehran defense / drone / sanctions '
+                           f'coordination signaling above baseline.'),
+        })
+
+    # ── 6. Cross-theater axis: China-Iran ────────────────────────────
+    china_actor = actors.get('china_iran_axis') or {}
+    china_lvl   = int(china_actor.get('max_level',
+                      china_actor.get('escalation_level', 0)) or 0)
+    if china_lvl >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_china_iran',
+            'theatre':    'iran',
+            'level':      china_lvl,
+            'icon':       '🇨🇳',
+            'color':      '#7c3aed',
+            'short_text': (f'{IRAN_FLAG} IRAN: China-Iran axis L{china_lvl}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN China-Iran axis L{china_lvl} '
+                           f'— Beijing-Tehran economic / oil / diplomatic '
+                           f'cover signaling above baseline.'),
+        })
+
+    # ── 7. Theatre composite high (catch-all) ────────────────────────
+    if theatre_level >= 4 or theatre_score >= 70:
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'iran',
+            'level':      theatre_level,
+            'icon':       '🔴' if theatre_level >= 4 else '🟠',
+            'color':      lvl_color(theatre_level),
+            'short_text': (f'{IRAN_FLAG} IRAN L{theatre_level} — '
+                           f'{_IRAN_ESC_LABELS.get(theatre_level, "")}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN command node at L{theatre_level} '
+                           f'{_IRAN_ESC_LABELS.get(theatre_level, "")} '
+                           f'(score {theatre_score}/100).'),
+        })
+
+    # ── 8. Regime fracture: domestic stress ──────────────────────────
+    if domestic_lvl >= 4:
+        signals.append({
+            'priority':   9,
+            'category':   'regime_fracture',
+            'theatre':    'iran',
+            'level':      domestic_lvl,
+            'icon':       '🪧',
+            'color':      lvl_color(domestic_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: Domestic stress L{domestic_lvl}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN domestic vector L{domestic_lvl} — '
+                           f'protest / strike / clerical fracture / IRGC '
+                           f'internal coercion language elevated.'),
+        })
+
+    # ── 9. Influence operations / soft power (Iran-specific) ─────────
+    if soft_power_lvl >= 3:
+        signals.append({
+            'priority':   7 + soft_power_lvl,   # L3=10, L4=11, L5=12
+            'category':   'influence_high',
+            'theatre':    'iran',
+            'level':      soft_power_lvl,
+            'icon':       '📡',
+            'color':      '#0ea5e9',
+            'short_text': (f'{IRAN_FLAG} IRAN: Influence ops L{soft_power_lvl} '
+                           f'(PressTV / viral media)'),
+            'long_text':  (f'{IRAN_FLAG} IRAN soft-power vector L{soft_power_lvl} '
+                           f'— Iranian state media (PressTV, Tasnim) / viral '
+                           f'artifacts / "resistance" framing targeting Western '
+                           f'audiences elevated.'),
+        })
+
+    # ── 10. Silence anomalies (Khamenei/IRGC suspicious quiet) ───────
+    for sa in silence_alerts[:2]:
+        if not isinstance(sa, dict):
+            continue
+        actor_id   = sa.get('actor_id', 'actor')
+        actor_name = sa.get('actor_name', actor_id)
+        # IRGC silence is the most operationally significant
+        is_irgc = 'irgc' in str(actor_id).lower() or 'khamenei' in str(actor_id).lower()
+        signals.append({
+            'priority':   11 if is_irgc else 9,
+            'category':   'silence_anomaly',
+            'theatre':    'iran',
+            'level':      4 if is_irgc else 3,
+            'icon':       '🔇',
+            'color':      '#dc2626' if is_irgc else '#f59e0b',
+            'short_text': (f'{IRAN_FLAG} IRAN: Silence anomaly — '
+                           f'{actor_name[:35]}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN unusual silence from '
+                           f'{actor_name}. '
+                           f'{"IRGC quiet during active tempo = operational " if is_irgc else ""}'
+                           f'{"planning indicator." if is_irgc else "May indicate message coordination or internal stress."}'),
+        })
+
+    # ── 11. Diplomatic active (off-ramp signaling) ───────────────────
+    if ceasefire_lvl >= 2:
+        prio = 6 + min(ceasefire_lvl, 3)   # L2=8, L3=9, L4=9, L5=9
+        dipl_label = scan_data.get('diplomatic_label_detailed', 'Diplomatic Push')
+        signals.append({
+            'priority':   prio,
+            'category':   'diplomatic_active',
+            'theatre':    'iran',
+            'level':      ceasefire_lvl,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': (f'{IRAN_FLAG} IRAN: Diplomatic track L{ceasefire_lvl} '
+                           f'({dipl_label})'),
+            'long_text':  (f'{IRAN_FLAG} IRAN diplomatic momentum L{ceasefire_lvl} '
+                           f'— {dipl_label}. Witkoff envoy / Muscat back-channel '
+                           f'/ JCPOA framing detected. Modifier: '
+                           f'{scan_data.get("diplomatic_modifier", 0)} pts.'),
+        })
+
+    # ── Sort and return ──────────────────────────────────────────────
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 if __name__ == '__main__':
