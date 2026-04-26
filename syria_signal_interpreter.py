@@ -703,6 +703,271 @@ def interpret_signals(scan_data):
 
 
 # ============================================================
+# CANONICAL TOP_SIGNALS BUILDER — v2.0 (April 2026)
+# ============================================================
+# Emits the canonical schema for Syria signals that feeds:
+#   - ME Regional BLUF (me_regional_bluf.py)
+#   - Global Pressure Index (global_pressure_index.py)
+#
+# CRITICAL ARCHITECTURAL NOTE:
+# Syria is INVERTED-LOGIC compared to other ME trackers. Low scores here
+# mean the transition is HOLDING -- which is GOOD news. So instead of
+# spamming "theatre_high" signals when Syria is at L0/L1, we emit a
+# "diplomatic_active" / "transition_stable" positive-news signal.
+#
+# Signals are escalation-driven only when actual instability triggers fire.
+#
+# Signal shape (canonical across platform):
+# {
+#     'priority':   int,
+#     'category':   str,        # red_line_breached / kinetic_pressure / theatre_high /
+#                               #   regime_fracture / diplomatic_active / silence_anomaly /
+#                               #   crosstheater_iran_syria
+#     'theatre':    'syria',
+#     'level':      int,        # 0-5
+#     'icon':       str,
+#     'color':      str,
+#     'short_text': str,        # ≤80 char
+#     'long_text':  str,        # ≤200 char
+# }
+
+SYRIA_FLAG = '\U0001f1f8\U0001f1fe'  # 🇸🇾
+
+
+def build_top_signals(result):
+    """
+    Build Syria's top_signals[] for BLUF/GPI consumption.
+    Reads from a fully-built scan result (with interpretation attached).
+    Returns sorted list (descending priority); BLUF/GPI dedupes globally.
+    """
+    signals = []
+
+    theatre_level = result.get('theatre_level',
+                    result.get('theatre_escalation_level', 0)) or 0
+    theatre_score = result.get('theatre_score', 0) or 0
+
+    # Syria-specific vectors
+    factional_lvl = result.get('factional_level',      0) or 0
+    strikes_lvl   = result.get('israeli_strike_level', 0) or 0
+    isis_lvl      = result.get('isis_level',           0) or 0
+
+    actors = result.get('actors', {}) or {}
+    hts_lvl          = actors.get('hts',          {}).get('escalation_level', 0)
+    sdf_lvl          = actors.get('sdf',          {}).get('escalation_level', 0)
+    sna_lvl          = actors.get('sna',          {}).get('escalation_level', 0)
+    turkey_lvl       = actors.get('turkey',       {}).get('escalation_level', 0)
+    israel_lvl       = actors.get('israel',       {}).get('escalation_level', 0)
+    iran_proxies_lvl = actors.get('iran_proxies', {}).get('escalation_level', 0)
+    us_envoy_lvl     = actors.get('us_envoy',     {}).get('escalation_level', 0)
+
+    druze_signal_count    = result.get('druze_signals_count', 0) or len(result.get('druze_signals', []))
+    hezbollah_nexus_count = result.get('hezbollah_nexus_count', 0)
+
+    # Pull interpretation block
+    interp = result.get('interpretation', {}) or {}
+    so_what = interp.get('so_what', {}) or {}
+    rl_obj  = interp.get('red_lines', {}) or {}
+
+    iran_expelled         = so_what.get('iran_expelled', False)
+    normalization_active  = so_what.get('normalization_active', False)
+    low_signal_positive   = so_what.get('low_signal_is_positive', False)
+
+    # ============================================
+    # CATEGORY 1: RED LINES BREACHED (highest priority)
+    # ============================================
+    for rl in rl_obj.get('triggered', []):
+        if rl.get('status') == 'BREACHED':
+            severity = int(rl.get('severity', 0) or 0)
+            signals.append({
+                'priority':   12 if severity >= 3 else 11,
+                'category':   'red_line_breached',
+                'theatre':    'syria',
+                'level':      max(theatre_level, severity * 2),
+                'icon':       rl.get('icon', '🚨'),
+                'color':      '#dc2626',
+                'short_text': f'{SYRIA_FLAG} SYRIA: {rl.get("label", "Red line breached")[:60]}',
+                'long_text':  (f'SYRIA red line breached -- {rl.get("label", "")}: '
+                               f'{rl.get("trigger", "")[:140]}'),
+            })
+
+    # ============================================
+    # CATEGORY 2: TURKEY-SDF KINETIC PRESSURE (Kurdish question)
+    # ============================================
+    if turkey_lvl >= 3 and sdf_lvl >= 2:
+        signals.append({
+            'priority':   11,
+            'category':   'kinetic_pressure',
+            'theatre':    'syria',
+            'level':      max(turkey_lvl, sdf_lvl),
+            'icon':       '⚔️',
+            'color':      '#dc2626',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Turkey-SDF tension (L{max(turkey_lvl, sdf_lvl)})',
+            'long_text':  (f'SYRIA: Turkish military posture vs Syrian Democratic Forces (SDF) '
+                           f'elevated. Northeastern Syria Kurdish question reactivating; '
+                           f'potential offensive prep language detected.'),
+        })
+
+    # ============================================
+    # CATEGORY 3: ISRAELI STRIKES (Iran prevention vector)
+    # ============================================
+    if strikes_lvl >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'kinetic_pressure',
+            'theatre':    'syria',
+            'level':      strikes_lvl,
+            'icon':       '🎯',
+            'color':      '#f97316',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Israeli airstrikes elevated (L{strikes_lvl})',
+            'long_text':  (f'SYRIA: Israeli airstrike tempo at L{strikes_lvl} -- southern '
+                           f'Syria / Damascus periphery. Iranian Revolutionary Guard Corps '
+                           f'(IRGC) re-entry prevention posture; Golan-proximity activity.'),
+        })
+
+    # ============================================
+    # CATEGORY 4: ISIS RECONSTITUTION (governance vacuum exploitation)
+    # ============================================
+    if isis_lvl >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'kinetic_pressure',
+            'theatre':    'syria',
+            'level':      isis_lvl,
+            'icon':       '⚫',
+            'color':      '#1f2937',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Islamic State (ISIS) reconstitution L{isis_lvl}',
+            'long_text':  (f'SYRIA: Islamic State (ISIS) reconstitution signals at L{isis_lvl} '
+                           f'across Idlib desert, Sinjar, and former territory. Hayat Tahrir '
+                           f'al-Sham (HTS) governance vacuum being exploited.'),
+        })
+
+    # ============================================
+    # CATEGORY 5: HTS FRAGMENTATION (regime fracture)
+    # ============================================
+    if factional_lvl >= 4:
+        signals.append({
+            'priority':   10,
+            'category':   'regime_fracture',
+            'theatre':    'syria',
+            'level':      factional_lvl,
+            'icon':       '⚡',
+            'color':      '#ef4444',
+            'short_text': f'{SYRIA_FLAG} SYRIA: HTS factional stress (L{factional_lvl})',
+            'long_text':  (f'SYRIA: Hayat Tahrir al-Sham (HTS) factional fragmentation '
+                           f'signals at L{factional_lvl}. Damascus governance consolidation '
+                           f'failing; competing factions visible.'),
+        })
+
+    # ============================================
+    # CATEGORY 6: DRUZE AUTONOMY MOVEMENT (Suwayda dynamics)
+    # ============================================
+    if druze_signal_count >= 3:
+        signals.append({
+            'priority':   9,
+            'category':   'regime_fracture',
+            'theatre':    'syria',
+            'level':      3,
+            'icon':       '🟣',
+            'color':      '#8b5cf6',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Druze (Suwayda) autonomy signals',
+            'long_text':  (f'SYRIA: Druze community in Suwayda showing autonomy / '
+                           f'self-defense organizing signals ({druze_signal_count} signals). '
+                           f'Israel-Druze coordination dynamic active.'),
+        })
+
+    # ============================================
+    # CATEGORY 7: HEZBOLLAH-SYRIA NEXUS (cross-theater fingerprint)
+    # ============================================
+    if hezbollah_nexus_count >= 2:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_iran_syria',
+            'theatre':    'syria',
+            'level':      max(iran_proxies_lvl, 3),
+            'icon':       '🔗',
+            'color':      '#7c3aed',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Hezbollah-Syria nexus active',
+            'long_text':  (f'SYRIA: Hezbollah cross-pollination signals ({hezbollah_nexus_count} '
+                           f'detections). Iran proxy network using Syria-Lebanon corridor; '
+                           f'cross-theater coordination fingerprint active.'),
+        })
+
+    # ============================================
+    # CATEGORY 8: THEATRE COMPOSITE HIGH (catch-all when escalating)
+    # ============================================
+    if theatre_level >= 4 or theatre_score >= 70:
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'syria',
+            'level':      theatre_level,
+            'icon':       '🔴',
+            'color':      '#dc2626',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Theatre composite L{theatre_level} ({theatre_score}/100)',
+            'long_text':  (f'SYRIA composite rhetoric at L{theatre_level} '
+                           f'(score {theatre_score}/100). Multi-vector escalation; transition '
+                           f'stability at risk.'),
+        })
+
+    # ============================================
+    # CATEGORY 9: TRANSITION STABLE (Syria-specific INVERTED-LOGIC positive signal)
+    # ============================================
+    # Only emit if NO escalation signals already fired.
+    # This is the unique Syria pattern: low-signal IS positive.
+    if not signals and low_signal_positive and theatre_level <= 1:
+        signals.append({
+            'priority':   5,
+            'category':   'diplomatic_active',
+            'theatre':    'syria',
+            'level':      0,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Transition holding (L0 monitoring)',
+            'long_text':  (f'SYRIA post-Assad transition stability holding (score '
+                           f'{theatre_score}/100). HTS governance consolidation continuing; '
+                           f'no major fragmentation, kinetic, or proxy escalation detected.'),
+        })
+
+    # ============================================
+    # CATEGORY 10: IRAN EXPELLED (positive structural signal)
+    # ============================================
+    if iran_expelled:
+        signals.append({
+            'priority':   7,
+            'category':   'diplomatic_active',
+            'theatre':    'syria',
+            'level':      0,
+            'icon':       '✅',
+            'color':      '#10b981',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Iran expelled (structural positive)',
+            'long_text':  (f'SYRIA: Iranian Revolutionary Guard Corps (IRGC) and proxy '
+                           f'presence reduced post-Assad. Structural strategic shift -- '
+                           f'land-bridge to Hezbollah severed.'),
+        })
+
+    # ============================================
+    # CATEGORY 11: NORMALIZATION TRACK (Syria-Israel dialogue)
+    # ============================================
+    if normalization_active:
+        signals.append({
+            'priority':   8,
+            'category':   'diplomatic_active',
+            'theatre':    'syria',
+            'level':      0,
+            'icon':       '🤝',
+            'color':      '#10b981',
+            'short_text': f'{SYRIA_FLAG} SYRIA: Normalization track signals (positive)',
+            'long_text':  (f'SYRIA: Tacit Syria-Israel normalization signals detected. '
+                           f'Abraham Accords angle opening; US envoy facilitation '
+                           f'(Caesar Act sanctions discussion) supportive.'),
+        })
+
+    # Sort descending by priority
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 if __name__ == '__main__':
