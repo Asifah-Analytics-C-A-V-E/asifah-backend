@@ -401,3 +401,240 @@ def build_historical_matches(result):
         })
 
     return sorted(matches, key=lambda m: m['score'], reverse=True)[:3]
+
+
+# ============================================
+# v2.0 — TOP SIGNALS (BLUF / GPI consumable)
+# ============================================
+# Emits a pre-prioritized list of signal dicts that the ME Regional BLUF
+# (and ultimately the Global Pressure Index) consume directly without
+# re-deriving from raw scan data.
+#
+# Canonical signal shape:
+# {
+#     'priority':   int,        # 0-15, higher = more important
+#     'category':   str,        # red_line_breached | mediation_active | influence_high |
+#                               # theatre_high | succession_watch | external_threat |
+#                               # silence_anomaly | crosstheater
+#     'theatre':    'oman',
+#     'level':      int,        # 0-5 (whichever axis level the signal originates from)
+#     'icon':       str,        # emoji
+#     'color':      str,        # hex color
+#     'short_text': str,        # ≤80 char headline for BLUF bullet rendering
+#     'long_text':  str,        # ≤200 char prose for tooltip / detail panel
+# }
+
+OMAN_FLAG = '\U0001f1f4\U0001f1f2'  # 🇴🇲
+
+def build_top_signals(result):
+    """
+    Build Oman's top_signals[] for BLUF/GPI consumption.
+    Reads from a fully-built scan result dict (with red_lines + so_what already attached).
+    Returns sorted list (descending priority); BLUF/GPI will dedupe + globally rank.
+    """
+    signals = []
+
+    threat_level    = result.get('threat_level',    0) or 0
+    influence_level = result.get('influence_level', 0) or 0
+    score           = result.get('threat_score', result.get('score', 0)) or 0
+    actors          = result.get('actors', {}) or {}
+
+    succession_lvl = actors.get('succession_watch',          {}).get('escalation_level', 0)
+    external_lvl   = actors.get('external_threats_inbound',  {}).get('escalation_level', 0)
+    mediation_lvl  = actors.get('mediation_activity',        {}).get('escalation_level', 0)
+    diplomatic_lvl = actors.get('regional_diplomatic_hub',   {}).get('escalation_level', 0)
+    security_lvl   = actors.get('omani_security',            {}).get('escalation_level', 0)
+    regime_lvl     = actors.get('omani_regime',              {}).get('escalation_level', 0)
+
+    # ============================================
+    # CATEGORY 1: RED LINES BREACHED (highest priority)
+    # ============================================
+    interp = result.get('interpretation', {}) or {}
+    rl_obj = interp.get('red_lines', {}) or result.get('red_lines', {}) or {}
+    for rl in rl_obj.get('triggered', []):
+        if rl.get('status') == 'BREACHED':
+            signals.append({
+                'priority':   12,
+                'category':   'red_line_breached',
+                'theatre':    'oman',
+                'level':      max(threat_level, influence_level),
+                'icon':       rl.get('icon', '🚨'),
+                'color':      '#dc2626',
+                'short_text': f'{OMAN_FLAG} OMAN: {rl.get("label", "Red line breached")[:60]}',
+                'long_text':  f'OMAN red line breached — {rl.get("label", "")}: {rl.get("trigger", "")[:140]}',
+            })
+
+    # ============================================
+    # CATEGORY 2: SUCCESSION WATCH (Oman-specific high-priority)
+    # ============================================
+    if succession_lvl >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'succession_watch',
+            'theatre':    'oman',
+            'level':      succession_lvl,
+            'icon':       '👑',
+            'color':      '#7c2d12',
+            'short_text': f'{OMAN_FLAG} OMAN: Succession watch L{succession_lvl}',
+            'long_text':  f'OMAN succession architecture under stress (L{succession_lvl}). '
+                          f'Sultan Haitham profile elevation, Crown Prince Theyazin movements, '
+                          f'royal decree volume changes warrant analyst attention.',
+        })
+    elif succession_lvl >= 3:
+        signals.append({
+            'priority':   8,
+            'category':   'succession_watch',
+            'theatre':    'oman',
+            'level':      succession_lvl,
+            'icon':       '👑',
+            'color':      '#92400e',
+            'short_text': f'{OMAN_FLAG} OMAN: Succession signals (L{succession_lvl})',
+            'long_text':  f'OMAN succession watch elevated (L{succession_lvl}). Forward indicators '
+                          f'(absence patterns, Crown Prince movements) warrant monitoring.',
+        })
+
+    # ============================================
+    # CATEGORY 3: EXTERNAL THREAT (Salalah/Duqm targeting)
+    # ============================================
+    if external_lvl >= 4:
+        signals.append({
+            'priority':   10,
+            'category':   'external_threat',
+            'theatre':    'oman',
+            'level':      external_lvl,
+            'icon':       '⚠️',
+            'color':      '#ea580c',
+            'short_text': f'{OMAN_FLAG} OMAN: External threat L{external_lvl} — Salalah/Duqm',
+            'long_text':  f'OMAN external threat elevated (L{external_lvl}). Iran/Houthi '
+                          f'targeting language naming Salalah container port or Duqm '
+                          f'logistics infrastructure detected.',
+        })
+    elif external_lvl >= 3:
+        signals.append({
+            'priority':   7,
+            'category':   'external_threat',
+            'theatre':    'oman',
+            'level':      external_lvl,
+            'icon':       '⚠️',
+            'color':      '#f97316',
+            'short_text': f'{OMAN_FLAG} OMAN: External threat watch (L{external_lvl})',
+            'long_text':  f'OMAN external threat watch (L{external_lvl}). Maritime/port-targeted '
+                          f'rhetoric monitored.',
+        })
+
+    # ============================================
+    # CATEGORY 4: MEDIATION ACTIVE (positive influence — Oman's stability anchor function)
+    # ============================================
+    if mediation_lvl >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'mediation_active',
+            'theatre':    'oman',
+            'level':      mediation_lvl,
+            'icon':       '🕊️',
+            'color':      '#7c3aed',
+            'short_text': f'{OMAN_FLAG} OMAN: High-stakes mediation active (L{mediation_lvl})',
+            'long_text':  f'OMAN in active mediation posture (L{mediation_lvl}). Iran-US back-'
+                          f'channel and/or Yemen mediation engaged. De-escalation lever available '
+                          f'to regional principals.',
+        })
+    elif mediation_lvl >= 3:
+        signals.append({
+            'priority':   8,
+            'category':   'mediation_active',
+            'theatre':    'oman',
+            'level':      mediation_lvl,
+            'icon':       '🕊️',
+            'color':      '#8b5cf6',
+            'short_text': f'{OMAN_FLAG} OMAN: Mediation engaged (L{mediation_lvl})',
+            'long_text':  f'OMAN mediation activity elevated (L{mediation_lvl}). Foreign Minister '
+                          f'engagements with US/Iran/Yemen counterparts logged.',
+        })
+
+    # ============================================
+    # CATEGORY 5: REGIONAL DIPLOMATIC HUB (GCC convening, hosted summits)
+    # ============================================
+    if diplomatic_lvl >= 4:
+        signals.append({
+            'priority':   9,
+            'category':   'influence_high',
+            'theatre':    'oman',
+            'level':      diplomatic_lvl,
+            'icon':       '🤝',
+            'color':      '#7c3aed',
+            'short_text': f'{OMAN_FLAG} OMAN: Diplomatic hub active (L{diplomatic_lvl})',
+            'long_text':  f'OMAN regional diplomatic hub function elevated (L{diplomatic_lvl}). '
+                          f'GCC convening or hosted summit activity detected.',
+        })
+
+    # ============================================
+    # CATEGORY 6: COMPOSITE INFLUENCE HIGH (when influence axis dominates)
+    # ============================================
+    if influence_level >= 4 and mediation_lvl < 4 and diplomatic_lvl < 4:
+        # Catch-all if influence is broadly elevated without a single channel maxing
+        signals.append({
+            'priority':   8,
+            'category':   'influence_high',
+            'theatre':    'oman',
+            'level':      influence_level,
+            'icon':       '🟣',
+            'color':      '#7c3aed',
+            'short_text': f'{OMAN_FLAG} OMAN: Influence vector L{influence_level}',
+            'long_text':  f'OMAN influence vector composite elevated (L{influence_level}). '
+                          f'Multi-channel diplomatic activity across mediation and regional convening.',
+        })
+
+    # ============================================
+    # CATEGORY 7: COMPOSITE THREAT HIGH (when threat axis dominates)
+    # ============================================
+    if threat_level >= 4:
+        # Catch-all if threat is broadly elevated
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'oman',
+            'level':      threat_level,
+            'icon':       '🔴',
+            'color':      '#dc2626',
+            'short_text': f'{OMAN_FLAG} OMAN: Threat vector L{threat_level}',
+            'long_text':  f'OMAN composite threat vector at L{threat_level} (score {score}/100). '
+                          f'Multi-source destabilization signals warrant analyst attention.',
+        })
+
+    # ============================================
+    # CATEGORY 8: INTERNAL SECURITY ANOMALY (atypical for Oman — high-signal if elevated)
+    # ============================================
+    if security_lvl >= 4:
+        signals.append({
+            'priority':   10,
+            'category':   'silence_anomaly',  # using silence_anomaly category for atypical signal
+            'theatre':    'oman',
+            'level':      security_lvl,
+            'icon':       '🚨',
+            'color':      '#dc2626',
+            'short_text': f'{OMAN_FLAG} OMAN: ROP/security crackdown L{security_lvl}',
+            'long_text':  f'OMAN internal security posture elevated (L{security_lvl}) — atypical for '
+                          f'historically benign police state. Indicates regime stress.',
+        })
+
+    # ============================================
+    # CATEGORY 9: REGIME CONTROL ANOMALY (silence at regime level)
+    # ============================================
+    if regime_lvl == 0 and any(actors.get(k, {}).get('escalation_level', 0) >= 3
+                               for k in ('external_threats_inbound', 'succession_watch')):
+        # Regime silent while peripheral actors elevated — could indicate stress
+        signals.append({
+            'priority':   7,
+            'category':   'silence_anomaly',
+            'theatre':    'oman',
+            'level':      0,
+            'icon':       '🔇',
+            'color':      '#f59e0b',
+            'short_text': f'{OMAN_FLAG} OMAN: Regime silent amid peripheral elevation',
+            'long_text':  f'OMAN regime channels quiet while external/succession signals elevated '
+                          f'— may indicate deliberate posture or institutional stress.',
+        })
+
+    # Sort descending; BLUF will dedupe+merge with other regional signals
+    signals.sort(key=lambda s: s['priority'], reverse=True)
+    return signals
