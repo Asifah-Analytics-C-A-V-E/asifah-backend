@@ -85,12 +85,16 @@ RHETORIC_CACHE_TTL  = 13 * 3600  # 13h -- covers scan cycle + buffer
 
 # Signal interpreter
 try:
-    from iraq_signal_interpreter import interpret_signals as iraq_interpret_signals
+    from iraq_signal_interpreter import (
+        interpret_signals as iraq_interpret_signals,
+        build_top_signals as iraq_build_top_signals,
+    )
     INTERPRETER_AVAILABLE = True
-    print("[Iraq Rhetoric] Signal interpreter loaded")
-except ImportError:
+    print("[Iraq Rhetoric] Signal interpreter loaded (incl. build_top_signals v2.0)")
+except ImportError as e:
     INTERPRETER_AVAILABLE = False
-    print("[Iraq Rhetoric] Warning: Signal interpreter not available")
+    iraq_build_top_signals = None
+    print(f"[Iraq Rhetoric] Warning: Signal interpreter not available: {e}")
 SCAN_INTERVAL_HOURS = 6
 
 _rhetoric_running = False
@@ -1534,8 +1538,22 @@ def run_iraq_rhetoric_scan(days=3):
                   f"best match: {best_pct}%"
                   f"{' | SADR-SILENT' if sadr_s else ''}"
                   f"{' | KATAIB-ACTIVE' if katai else ''}")
+
+            # v2.0: emit canonical top_signals[] for ME BLUF + GPI consumption
+            if iraq_build_top_signals:
+                try:
+                    result['top_signals'] = iraq_build_top_signals(result)
+                    print(f"[Iraq Rhetoric] Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+                except Exception as e:
+                    print(f"[Iraq Rhetoric] build_top_signals error: {str(e)[:120]}")
+                    result['top_signals'] = []
+            else:
+                result['top_signals'] = []
         except Exception as e:
             print(f"[Iraq Rhetoric] Warning: Interpreter error (non-fatal): {e}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
 
     # Re-save with enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
