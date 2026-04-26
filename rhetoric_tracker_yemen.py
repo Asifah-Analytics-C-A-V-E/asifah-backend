@@ -30,11 +30,16 @@ from flask import jsonify, request
 # ── v2.1: Signal interpreter (so_what, red_lines, historical_matches) ──
 # Optional — tracker continues to function if import fails (graceful degradation).
 try:
-    from yemen_signal_interpreter import interpret_signals as _yemen_interpret_signals
+    from yemen_signal_interpreter import (
+        interpret_signals as _yemen_interpret_signals,
+        build_top_signals as _yemen_build_top_signals,
+    )
     _INTERPRETER_AVAILABLE = True
+    print("[Yemen Rhetoric] Signal interpreter loaded (incl. build_top_signals v2.0)")
 except ImportError as _e:
     print(f"[Yemen Rhetoric] ⚠️  Signal interpreter not available: {_e}")
     _yemen_interpret_signals = None
+    _yemen_build_top_signals = None
     _INTERPRETER_AVAILABLE = False
 
 # ============================================
@@ -1466,6 +1471,17 @@ def run_houthi_rhetoric_scan(days=3):
             result['interpretation'] = None
     else:
         result['interpretation'] = None
+
+    # ── v2.0: emit canonical top_signals[] for ME BLUF + GPI consumption ──
+    if _INTERPRETER_AVAILABLE and _yemen_build_top_signals:
+        try:
+            result['top_signals'] = _yemen_build_top_signals(result)
+            print(f"[Yemen Rhetoric] Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+        except Exception as e:
+            print(f"[Yemen Rhetoric] build_top_signals error: {str(e)[:120]}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
 
     # ── Delta vs prior scans ──
     _redis_set(RHETORIC_CACHE_KEY, result)  # Save first so history is up to date
