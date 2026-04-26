@@ -83,14 +83,20 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
 
-# Signal interpreter — So What, Red Lines, Historical Patterns
+# Signal interpreter — So What, Red Lines, Historical Patterns + canonical top_signals
 try:
-    from iran_signal_interpreter import interpret_signals as iran_interpret_signals
+    from iran_signal_interpreter import (
+        interpret_signals as iran_interpret_signals,
+        build_top_signals as iran_build_top_signals,
+    )
     INTERPRETER_AVAILABLE = True
-    print("[Iran Rhetoric] ✅ Signal interpreter loaded")
-except ImportError:
+    print("[Iran Rhetoric] ✅ Signal interpreter loaded (incl. build_top_signals v2.0)")
+except Exception as e:
+    import traceback as _tb
     INTERPRETER_AVAILABLE = False
-    print("[Iran Rhetoric] ⚠️ Signal interpreter not available")
+    iran_build_top_signals = None
+    print(f"[Iran Rhetoric] ⚠️ Signal interpreter not available: {e}")
+    _tb.print_exc()
 
 # ============================================
 # CONFIG
@@ -2068,6 +2074,17 @@ def run_iran_rhetoric_scan(days=3):
             print(f"[Iran Rhetoric] ✅ Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%")
         except Exception as e:
             print(f"[Iran Rhetoric] ⚠️ Interpreter error (non-fatal): {e}")
+
+    # Canonical top_signals[] for ME regional BLUF + GPI consumption
+    if iran_build_top_signals:
+        try:
+            result['top_signals'] = iran_build_top_signals(result)
+            print(f"[Iran Rhetoric] ✅ Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+        except Exception as e:
+            print(f"[Iran Rhetoric] ⚠️ build_top_signals error: {str(e)[:120]}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
 
     # Re-save with all enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
