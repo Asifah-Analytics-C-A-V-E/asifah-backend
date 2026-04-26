@@ -1011,6 +1011,242 @@ def interpret_signals(scan_data):
 
 
 # ============================================================
+# CANONICAL SIGNAL EMITTER (v2.0)
+# ============================================================
+# Maps Lebanon's vectors -> canonical platform-wide signal categories
+# consumed by me_regional_bluf.py and global_pressure_index.py.
+#
+# Categories used by Lebanon:
+#   red_line_breached    (severity 3 red lines)
+#   kinetic_pressure     (Hezbollah strikes/rockets at L4+)
+#   theatre_high         (composite L4+ catch-all)
+#   crosstheater_iran_lebanon  (Iran directing Hezbollah)
+#   regime_fracture      (LAF enforcement gap, GOL paralysis)
+#   silence_anomaly      (suspicious silence from key actor)
+#   diplomatic_active    (ceasefire/negotiation track live)
+#   red_line_breached    (Hezbollah disrupting diplomacy -- special flavor)
+# ============================================================
+
+LEBANON_FLAG = '\U0001f1f1\U0001f1e7'  # 🇱🇧
+
+# Universal escalation labels (matches platform standard)
+_LEB_ESC_LABELS = {
+    0: 'Monitoring',
+    1: 'Routine',
+    2: 'Elevated Rhetoric',
+    3: 'Heightened Posture',
+    4: 'Active Signaling',
+    5: 'Active Conflict',
+}
+
+
+def build_top_signals(scan_data):
+    """
+    Convert Lebanon scan_data into canonical top_signals[] for the regional BLUF
+    and the Global Pressure Index. Schema:
+
+        {
+          'priority':   int 0-15 (higher == more urgent),
+          'category':   str (canonical bucket),
+          'theatre':    'lebanon',
+          'level':      int 0-5,
+          'icon':       str (emoji),
+          'color':      str (hex),
+          'short_text': str (<=80 char headline),
+          'long_text':  str (<=200 char tooltip / detail),
+        }
+
+    Always returns a list (possibly empty). Sorted by priority desc.
+    """
+    signals = []
+
+    interp        = scan_data.get('interpretation') or {}
+    so_what       = interp.get('so_what') or {}
+    rl_block      = interp.get('red_lines') or {}
+    gl_block      = interp.get('green_lines') or {}
+    dipl          = interp.get('diplomatic_track') or {}
+    triggered_rls = rl_block.get('triggered') or []
+    triggered_gls = gl_block.get('triggered') or []
+
+    theatre_level   = int(scan_data.get('theatre_level', 0) or 0)
+    theatre_score   = int(scan_data.get('rhetoric_score',
+                          scan_data.get('theatre_score', 0)) or 0)
+    rockets_level   = int(scan_data.get('rockets_level', 0) or 0)
+    ground_ops_lvl  = int(scan_data.get('ground_ops_level', 0) or 0)
+    crossborder_lvl = int(scan_data.get('crossborder_level', 0) or 0)
+    ceasefire_lvl   = int(scan_data.get('ceasefire_level', 0) or 0)
+
+    actors          = scan_data.get('actors') or {}
+    silence_alerts  = scan_data.get('silence_anomalies') or []
+    laf_gap         = bool(so_what.get('laf_enforcement_gap', False))
+    iran_directing  = bool(so_what.get('iran_directing', False))
+    hez_disrupting  = bool(dipl.get('hezbollah_disrupting',
+                           so_what.get('hezbollah_disrupting', False)))
+
+    # ── Color helpers ────────────────────────────────────────────────
+    def lvl_color(lvl):
+        return {0:'#6b7280', 1:'#16a34a', 2:'#facc15', 3:'#f59e0b',
+                4:'#f97316', 5:'#dc2626'}.get(int(lvl), '#6b7280')
+
+    # ── 1. Red lines BREACHED (severity 3) ───────────────────────────
+    for rl in triggered_rls:
+        if not isinstance(rl, dict):
+            continue
+        if rl.get('status') != 'BREACHED':
+            continue
+        sev   = int(rl.get('severity', 0) or 0)
+        label = str(rl.get('label', 'Red line'))[:55]
+        signals.append({
+            'priority':   12 if sev >= 3 else 10,
+            'category':   'red_line_breached',
+            'theatre':    'lebanon',
+            'level':      max(theatre_level, 4),
+            'icon':       rl.get('icon', '🚨'),
+            'color':      '#dc2626',
+            'short_text': f'{LEBANON_FLAG} LEBANON: BREACH — {label}',
+            'long_text':  (f'{LEBANON_FLAG} LEBANON red line breached: '
+                           f'{rl.get("label", "")[:140]}'),
+        })
+
+    # ── 2. Hezbollah disrupting diplomacy (special breach flavor) ────
+    if hez_disrupting and ceasefire_lvl >= 2:
+        signals.append({
+            'priority':   11,
+            'category':   'red_line_breached',
+            'theatre':    'lebanon',
+            'level':      max(theatre_level, 4),
+            'icon':       '🪓',
+            'color':      '#dc2626',
+            'short_text': (f'{LEBANON_FLAG} LEBANON: Hezbollah escalating to '
+                           f'derail talks'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON dual-track: Hezbollah escalating '
+                           f'kinetics specifically while diplomatic channel L'
+                           f'{ceasefire_lvl} active. Spoiler dynamic.'),
+        })
+
+    # ── 3. Kinetic pressure — Hezbollah strikes / rockets L4+ ────────
+    kinetic_lvl = max(rockets_level, ground_ops_lvl, crossborder_lvl)
+    if kinetic_lvl >= 4:
+        # Identify the most active vector
+        if rockets_level >= max(ground_ops_lvl, crossborder_lvl):
+            vec_name = 'rocket fire'
+        elif ground_ops_lvl >= crossborder_lvl:
+            vec_name = 'ground operations'
+        else:
+            vec_name = 'cross-border activity'
+        signals.append({
+            'priority':   9 + kinetic_lvl,   # L4=13, L5=14
+            'category':   'kinetic_pressure',
+            'theatre':    'lebanon',
+            'level':      kinetic_lvl,
+            'icon':       '🚀' if rockets_level == kinetic_lvl else '⚔️',
+            'color':      lvl_color(kinetic_lvl),
+            'short_text': (f'{LEBANON_FLAG} LEBANON: Active {vec_name} '
+                           f'L{kinetic_lvl}'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON kinetic vector at L{kinetic_lvl} '
+                           f'({_LEB_ESC_LABELS.get(kinetic_lvl, "")}). '
+                           f'Rockets L{rockets_level}, ground L{ground_ops_lvl}, '
+                           f'cross-border L{crossborder_lvl}.'),
+        })
+
+    # ── 4. Cross-theater: Iran directing Hezbollah ───────────────────
+    if iran_directing:
+        iran_actor = actors.get('iran_lebanon') or {}
+        iran_lvl   = int(iran_actor.get('escalation_level',
+                          iran_actor.get('max_escalation_level', 0)) or 0)
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_iran_lebanon',
+            'theatre':    'lebanon',
+            'level':      max(iran_lvl, 3),
+            'icon':       '🕌',
+            'color':      '#7c3aed',
+            'short_text': (f'{LEBANON_FLAG} LEBANON: Iran directing Hezbollah '
+                           f'reactivation'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON Iran-Hezbollah axis active — '
+                           f'IRGC direction signals detected. Hezbollah operating '
+                           f'in service of axis, not Lebanese national interest.'),
+        })
+
+    # ── 5. Theatre composite high (catch-all) ────────────────────────
+    if theatre_level >= 4 or theatre_score >= 70:
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'lebanon',
+            'level':      theatre_level,
+            'icon':       '🔴' if theatre_level >= 4 else '🟠',
+            'color':      lvl_color(theatre_level),
+            'short_text': (f'{LEBANON_FLAG} LEBANON L{theatre_level} — '
+                           f'{_LEB_ESC_LABELS.get(theatre_level, "")}'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON at L{theatre_level} '
+                           f'{_LEB_ESC_LABELS.get(theatre_level, "")} '
+                           f'(score {theatre_score}/100).'),
+        })
+
+    # ── 6. Regime fracture: LAF enforcement gap ──────────────────────
+    if laf_gap:
+        signals.append({
+            'priority':   9,
+            'category':   'regime_fracture',
+            'theatre':    'lebanon',
+            'level':      max(theatre_level - 1, 3),
+            'icon':       '🪖',
+            'color':      '#f97316',
+            'short_text': (f'{LEBANON_FLAG} LEBANON: LAF (Lebanese Armed Forces) '
+                           f'enforcement gap'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON LAF cannot/will not enforce '
+                           f'1701 disarmament. Deployment without enforcement -- '
+                           f'Israel will not pull back without LAF teeth.'),
+        })
+
+    # ── 7. Silence anomalies (suspicious quiet from key actor) ───────
+    for sa in silence_alerts[:2]:  # cap at 2 to avoid flooding
+        if not isinstance(sa, dict):
+            continue
+        actor_id   = sa.get('actor_id', 'actor')
+        actor_name = sa.get('actor_name', actor_id)
+        signals.append({
+            'priority':   9,
+            'category':   'silence_anomaly',
+            'theatre':    'lebanon',
+            'level':      3,
+            'icon':       '🔇',
+            'color':      '#f59e0b',
+            'short_text': (f'{LEBANON_FLAG} LEBANON: Silence anomaly — '
+                           f'{actor_name[:35]}'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON unusual silence from '
+                           f'{actor_name}. Could indicate operational planning, '
+                           f'internal crisis, or message coordination.'),
+        })
+
+    # ── 8. Diplomatic active (ceasefire / negotiation track) ─────────
+    if ceasefire_lvl >= 2:
+        dipl_score = int(dipl.get('score', 0) or 0)
+        dipl_scen  = str(so_what.get('diplomatic_scenario', dipl.get('scenario', ''))
+                         or '')[:60]
+        # Higher priority when score is climbing — this is a real off-ramp
+        prio = 6 + min(ceasefire_lvl, 3)   # L2=8, L3=9, L4=9, L5=9
+        signals.append({
+            'priority':   prio,
+            'category':   'diplomatic_active',
+            'theatre':    'lebanon',
+            'level':      ceasefire_lvl,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': (f'{LEBANON_FLAG} LEBANON: Diplomatic track L'
+                           f'{ceasefire_lvl} ({dipl_score}/100)'),
+            'long_text':  (f'{LEBANON_FLAG} LEBANON diplomatic momentum '
+                           f'L{ceasefire_lvl} -- {dipl_scen or "negotiation channel active"}. '
+                           f'Modifier: {scan_data.get("diplomatic_modifier", 0)} pts.'),
+        })
+
+    # ── Sort and return ──────────────────────────────────────────────
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 if __name__ == '__main__':
