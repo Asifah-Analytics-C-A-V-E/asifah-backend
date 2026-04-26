@@ -612,6 +612,283 @@ def interpret_signals(scan_data):
 
 
 # ============================================================
+# CANONICAL TOP_SIGNALS BUILDER — v2.0 (April 2026)
+# ============================================================
+# Emits the canonical schema for Yemen signals that feeds:
+#   - ME Regional BLUF (me_regional_bluf.py)
+#   - Global Pressure Index (global_pressure_index.py)
+#
+# Yemen signals include the marquee DUAL CHOKEPOINT cross-theater
+# fingerprint (Hormuz + Bab el-Mandeb simultaneous) which is detected
+# by the GPI's _narrative_dual_chokepoint detector.
+#
+# Bidirectional migration model also surfaced as canonical signals:
+#   - migration_surge: outbound flow (escalatory)
+#   - diplomatic_active (return flow): de-escalatory
+#
+# Signal shape:
+# {
+#     'priority':   int,
+#     'category':   str,        # red_line_breached / kinetic_pressure /
+#                               #   dual_chokepoint / diplomatic_active /
+#                               #   migration_surge / theatre_high /
+#                               #   crosstheater_iran_yemen
+#     'theatre':    'yemen',
+#     'level':      int,
+#     'icon':       str,
+#     'color':      str,
+#     'short_text': str,        # ≤80 char
+#     'long_text':  str,        # ≤200 char
+# }
+
+YEMEN_FLAG = '\U0001f1fe\U0001f1ea'  # 🇾🇪
+
+
+def build_top_signals(result):
+    """
+    Build Yemen's top_signals[] for BLUF/GPI consumption.
+    Reads from a fully-built scan result (with interpretation attached).
+    Returns sorted list (descending priority); BLUF/GPI dedupes globally.
+    """
+    signals = []
+
+    theatre_level = result.get('theatre_escalation_level', 0) or 0
+    theatre_score = result.get('theatre_score', result.get('rhetoric_score', 0)) or 0
+
+    # Yemen-specific vectors
+    maritime_lvl     = result.get('maritime_level',         0) or 0
+    strike_lvl       = result.get('direct_strike_level',    0) or 0
+    somaliland_lvl   = result.get('somaliland_level',       0) or 0
+
+    # Diplomatic + migration (canonical multi-axis schema)
+    diplomatic_active   = result.get('diplomatic_track_active',   False)
+    diplomatic_modifier = result.get('diplomatic_modifier',       0) or 0
+    migration_out_lvl   = result.get('migration_out_level',       0) or 0
+    migration_return_lvl = result.get('migration_return_level',   0) or 0
+
+    actors = result.get('actors', {}) or {}
+    houthi_lvl     = actors.get('houthi',      {}).get('escalation_level', 0)
+    ksa_lvl        = actors.get('ksa',         {}).get('escalation_level', 0)
+    uae_lvl        = actors.get('uae',         {}).get('escalation_level', 0)
+    israel_lvl     = actors.get('israel',      {}).get('escalation_level', 0)
+    us_lvl         = actors.get('us',          {}).get('escalation_level', 0)
+
+    # Pull interpretation block
+    interp = result.get('interpretation', {}) or {}
+    so_what = interp.get('so_what', {}) or {}
+    rl_obj  = interp.get('red_lines', {}) or {}
+
+    dual_chokepoint = so_what.get('dual_chokepoint', False)
+
+    # ============================================
+    # CATEGORY 1: DUAL CHOKEPOINT (Yemen's marquee cross-theater signal)
+    # ============================================
+    # When Houthi maritime escalation co-occurs with Iran Hormuz signals,
+    # this lights up the GPI dual_chokepoint narrative (priority 13).
+    if dual_chokepoint:
+        signals.append({
+            'priority':   13,
+            'category':   'dual_chokepoint',
+            'theatre':    'yemen',
+            'level':      max(maritime_lvl, 4),
+            'icon':       '🚢',
+            'color':      '#dc2626',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Dual chokepoint -- Bab el-Mandeb + Hormuz',
+            'long_text':  (f'YEMEN: Houthi Bab el-Mandeb / Red Sea pressure converging with '
+                           f'Iranian Strait of Hormuz signaling. High-impact maritime '
+                           f'supply-chain scenario; global energy + shipping shock if activated.'),
+        })
+
+    # ============================================
+    # CATEGORY 2: RED LINES BREACHED
+    # ============================================
+    for rl in rl_obj.get('triggered', []):
+        if rl.get('status') == 'BREACHED':
+            severity = int(rl.get('severity', 0) or 0)
+            signals.append({
+                'priority':   12 if severity >= 3 else 11,
+                'category':   'red_line_breached',
+                'theatre':    'yemen',
+                'level':      max(theatre_level, severity * 2),
+                'icon':       rl.get('icon', '🚨'),
+                'color':      '#dc2626',
+                'short_text': f'{YEMEN_FLAG} YEMEN: {rl.get("label", "Red line breached")[:60]}',
+                'long_text':  (f'YEMEN red line breached -- {rl.get("label", "")}: '
+                               f'{rl.get("trigger", "")[:140]}'),
+            })
+
+    # ============================================
+    # CATEGORY 3: MARITIME THREAT (Bab el-Mandeb / Red Sea)
+    # ============================================
+    if maritime_lvl >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'kinetic_pressure',
+            'theatre':    'yemen',
+            'level':      maritime_lvl,
+            'icon':       '🚢',
+            'color':      '#dc2626',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Maritime threat L{maritime_lvl} -- Bab el-Mandeb',
+            'long_text':  (f'YEMEN: Houthi (Ansar Allah) maritime threat at L{maritime_lvl}. '
+                           f'Bab el-Mandeb / Red Sea / Suez supply chain pressure; '
+                           f'commercial shipping risk window open.'),
+        })
+    elif maritime_lvl >= 3:
+        signals.append({
+            'priority':   9,
+            'category':   'kinetic_pressure',
+            'theatre':    'yemen',
+            'level':      maritime_lvl,
+            'icon':       '🌊',
+            'color':      '#f97316',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Maritime pressure L{maritime_lvl}',
+            'long_text':  (f'YEMEN: Houthi (Ansar Allah) maritime pressure at L{maritime_lvl}. '
+                           f'Red Sea / Bab el-Mandeb activity elevated; commercial shipping '
+                           f'monitoring elevated.'),
+        })
+
+    # ============================================
+    # CATEGORY 4: DIRECT STRIKE THREAT (Israel / KSA / UAE / US bases)
+    # ============================================
+    if strike_lvl >= 4:
+        signals.append({
+            'priority':   11,
+            'category':   'kinetic_pressure',
+            'theatre':    'yemen',
+            'level':      strike_lvl,
+            'icon':       '🎯',
+            'color':      '#dc2626',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Direct strike threat L{strike_lvl}',
+            'long_text':  (f'YEMEN: Houthi direct strike threat at L{strike_lvl} -- '
+                           f'Israel / Kingdom of Saudi Arabia (KSA) / United Arab Emirates '
+                           f'(UAE) / US bases. Drone/missile launch posture; air defense '
+                           f'tempo elevated.'),
+        })
+    elif strike_lvl >= 3:
+        signals.append({
+            'priority':   9,
+            'category':   'kinetic_pressure',
+            'theatre':    'yemen',
+            'level':      strike_lvl,
+            'icon':       '🚀',
+            'color':      '#f97316',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Direct strike rhetoric L{strike_lvl}',
+            'long_text':  (f'YEMEN: Houthi direct strike rhetoric at L{strike_lvl}. '
+                           f'Threat language vs Israel / KSA / UAE / US elevated; '
+                           f'kinetic activity not yet declared.'),
+        })
+
+    # ============================================
+    # CATEGORY 5: HOUTHI ACTOR HIGH (composite escalation)
+    # ============================================
+    if houthi_lvl >= 4 and not (maritime_lvl >= 4 or strike_lvl >= 4):
+        # Only fire if maritime/strike haven't already covered it
+        signals.append({
+            'priority':   10,
+            'category':   'theatre_high',
+            'theatre':    'yemen',
+            'level':      houthi_lvl,
+            'icon':       '🔴',
+            'color':      '#dc2626',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Houthi composite L{houthi_lvl}',
+            'long_text':  (f'YEMEN: Ansar Allah (Houthi) composite escalation at L{houthi_lvl}. '
+                           f'Multi-vector threat language across maritime, direct strike, '
+                           f'and political signaling.'),
+        })
+
+    # ============================================
+    # CATEGORY 6: MIGRATION SURGE OUTBOUND (humanitarian + escalatory)
+    # ============================================
+    if migration_out_lvl >= 3:
+        signals.append({
+            'priority':   8,
+            'category':   'migration_surge',
+            'theatre':    'yemen',
+            'level':      migration_out_lvl,
+            'icon':       '🚶',
+            'color':      '#f59e0b',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Migration outflow L{migration_out_lvl}',
+            'long_text':  (f'YEMEN: Outbound migration pressure at L{migration_out_lvl} -- '
+                           f'Yemen→Oman / KSA / Horn of Africa corridor. Humanitarian '
+                           f'precursor signal; ground escalation indicator.'),
+        })
+
+    # ============================================
+    # CATEGORY 7: MIGRATION RETURN FLOW (de-escalatory positive signal)
+    # ============================================
+    if migration_return_lvl >= 3:
+        signals.append({
+            'priority':   6,
+            'category':   'diplomatic_active',
+            'theatre':    'yemen',
+            'level':      migration_return_lvl,
+            'icon':       '↩️',
+            'color':      '#10b981',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Return migration L{migration_return_lvl} (de-escalation)',
+            'long_text':  (f'YEMEN: Return migration flow at L{migration_return_lvl} -- '
+                           f'Yemenis returning from Oman/KSA. De-escalatory ground signal; '
+                           f'humanitarian normalization indicator.'),
+        })
+
+    # ============================================
+    # CATEGORY 8: DIPLOMATIC TRACK (KSA-Houthi negotiations)
+    # ============================================
+    if diplomatic_active and diplomatic_modifier <= -3:
+        signals.append({
+            'priority':   8,
+            'category':   'diplomatic_active',
+            'theatre':    'yemen',
+            'level':      0,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': f'{YEMEN_FLAG} YEMEN: KSA-Houthi diplomatic track active',
+            'long_text':  (f'YEMEN: Diplomatic track active (modifier {diplomatic_modifier}) -- '
+                           f'KSA-Houthi negotiations / mediator activity. Off-ramp signaling; '
+                           f'de-escalation modifier applied to threat score.'),
+        })
+
+    # ============================================
+    # CATEGORY 9: SOMALILAND / HORN OF AFRICA GROUND OPS
+    # ============================================
+    if somaliland_lvl >= 3:
+        signals.append({
+            'priority':   7,
+            'category':   'kinetic_pressure',
+            'theatre':    'yemen',
+            'level':      somaliland_lvl,
+            'icon':       '🌍',
+            'color':      '#f97316',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Somaliland/Horn ground signal L{somaliland_lvl}',
+            'long_text':  (f'YEMEN: Somaliland / Horn of Africa ground operation precursor '
+                           f'signals at L{somaliland_lvl}. Berbera / US or Israeli military '
+                           f'access dynamics; Bab el-Mandeb southern flank activity.'),
+        })
+
+    # ============================================
+    # CATEGORY 10: THEATRE COMPOSITE HIGH (catch-all)
+    # ============================================
+    if (theatre_level >= 4 or theatre_score >= 70) and \
+       not any(s.get('category') in ('kinetic_pressure', 'theatre_high', 'dual_chokepoint')
+               for s in signals):
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'yemen',
+            'level':      theatre_level,
+            'icon':       '🔴',
+            'color':      '#dc2626',
+            'short_text': f'{YEMEN_FLAG} YEMEN: Theatre composite L{theatre_level} ({theatre_score}/100)',
+            'long_text':  (f'YEMEN composite rhetoric at L{theatre_level} '
+                           f'(score {theatre_score}/100). Multi-vector pressure across '
+                           f'maritime, direct strike, and political channels.'),
+        })
+
+    # Sort descending by priority
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 if __name__ == '__main__':
