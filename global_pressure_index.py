@@ -244,10 +244,11 @@ def _narrative_china_taiwan_takeover(blufs):
             'icon':     '\U0001f1e8\U0001f1f3',  # 🇨🇳
             'color':    '#dc2626',
             'headline': 'China at coercion threshold -- Taiwan kinetic signaling at incident level',
-            'detail':   ('Asia-Pacific theater: PLA tempo plus Taiwan deterrence-gap signals indicate '
-                         'the highest-stakes window in years for a Taiwan Strait contingency. Watch '
-                         'for ADIZ violation surges, MND brevity-language shifts, and US-Japan-Taiwan '
-                         'coalition signaling cadence over next 48-72 hours.'),
+            'detail':   ('Asia-Pacific theater: People\'s Liberation Army (PLA) tempo plus Taiwan '
+                         'deterrence-gap signals indicate the highest-stakes window in years for a '
+                         'Taiwan Strait contingency. Watch for Air Defense Identification Zone (ADIZ) '
+                         'violation surges, Taiwan Ministry of National Defense (MND) brevity-language '
+                         'shifts, and US-Japan-Taiwan coalition signaling cadence over next 48-72 hours.'),
         }
     return None
 
@@ -295,11 +296,11 @@ def _narrative_dprk_russia_axis(blufs):
             'regions':  ['europe', 'asia'],
             'icon':     '\U0001f6a9',  # 🚩
             'color':    '#7c3aed',
-            'headline': 'DPRK-Russia axis active -- ammunition and personnel transfers documented',
-            'detail':   ('North Korean ammunition stocks and reportedly personnel are flowing to '
-                         'Russian forces. This sustains Russian war-fighting capacity, complicates '
+            'headline': 'North Korea-Russia axis active -- ammunition and personnel transfers documented',
+            'detail':   ('North Korean (DPRK) ammunition stocks and reportedly personnel are flowing '
+                         'to Russian forces. This sustains Russian war-fighting capacity, complicates '
                          'sanctions enforcement, and elevates Korean Peninsula unpredictability '
-                         'as DPRK extracts technology transfers in return.'),
+                         'as North Korea extracts technology transfers in return.'),
         }
     return None
 
@@ -318,8 +319,9 @@ def _narrative_arctic_convergence(blufs):
             'color':    '#0ea5e9',
             'headline': 'Arctic convergence -- Russia exploiting US-Denmark sovereignty friction',
             'detail':   ('Russian Northern Fleet posture is simultaneously elevated with US-Greenland '
-                         'sovereignty pressure signals. Classic GIUK gap pressure window; sub-cable '
-                         'and undersea infrastructure should be monitored for hybrid interference.'),
+                         'sovereignty pressure signals. Classic Greenland-Iceland-United Kingdom (GIUK) '
+                         'gap pressure window; sub-cable and undersea infrastructure should be '
+                         'monitored for hybrid interference.'),
         }
     return None
 
