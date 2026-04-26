@@ -75,12 +75,16 @@ except ImportError:
 
 # Signal interpreter -- So What, Red Lines, Historical Patterns
 try:
-    from syria_signal_interpreter import interpret_signals as syria_interpret_signals
+    from syria_signal_interpreter import (
+        interpret_signals as syria_interpret_signals,
+        build_top_signals as syria_build_top_signals,
+    )
     INTERPRETER_AVAILABLE = True
-    print("[Syria Rhetoric] Signal interpreter loaded")
-except ImportError:
+    print("[Syria Rhetoric] Signal interpreter loaded (incl. build_top_signals v2.0)")
+except ImportError as e:
     INTERPRETER_AVAILABLE = False
-    print("[Syria Rhetoric] Warning: Signal interpreter not available")
+    syria_build_top_signals = None
+    print(f"[Syria Rhetoric] Warning: Signal interpreter not available: {e}")
 
 RHETORIC_CACHE_KEY        = 'rhetoric:syria:latest'      # v2.0 unified key
 RHETORIC_CACHE_KEY_LEGACY = 'syria_rhetoric_cache'        # backward compat
@@ -1514,8 +1518,22 @@ def run_syria_rhetoric_scan(days=3):
                   f"best match: {best_pct}%"
                   f"{' | LOW-SIG-POSITIVE' if low_sig else ''}"
                   f"{' | IRAN-EXPELLED' if iran_exp else ''}")
+
+            # v2.0: emit canonical top_signals[] for ME BLUF + GPI consumption
+            if syria_build_top_signals:
+                try:
+                    result['top_signals'] = syria_build_top_signals(result)
+                    print(f"[Syria Rhetoric] Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+                except Exception as e:
+                    print(f"[Syria Rhetoric] build_top_signals error: {str(e)[:120]}")
+                    result['top_signals'] = []
+            else:
+                result['top_signals'] = []
         except Exception as e:
             print(f"[Syria Rhetoric] Warning: Interpreter error (non-fatal): {e}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
 
     # Re-save with enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
