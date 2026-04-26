@@ -816,6 +816,256 @@ def interpret_signals(scan_data):
 
 
 # ============================================================
+# CANONICAL TOP_SIGNALS BUILDER — v2.0 (April 2026)
+# ============================================================
+# Emits the canonical schema for Iraq signals that feeds:
+#   - ME Regional BLUF (me_regional_bluf.py)
+#   - Global Pressure Index (global_pressure_index.py)
+#
+# Signal shape (canonical across platform):
+# {
+#     'priority':   int,        # higher = more urgent
+#     'category':   str,        # red_line_breached / kinetic_pressure / theatre_high /
+#                               #   silence_anomaly / regime_fracture / diplomatic_active /
+#                               #   crosstheater_iran_iraq
+#     'theatre':    'iraq',
+#     'level':      int,        # 0-5
+#     'icon':       str,        # emoji
+#     'color':      str,        # hex
+#     'short_text': str,        # ≤80 char headline
+#     'long_text':  str,        # ≤200 char tooltip / detail
+# }
+
+IRAQ_FLAG = '\U0001f1ee\U0001f1f6'  # 🇮🇶
+
+
+def build_top_signals(result):
+    """
+    Build Iraq's top_signals[] for BLUF/GPI consumption.
+    Reads from a fully-built scan result (with interpretation attached).
+    Returns sorted list (descending priority); BLUF/GPI dedupes globally.
+    """
+    signals = []
+
+    theatre_level = result.get('theatre_level',
+                    result.get('theatre_escalation_level', 0)) or 0
+    theatre_score = result.get('theatre_score', 0) or 0
+
+    # Iraq-specific vectors (set by the tracker)
+    pmf_level    = result.get('pmf_level',         0) or 0
+    iran_level   = result.get('iran_strike_level', 0) or 0
+    base_level   = result.get('us_base_level',     0) or 0
+    kurd_level   = result.get('kurdish_level',     0) or 0
+    isis_level   = result.get('isis_level',        0) or 0
+
+    actors = result.get('actors', {}) or {}
+    iraqi_gov_lvl = actors.get('iraqi_gov',  {}).get('escalation_level', 0)
+    sadr_lvl      = actors.get('sadr',       {}).get('escalation_level', 0)
+    kataib_lvl    = actors.get('kataib',     {}).get('escalation_level', 0)
+    krg_lvl       = actors.get('krg',        {}).get('escalation_level', 0)
+
+    # Pull interpretation block (Iraq's interpret_signals output)
+    interp = result.get('interpretation', {}) or {}
+    so_what = interp.get('so_what', {}) or {}
+    rl_obj  = interp.get('red_lines', {}) or {}
+
+    sadr_silent     = so_what.get('sadr_silent', False)
+    kataib_active   = so_what.get('kataib_active', False)
+    iran_directing  = so_what.get('iran_directing', False)
+    us_under_threat = so_what.get('us_under_threat', False)
+
+    # ============================================
+    # CATEGORY 1: RED LINES BREACHED (highest priority)
+    # ============================================
+    for rl in rl_obj.get('triggered', []):
+        if rl.get('status') == 'BREACHED':
+            severity = int(rl.get('severity', 0) or 0)
+            signals.append({
+                'priority':   12 if severity >= 3 else 11,
+                'category':   'red_line_breached',
+                'theatre':    'iraq',
+                'level':      max(theatre_level, severity * 2),
+                'icon':       rl.get('icon', '🚨'),
+                'color':      '#dc2626',
+                'short_text': f'{IRAQ_FLAG} IRAQ: {rl.get("label", "Red line breached")[:60]}',
+                'long_text':  (f'IRAQ red line breached -- {rl.get("label", "")}: '
+                               f'{rl.get("trigger", "")[:140]}'),
+            })
+
+    # ============================================
+    # CATEGORY 2: US BASE / EMBASSY KINETIC PRESSURE
+    # ============================================
+    if base_level >= 3:
+        signals.append({
+            'priority':   11,
+            'category':   'kinetic_pressure',
+            'theatre':    'iraq',
+            'level':      base_level,
+            'icon':       '⚔️',
+            'color':      '#dc2626',
+            'short_text': f'{IRAQ_FLAG} IRAQ: US base/diplomatic pressure (L{base_level})',
+            'long_text':  (f'IRAQ US Forces / United States Central Command (CENTCOM) base or '
+                           f'diplomatic facility kinetic pressure at L{base_level}. Force protection '
+                           f'posture elevated; rocket/drone strikes likely.'),
+        })
+
+    # ============================================
+    # CATEGORY 3: KATAIB-ACTIVE + SADR-SILENT (Iraq-specific high-signal pattern)
+    # ============================================
+    # This is the classic pre-escalation pattern flagged by the so_what builder.
+    if kataib_active and sadr_silent:
+        signals.append({
+            'priority':   11,
+            'category':   'silence_anomaly',
+            'theatre':    'iraq',
+            'level':      max(kataib_lvl, 4),
+            'icon':       '🚨',
+            'color':      '#dc2626',
+            'short_text': f'{IRAQ_FLAG} IRAQ: Kata\'ib active + Sadr silent -- pre-mobilization pattern',
+            'long_text':  (f'IRAQ: Kata\'ib Hezbollah operationally active while Muqtada al-Sadr '
+                           f'has gone silent ({sadr_lvl=}, baseline departure). Historical pattern: '
+                           f'Sadr silence precedes mobilization within 1-3 weeks.'),
+        })
+    elif sadr_silent:
+        signals.append({
+            'priority':   9,
+            'category':   'silence_anomaly',
+            'theatre':    'iraq',
+            'level':      3,
+            'icon':       '🤐',
+            'color':      '#f59e0b',
+            'short_text': f'{IRAQ_FLAG} IRAQ: Sadr silent -- watch for mobilization',
+            'long_text':  (f'IRAQ: Muqtada al-Sadr has gone silent (statement count below baseline). '
+                           f'Wildcard actor; historical silence-before-mobilization precedent.'),
+        })
+
+    # ============================================
+    # CATEGORY 4: IRAN DIRECTING IRAQI PROXIES (cross-theater fingerprint)
+    # ============================================
+    if iran_directing or iran_level >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_iran_iraq',
+            'theatre':    'iraq',
+            'level':      max(iran_level, pmf_level),
+            'icon':       '🔗',
+            'color':      '#7c3aed',
+            'short_text': f'{IRAQ_FLAG} IRAQ: Iran-directing PMF (L{max(iran_level, pmf_level)})',
+            'long_text':  (f'IRAQ: Islamic Revolutionary Guard Corps (IRGC) Quds Force directing '
+                           f'Popular Mobilization Forces (PMF) / Hashd al-Shaabi posture. '
+                           f'Tehran-Baghdad coordination signal active.'),
+        })
+
+    # ============================================
+    # CATEGORY 5: PMF FRAGMENTATION / REGIME STRESS
+    # ============================================
+    if pmf_level >= 4 and iraqi_gov_lvl <= 1:
+        signals.append({
+            'priority':   10,
+            'category':   'regime_fracture',
+            'theatre':    'iraq',
+            'level':      pmf_level,
+            'icon':       '⚡',
+            'color':      '#ef4444',
+            'short_text': f'{IRAQ_FLAG} IRAQ: PMF outpacing government (L{pmf_level})',
+            'long_text':  (f'IRAQ: Popular Mobilization Forces (PMF) escalation tempo exceeding '
+                           f'Iraqi government statements. Sudani losing control of state monopoly '
+                           f'on force; PMF acting independently.'),
+        })
+
+    # ============================================
+    # CATEGORY 6: THEATRE COMPOSITE HIGH (catch-all)
+    # ============================================
+    if theatre_level >= 4 or theatre_score >= 70:
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'iraq',
+            'level':      theatre_level,
+            'icon':       '🔴',
+            'color':      '#dc2626',
+            'short_text': f'{IRAQ_FLAG} IRAQ: Theatre composite L{theatre_level} ({theatre_score}/100)',
+            'long_text':  (f'IRAQ composite rhetoric vector at L{theatre_level} '
+                           f'(score {theatre_score}/100). Multi-actor escalation across PMF, '
+                           f'Iran-Iraq, US base posture vectors.'),
+        })
+
+    # ============================================
+    # CATEGORY 7: ISIS RECONSTITUTION (background threat resurfacing)
+    # ============================================
+    if isis_level >= 3:
+        signals.append({
+            'priority':   8,
+            'category':   'kinetic_pressure',
+            'theatre':    'iraq',
+            'level':      isis_level,
+            'icon':       '⚫',
+            'color':      '#1f2937',
+            'short_text': f'{IRAQ_FLAG} IRAQ: ISIS reconstitution (L{isis_level})',
+            'long_text':  (f'IRAQ: Islamic State (ISIS) reconstitution signals at L{isis_level}. '
+                           f'Sinjar / Nineveh / contested territory exploitation as governance '
+                           f'attention focuses on Iran-US tensions.'),
+        })
+
+    # ============================================
+    # CATEGORY 8: KURDISH FRICTION (KRG / Erbil tensions)
+    # ============================================
+    if kurd_level >= 3 or krg_lvl >= 3:
+        signals.append({
+            'priority':   7,
+            'category':   'regime_fracture',
+            'theatre':    'iraq',
+            'level':      max(kurd_level, krg_lvl),
+            'icon':       '🟡',
+            'color':      '#eab308',
+            'short_text': f'{IRAQ_FLAG} IRAQ: Kurdish/Erbil friction (L{max(kurd_level, krg_lvl)})',
+            'long_text':  (f'IRAQ: Kurdistan Regional Government (KRG) / Erbil tensions elevated '
+                           f'(L{max(kurd_level, krg_lvl)}). Baghdad-KRG friction or Erbil base '
+                           f'attacks; potential triple-vector with Syria/Turkey Kurdish dynamics.'),
+        })
+
+    # ============================================
+    # CATEGORY 9: SUDANI DIPLOMATIC DE-ESCALATION (positive signal)
+    # ============================================
+    if iraqi_gov_lvl >= 2 and pmf_level <= 2 and iran_level <= 2:
+        signals.append({
+            'priority':   6,
+            'category':   'diplomatic_active',
+            'theatre':    'iraq',
+            'level':      iraqi_gov_lvl,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': f'{IRAQ_FLAG} IRAQ: Sudani de-escalation track active (L{iraqi_gov_lvl})',
+            'long_text':  (f'IRAQ: Prime Minister Sudani diplomatic posture active while PMF and '
+                           f'Iran-Iraq vectors remain restrained. Government providing diplomatic '
+                           f'cover; positive de-escalation signal.'),
+        })
+
+    # ============================================
+    # CATEGORY 10: US-UNDER-THREAT FLAG (composite from so_what)
+    # ============================================
+    if us_under_threat and base_level < 3:
+        # If so_what flags us_under_threat but base level isn't yet high,
+        # surface it as an early-warning approaching signal.
+        signals.append({
+            'priority':   8,
+            'category':   'kinetic_pressure',
+            'theatre':    'iraq',
+            'level':      max(base_level, 3),
+            'icon':       '🎯',
+            'color':      '#f97316',
+            'short_text': f'{IRAQ_FLAG} IRAQ: US forces under elevated threat posture',
+            'long_text':  (f'IRAQ: Composite analysis flags US Forces / Embassy / Green Zone under '
+                           f'elevated threat posture. Force protection signaling and adversary '
+                           f'rhetoric converging.'),
+        })
+
+    # Sort descending by priority
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 if __name__ == '__main__':
