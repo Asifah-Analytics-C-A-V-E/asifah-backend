@@ -52,7 +52,7 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
 REGIONAL_BLUF_ENDPOINTS = {
     'me':     os.environ.get('ME_BACKEND_URL',     'https://asifah-backend.onrender.com')         + '/api/rhetoric/me/bluf',
     'asia':   os.environ.get('ASIA_BACKEND_URL',   'https://asifah-asia-backend.onrender.com')   + '/api/rhetoric/asia/bluf',
-    'europe': os.environ.get('EUROPE_BACKEND_URL', 'https://asifah-europe-backend.onrender.com') + '/api/rhetoric/europe/bluf',
+    'europe': os.environ.get('EUROPE_BACKEND_URL', 'https://asifa-europe-backend.onrender.com') + '/api/rhetoric/europe/bluf',
     'wha':    os.environ.get('WHA_BACKEND_URL',    'https://asifah-wha-backend.onrender.com')    + '/api/rhetoric/wha/bluf',
 }
 
