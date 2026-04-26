@@ -73,14 +73,20 @@ import os
 import threading
 from collections import defaultdict
 
-# Signal interpreter -- So What, Red Lines, Historical Patterns
+# Signal interpreter -- So What, Red Lines, Historical Patterns + canonical top_signals
 try:
-    from lebanon_signal_interpreter import interpret_signals as lebanon_interpret_signals
+    from lebanon_signal_interpreter import (
+        interpret_signals as lebanon_interpret_signals,
+        build_top_signals as lebanon_build_top_signals,
+    )
     INTERPRETER_AVAILABLE = True
-    print("[Lebanon Rhetoric] Signal interpreter loaded")
-except ImportError:
+    print("[Lebanon Rhetoric] Signal interpreter loaded (incl. build_top_signals v2.0)")
+except Exception as e:
+    import traceback as _tb
     INTERPRETER_AVAILABLE = False
-    print("[Lebanon Rhetoric] Warning: Signal interpreter not available")
+    lebanon_build_top_signals = None
+    print(f"[Lebanon Rhetoric] Warning: Signal interpreter not available: {e}")
+    _tb.print_exc()
 
 # Telegram signal source
 try:
@@ -2182,6 +2188,17 @@ def run_rhetoric_scan(days=3):
                   f"{' | LAF GAP' if laf_gap else ''}{' | IRAN DIRECTING' if iran_dir else ''}")
         except Exception as e:
             print(f"[Lebanon Rhetoric] Warning: Interpreter error (non-fatal): {e}")
+
+    # Canonical top_signals[] for regional BLUF + GPI consumption
+    if lebanon_build_top_signals:
+        try:
+            result['top_signals'] = lebanon_build_top_signals(result)
+            print(f"[Lebanon Rhetoric] Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+        except Exception as e:
+            print(f"[Lebanon Rhetoric] build_top_signals error: {str(e)[:120]}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
 
     # ── Re-save with all enriched fields ──
     _redis_set(RHETORIC_CACHE_KEY, result, ttl=24 * 3600)
