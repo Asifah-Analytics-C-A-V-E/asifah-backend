@@ -1,13 +1,22 @@
 """
 me_regional_bluf.py
 Asifah Analytics -- ME Backend Module
-v1.0.0
+v2.0.0  (Apr 26 2026)
 
 ME Regional BLUF (Bottom Line Up Front) Engine.
 
-Reads from all six ME rhetoric tracker Redis caches simultaneously
-and synthesizes a single analyst-prose BLUF paragraph + three
-structured top-line signals.
+Reads from all SEVEN ME rhetoric tracker Redis caches simultaneously
+and synthesizes a single analyst-prose BLUF paragraph + top-5 structured
+signals.
+
+v2.0 Architectural Changes:
+  - Dual-axis aware (handles Oman threat + influence vectors)
+  - Backward compatibility shim — works with v1.x trackers AND
+    v2.x trackers that self-emit top_signals[]
+  - New signal categories: mediation_active, influence_high, green_line_active
+  - Top 5 signals (was top 3) — richer briefing while still scannable
+  - Designed to be GPI-compatible: emits regional top_signals[] for
+    consumption by global_pressure_index.py at the next altitude
 
 Updated every time any tracker scan completes, or on-demand via
 /api/rhetoric/me/bluf endpoint.
@@ -28,6 +37,7 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
 
 BLUF_CACHE_KEY = 'rhetoric:me:regional_bluf'
 BLUF_CACHE_TTL = 14 * 3600  # 14h -- outlasts any individual tracker TTL
+TOP_SIGNALS_COUNT = 5  # v2.0: was 3
 
 
 # ============================================================
@@ -73,7 +83,7 @@ def _redis_set(key, value, ttl=BLUF_CACHE_TTL):
 
 
 # ============================================================
-# CACHE KEY MAP -- all six ME trackers
+# CACHE KEY MAP -- all SEVEN ME trackers
 # ============================================================
 TRACKER_KEYS = {
     'israel':  ('rhetoric:israel:latest',   'israel_rhetoric_cache'),
@@ -82,6 +92,7 @@ TRACKER_KEYS = {
     'yemen':   ('yemen_rhetoric_cache',      None),
     'syria':   ('rhetoric:syria:latest',     'syria_rhetoric_cache'),
     'iraq':    ('rhetoric:iraq:latest',      'iraq_rhetoric_cache'),
+    'oman':    ('rhetoric:oman:latest',      None),  # v2.0: dual-axis stability anchor
 }
 
 THEATRE_FLAGS = {
@@ -91,6 +102,7 @@ THEATRE_FLAGS = {
     'yemen':   '\U0001f1fe\U0001f1ea',
     'syria':   '\U0001f1f8\U0001f1fe',
     'iraq':    '\U0001f1ee\U0001f1f6',
+    'oman':    '\U0001f1f4\U0001f1f2',  # v2.0: Oman flag 🇴🇲
 }
 
 ESCALATION_LABELS = {
@@ -111,27 +123,293 @@ ESCALATION_COLORS = {
     5: '#dc2626',
 }
 
+# v2.0: Per-region influence-side coloring (for stability anchors like Oman)
+INFLUENCE_LABELS = {
+    0: 'Standby',
+    1: 'Engaged',
+    2: 'Active',
+    3: 'Mediation Engaged',
+    4: 'High-Stakes Mediation',
+    5: 'Crisis Mediation',
+}
+
+INFLUENCE_COLORS = {
+    0: '#6b7280',
+    1: '#a78bfa',
+    2: '#8b5cf6',
+    3: '#7c3aed',
+    4: '#6d28d9',
+    5: '#5b21b6',
+}
+
 
 # ============================================================
-# DATA INGESTION -- read all six caches
+# COMPATIBILITY SHIM -- v2.0
+# ============================================================
+# Trackers will gradually be upgraded to emit a canonical shape.
+# Until then, this shim normalizes ALL trackers (old and new) into
+# the same internal representation that the BLUF engine consumes.
+#
+# Canonical internal shape:
+# {
+#     'theatre':           str,
+#     'flag':              str,
+#     'levels': {
+#         'threat':         0-5,
+#         'influence':      0-5 or None,   # only for stability anchors
+#         'green':          0-5 or None,   # only for trackers w/ green lines
+#         'dominant_axis':  'threat' | 'influence' | 'green',
+#         'dominant_level': 0-5,
+#     },
+#     'score':             0-100,
+#     'so_what':           {...},          # interpreter output
+#     'red_lines':         {...},
+#     'green_lines':       {...} or None,  # OPTIONAL
+#     'diplomatic_track':  {...} or None,  # OPTIONAL
+#     'historical_matches':[...] or None,  # OPTIONAL
+#     'top_signals':       [...],          # NEW v2.0 — pre-prioritized
+#     'silence_anomalies': [...],          # legacy
+#     'crosstheater_coordination': [...],  # legacy
+#     'raw':               <untouched original>,  # for legacy access
+# }
+# ============================================================
+
+def _normalize_tracker_data(theatre, raw_data):
+    """
+    v2.0 compatibility shim.
+    Takes raw cached tracker data (any version) and returns canonical shape.
+    Trackers that have been upgraded to v2.0 self-emit 'top_signals' — we use it.
+    Trackers that haven't been upgraded yet — we synthesize 'top_signals' here.
+    """
+    if not raw_data:
+        return None
+
+    flag = THEATRE_FLAGS.get(theatre, '')
+
+    # ---- THREAT LEVEL ----
+    threat = _legacy_get_theatre_level(raw_data, theatre)
+
+    # ---- INFLUENCE LEVEL (Oman & future stability anchors) ----
+    influence = raw_data.get('influence_level')
+    if influence is None and theatre == 'oman':
+        # Fallback: compute from interpreter output if present
+        interp = raw_data.get('interpretation', {}) or {}
+        so_what = interp.get('so_what', {}) if interp else {}
+        influence = so_what.get('influence_level', 0)
+
+    # ---- GREEN LEVEL (Russia & future de-escalation trackers) ----
+    green = None
+    interp = raw_data.get('interpretation', {}) or {}
+    green_lines = interp.get('green_lines') if interp else None
+    if green_lines and isinstance(green_lines, dict):
+        green = green_lines.get('count', 0)
+        if green > 5:
+            green = 5  # cap
+
+    # ---- DOMINANT AXIS ----
+    threat_int    = int(threat or 0)
+    influence_int = int(influence or 0)
+    green_int     = int(green or 0)
+    dominant_level = max(threat_int, influence_int)
+    if influence_int > threat_int:
+        dominant_axis = 'influence'
+    elif green_int >= 3 and threat_int <= 2:
+        dominant_axis = 'green'
+        dominant_level = max(dominant_level, green_int)
+    else:
+        dominant_axis = 'threat'
+
+    # ---- SCORE ----
+    score = _legacy_get_theatre_score(raw_data, theatre)
+
+    # ---- TOP SIGNALS (v2.0 native if present, else synthesize) ----
+    if 'top_signals' in raw_data and isinstance(raw_data['top_signals'], list):
+        # v2.0 tracker — already self-emits
+        top_signals = raw_data['top_signals']
+    else:
+        # Legacy tracker — synthesize from raw fields
+        top_signals = _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int, score)
+
+    return {
+        'theatre':       theatre,
+        'flag':          flag,
+        'levels': {
+            'threat':         threat_int,
+            'influence':      influence_int if influence is not None else None,
+            'green':          green_int     if green     is not None else None,
+            'dominant_axis':  dominant_axis,
+            'dominant_level': dominant_level,
+        },
+        'score':         score,
+        'so_what':       (interp.get('so_what', {}) if interp else {}) or raw_data.get('so_what', {}),
+        'red_lines':     (interp.get('red_lines', {}) if interp else {}) or raw_data.get('red_lines', {}),
+        'green_lines':   green_lines,
+        'diplomatic_track':   (interp.get('diplomatic_track') if interp else None) or raw_data.get('diplomatic_track'),
+        'historical_matches': (interp.get('historical_matches') if interp else None) or raw_data.get('historical_matches'),
+        'top_signals':   top_signals,
+        'silence_anomalies':         raw_data.get('silence_anomalies', []),
+        'crosstheater_coordination': raw_data.get('crosstheater_coordination', []),
+        'scanned_at':    raw_data.get('scanned_at') or raw_data.get('timestamp', ''),
+        'raw':           raw_data,
+    }
+
+
+def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int, score):
+    """
+    For trackers not yet upgraded to v2.0 self-emit pattern.
+    Synthesize top_signals[] from raw fields using the same logic as
+    the original _extract_key_signals() — but per-tracker, ranked by priority.
+    Returns list of signal dicts; BLUF will consume them globally.
+    """
+    flag    = THEATRE_FLAGS.get(theatre, '')
+    interp  = raw_data.get('interpretation', {}) or {}
+    so_what = interp.get('so_what', {}) if interp else {}
+    rl_obj  = interp.get('red_lines', {}) if interp else {}
+    signals = []
+
+    # Red lines breached (highest priority)
+    for rl in rl_obj.get('triggered', []):
+        if rl.get('status') == 'BREACHED':
+            signals.append({
+                'priority':  10 + threat_int,
+                'category':  'red_line_breached',
+                'theatre':   theatre,
+                'level':     threat_int,
+                'icon':      rl.get('icon', '🚨'),
+                'color':     '#dc2626',
+                'short_text': f'{flag} {theatre.upper()}: {rl.get("label", "Red line breached")[:60]}',
+                'long_text':  f'{flag} {theatre.upper()} L{threat_int}: {rl.get("label", "")} — {rl.get("trigger", "")[:120]}',
+            })
+
+    # Theatre at high level
+    if threat_int >= 4:
+        signals.append({
+            'priority':  9 + threat_int,
+            'category':  'theatre_high',
+            'theatre':   theatre,
+            'level':     threat_int,
+            'icon':      '🔴',
+            'color':     ESCALATION_COLORS.get(threat_int, '#6b7280'),
+            'short_text': f'{flag} {theatre.upper()} L{threat_int} — {ESCALATION_LABELS.get(threat_int, "")}',
+            'long_text':  f'{flag} {theatre.upper()} at L{threat_int} {ESCALATION_LABELS.get(threat_int, "")} (score {score}/100)',
+        })
+
+    # Influence-side high (Oman pattern)
+    if influence_int >= 3:
+        signals.append({
+            'priority':  7 + influence_int,
+            'category':  'mediation_active' if theatre == 'oman' else 'influence_high',
+            'theatre':   theatre,
+            'level':     influence_int,
+            'icon':      '🕊️',
+            'color':     INFLUENCE_COLORS.get(influence_int, '#7c3aed'),
+            'short_text': f'{flag} {theatre.upper()}: {INFLUENCE_LABELS.get(influence_int, "Active influence")}',
+            'long_text':  f'{flag} {theatre.upper()} influence L{influence_int} — {INFLUENCE_LABELS.get(influence_int, "Active")}; mediation channel engaged.',
+        })
+
+    # Silence anomalies
+    for anom in raw_data.get('silence_anomalies', []):
+        if anom.get('deviation') and '100%' in str(anom.get('deviation', '')):
+            actor_name = anom.get('actor_name', anom.get('actor_id', 'Unknown'))
+            signals.append({
+                'priority':  6 + threat_int,
+                'category':  'silence_anomaly',
+                'theatre':   theatre,
+                'level':     threat_int,
+                'icon':      '🔇',
+                'color':     '#f59e0b',
+                'short_text': f'{flag} {theatre.upper()}: {actor_name} silent',
+                'long_text':  f'{flag} {theatre.upper()}: {actor_name} SILENT — {anom.get("signal", "Unusual quiet pattern")}',
+            })
+
+    # Cross-theater coordination
+    for ct in raw_data.get('crosstheater_coordination', []):
+        if ct.get('confidence', 0) >= 60 and ct.get('type') == 'simultaneous_elevation':
+            theaters_in = ct.get('theaters', [])
+            signals.append({
+                'priority':  8,
+                'category':  'crosstheater',
+                'theatre':   'regional',
+                'level':     threat_int,
+                'icon':      '🔗',
+                'color':     '#7c3aed',
+                'short_text': f'CROSS-THEATER: {", ".join(t.upper() for t in theaters_in[:3])}',
+                'long_text':  f'CROSS-THEATER: Simultaneous elevation across {", ".join(t.upper() for t in theaters_in)} ({ct.get("confidence", 0)}% confidence) — {ct.get("signal", "")}',
+            })
+
+    # Green lines / diplomatic de-escalation (Russia pattern, future trackers)
+    green_lines = interp.get('green_lines') if interp else None
+    if green_lines and green_lines.get('count', 0) >= 2 and threat_int <= 2:
+        signals.append({
+            'priority':  5 + threat_int,
+            'category':  'green_line_active',
+            'theatre':   theatre,
+            'level':     threat_int,
+            'icon':      '✅',
+            'color':     '#10b981',
+            'short_text': f'{flag} {theatre.upper()}: De-escalation signals',
+            'long_text':  f'{flag} {theatre.upper()}: {green_lines.get("count", 0)} green-line de-escalation triggers active.',
+        })
+
+    # Interpreter-specific flags (legacy support)
+    if so_what.get('sadr_silent') and theatre == 'iraq':
+        signals.append({
+            'priority': 7, 'category': 'sadr_silent', 'theatre': 'iraq',
+            'level': threat_int, 'icon': '👁️', 'color': '#7c3aed',
+            'short_text': '🇮🇶 IRAQ: Al-Sadr silent',
+            'long_text':  'IRAQ: Al-Sadr SILENT — historical pattern precedes mobilization (2020, 2022)',
+        })
+    if so_what.get('dual_chokepoint') and theatre == 'yemen':
+        signals.append({
+            'priority': 10, 'category': 'dual_chokepoint', 'theatre': 'yemen',
+            'level': threat_int, 'icon': '🔱', 'color': '#7c3aed',
+            'short_text': '🔱 DUAL CHOKEPOINT: Hormuz + Bab el-Mandeb',
+            'long_text':  'DUAL CHOKEPOINT: Hormuz + Bab el-Mandeb simultaneous signals — coordinated blockade risk',
+        })
+    if so_what.get('laf_enforcement_gap') and theatre == 'lebanon':
+        signals.append({
+            'priority': 6, 'category': 'laf_gap', 'theatre': 'lebanon',
+            'level': threat_int, 'icon': '🏳️', 'color': '#f97316',
+            'short_text': '🇱🇧 LEBANON: LAF enforcement gap',
+            'long_text':  'LEBANON: LAF enforcement gap persists — Israeli withdrawal conditions not met',
+        })
+    if so_what.get('iran_expelled') and theatre == 'syria':
+        signals.append({
+            'priority': 5, 'category': 'iran_expelled', 'theatre': 'syria',
+            'level': threat_int, 'icon': '✅', 'color': '#10b981',
+            'short_text': '🇸🇾 SYRIA: Iran corridor severed',
+            'long_text':  'SYRIA: Iran expelled — Hezbollah resupply corridor severed. Transition holding.',
+        })
+
+    return signals
+
+
+# ============================================================
+# DATA INGESTION -- read all SEVEN caches
 # ============================================================
 
 def _read_all_trackers():
-    """Read all six ME tracker caches. Returns dict keyed by theatre."""
+    """Read all SEVEN ME tracker caches. Returns dict of NORMALIZED tracker data
+    (post-shim), keyed by theatre. Each value is the canonical internal shape."""
     results = {}
     for theatre, (primary_key, fallback_key) in TRACKER_KEYS.items():
-        data = _redis_get(primary_key)
-        if not data and fallback_key:
-            data = _redis_get(fallback_key)
-        if data:
-            results[theatre] = data
-            print(f'[ME BLUF] {theatre}: loaded (score={data.get("theatre_score", data.get("rhetoric_score", "?"))})')
+        raw = _redis_get(primary_key)
+        if not raw and fallback_key:
+            raw = _redis_get(fallback_key)
+        if raw:
+            normalized = _normalize_tracker_data(theatre, raw)
+            if normalized:
+                results[theatre] = normalized
+                lvls = normalized['levels']
+                axis_str = (f"T{lvls['threat']}" +
+                            (f"/I{lvls['influence']}" if lvls['influence'] is not None else ''))
+                print(f'[ME BLUF] {theatre}: loaded ({axis_str}, score={normalized["score"]})')
         else:
             print(f'[ME BLUF] {theatre}: no cache available')
     return results
 
 
-def _get_theatre_level(data, theatre):
+def _legacy_get_theatre_level(data, theatre):
     """Normalize theatre level across different tracker field names."""
     if theatre == 'israel':
         # Israel uses inbound/outbound; use inbound as primary
@@ -152,7 +430,7 @@ def _get_theatre_level(data, theatre):
                data.get('theatre_level', 0))
 
 
-def _get_theatre_score(data, theatre):
+def _legacy_get_theatre_score(data, theatre):
     return data.get('theatre_score',
            data.get('rhetoric_score', 0))
 
@@ -177,137 +455,41 @@ def _build_posture_label(max_level, theatres_at_l3plus):
 
 
 def _extract_key_signals(trackers):
-    """Extract the top 3 structured signal bullets from all theatres."""
-    signals = []
-
-    # Collect raw signals from each tracker
+    """
+    v2.0 NEW PIPELINE.
+    Each tracker — whether v2.0 self-emitting or v1.x shimmed —
+    arrives with a 'top_signals' array attached. This function:
+      1. Collects all top_signals from all trackers
+      2. Globally sorts by priority (descending)
+      3. Dedupes by (theatre, category) key
+      4. Returns top N (TOP_SIGNALS_COUNT, default 5)
+    """
+    all_signals = []
     for theatre, data in trackers.items():
-        level = _get_theatre_level(data, theatre)
-        score = _get_theatre_score(data, theatre)
-        interp = data.get('interpretation', {})
-        so_what = interp.get('so_what', {}) if interp else {}
-        red_lines = interp.get('red_lines', {}) if interp else {}
+        for sig in data.get('top_signals', []):
+            # Backfill defensive fields if a v2.0 tracker omitted any
+            sig.setdefault('priority', 5)
+            sig.setdefault('category', 'unknown')
+            sig.setdefault('theatre', theatre)
+            sig.setdefault('icon', '•')
+            sig.setdefault('color', '#6b7280')
+            sig.setdefault('short_text', '')
+            sig.setdefault('long_text', sig.get('short_text', ''))
+            all_signals.append(sig)
 
-        # Breached red lines are highest priority
-        breached_count = red_lines.get('breached_count', 0)
-        triggered = red_lines.get('triggered', [])
-        for rl in triggered:
-            if rl.get('status') == 'BREACHED':
-                signals.append({
-                    'priority': 10 + level,
-                    'theatre':  theatre,
-                    'level':    level,
-                    'type':     'red_line_breached',
-                    'text':     f'{THEATRE_FLAGS[theatre]} {theatre.upper()} L{level}: '
-                                f'{rl["label"]} -- {rl.get("trigger", "")[:80]}',
-                    'color':    '#dc2626',
-                    'icon':     rl.get('icon', '🚨'),
-                })
+    # Global sort
+    all_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
 
-        # Silence anomalies
-        for anom in data.get('silence_anomalies', []):
-            if anom.get('deviation') and '100%' in str(anom.get('deviation', '')):
-                actor_name = anom.get('actor_name', anom.get('actor_id', 'Unknown'))
-                signals.append({
-                    'priority': 6 + level,
-                    'theatre':  theatre,
-                    'level':    level,
-                    'type':     'silence_anomaly',
-                    'text':     f'{THEATRE_FLAGS[theatre]} {theatre.upper()}: '
-                                f'{actor_name} SILENT -- {anom.get("signal", "Unusual quiet")}',
-                    'color':    '#f59e0b',
-                    'icon':     '🔇',
-                })
-
-        # Cross-theater coordination
-        crosstheater = data.get('crosstheater_coordination', [])
-        for ct in crosstheater:
-            if ct.get('confidence', 0) >= 60 and ct.get('type') == 'simultaneous_elevation':
-                theaters_in = ct.get('theaters', [])
-                signals.append({
-                    'priority': 8,
-                    'theatre':  'regional',
-                    'level':    level,
-                    'type':     'crosstheater',
-                    'text':     f'CROSS-THEATER: Simultaneous elevation across '
-                                f'{", ".join(t.upper() for t in theaters_in)} '
-                                f'({ct.get("confidence", 0)}% confidence) -- '
-                                f'{ct.get("signal", "")}',
-                    'color':    '#7c3aed',
-                    'icon':     '🔗',
-                })
-
-        # High-level theatre signals
-        if level >= 4:
-            signals.append({
-                'priority': 9 + level,
-                'theatre':  theatre,
-                'level':    level,
-                'type':     'theatre_high',
-                'text':     f'{THEATRE_FLAGS[theatre]} {theatre.upper()} at L{level} '
-                            f'{ESCALATION_LABELS.get(level, "")} '
-                            f'(score {score}/100)',
-                'color':    ESCALATION_COLORS.get(level, '#6b7280'),
-                'icon':     '🔴',
-            })
-
-        # Interpreter-specific flags
-        if so_what:
-            if so_what.get('sadr_silent'):
-                signals.append({
-                    'priority': 7,
-                    'theatre': 'iraq',
-                    'level':   level,
-                    'type':    'sadr',
-                    'text':    'IRAQ: Al-Sadr SILENT -- historical pattern precedes mobilization (2020, 2022)',
-                    'color':   '#7c3aed',
-                    'icon':    '👁️',
-                })
-            if so_what.get('dual_chokepoint'):
-                signals.append({
-                    'priority': 10,
-                    'theatre': 'yemen',
-                    'level':   level,
-                    'type':    'dual_chokepoint',
-                    'text':    'DUAL CHOKEPOINT: Hormuz + Bab el-Mandeb simultaneous signals -- '
-                               'coordinated blockade risk',
-                    'color':   '#7c3aed',
-                    'icon':    '🔱',
-                })
-            if so_what.get('laf_enforcement_gap'):
-                signals.append({
-                    'priority': 6,
-                    'theatre': 'lebanon',
-                    'level':   level,
-                    'type':    'laf_gap',
-                    'text':    'LEBANON: LAF enforcement gap persists -- '
-                               'Israeli withdrawal conditions not met',
-                    'color':   '#f97316',
-                    'icon':    '🏳️',
-                })
-            if so_what.get('iran_expelled') and theatre == 'syria':
-                signals.append({
-                    'priority': 5,
-                    'theatre': 'syria',
-                    'level':   level,
-                    'type':    'iran_expelled',
-                    'text':    'SYRIA: Iran expelled -- Hezbollah resupply corridor severed. '
-                               'Transition holding.',
-                    'color':   '#10b981',
-                    'icon':    '✅',
-                })
-
-    # Sort by priority descending, deduplicate by type+theatre
-    signals.sort(key=lambda x: x['priority'], reverse=True)
+    # Dedupe by (theatre, category)
     seen = set()
     deduped = []
-    for s in signals:
-        key = f'{s["theatre"]}:{s["type"]}'
+    for s in all_signals:
+        key = f'{s.get("theatre", "")}:{s.get("category", "")}'
         if key not in seen:
             seen.add(key)
             deduped.append(s)
 
-    return deduped[:3]
+    return deduped[:TOP_SIGNALS_COUNT]
 
 
 def _write_bluf_prose(trackers, levels, scores, max_level,
@@ -315,10 +497,11 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
     """
     Write a single analyst-prose BLUF paragraph.
     Style: direct declarative sentences, no hedging, intelligence product voice.
+    v2.0: Reads from normalized trackers (post-shim). Adds Oman/influence handling.
     """
     now_str = datetime.now(timezone.utc).strftime('%d %b %Y %H:%MZ')
 
-    # Lead: posture + active conflict theatres
+    # v2.0: levels = {theatre: int} of THREAT level (not influence)
     l5_theatres  = [t for t, l in levels.items() if l >= 5]
     l4_theatres  = [t for t, l in levels.items() if l == 4]
     l3_theatres  = [t for t, l in levels.items() if l == 3]
@@ -359,14 +542,10 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
             f'Regional posture MONITORING.'
         )
 
-    # Cross-theater coordination sentence
-    iran_data = trackers.get('iran', {})
-    iran_interp = iran_data.get('interpretation', {})
-    iran_so = iran_interp.get('so_what', {}) if iran_interp else {}
-
+    # Cross-theater coordination sentence (v2.0: from normalized data)
     coordination_theatres = []
     for t, data in trackers.items():
-        for ct in data.get('crosstheater_coordination', []):
+        for ct in data.get('crosstheater_coordination', []) or []:
             if ct.get('confidence', 0) >= 60:
                 for theatre in ct.get('theaters', []):
                     if theatre not in coordination_theatres:
@@ -379,14 +558,15 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
             f'watch for synchronized proxy operations.'
         )
 
-    # Iran/ceasefire context
-    iraq_data  = trackers.get('iraq', {})
-    iraq_interp = iraq_data.get('interpretation', {})
-    iraq_so    = iraq_interp.get('so_what', {}) if iraq_interp else {}
-    ceasefire  = iraq_so.get('ceasefire_active', False)
+    # Iran/ceasefire context (v2.0: read so_what from normalized shape)
+    iran_data = trackers.get('iran', {}) or {}
+    iran_so   = iran_data.get('so_what', {}) or {}
+    iraq_data = trackers.get('iraq', {}) or {}
+    iraq_so   = iraq_data.get('so_what', {}) or {}
+    ceasefire = iraq_so.get('ceasefire_active', False)
 
-    # Check for OTP signals in Iran
-    otp_count = iran_data.get('otp_signal_count', iran_data.get('otp_count', 0))
+    raw_iran  = iran_data.get('raw', {}) or {}
+    otp_count = raw_iran.get('otp_signal_count', raw_iran.get('otp_count', 0))
     if otp_count and otp_count >= 10:
         parts.append(
             f'Iran Operation True Promise signals at {otp_count} -- '
@@ -399,10 +579,9 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
         )
 
     # Lebanon/Hezbollah sentence if active
-    leb_data   = trackers.get('lebanon', {})
-    leb_level  = levels.get('lebanon', 0)
-    leb_interp = leb_data.get('interpretation', {})
-    leb_so     = leb_interp.get('so_what', {}) if leb_interp else {}
+    leb_data  = trackers.get('lebanon', {}) or {}
+    leb_level = levels.get('lebanon', 0)
+    leb_so    = leb_data.get('so_what', {}) or {}
     if leb_level >= 4:
         iran_directing = leb_so.get('iran_directing', False)
         laf_gap        = leb_so.get('laf_enforcement_gap', False)
@@ -413,8 +592,9 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
         )
 
     # Houthi silence if detected
-    yemen_data   = trackers.get('yemen', {})
-    houthi_actor = yemen_data.get('actors', {}).get('houthis', {})
+    yemen_data    = trackers.get('yemen', {}) or {}
+    raw_yemen     = yemen_data.get('raw', {}) or {}
+    houthi_actor  = (raw_yemen.get('actors', {}) or {}).get('houthis', {}) or {}
     houthi_silent = houthi_actor.get('statement_count', 1) == 0
     if houthi_silent:
         parts.append(
@@ -423,13 +603,38 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
         )
 
     # Syria positive note if transition holding
-    syria_data   = trackers.get('syria', {})
-    syria_interp = syria_data.get('interpretation', {})
-    syria_so     = syria_interp.get('so_what', {}) if syria_interp else {}
+    syria_data = trackers.get('syria', {}) or {}
+    syria_so   = syria_data.get('so_what', {}) or {}
     if syria_so.get('iran_expelled') and levels.get('syria', 0) <= 1:
         parts.append(
             'Syria transition holding; Iran expelled and corridor severed.'
         )
+
+    # v2.0 NEW: Oman / influence sentence — stability anchor pattern
+    oman_data = trackers.get('oman', {}) or {}
+    if oman_data:
+        oman_lvls       = oman_data.get('levels', {}) or {}
+        oman_threat     = oman_lvls.get('threat', 0) or 0
+        oman_influence  = oman_lvls.get('influence', 0) or 0
+        oman_so         = oman_data.get('so_what', {}) or {}
+        oman_scenario   = oman_so.get('scenario', '')
+
+        if oman_influence >= 4:
+            parts.append(
+                f'Oman in active mediation posture (influence L{oman_influence}); '
+                f'Muscat back-channel engaged — de-escalation lever available.'
+            )
+        elif oman_influence >= 3:
+            parts.append(
+                f'Oman influence vector elevated (L{oman_influence}); '
+                f'mediation channels engaged.'
+            )
+        elif oman_threat >= 3:
+            # Threat to Oman itself (Salalah/Duqm/succession) — escalatory, not stabilizing
+            parts.append(
+                f'Oman threat vector at L{oman_threat} ({oman_scenario or "external pressure"}); '
+                f'stability anchor function compromised.'
+            )
 
     # Closing risk sentence
     if max_level >= 4:
@@ -452,8 +657,9 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
 
 def build_regional_bluf(force=False):
     """
-    Build the ME regional BLUF. Reads all six caches, synthesizes,
+    Build the ME regional BLUF. Reads all SEVEN caches, synthesizes,
     caches result in Redis. Returns dict.
+    v2.0: Uses normalized tracker shape, emits dual-axis-aware output, top-5 signals.
     """
     if not force:
         cached = _redis_get(BLUF_CACHE_KEY)
@@ -467,8 +673,8 @@ def build_regional_bluf(force=False):
             except Exception:
                 pass
 
-    print('[ME BLUF] Building regional BLUF from all six tracker caches...')
-    trackers = _read_all_trackers()
+    print('[ME BLUF v2.0] Building regional BLUF from all SEVEN tracker caches...')
+    trackers = _read_all_trackers()  # Already normalized post-shim
 
     if not trackers:
         return {
@@ -478,37 +684,52 @@ def build_regional_bluf(force=False):
             'signals': [],
         }
 
-    # Normalize levels and scores
-    levels = {t: _get_theatre_level(d, t) for t, d in trackers.items()}
-    scores = {t: _get_theatre_score(d, t) for t, d in trackers.items()}
+    # Pull threat levels and scores from normalized shape
+    # (Influence levels live in theatre_summary; not used as primary level)
+    levels = {t: d['levels']['threat'] for t, d in trackers.items()}
+    scores = {t: d['score']            for t, d in trackers.items()}
 
-    max_level         = max(levels.values()) if levels else 0
-    avg_score         = round(sum(scores.values()) / len(scores), 1) if scores else 0
+    max_level          = max(levels.values()) if levels else 0
+    avg_score          = round(sum(scores.values()) / len(scores), 1) if scores else 0
     theatres_at_l3plus = sum(1 for l in levels.values() if l >= 3)
     theatres_live      = len(trackers)
 
     posture_label, posture_color = _build_posture_label(max_level, theatres_at_l3plus)
 
-    # Extract top 3 signals
+    # Extract top 5 signals (was 3)
     top_signals = _extract_key_signals(trackers)
 
-    # Write BLUF prose
+    # Write BLUF prose (now uses normalized shape)
     bluf_prose = _write_bluf_prose(
         trackers, levels, scores,
         max_level, theatres_at_l3plus, top_signals
     )
 
-    # Per-theatre summary (for display)
+    # v2.0: Per-theatre summary (now includes BOTH axis levels for dual-axis trackers)
     theatre_summary = {}
     for t, data in trackers.items():
-        lvl = levels[t]
+        lvls         = data.get('levels', {}) or {}
+        threat_lvl   = lvls.get('threat', 0)
+        infl_lvl     = lvls.get('influence')
+        green_lvl    = lvls.get('green')
+        dom_axis     = lvls.get('dominant_axis', 'threat')
+        dom_level    = lvls.get('dominant_level', threat_lvl)
         theatre_summary[t] = {
-            'level':       lvl,
-            'label':       ESCALATION_LABELS.get(lvl, 'Unknown'),
-            'color':       ESCALATION_COLORS.get(lvl, '#6b7280'),
-            'score':       scores[t],
-            'flag':        THEATRE_FLAGS[t],
-            'timestamp':   data.get('timestamp', data.get('scanned_at', '')),
+            'level':            threat_lvl,                                  # back-compat: legacy single-axis
+            'label':            ESCALATION_LABELS.get(threat_lvl, 'Unknown'),
+            'color':            ESCALATION_COLORS.get(threat_lvl, '#6b7280'),
+            'score':            scores[t],
+            'flag':             data.get('flag', THEATRE_FLAGS.get(t, '')),
+            'timestamp':        data.get('scanned_at', ''),
+            # v2.0 NEW dual-axis fields:
+            'threat_level':     threat_lvl,
+            'influence_level':  infl_lvl,
+            'green_level':      green_lvl,
+            'dominant_axis':    dom_axis,
+            'dominant_level':   dom_level,
+            'is_dual_axis':     infl_lvl is not None,
+            'influence_label':  INFLUENCE_LABELS.get(infl_lvl, '') if infl_lvl is not None else None,
+            'influence_color':  INFLUENCE_COLORS.get(infl_lvl, '#6b7280') if infl_lvl is not None else None,
         }
 
     result = {
@@ -516,6 +737,7 @@ def build_regional_bluf(force=False):
         'from_cache':        False,
         'bluf':              bluf_prose,
         'signals':           top_signals,
+        'top_signals':       top_signals,  # alias for GPI consumption
         'posture_label':     posture_label,
         'posture_color':     posture_color,
         'max_level':         max_level,
@@ -524,7 +746,9 @@ def build_regional_bluf(force=False):
         'theatres_live':     theatres_live,
         'theatre_summary':   theatre_summary,
         'generated_at':      datetime.now(timezone.utc).isoformat(),
-        'version':           '1.0.0',
+        'version':           '2.0.0',
+        'region':            'middle_east',  # v2.0: GPI-readable
+        'top_signals_count': len(top_signals),
     }
 
     _redis_set(BLUF_CACHE_KEY, result)
