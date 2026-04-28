@@ -507,11 +507,59 @@ def _compute_global_level(blufs, narratives):
 def _build_global_top_signals(blufs, narratives):
     """
     Top N signals across all regions + narrative-derived signals.
+
+    Tiered sort (analyst-first hierarchy, v1.1):
+      Tier 1 (+30 boost) — CROSS-REGIONAL COORDINATION (≥2 regions)
+                          Things you won't see in any single regional dashboard.
+                          russia_iran_axis, dprk_russia_axis, nuclear_signaling_global, etc.
+      Tier 2 (+20 boost) — ACTIVE CONFLICT (L5 in any region)
+                          There is a war happening here right now.
+      Tier 3 (+10 boost) — SINGLE-REGION HIGH-PRIORITY NARRATIVES
+                          china_taiwan_takeover, dual_chokepoint, wha_cascade
+      Tier 4 (+0)        — Everything else (raw regional signals, baseline)
+
+    Within each tier, raw priority breaks ties.
     """
+    # Categories that are inherently cross-regional even when emitted from one region's
+    # signals (e.g., a Russia tracker emits "crosstheater_iran_russia" — that's a Tier-1
+    # signal even though only Europe surfaces it).
+    CROSSTHEATER_CATEGORIES = {
+        'crosstheater_iran_russia', 'crosstheater_russia_iran',
+        'crosstheater_dprk_russia', 'crosstheater_china_iran',
+        'crosstheater_iran_proxies', 'crosstheater_iran_israel',
+        'crosstheater_lebanon_israel', 'crosstheater_yemen_israel',
+        'crosstheater_syria_israel', 'crosstheater_iraq_israel',
+        'multi_axis_convergence', 'dual_chokepoint',
+    }
+
+    def _tier_boost(signal):
+        """Return priority boost based on which analyst tier the signal belongs to."""
+        regions = signal.get('regions') or []
+        category = signal.get('category', '')
+        level = int(signal.get('level', 0) or 0)
+        theatre = signal.get('theatre', '')
+
+        # Tier 1: Cross-regional coordination (≥2 regions OR known crosstheater category)
+        if (isinstance(regions, list) and len(regions) >= 2) or category in CROSSTHEATER_CATEGORIES:
+            return 30
+
+        # Tier 2: Active conflict — single region at L5
+        if level >= 5 and theatre != 'global':
+            return 20
+
+        # Tier 3: Major regional narratives (came from narrative detector, single region)
+        # We tag narrative-derived signals with theatre='global' and they have a 'regions' list.
+        # Single-region narratives (1 region) sit here.
+        if theatre == 'global' and isinstance(regions, list) and len(regions) == 1:
+            return 10
+
+        # Tier 4: Everything else
+        return 0
+
     signals = []
 
     # 1. Promote top narratives to signals
-    for n in narratives[:3]:
+    for n in narratives[:5]:   # widened from 3 to 5 since tier sort handles ranking
         if n.get('category') in ('global_baseline', 'global_warning'):
             continue
         signals.append({
@@ -541,15 +589,24 @@ def _build_global_top_signals(blufs, narratives):
                 'color':      sig.get('color', '#6b7280'),
                 'short_text': sig.get('short_text', sig.get('text', ''))[:80],
                 'long_text':  sig.get('long_text', sig.get('short_text', '')),
+                # No 'regions' key — single-region signals naturally Tier 2 or 4
             })
 
-    # Dedupe by category+theatre, sort by priority, return top N
+    # Compute tier-adjusted sort key for each signal
+    for s in signals:
+        s['_tier_boost'] = _tier_boost(s)
+        s['_sort_key']   = s['_tier_boost'] + int(s.get('priority', 0) or 0)
+
+    # Dedupe by category+theatre, sort by tier-adjusted score, return top N
     seen = set()
     deduped = []
-    for s in sorted(signals, key=lambda x: x.get('priority', 0), reverse=True):
+    for s in sorted(signals, key=lambda x: x.get('_sort_key', 0), reverse=True):
         key = f"{s.get('theatre', '')}:{s.get('category', '')}"
         if key not in seen:
             seen.add(key)
+            # Strip internal sort fields before returning
+            s.pop('_tier_boost', None)
+            s.pop('_sort_key', None)
             deduped.append(s)
     return deduped[:TOP_GLOBAL_SIGNALS_COUNT]
 
@@ -561,13 +618,38 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
     """
     Generate the 3-5 sentence analyst-prose BLUF.
     Top narratives drive the lead; regional summaries follow.
+
+    Narratives are re-sorted with tier boosts (v1.1):
+      Cross-regional (≥2 regions) leads, then active-conflict regions,
+      then single-region narratives. This mirrors the top_signals sort
+      so the prose lead matches what the analyst sees in the signal list.
     """
     date_str = datetime.now(timezone.utc).strftime('%b %d, %Y %H:%MZ')
     parts = [f'Global Pressure Index ({date_str}):']
 
-    # Lead: highest-priority narrative
-    leading = next((n for n in narratives if n.get('category')
-                    not in ('global_baseline', 'global_warning')), None)
+    # ── Re-sort narratives with tier boost so cross-regional leads ──
+    def _narrative_tier_boost(n):
+        regions = n.get('regions') or []
+        # Cross-regional narrative (>=2 regions): leads
+        if isinstance(regions, list) and len(regions) >= 2:
+            return 30
+        # Single-region narrative pointing at an L5 region: active-conflict tier
+        for r in regions:
+            bluf = blufs.get(r) or {}
+            if _level_of(bluf) >= 5:
+                return 20
+        # Otherwise: standard regional narrative
+        return 10
+
+    real_narratives = [n for n in narratives
+                       if n.get('category') not in ('global_baseline', 'global_warning')]
+    real_narratives.sort(
+        key=lambda n: _narrative_tier_boost(n) + int(n.get('priority', 0) or 0),
+        reverse=True,
+    )
+
+    # Lead: highest tier-adjusted narrative
+    leading = real_narratives[0] if real_narratives else None
 
     if leading:
         parts.append(leading['headline'] + '.')
@@ -579,9 +661,8 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             parts.append(baseline['headline'] + '.')
             parts.append(baseline['detail'])
 
-    # Secondary narratives (briefly)
-    secondary = [n for n in narratives[1:3] if n.get('category')
-                 not in ('global_baseline', 'global_warning')]
+    # Secondary narratives (briefly) — also use tier-sorted order
+    secondary = real_narratives[1:3]
     if secondary:
         sec_lines = [f"{n['icon']} {n['headline']}" for n in secondary]
         parts.append('Concurrent signals: ' + '; '.join(sec_lines) + '.')
