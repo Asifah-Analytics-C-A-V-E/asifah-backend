@@ -365,14 +365,17 @@ ACTORS = {
         'flag': '🇷🇺',
         'icon': '🚀',
         'color': '#dc2626',
-        'role': 'External Military Supporter — Russia (Launch / Arms / Coordination)',
+        'role': 'External Military Supporter — Russia (Launch / Arms / Coordination / Mediation)',
         'description': (
             'Russia as active supporter of Iran. Sub-categorized across '
-            'four dimensions: launch partnership (Russian rockets carrying '
+            'five dimensions: launch partnership (Russian rockets carrying '
             'Iranian satellites), arms/hardware, intelligence sharing, '
-            'and strategic coordination. Russia has launched several '
-            'Iranian satellites in recent years and provides targeting '
-            'data for IRGC strikes on US installations.'
+            'strategic coordination, and diplomatic / mediation cover '
+            '(top-level meetings, UN Security Council vetoes, mediation '
+            'channel substitution when other tracks stall). Russia has '
+            'launched several Iranian satellites in recent years, provides '
+            'targeting data for IRGC strikes on US installations, and '
+            'increasingly provides diplomatic cover at the UN.'
         ),
         'keywords': [
             # Russia → Iran — launch partnership / space
@@ -384,19 +387,65 @@ ACTORS = {
             'russia intelligence iran', 'russia helps iran',
             'russia iran targeting us ships', 'russia satellite irgc',
             'russia targets us iran', 'russian targeting data iran',
+            'russia satellite imagery iran', 'satellite imagery warship',
+            'russia warship locations iran',
             # Russia → Iran — arms / hardware
             'russia arms iran', 'russia weapons iran',
             'russia supplies iran', 'russia iran military supplies',
             'russia air defense iran', 'russian s-400 iran',
             'russian jets iran', 'sukhoi iran',
+            'advanced drones russia iran', 'shahed russia iran',
+            'russia drone delivery iran',
             # Russia → Iran — strategic coordination
             'moscow tehran military', 'russia iran military coordination',
             'russia backs iran war', 'russia iran cooperation war',
             'russia food aid iran', 'russia nonlethal iran',
             'russia iran defense pact', 'comprehensive partnership iran russia',
+            # ── v2.4 — TOP-LEVEL DIPLOMATIC COORDINATION (Apr 2026) ──
+            # Single-word + short-phrase triggers that match real article text.
+            # NYT writes "Abbas Araghchi ... met with President Vladimir V Putin"
+            # so "araghchi putin" as adjacent text rarely appears -- need both
+            # standalone names + short phrases that DO appear adjacent.
+            'araghchi',           # Foreign Minister name (rare in non-coordination context)
+            'mojtaba khamenei',   # New supreme leader - names appear adjacent
+            'mojtaba',            # Standalone (only one Mojtaba in this domain)
+            'iran foreign minister',
+            'iranian foreign minister',
+            'iran fm',
+            'foreign minister moscow',
+            'foreign minister russia',
+            'foreign minister putin',
+            # ── v2.4 — UN / DIPLOMATIC COVER ──
+            'russia veto', 'russia vetoes', 'russia vetoed',
+            'hormuz resolution', 'hormuz veto',
+            'vetoing a resolution', 'diplomatic cover for iran',
+            'russia un cover', 'russia security council iran',
+            # ── v2.4 — URANIUM / NUCLEAR HANDOVER ──
+            'take iranian uranium', 'take that uranium',
+            'iranian uranium', 'uranium russia',
+            'kremlin uranium', 'iranian stockpile',
+            'enriched uranium russia', 'readiness to take',
+            # ── v2.4 — CASPIAN TRADE WORKAROUND ──
+            'caspian sea', 'caspian trade', 'caspian shipping',
+            'caspian transit', 'via the caspian',
+            # ── v2.4 — MEDIATION SUBSTITUTION ──
+            'moscow mediation', 'putin mediates',
+            'russia mediation', 'russia broker',
+            'phased approach hormuz', 'reopening the strait of hormuz',
+            'phased hormuz', 'mediation channel',
+            'witkoff', 'kushner pakistan',
+            'called off the trip', 'cancelled the trip',
+            'trump abruptly called', 'trump cancels iran',
+            'pakistan and oman', 'pakistan talks',
+            # ── v2.4 — INTELLIGENCE / WEAPONS SUPPLY (specific) ──
+            'satellite imagery showing', 'warships and military',
+            'advanced drones to iran', 'deliver advanced drones',
+            'shahed flow', 'uranium and shahed',
             # Arabic / Farsi
             'روسيا تدعم إيران', 'روسیه ایران حمایت',
             'پرتاب ماهواره ایرانی روسیه',
+            'عراقچی', 'مجتبی خامنه‌ای',  # Araghchi / Mojtaba Khamenei
+            'وتو روسيا',                     # Russia veto
         ],
         'baseline_statements_per_week': 3,
     },
@@ -1300,6 +1349,13 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # ── v2.4 — Targeted queries for Iran-Russia DIPLOMATIC coordination ──
+    # Catches NYT/Reuters analytical framing on top-level meetings,
+    # mediation substitution, UN cover, uranium handover. Iranian state
+    # media reports the meeting fact; Western OSINT reports the substance.
+    ("https://news.google.com/rss/search?q=Araghchi+Putin+OR+%22Iran+foreign+minister%22+Russia+2026&hl=en&gl=US&ceid=US:en", 1.05),
+    ("https://news.google.com/rss/search?q=Russia+veto+Iran+OR+%22Hormuz+resolution%22+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Russia+uranium+Iran+OR+%22Caspian%22+Iran+trade+2026&hl=en&gl=US&ceid=US:en", 0.95),
     # Barak Ravid — first-mover Israel/Iran OSINT journalist (v2.3)
     # 2 queries — Ravid covers Iran less centrally than Israel/Lebanon
     # but his US-Iran ceasefire + nuclear deal scoops are high-value
@@ -1451,7 +1507,17 @@ ACTOR_KEYWORDS = {
                          'russian satellite iran', 'russia launches iran',
                          'russia supplies iran', 'russia iran military',
                          'russian targeting iran', 'russian rocket iran',
-                         'روسیه ایران', 'روسيا إيران'],
+                         # v2.4 — top-level diplomatic / mediation
+                         'araghchi', 'mojtaba khamenei', 'mojtaba',
+                         'iran foreign minister', 'iranian foreign minister',
+                         'foreign minister moscow', 'foreign minister putin',
+                         'russia veto', 'hormuz resolution',
+                         'iranian uranium', 'kremlin uranium',
+                         'caspian sea', 'via the caspian',
+                         'moscow mediation', 'witkoff',
+                         'called off the trip', 'pakistan and oman',
+                         'روسیه ایران', 'روسيا إيران',
+                         'عراقچی', 'مجتبی خامنه‌ای'],
     'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
                      'netanyahu iran', 'mossad iran', 'israel red line iran',
                      'israel nuclear iran', 'israel sabotage iran',
