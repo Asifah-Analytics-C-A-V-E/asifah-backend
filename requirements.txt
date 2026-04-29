@@ -8,3 +8,4 @@ beautifulsoup4==4.12.3
 lxml==5.1.0
 redis==5.0.1
 telethon==1.36.0
+yfinance==0.2.40
