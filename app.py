@@ -29,6 +29,16 @@ from pathlib import Path
 import threading
 from military_tracker import register_military_endpoints, get_military_posture
 from rhetoric_tracker import register_rhetoric_endpoints
+
+# Cross-cutting Commodity Tracker (yfinance sparklines + multilingual GDELT + Brave fallback)
+try:
+    from commodity_tracker import register_commodity_endpoints
+    COMMODITY_TRACKER_AVAILABLE = True
+    print("[ME Backend] ✅ Commodity tracker module loaded")
+except ImportError as e:
+    COMMODITY_TRACKER_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ Commodity tracker not available: {e}")
+
 # Syria humanitarian data module (DTM API + ReliefWeb + OCHA)
 try:
     from syria_humanitarian import register_syria_humanitarian_endpoints
@@ -892,6 +902,12 @@ try:
 except ImportError:
     print("[App] ⚠️ Rhetoric tracker not found")
 register_military_endpoints(app)
+
+# Cross-cutting Commodity Tracker — register right after Military (canonical sidebar order)
+if COMMODITY_TRACKER_AVAILABLE:
+    register_commodity_endpoints(app)
+    print("[ME Backend] ✅ Commodity endpoints registered: /api/commodity-pressure, /api/commodity-prices")
+
 # Flight Disruptions — background scan thread (12h cycle)
 try:
     register_flight_scan_thread()
