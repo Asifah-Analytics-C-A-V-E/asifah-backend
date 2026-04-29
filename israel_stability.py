@@ -212,12 +212,30 @@ def fetch_nis_usd():
             if price and price > 0:
                 change_pct = ((price - prev) / prev * 100) if prev else 0
                 trend = 'weakening' if change_pct > 0.1 else ('strengthening' if change_pct < -0.1 else 'stable')
+
+                # v2.1.0 — Extract 5-day sparkline series from same response
+                # (was previously discarded — Yahoo returns it for free with ?range=5d)
+                sparkline = []
+                try:
+                    timestamps = result.get('timestamp') or []
+                    closes = (result.get('indicators', {}) or {}).get('quote', [{}])[0].get('close') or []
+                    for ts, close in zip(timestamps, closes):
+                        if close is not None:
+                            sparkline.append({
+                                'time':  datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+                                'value': round(float(close), 4),
+                            })
+                    print(f"[Israel Econ] ✅ NIS sparkline: {len(sparkline)} datapoints")
+                except Exception as e:
+                    print(f"[Israel Econ] NIS sparkline parse error: {str(e)[:80]}")
+
                 print(f"[Israel Econ] ✅ NIS/USD: {price:.4f} ({change_pct:+.2f}%)")
                 return {
                     'usd_to_ils': round(price, 4),
                     'change_pct_24h': round(change_pct, 3),
                     'trend': trend,
                     'source': 'Yahoo Finance',
+                    'sparkline': sparkline,        # v2.1.0
                     'timestamp': datetime.now(timezone.utc).isoformat()
                 }
     except Exception as e:
@@ -235,6 +253,7 @@ def fetch_nis_usd():
                     'change_pct_24h': 0,
                     'trend': 'stable',
                     'source': 'ExchangeRate-API',
+                    'sparkline': [],   # v2.1.0 — fallback has no historical series
                     'timestamp': datetime.now(timezone.utc).isoformat()
                 }
     except Exception as e:
@@ -247,6 +266,7 @@ def fetch_nis_usd():
         'trend': 'stable',
         'source': 'Estimated',
         'estimated': True,
+        'sparkline': [],   # v2.1.0
         'timestamp': datetime.now(timezone.utc).isoformat()
     }
 
@@ -403,20 +423,95 @@ def fetch_tase_index():
 # ========================================
 
 WAR_KEYWORDS = [
-    # Active hostilities
+    # ── Active hostilities (war) ──
     'IDF strike', 'Israeli airstrike', 'Gaza offensive', 'IDF operation',
     'Hamas attack', 'missile attack Israel', 'drone Israel', 'ballistic missile Israel',
     'Iron Dome intercept', 'Ben Gurion Airport closed', 'Hezbollah fire',
     'Houthi missile', 'Iran attack Israel',
-    # Hostage situation
+    # ── Hostage situation ──
     'hostage deal', 'hostage release', 'Gaza ceasefire', 'ceasefire collapse',
     'hostage negotiations', 'Sinwar', 'Hamas ceasefire',
-    # Coalition crisis signals
+    # ── Coalition crisis signals ──
     'Ben Gvir resign', 'Ben Gvir threatens', 'Smotrich coalition',
     'Netanyahu coalition', 'no confidence Netanyahu', 'coalition collapse',
     'Netanyahu resign', 'Netanyahu indictment',
-    # Bennett signals
+    # ── Opposition signals (legacy index — kept for backward compat) ──
     'Bennett prime minister', 'Bennett challenge Netanyahu', 'Bennett coalition'
+]
+
+# v2.1.0 (April 2026) — Named keyword sets to replace error-prone slice indexing.
+# The old [:14] / [14:22] / [22:30] / [30:] slices were OFF-BY-ONE and only
+# detected ONE Bennett keyword instead of three. These sets are now the source
+# of truth for the classifier; WAR_KEYWORDS list above is kept for backward
+# compatibility with anything else that imports it.
+
+WAR_KW_WAR = [
+    'IDF strike', 'Israeli airstrike', 'Gaza offensive', 'IDF operation',
+    'Hamas attack', 'missile attack Israel', 'drone Israel', 'ballistic missile Israel',
+    'Iron Dome intercept', 'Ben Gurion Airport closed', 'Hezbollah fire',
+    'Houthi missile', 'Iran attack Israel',
+]
+
+WAR_KW_HOSTAGE = [
+    'hostage deal', 'hostage release', 'Gaza ceasefire', 'ceasefire collapse',
+    'hostage negotiations', 'Sinwar', 'Hamas ceasefire',
+]
+
+WAR_KW_COALITION = [
+    'Ben Gvir resign', 'Ben Gvir threatens', 'Smotrich coalition',
+    'Netanyahu coalition', 'no confidence Netanyahu', 'coalition collapse',
+    'Netanyahu resign', 'Netanyahu indictment',
+    # New in v2.1.0
+    'coalition crisis Israel', 'haredi draft', 'ultra-Orthodox draft',
+    'Knesset dissolved', 'Knesset vote no confidence', 'Likud rebellion',
+    'budget vote Israel', 'Otzma Yehudit', 'Religious Zionism Israel',
+]
+
+# ── OPPOSITION KEYWORDS — the big expansion ──
+# Captures Bennett, Lapid, Eisenkot, Gantz, Liberman + the new "Together" party
+# + bloc dynamics + early-elections signals. This is what fills the Opposition
+# Watch card (formerly Bennett Watch).
+OPPOSITION_KW = [
+    # Bennett — full name + role variants
+    'Bennett', 'Naftali Bennett', 'former PM Bennett', 'Bennett 2026',
+    'Bennett polling', 'Bennett party', 'Bennett opposition', 'Bennett Knesset',
+    'Bennett warned', 'Bennett criticized', 'Bennett to launch', 'Bennett new party',
+    # Lapid
+    'Lapid', 'Yair Lapid', 'Yesh Atid', 'Lapid opposition',
+    'Lapid Bennett', 'opposition leader Lapid',
+    # Together party (April 26, 2026 merger)
+    'Together party', 'Together led by Bennett', 'Bennett Lapid alliance',
+    'Bennett Lapid merger', 'Bennett Lapid unite', 'Bennett Lapid party',
+    'opposition merger Israel', 'opposition unite Israel',
+    # Eisenkot / Yashar
+    'Eisenkot', 'Gadi Eisenkot', 'Yashar party', 'Yashar Israel',
+    'Eisenkot Bennett', 'Eisenkot join', 'Yashar Eisenkot',
+    # Gantz / National Unity
+    'Gantz', 'Benny Gantz', 'National Unity Israel', 'Gantz party',
+    'Gantz opposition', 'Gantz Knesset',
+    # Liberman / Yisrael Beiteinu
+    'Liberman', 'Avigdor Liberman', 'Yisrael Beiteinu',
+    # Bloc dynamics
+    'anti-Netanyahu bloc', 'opposition bloc Israel', 'Zionist opposition',
+    'change bloc', 'opposition coalition Israel',
+    # Early elections / electoral pressure
+    'early elections Israel', 'October 2026 elections', 'Israel election 2026',
+    'Knesset election', 'Israel election by October', 'snap election Israel',
+    'dissolve Knesset', 'Israel goes to elections',
+    # Polling signals
+    'Israel poll', 'Channel 12 poll Israel', 'Channel 13 poll Israel',
+    'Maariv poll', 'Walla poll Israel', 'Israeli poll seats',
+]
+
+# ── ELECTIONS PROXIMITY signals — high-priority subset ──
+# These specifically trigger the new Elections Vector. When these surface,
+# elections are imminent / called / being debated.
+ELECTIONS_PROXIMITY_KW = [
+    'early elections Israel', 'October 2026 elections', 'Israel election 2026',
+    'snap election Israel', 'dissolve Knesset', 'Israel goes to elections',
+    'Knesset dissolved', 'no confidence Netanyahu', 'no confidence vote Israel',
+    'budget vote fails', 'coalition collapse', 'caretaker government Israel',
+    'Israel election by October',
 ]
 
 SEVERITY_HIGH = [
@@ -525,24 +620,28 @@ def scan_israel_conflict(days=7):
     war_hits       = 0
     coalition_hits = 0
     hostage_hits   = 0
-    bennett_hits   = 0
+    bennett_hits   = 0   # v2.1.0 — now counts ALL opposition mentions, not just Bennett
+    elections_hits = 0   # v2.1.0 — early-elections proximity signals
     high_severity  = 0
 
     war_articles       = []
     coalition_articles = []
     hostage_articles   = []
-    bennett_articles   = []
+    bennett_articles   = []   # v2.1.0 — opposition articles (Bennett, Lapid, Eisenkot, Gantz, Together, etc.)
+    elections_articles = []   # v2.1.0 — articles specifically mentioning early elections / dissolution / etc.
 
     for a in all_articles:
         t = a['title'].lower()
         d = a.get('description', '').lower()
         combined = t + ' ' + d
 
-        is_war       = any(kw.lower() in combined for kw in WAR_KEYWORDS[:14])
-        is_coalition = any(kw.lower() in combined for kw in WAR_KEYWORDS[14:22])
-        is_hostage   = any(kw.lower() in combined for kw in WAR_KEYWORDS[22:30])
-        is_bennett   = any(kw.lower() in combined for kw in WAR_KEYWORDS[30:])
-        is_severe    = any(kw in combined for kw in SEVERITY_HIGH)
+        # v2.1.0 — Use named keyword sets (was: error-prone slice indexing)
+        is_war        = any(kw.lower() in combined for kw in WAR_KW_WAR)
+        is_hostage    = any(kw.lower() in combined for kw in WAR_KW_HOSTAGE)
+        is_coalition  = any(kw.lower() in combined for kw in WAR_KW_COALITION)
+        is_opposition = any(kw.lower() in combined for kw in OPPOSITION_KW)
+        is_elections  = any(kw.lower() in combined for kw in ELECTIONS_PROXIMITY_KW)
+        is_severe     = any(kw in combined for kw in SEVERITY_HIGH)
 
         if is_war:
             war_hits += 1
@@ -553,9 +652,12 @@ def scan_israel_conflict(days=7):
         if is_hostage:
             hostage_hits += 1
             hostage_articles.append(a)
-        if is_bennett:
+        if is_opposition:
             bennett_hits += 1
             bennett_articles.append(a)
+        if is_elections:
+            elections_hits += 1
+            elections_articles.append(a)
         if is_severe:
             high_severity += 1
 
@@ -568,7 +670,14 @@ def scan_israel_conflict(days=7):
     )
 
     # Coalition fragility score 0-100
-    coalition_score = min(100, coalition_hits * 8 + bennett_hits * 5)
+    # v2.1.0 — Now factors in ALL opposition mentions (was: only Bennett's narrow set)
+    coalition_score = min(100, coalition_hits * 8 + bennett_hits * 3 + elections_hits * 5)
+
+    # v2.1.0 — Elections proximity score 0-100 (separate from coalition fragility)
+    # Powers the new Elections Vector — reflects how imminent / publicly debated
+    # an early dissolution actually is. Different from coalition fragility because
+    # a coalition can be fragile WITHOUT election triggers firing yet.
+    elections_proximity_score = min(100, elections_hits * 10)
 
     # Hostage/ceasefire status heuristic
     ceasefire_active = hostage_hits > 0 and any(
@@ -576,23 +685,28 @@ def scan_israel_conflict(days=7):
         for a in hostage_articles
     )
 
-    print(f"[Israel Conflict] War:{war_hits} | Coalition:{coalition_hits} | Hostage:{hostage_hits} | Bennett:{bennett_hits}")
-    print(f"[Israel Conflict] Conflict score: {conflict_score}/100 | Coalition fragility: {coalition_score}/100")
+    print(f"[Israel Conflict] War:{war_hits} | Coalition:{coalition_hits} | Hostage:{hostage_hits} | Opposition:{bennett_hits} | Elections:{elections_hits}")
+    print(f"[Israel Conflict] Conflict: {conflict_score}/100 | Coalition fragility: {coalition_score}/100 | Elections proximity: {elections_proximity_score}/100")
 
     return {
         'conflict_score': conflict_score,
         'coalition_score': coalition_score,
+        'elections_proximity_score': elections_proximity_score,
         'war_article_count': war_hits,
         'coalition_article_count': coalition_hits,
         'hostage_article_count': hostage_hits,
-        'bennett_mentions': bennett_hits,
+        'bennett_mentions': bennett_hits,         # legacy field name kept for backward compat
+        'opposition_mentions': bennett_hits,      # v2.1.0 — preferred new name
+        'elections_mentions': elections_hits,     # v2.1.0
         'high_severity_count': high_severity,
         'ceasefire_active': ceasefire_active,
         'articles': {
             'war': war_articles[:10],
             'coalition': coalition_articles[:8],
             'hostage': hostage_articles[:8],
-            'bennett': bennett_articles[:5]
+            'bennett': bennett_articles[:8],      # legacy bucket (now contains all opposition)
+            'opposition': bennett_articles[:8],   # v2.1.0 — preferred new bucket name
+            'elections': elections_articles[:6],  # v2.1.0
         },
         'all_articles': all_articles[:40]
     }
@@ -708,9 +822,17 @@ COALITION_DATA = {
         {'name': 'Otzma Yehudit', 'seats': 6, 'leader': 'Ben Gvir'},
         {'name': 'Noam', 'seats': 1, 'leader': 'Maoz'}
     ],
-    'opposition_leader': 'Yair Lapid (Yesh Atid)',
+    'opposition_leader': 'Naftali Bennett (Together / מחר — formerly Bennett 2026 + Yesh Atid)',
+    'opposition_party': 'Together (מחר) — led by Bennett, merged Apr 26 2026',
+    'opposition_other_blocs': [
+        'Yashar! (Eisenkot) — courted to join Together',
+        'National Unity (Gantz)',
+        'Yisrael Beiteinu (Liberman)',
+        'Democrats / Labor',
+        'Hadash-Taal / Ra\'am (Arab parties)',
+    ],
     'formed': '2022-12-29',
-    'next_election': 'By November 2026 (can be called earlier)',
+    'next_election': 'By October 2026 (can be called earlier)',
     'war_cabinet_active': False,  # Gantz resigned June 2024
     'icc_warrants': ['Netanyahu', 'Gallant (former)'],
     'criminal_trial': 'Netanyahu — bribery, fraud, breach of trust (ongoing)',
@@ -856,11 +978,17 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
     print(f"[Israel Stability] War impact: -{war_impact} (conflict_score={conflict_score})")
 
     # ── Coalition fragility (-15 max) ──
+    # v2.1.0 — Now incorporates elections_proximity_score: when articles are
+    # explicitly discussing early elections / dissolution / no-confidence votes,
+    # the coalition isn't just fragile, it's in active electoral pressure mode.
     coalition_score = conflict_data.get('coalition_score', 0)
+    elections_proximity = conflict_data.get('elections_proximity_score', 0)
     election_signals = knesset_data.get('election_signal_count', 0)
-    coalition_impact = int((coalition_score / 100) * 12) + min(election_signals * 2, 3)
+    coalition_impact = int((coalition_score / 100) * 10) \
+                     + int((elections_proximity / 100) * 4) \
+                     + min(election_signals * 2, 3)
     coalition_impact = min(coalition_impact, 15)
-    print(f"[Israel Stability] Coalition impact: -{coalition_impact} (coalition_score={coalition_score}, election_signals={election_signals})")
+    print(f"[Israel Stability] Coalition impact: -{coalition_impact} (coalition_score={coalition_score}, elections_proximity={elections_proximity}, election_signals={election_signals})")
 
     # ── Regional threat (-15 max) ──
     # Static baseline — Iran/Hezbollah/Houthi ongoing
@@ -976,8 +1104,12 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
             'rhetoric_inbound': rhetoric_inbound,
             'rhetoric_outbound': rhetoric_outbound,
             'rhetoric_alerts': rhetoric_alerts,
+            # v2.1.0 — elections proximity surfaced for frontend's new Elections Vector card
+            'elections_proximity_score': conflict_data.get('elections_proximity_score', 0),
+            'opposition_mentions': conflict_data.get('opposition_mentions', 0),
+            'elections_mentions': conflict_data.get('elections_mentions', 0),
         },
-        'version': '1.0.0-active-war'
+        'version': '2.1.0-opposition-elections-vector'
     }
 
 # ========================================
@@ -1072,13 +1204,20 @@ def scan_israel_stability():
             'conflict': {
                 'score': conflict.get('conflict_score', 0),
                 'coalition_score': conflict.get('coalition_score', 0),
+                # v2.1.0 — new fields
+                'elections_proximity_score': conflict.get('elections_proximity_score', 0),
+                'opposition_mentions': conflict.get('opposition_mentions', 0),
+                'elections_mentions': conflict.get('elections_mentions', 0),
+                'opposition_articles': conflict.get('articles', {}).get('opposition', [])[:6],
+                'elections_articles': conflict.get('articles', {}).get('elections', [])[:6],
+                # Other content
                 'war_articles': conflict.get('articles', {}).get('war', [])[:8],
                 'coalition_articles': conflict.get('articles', {}).get('coalition', [])[:5],
                 'hostage_articles': conflict.get('articles', {}).get('hostage', [])[:5],
-                'bennett_articles': conflict.get('articles', {}).get('bennett', [])[:4],
+                'bennett_articles': conflict.get('articles', {}).get('bennett', [])[:4],     # legacy, kept for backward compat
                 'ceasefire_active': conflict.get('ceasefire_active', False),
                 'high_severity_count': conflict.get('high_severity_count', 0),
-                'bennett_mentions': conflict.get('bennett_mentions', 0)
+                'bennett_mentions': conflict.get('bennett_mentions', 0)                       # legacy, kept for backward compat
             },
             'strikes': {
                 'source': strikes.get('source'),
