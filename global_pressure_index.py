@@ -536,7 +536,23 @@ def _build_global_top_signals(blufs, narratives):
         """Return priority boost based on which analyst tier the signal belongs to."""
         regions = signal.get('regions') or []
         category = signal.get('category', '')
-        level = int(signal.get('level', 0) or 0)
+        # v2.1: Defensive — level can be either a numeric tier (0-5 from rhetoric trackers)
+        # OR a string status label (e.g. 'surge', 'elevated', 'normal' from commodity tracker).
+        # Map known string labels to numeric equivalents; default unknown strings to 0.
+        raw_level = signal.get('level', 0)
+        if isinstance(raw_level, str):
+            level = {
+                'surge': 5, 'critical': 5,
+                'elevated': 3, 'heightened': 3, 'warning': 3,
+                'active': 2, 'rising': 2,
+                'normal': 1, 'stable': 1,
+                'baseline': 0, 'low': 0, 'monitoring': 0,
+            }.get(raw_level.lower().strip(), 0)
+        else:
+            try:
+                level = int(raw_level or 0)
+            except (ValueError, TypeError):
+                level = 0
         theatre = signal.get('theatre', '')
 
         # Tier 1: Cross-regional coordination (≥2 regions OR known crosstheater category)
