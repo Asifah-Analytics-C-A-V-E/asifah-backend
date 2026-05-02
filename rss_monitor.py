@@ -98,8 +98,51 @@ DIPLOMATIC_RSS_FEEDS = {
     'karam_lebanon':        'https://news.google.com/rss/search?q=%22Simon+Karam%22+Lebanon&hl=en&gl=US&ceid=US:en',
 }
 
+# ========================================
+# v3.4.0 — OPEC + Gulf Energy Signal Feeds (May 2026)
+# ========================================
+# Built around UAE's OPEC departure (May 1, 2026) and the Hormuz energy crisis.
+# Captures: OPEC institutional signals, Saudi-UAE bilateral dynamics,
+# Aramco / ADNOC infrastructure rhetoric, Hormuz / Fujairah chokepoint
+# coverage, OPEC quota negotiations, and Gulf energy diplomacy.
+#
+# Pattern: Google News RSS for editorial coverage (proven-working),
+# plus OPEC's institutional feed for first-party press releases.
+# Serves: UAE, Saudi Arabia stability pages + GPI economic axis signals.
+OPEC_GULF_RSS_FEEDS = {
+    # ── OPEC institutional + cartel dynamics ──
+    # Note: OPEC's direct RSS at opec.org/opec_web/en/feeds.htm has shifted URLs over time.
+    # Using Google News site-search as a stable fallback that captures opec.org press releases.
+    'opec_press':            'https://news.google.com/rss/search?q=site:opec.org+press+release+OR+statement&hl=en&gl=US&ceid=US:en',
+    'opec_news':             'https://news.google.com/rss/search?q=%22OPEC%22+OR+%22OPEC%2B%22+OR+%22OPEC+plus%22&hl=en&gl=US&ceid=US:en',
+    'opec_quotas':           'https://news.google.com/rss/search?q=OPEC+quota+OR+%22OPEC%2B+quota%22+OR+%22production+cut%22&hl=en&gl=US&ceid=US:en',
+
+    # ── UAE OPEC departure + post-departure dynamics ──
+    'uae_opec_exit':         'https://news.google.com/rss/search?q=%22UAE%22+OPEC+OR+%22United+Arab+Emirates%22+OPEC&hl=en&gl=US&ceid=US:en',
+    'adnoc_news':            'https://news.google.com/rss/search?q=%22ADNOC%22+OR+%22Abu+Dhabi+National+Oil%22&hl=en&gl=US&ceid=US:en',
+
+    # ── Saudi Arabia / Aramco infrastructure + KSA energy signals ──
+    'saudi_opec':            'https://news.google.com/rss/search?q=%22Saudi+Arabia%22+OPEC+OR+%22Saudi%22+oil+production&hl=en&gl=US&ceid=US:en',
+    'aramco_news':           'https://news.google.com/rss/search?q=%22Saudi+Aramco%22+OR+%22Aramco%22&hl=en&gl=US&ceid=US:en',
+    'saudi_uae_bilateral':   'https://news.google.com/rss/search?q=%22Saudi%22+%22UAE%22+OR+%22Saudi-UAE%22+OR+%22MBS%22+%22MBZ%22&hl=en&gl=US&ceid=US:en',
+
+    # ── Hormuz + Fujairah chokepoint coverage ──
+    'hormuz_strait':         'https://news.google.com/rss/search?q=%22Strait+of+Hormuz%22+OR+%22Hormuz+blockade%22&hl=en&gl=US&ceid=US:en',
+    'fujairah_pipeline':     'https://news.google.com/rss/search?q=%22Fujairah%22+OR+%22Habshan-Fujairah%22+pipeline&hl=en&gl=US&ceid=US:en',
+
+    # ── Energy markets + Gulf oil pricing ──
+    'gulf_oil_pricing':      'https://news.google.com/rss/search?q=%22Brent%22+OR+%22WTI%22+%22Gulf%22+OR+%22Middle+East%22+oil+price&hl=en&gl=US&ceid=US:en',
+    'oilprice_gulf':         'https://news.google.com/rss/search?q=site:oilprice.com+OPEC+OR+UAE+OR+Saudi&hl=en&gl=US&ceid=US:en',
+
+    # ── Al-Monitor Gulf editorial (regional analyst voice) ──
+    'almonitor_gulf':        'https://news.google.com/rss/search?q=site:al-monitor.com+OPEC+OR+UAE+OR+Saudi+OR+Gulf&hl=en&gl=US&ceid=US:en',
+
+    # ── Trump OPEC rhetoric (US-Gulf-OPEC nexus) ──
+    'trump_opec':            'https://news.google.com/rss/search?q=%22Trump%22+OPEC+OR+%22Trump%22+%22oil+prices%22&hl=en&gl=US&ceid=US:en',
+}
+
 # Combine all feeds
-ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS, **DIPLOMATIC_RSS_FEEDS}
+ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS, **DIPLOMATIC_RSS_FEEDS, **OPEC_GULF_RSS_FEEDS}
 
 
 # ========================================
