@@ -230,6 +230,257 @@ def _level_of(bluf):
     return _safe_level(bluf.get('max_level', bluf.get('peak_level', 0)), default=0)
 
 
+# ============================================================
+# PRESSURE AXES (v2.2) — multi-dimensional pressure model
+# ============================================================
+# A signal can carry pressure on one of 4 orthogonal axes:
+#   • kinetic      — strikes, mobilization, casualties, ultimatums (rhetoric trackers)
+#   • economic     — commodity surges, currency stress, sanctions, supply chain
+#   • diplomatic   — ceasefire arithmetic, mediation tempo, alliance reshuffling
+#   • humanitarian — displacement flows, civilian harm, famine, refugee surges
+#
+# v2.2 design choice: HEADLINE level = kinetic max (preserves operator semantics:
+# "L5 = active conflict"). Other axes surface in a sorted stack BENEATH the headline,
+# so a quiet kinetic / hot economic regime reads as "L0 Monitoring · L5 📈 Economic".
+#
+# Backwards compat: signals without `pressure_type` default to 'kinetic'. Existing
+# rhetoric trackers need no change. Commodity / diplomatic / humanitarian signals
+# get tagged at the GPI ingestion layer (see _tag_pressure_type_at_ingest below)
+# until their source modules can be migrated to emit pressure_type natively.
+
+PRESSURE_KINETIC      = 'kinetic'
+PRESSURE_ECONOMIC     = 'economic'
+PRESSURE_DIPLOMATIC   = 'diplomatic'
+PRESSURE_HUMANITARIAN = 'humanitarian'
+
+PRESSURE_AXES = (
+    PRESSURE_KINETIC,
+    PRESSURE_ECONOMIC,
+    PRESSURE_DIPLOMATIC,
+    PRESSURE_HUMANITARIAN,
+)
+
+PRESSURE_AXIS_META = {
+    PRESSURE_KINETIC: {
+        'label': 'Kinetic',
+        'icon':  '⚔️',
+        'color': '#dc2626',  # red — conflict
+        'description': 'Strikes, mobilization, ultimatums, casualties.',
+    },
+    PRESSURE_ECONOMIC: {
+        'label': 'Economic',
+        'icon':  '📈',
+        'color': '#f59e0b',  # amber — financial/commodity
+        'description': 'Commodity surges, currency stress, sanctions, supply chain.',
+    },
+    PRESSURE_DIPLOMATIC: {
+        'label': 'Diplomatic',
+        'icon':  '🕊️',
+        'color': '#0ea5e9',  # cyan — mediation tracks
+        'description': 'Ceasefire arithmetic, mediation tempo, alliance shifts.',
+    },
+    PRESSURE_HUMANITARIAN: {
+        'label': 'Humanitarian',
+        'icon':  '🆘',
+        'color': '#a855f7',  # purple — civilian/displacement
+        'description': 'Displacement flows, civilian harm, famine, refugee surges.',
+    },
+}
+
+
+# ── Inline tagging at GPI ingestion ──
+# Phase 1 strategy: rather than modifying every source module, we infer a signal's
+# pressure_type at the GPI ingestion layer using its category and source labels.
+# This lets us roll out the multi-axis architecture WITHOUT a fleet-wide migration.
+# As source modules are migrated to emit pressure_type natively, the inferred value
+# will simply be overridden by the explicit one (we always trust an explicit value).
+
+# Categories that map to specific axes when no explicit pressure_type is set.
+# Keys are substrings checked against signal['category'] (case-insensitive).
+_CATEGORY_AXIS_HINTS = {
+    # Economic — commodity tracker emits these
+    'commodity':         PRESSURE_ECONOMIC,
+    'wheat':             PRESSURE_ECONOMIC,
+    'oil':               PRESSURE_ECONOMIC,
+    'gas':               PRESSURE_ECONOMIC,
+    'energy':            PRESSURE_ECONOMIC,
+    'currency':          PRESSURE_ECONOMIC,
+    'sanction':          PRESSURE_ECONOMIC,
+    'inflation':         PRESSURE_ECONOMIC,
+    'supply_chain':      PRESSURE_ECONOMIC,
+    'economic':          PRESSURE_ECONOMIC,
+    'financial':         PRESSURE_ECONOMIC,
+    'eurobond':          PRESSURE_ECONOMIC,
+
+    # Diplomatic — diplomatic-track architecture emits these
+    'diplomatic':        PRESSURE_DIPLOMATIC,
+    'ceasefire':         PRESSURE_DIPLOMATIC,
+    'mediation':         PRESSURE_DIPLOMATIC,
+    'negotiation':       PRESSURE_DIPLOMATIC,
+    'envoy':             PRESSURE_DIPLOMATIC,
+    'witkoff':           PRESSURE_DIPLOMATIC,
+    'salalah':           PRESSURE_DIPLOMATIC,
+    'de_escalation':     PRESSURE_DIPLOMATIC,
+    'green_line':        PRESSURE_DIPLOMATIC,
+
+    # Humanitarian — migration model + humanitarian signal categories
+    'humanitarian':      PRESSURE_HUMANITARIAN,
+    'displacement':      PRESSURE_HUMANITARIAN,
+    'refugee':           PRESSURE_HUMANITARIAN,
+    'migration':         PRESSURE_HUMANITARIAN,
+    'famine':            PRESSURE_HUMANITARIAN,
+    'civilian_harm':     PRESSURE_HUMANITARIAN,
+    'casualties':        PRESSURE_HUMANITARIAN,
+    'idp':               PRESSURE_HUMANITARIAN,
+}
+
+
+def _infer_pressure_type(signal):
+    """
+    Determine pressure_type for a signal.
+    Priority:
+      1. Explicit signal['pressure_type'] (from migrated sources) — trusted.
+      2. signal['category'] keyword match against _CATEGORY_AXIS_HINTS.
+      3. Source-label fallbacks (commodity_tracker, commodity_proxy, etc.)
+      4. Default: 'kinetic' (rhetoric trackers — current canonical).
+    """
+    # 1. Explicit pressure_type wins
+    explicit = signal.get('pressure_type')
+    if explicit and explicit in PRESSURE_AXES:
+        return explicit
+
+    # 2. Category keyword match
+    category = (signal.get('category') or '').lower()
+    if category:
+        for hint, axis in _CATEGORY_AXIS_HINTS.items():
+            if hint in category:
+                return axis
+
+    # 3. Source-label fallbacks (for signals that come without a category)
+    source = (signal.get('source') or '').lower()
+    if 'commodity' in source or 'wheat' in source or 'oil' in source:
+        return PRESSURE_ECONOMIC
+    if 'diplomatic' in source or 'mediation' in source or 'envoy' in source:
+        return PRESSURE_DIPLOMATIC
+    if 'humanitarian' in source or 'displacement' in source or 'migration' in source:
+        return PRESSURE_HUMANITARIAN
+
+    # 4. Default: kinetic (rhetoric trackers)
+    return PRESSURE_KINETIC
+
+
+def _tag_pressure_axes(signals):
+    """Tag every signal with pressure_type if not already set. Returns list with
+    each signal augmented with `pressure_type` field. Idempotent."""
+    tagged = []
+    for s in signals or []:
+        s2 = dict(s)  # shallow copy — don't mutate caller
+        if 'pressure_type' not in s2 or s2['pressure_type'] not in PRESSURE_AXES:
+            s2['pressure_type'] = _infer_pressure_type(s)
+        tagged.append(s2)
+    return tagged
+
+
+def _build_pressure_axes_payload(blufs, narratives):
+    """
+    Build the per-axis aggregation payload that the frontend will consume.
+
+    For each axis, returns:
+      - level     : max signal level on that axis across all regions (0-5)
+      - label     : display label e.g. 'Kinetic'
+      - icon      : emoji
+      - color     : hex
+      - top_signals : top 5 signals on this axis, sorted by level desc
+      - region_levels : dict of {region: max_level_on_this_axis}
+                        (for understanding WHERE the pressure is)
+
+    Headline level is computed elsewhere (kinetic-weighted, see _compute_global_level).
+    This payload is purely for the multi-axis stack display.
+    """
+    # Collect every signal from every BLUF, plus narrative-derived signals
+    all_signals = []
+    for region, bluf in (blufs or {}).items():
+        if not bluf:
+            continue
+        for sig in _signals_of(bluf):
+            sig_with_region = dict(sig)
+            sig_with_region.setdefault('theatre', region)
+            sig_with_region.setdefault('region', region)
+            all_signals.append(sig_with_region)
+
+    # Tag everything with pressure_type (inferred or explicit)
+    all_signals = _tag_pressure_axes(all_signals)
+
+    # Build per-axis aggregation
+    axes = {}
+    for axis in PRESSURE_AXES:
+        axis_signals = [s for s in all_signals if s.get('pressure_type') == axis]
+
+        # Per-region max level on this axis (lets frontend show "where")
+        region_levels = {}
+        for s in axis_signals:
+            region = s.get('region') or s.get('theatre') or 'unknown'
+            lvl = _safe_level(s.get('level', 0))
+            if lvl > region_levels.get(region, -1):
+                region_levels[region] = lvl
+
+        # Overall axis level = max across regions
+        axis_level = max(region_levels.values()) if region_levels else 0
+
+        # Top 5 signals on this axis, sorted by level desc then priority desc
+        top_axis_signals = sorted(
+            axis_signals,
+            key=lambda s: (
+                _safe_level(s.get('level', 0)),
+                _safe_level(s.get('priority', 0)),
+            ),
+            reverse=True,
+        )[:5]
+
+        # Strip internal sort fields before returning
+        top_axis_signals_clean = []
+        for s in top_axis_signals:
+            top_axis_signals_clean.append({
+                'category':      s.get('category', ''),
+                'theatre':       s.get('theatre') or s.get('region', ''),
+                'region':        s.get('region') or s.get('theatre', ''),
+                'level':         _safe_level(s.get('level', 0)),
+                'pressure_type': s.get('pressure_type'),
+                'icon':          s.get('icon', PRESSURE_AXIS_META[axis]['icon']),
+                'color':         s.get('color', PRESSURE_AXIS_META[axis]['color']),
+                'short_text':    (s.get('short_text') or s.get('text') or '')[:120],
+                'long_text':     s.get('long_text') or s.get('short_text') or s.get('text') or '',
+            })
+
+        meta = PRESSURE_AXIS_META[axis]
+        axes[axis] = {
+            'axis':          axis,
+            'label':         meta['label'],
+            'icon':          meta['icon'],
+            'color':         meta['color'],
+            'description':   meta['description'],
+            'level':         axis_level,
+            'level_label':   GLOBAL_LEVEL_LABELS.get(axis_level, ''),
+            'region_levels': region_levels,
+            'signal_count':  len(axis_signals),
+            'top_signals':   top_axis_signals_clean,
+        }
+
+    # Build a sorted stack ordering — highest-level axis first.
+    # Tiebreaker: PRESSURE_AXES order (kinetic > economic > diplomatic > humanitarian)
+    axis_order = sorted(
+        PRESSURE_AXES,
+        key=lambda a: (-axes[a]['level'], PRESSURE_AXES.index(a)),
+    )
+
+    return {
+        'axes':            axes,           # full data, keyed by axis name
+        'axes_ordered':    axis_order,     # sorted axis names, highest first
+        'kinetic_level':   axes[PRESSURE_KINETIC]['level'],   # convenience accessor
+        'headline_axis':   PRESSURE_KINETIC,                  # current headline driver
+    }
+
+
 def _has_signal_category(bluf, *categories):
     """True if any signal in this BLUF matches one of the given categories."""
     sigs = _signals_of(bluf)
@@ -812,6 +1063,9 @@ def build_gpi(force=False):
         global_level  = _compute_global_level(blufs, narratives)
         bluf_prose    = _synthesize_global_bluf(blufs, narratives, global_level)
         top_signals   = _build_global_top_signals(blufs, narratives)
+        # v2.2 — multi-axis pressure aggregation (kinetic / economic / diplomatic / humanitarian)
+        # Headline level remains kinetic-driven; pressure_axes is additive payload for frontend.
+        pressure_axes = _build_pressure_axes_payload(blufs, narratives)
 
         # Regional cards in alphabetical order
         regional_cards = []
@@ -822,13 +1076,14 @@ def build_gpi(force=False):
             'success':         True,
             'from_cache':      False,
             'generated_at':    datetime.now(timezone.utc).isoformat(),
-            'version':         '2.0.0',
+            'version':         '2.2.0',
             'global_level':    global_level,
             'global_label':    GLOBAL_LEVEL_LABELS.get(global_level, ''),
             'global_color':    GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
             'bluf':            bluf_prose,
             'narratives':      narratives,
             'top_signals':     top_signals,
+            'pressure_axes':   pressure_axes,    # v2.2 — multi-axis stack payload
             'regional_cards':  regional_cards,
             'regions_live':    len(blufs),
             'regions_total':   len(REGIONAL_BLUF_ENDPOINTS),
@@ -844,8 +1099,14 @@ def build_gpi(force=False):
         }
         _redis_set(LEVEL_CACHE_KEY, level_payload, ttl=LEVEL_CACHE_TTL)
 
-        print(f'[GPI v2.0] Built: L{global_level} {GLOBAL_LEVEL_LABELS.get(global_level)} '
-              f'| narratives={len(narratives)} | signals={len(top_signals)} | regions={len(blufs)}/4')
+        # Build a compact multi-axis log line: "K5 E4 D3 H2"
+        axis_str = ' '.join(
+            f"{ax[0].upper()}{pressure_axes['axes'][ax]['level']}"
+            for ax in PRESSURE_AXES
+        )
+        print(f'[GPI v2.2] Built: L{global_level} {GLOBAL_LEVEL_LABELS.get(global_level)} '
+              f'| axes=[{axis_str}] | narratives={len(narratives)} '
+              f'| signals={len(top_signals)} | regions={len(blufs)}/4')
         return result
 
     except Exception as e:
