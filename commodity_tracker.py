@@ -125,9 +125,11 @@ COMMODITY_TYPES = {
         'chokepoints': [
             'strait of hormuz', 'bab el-mandeb', 'suez canal',
             'fujairah', 'ras tanura', 'novorossiysk', 'primorsk',
-            'kozmino', 'jubail', 'hormuz blockade'
+            'kozmino', 'jubail', 'hormuz blockade',
+            'baku-tbilisi-ceyhan', 'btc pipeline', 'sangachal terminal',
+            'caspian sea', 'ceyhan terminal'
         ],
-        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae'],
+        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan'],
         'top_consumers':  ['china', 'usa', 'india', 'eu'],
     },
     'natural_gas': {
@@ -144,7 +146,7 @@ COMMODITY_TYPES = {
             'turkstream', 'nord stream', 'yamal', 'tanap',
             'qatar lng', 'sakhalin', 'arctic lng',
         ],
-        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china'],
+        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china', 'azerbaijan'],
         'top_consumers':  ['eu', 'china', 'japan', 'korea'],
     },
     'wheat': {
