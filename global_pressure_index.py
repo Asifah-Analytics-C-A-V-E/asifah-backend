@@ -180,11 +180,54 @@ def _signals_of(bluf):
     return bluf.get('top_signals') or bluf.get('signals') or []
 
 
+# ============================================================
+# DEFENSIVE LEVEL COERCION (v2.1)
+# ============================================================
+# Signal `level` can arrive as either:
+#   - numeric tier 0-5 (rhetoric trackers — canonical)
+#   - string status label (commodity tracker: 'surge', 'elevated', etc.)
+#   - None / missing
+# This helper normalizes everything to a numeric tier 0-5.
+
+_LEVEL_LABEL_MAP = {
+    'surge': 5, 'critical': 5, 'crisis': 5,
+    'elevated': 3, 'heightened': 3, 'warning': 3, 'alert': 3,
+    'active': 2, 'rising': 2, 'tensions': 2,
+    'normal': 1, 'stable': 1, 'baseline': 1,
+    'low': 0, 'monitoring': 0, 'none': 0,
+}
+
+
+def _safe_level(value, default=0):
+    """Coerce signal level to integer tier (0-5), tolerating string labels."""
+    if value is None:
+        return default
+    if isinstance(value, bool):  # bool is subclass of int — guard before int check
+        return int(value)
+    if isinstance(value, (int, float)):
+        try:
+            return int(value)
+        except (ValueError, TypeError, OverflowError):
+            return default
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if not v:
+            return default
+        # First try direct int parse (e.g. "3" or "5")
+        try:
+            return int(v)
+        except ValueError:
+            pass
+        # Then try label map
+        return _LEVEL_LABEL_MAP.get(v, default)
+    return default
+
+
 def _level_of(bluf):
     """Get max/peak level from a BLUF."""
     if not bluf:
         return 0
-    return int(bluf.get('max_level', bluf.get('peak_level', 0)) or 0)
+    return _safe_level(bluf.get('max_level', bluf.get('peak_level', 0)), default=0)
 
 
 def _has_signal_category(bluf, *categories):
@@ -206,7 +249,7 @@ def _max_signal_level(bluf, *categories):
     sigs = _signals_in_category(bluf, *categories)
     if not sigs:
         return 0
-    return max(int(s.get('level', 0) or 0) for s in sigs)
+    return max(_safe_level(s.get('level', 0)) for s in sigs)
 
 
 # ============================================================
@@ -334,7 +377,7 @@ def _narrative_houthi_fragility(blufs):
     has_diplomatic = _has_signal_category(me, 'diplomatic_active', 'mediation_active', 'off_ramp_active')
     yemen_signals = [s for s in _signals_of(me)
                      if 'yemen' in (s.get('theatre', '') + s.get('short_text', '')).lower()]
-    yemen_low = not yemen_signals or all(int(s.get('level', 0) or 0) < 3 for s in yemen_signals)
+    yemen_low = not yemen_signals or all(_safe_level(s.get('level', 0)) < 3 for s in yemen_signals)
     if has_diplomatic and yemen_low:
         return {
             'priority': 9,
@@ -536,23 +579,7 @@ def _build_global_top_signals(blufs, narratives):
         """Return priority boost based on which analyst tier the signal belongs to."""
         regions = signal.get('regions') or []
         category = signal.get('category', '')
-        # v2.1: Defensive — level can be either a numeric tier (0-5 from rhetoric trackers)
-        # OR a string status label (e.g. 'surge', 'elevated', 'normal' from commodity tracker).
-        # Map known string labels to numeric equivalents; default unknown strings to 0.
-        raw_level = signal.get('level', 0)
-        if isinstance(raw_level, str):
-            level = {
-                'surge': 5, 'critical': 5,
-                'elevated': 3, 'heightened': 3, 'warning': 3,
-                'active': 2, 'rising': 2,
-                'normal': 1, 'stable': 1,
-                'baseline': 0, 'low': 0, 'monitoring': 0,
-            }.get(raw_level.lower().strip(), 0)
-        else:
-            try:
-                level = int(raw_level or 0)
-            except (ValueError, TypeError):
-                level = 0
+        level = _safe_level(signal.get('level', 0))
         theatre = signal.get('theatre', '')
 
         # Tier 1: Cross-regional coordination (≥2 regions OR known crosstheater category)
