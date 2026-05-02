@@ -1585,6 +1585,26 @@ def _run_full_scan(days=7):
 
     scan_time = round(time.time() - scan_start, 1)
 
+    # ── PAGE-LEVEL top_signals: round-robin across commodities ──
+    # Bug fix May 2 2026: previous logic was sort-by-weight which let one
+    # commodity (typically oil) monopolize the top 30. This caused
+    # commodities.html bottom feed to show "no signals" for any non-oil
+    # commodity even though those commodities had 18-53 signals each.
+    # Now: take top N from each commodity, then sort by weight within tier.
+    PER_COMMODITY_QUOTA = 5   # each commodity gets up to 5 slots
+    diversified_signals = []
+    for commodity_id, summary in commodity_summaries.items():
+        commodity_top = sorted(
+            summary.get('top_signals', []),
+            key=lambda s: s.get('weight', 0),
+            reverse=True
+        )[:PER_COMMODITY_QUOTA]
+        diversified_signals.extend(commodity_top)
+    # Final sort: by tier (1 first), then by weight within tier
+    diversified_signals.sort(
+        key=lambda s: (s.get('commodity_tier', 3), -s.get('weight', 0))
+    )
+
     result = {
         'success':                True,
         'scan_time_seconds':      scan_time,
@@ -1593,7 +1613,7 @@ def _run_full_scan(days=7):
         'total_signals_detected': len(all_signals),
         'commodity_summaries':    commodity_summaries,
         'country_summaries':      country_summaries,
-        'top_signals':            sorted(all_signals, key=lambda s: s['weight'], reverse=True)[:30],
+        'top_signals':            diversified_signals,
         'source_breakdown': {
             'rss':     len(rss_articles),
             'gdelt':   len(gdelt_articles),
@@ -1603,7 +1623,7 @@ def _run_full_scan(days=7):
         },
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.0.0',
+        'version':                '1.1.0',
     }
 
     save_commodity_cache(result)
