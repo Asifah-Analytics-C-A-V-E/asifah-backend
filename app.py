@@ -30,6 +30,13 @@ import threading
 from military_tracker import register_military_endpoints, get_military_posture
 from rhetoric_tracker import register_rhetoric_endpoints
 
+try:
+    from think_tank_feeds import register_think_tank_endpoints
+    THINK_TANK_AVAILABLE = True
+except ImportError as e:
+    THINK_TANK_AVAILABLE = False
+    print(f'[ME Backend] Think Tank module not available: {e}')
+
 # Cross-cutting Commodity Tracker (yfinance sparklines + multilingual GDELT + Brave fallback)
 try:
     from commodity_tracker import register_commodity_endpoints
@@ -902,6 +909,9 @@ try:
 except ImportError:
     print("[App] ⚠️ Rhetoric tracker not found")
 register_military_endpoints(app)
+
+if THINK_TANK_AVAILABLE:
+    register_think_tank_endpoints(app)
 
 # Cross-cutting Commodity Tracker — register right after Military (canonical sidebar order)
 if COMMODITY_TRACKER_AVAILABLE:
