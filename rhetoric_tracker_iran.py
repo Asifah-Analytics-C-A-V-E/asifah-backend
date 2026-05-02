@@ -689,6 +689,10 @@ DIPLOMATIC_TRIGGERS = {
         'iran ceasefire negotiations', 'iran us second round',
         'us iran ceasefire talks', 'iran us framework',
         'pakistan iran us mediator', 'oman iran us mediator',
+        # Hormuz-for-blockade-lift exchange (WSJ Apr 28 2026 — specific bargain)
+        'hormuz for blockade lift', 'stop hormuz attacks in exchange',
+        'iran hormuz ceasefire deal', 'iran offers stop hormuz',
+        'iran lift blockade exchange', 'iran shipping resumes deal',
         'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
     ],
     3: [
@@ -702,6 +706,10 @@ DIPLOMATIC_TRIGGERS = {
         'trump iran ceasefire extension', 'jones act waiver',
         'us extends iran ceasefire', 'iran ceasefire extension',
         'iran nuclear envoy', 'special envoy iran',
+        # Hormuz/blockade conditional offers via mediators (WSJ Apr 28 2026)
+        'iran hormuz offer mediator', 'iran ceasefire offer mediator',
+        'iran offers hormuz halt', 'tehran offers hormuz',
+        'iran us blockade lift talks', 'iran sanctions relief offer',
         'پاکستان وساطت', 'وساطة باكستانية',
     ],
     2: [
@@ -711,6 +719,11 @@ DIPLOMATIC_TRIGGERS = {
         'iran diplomatic outreach', 'iran ceasefire offer',
         'pakistan iran diplomacy', 'oman iran diplomacy',
         'tehran offers talks', 'iran open to talks',
+        # General Hormuz/blockade off-ramp signaling (WSJ Apr 28 2026)
+        'stop hormuz attacks', 'lift blockade iran', 'iran lift blockade',
+        'iran shipping resumes', 'blockade lift in exchange',
+        'iran end war exchange', 'iran sanctions relief',
+        'iran reconstruction relief', 'iran economic off-ramp',
         'مذاکرات هسته‌ای ایران', 'دبلوماسية إيرانية',
     ],
     1: [
