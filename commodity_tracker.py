@@ -479,6 +479,105 @@ COMMODITY_KEYWORDS = {
 
 
 # ========================================
+# SIGNAL PATTERN CLASSIFIER (Phase 2)
+# ========================================
+# Classifies WHAT KIND of commodity story an article tells.
+# An article can match multiple signal types (e.g., "Iran war disrupts
+# sulfuric acid → copper costs" = geopolitical_coupling + cross_commodity).
+# This is the analytical layer on top of raw commodity keyword matching.
+#
+# Each pattern is a list of substring keywords. Match is case-insensitive
+# and operates on the same combined title+description+content text used
+# by analyze_article_commodity().
+
+SIGNAL_PATTERNS = {
+    # Supply-side disruptions: production cuts, sanctions, export bans, conflict
+    'supply_disruption': [
+        'production cut', 'production halt', 'mine closure', 'mine shutdown',
+        'strike', 'mine strike', 'workers strike', 'union strike',
+        'export ban', 'export halt', 'export restriction', 'export quota',
+        'sanctions on', 'sanctioned producer', 'secondary sanctions',
+        'force majeure', 'pipeline rupture', 'pipeline attack',
+        'port closure', 'port disruption', 'shipping disruption',
+        'mine collapse', 'mine accident', 'mining accident',
+        'production suspended', 'output cut', 'output decline',
+        'supply shortage', 'supply crunch', 'supply tightening',
+    ],
+
+    # Demand-side surges: structural / secular demand stories
+    'demand_surge': [
+        'ai demand', 'data center demand', 'data centre demand',
+        'electrification', 'ev demand', 'electric vehicle demand',
+        'battery demand', 'grid buildout', 'grid expansion',
+        'green transition', 'energy transition', 'decarbonization',
+        'renewable buildout', 'solar buildout', 'wind buildout',
+        'reshoring demand', 'friend-shoring',
+        'critical mineral demand', 'strategic stockpile',
+        'china demand', 'india demand', 'emerging market demand',
+    ],
+
+    # Cost structure: margins, byproducts, cash costs, capex, inflation
+    'cost_structure': [
+        'cash cost', 'all-in cost', 'all-in sustaining cost', 'aisc',
+        'negative cost', 'cost negative', 'production cost',
+        'byproduct revenue', 'byproduct credit', 'co-product',
+        'cost inflation', 'cost pressure', 'margin compression',
+        'capex inflation', 'project cost overrun',
+        'profit margin', 'margin expansion', 'operating margin',
+        'unit cost', 'cost per pound', 'cost per ounce', 'cost per ton',
+    ],
+
+    # Cross-commodity / feedstock dependencies (sulfuric acid, ammonia, diesel, etc.)
+    'cross_commodity': [
+        'sulfuric acid', 'sulphuric acid', 'leaching agent',
+        'ammonia supply', 'ammonia shortage', 'ammonia price',
+        'hydrogen feedstock', 'green hydrogen',
+        'diesel mining', 'mining diesel', 'diesel shortage',
+        'helium shortage', 'neon shortage', 'argon shortage',
+        'hydrofluoric acid', 'hf acid',
+        'natural gas feedstock', 'gas feedstock',
+        'coke shortage', 'coking coal shortage',
+        'feedstock disruption', 'feedstock cost',
+    ],
+
+    # Market regime: supercycle, structural shifts, fund flows, positioning
+    'market_regime': [
+        'supercycle', 'super cycle', 'commodities supercycle',
+        'multi-year bull', 'long-term bull', 'structural bull',
+        'fund inflows', 'institutional inflows', 'etf inflows',
+        'positioning', 'speculator positioning', 'cot report',
+        'all-time high', 'record high', 'multi-year high',
+        'paradigm shift', 'structural shortage', 'structural deficit',
+        'mining supercycle', 'metals supercycle',
+    ],
+
+    # Geopolitical coupling: war, sanctions, trade wars, alliance shifts hitting commodities
+    'geopolitical_coupling': [
+        'iran war', 'ukraine war', 'russia war',
+        'middle east conflict', 'red sea attack', 'houthi attack',
+        'sanctions evasion', 'sanctions bypass', 'shadow fleet',
+        'china export controls', 'china export restrictions', 'critical mineral controls',
+        'rare earth weaponization', 'mineral weaponization',
+        'trade war', 'tariff impact', 'tariff retaliation',
+        'export licensing', 'license requirement',
+        'nato sanctions', 'g7 sanctions', 'eu sanctions',
+        'opec decision', 'opec+', 'opec quota',
+    ],
+
+    # Market consolidation: M&A, producer concentration, market structure changes
+    'consolidation': [
+        'acquisition', 'takeover', 'merger', 'm&a',
+        'consolidation', 'industry consolidation',
+        'small producers squeezed', 'small miners',
+        'integrated producer', 'vertically integrated',
+        'market share', 'oligopoly',
+        'asset sale', 'divestiture', 'spinoff',
+        'private equity', 'strategic buyer',
+    ],
+}
+
+
+# ========================================
 # COUNTRY EXPOSURE MATRIX (Phase 1)
 # ========================================
 # Which commodities does each country touch, and in what role?
@@ -562,6 +661,7 @@ COMMODITY_RSS_FEEDS = {
     # Strategic minerals
     'USGS Mineral News': 'https://news.google.com/rss/search?q=USGS+mineral+OR+rare+earth+OR+lithium+OR+uranium&hl=en&gl=US&ceid=US:en',
     'Mining.com': 'https://news.google.com/rss/search?q=site:mining.com+OR+mining+production&hl=en&gl=US&ceid=US:en',
+    'Mining.com Direct': 'https://www.mining.com/feed/',
     'Mining Journal': 'https://news.google.com/rss/search?q=mining+journal+OR+mineral+production&hl=en&gl=US&ceid=US:en',
     # Potash-specific (Peter's signal)
     'Potash News': 'https://news.google.com/rss/search?q=potash+OR+belaruskali+OR+uralkali+OR+nutrien&hl=en&gl=US&ceid=US:en',
@@ -1276,6 +1376,25 @@ def fetch_reddit_commodity(days=7):
 # ARTICLE ANALYZER
 # ========================================
 
+def detect_signal_types(text):
+    """
+    Classify what KIND of commodity story this is.
+    Returns a list of signal type IDs (e.g., ['cost_structure', 'cross_commodity']).
+    Uses substring matching against SIGNAL_PATTERNS. Case-insensitive.
+
+    An article can match multiple signal types — that intersection is often
+    where the strategic story lives (e.g., 'geopolitical_coupling' +
+    'cross_commodity' = ME war disrupting global mining feedstocks).
+    """
+    matched = []
+    for signal_type, patterns in SIGNAL_PATTERNS.items():
+        for kw in patterns:
+            if kw.lower() in text:
+                matched.append(signal_type)
+                break  # one match per signal type per article
+    return matched
+
+
 def analyze_article_commodity(article):
     """
     Analyze a single article for commodity signals.
@@ -1286,6 +1405,7 @@ def analyze_article_commodity(article):
             'countries':      [list of country_ids matched (via exposure mapping)],
             'score':          numeric weight,
             'signals':        [list of structured signal dicts],
+            'signal_types':   [list of signal type IDs detected in this article],
         }
     """
     title       = (article.get('title') or '').lower()
@@ -1293,11 +1413,15 @@ def analyze_article_commodity(article):
     content     = (article.get('content') or '').lower()
     text        = f"{title} {description} {content}"
 
+    # Phase 2 classifier — what KIND of story is this?
+    signal_types = detect_signal_types(text)
+
     result = {
-        'commodities': set(),
-        'countries':   set(),
-        'score':       0,
-        'signals':     [],
+        'commodities':  set(),
+        'countries':    set(),
+        'score':        0,
+        'signals':      [],
+        'signal_types': signal_types,
     }
 
     for commodity_id, keywords in COMMODITY_KEYWORDS.items():
@@ -1328,6 +1452,7 @@ def analyze_article_commodity(article):
                     'category':          commodity_data.get('category', 'unknown'),
                     'matched_keyword':   kw,
                     'weight':            round(signal_score, 2),
+                    'signal_types':      signal_types,
                     'article_title':     article.get('title', '')[:200],
                     'article_url':       article.get('url', ''),
                     'source':            article.get('source', {}).get('name', 'Unknown'),
@@ -1522,22 +1647,31 @@ def _run_full_scan(days=7):
     for cid, cdata in COMMODITY_TYPES.items():
         sigs = sorted(per_commodity_signals[cid], key=lambda s: s['weight'], reverse=True)
         score = round(per_commodity_score[cid], 2)
+
+        # Aggregate signal-type counts across this commodity's articles
+        # (e.g., {'cost_structure': 3, 'supply_disruption': 1, 'cross_commodity': 1})
+        signal_type_counts = {}
+        for sig in sigs:
+            for st in sig.get('signal_types', []):
+                signal_type_counts[st] = signal_type_counts.get(st, 0) + 1
+
         commodity_summaries[cid] = {
-            'name':           cdata.get('name', cid),
-            'icon':           cdata.get('icon', '📊'),
-            'tier':           cdata.get('tier', 3),
-            'category':       cdata.get('category', 'unknown'),
-            'has_spot_price': cdata.get('has_spot_price', False),
-            'unit':           cdata.get('unit', ''),
-            'description':    cdata.get('description', ''),
-            'top_producers':  cdata.get('top_producers', []),
-            'top_consumers':  cdata.get('top_consumers', []),
-            'chokepoints':    cdata.get('chokepoints', []),
-            'sparkline':      sparklines.get(cid),
-            'total_score':    score,
-            'signal_count':   len(sigs),
-            'top_signals':    sigs[:8],
-            'alert_level':    determine_alert_level(score),
+            'name':                cdata.get('name', cid),
+            'icon':                cdata.get('icon', '📊'),
+            'tier':                cdata.get('tier', 3),
+            'category':            cdata.get('category', 'unknown'),
+            'has_spot_price':      cdata.get('has_spot_price', False),
+            'unit':                cdata.get('unit', ''),
+            'description':         cdata.get('description', ''),
+            'top_producers':       cdata.get('top_producers', []),
+            'top_consumers':       cdata.get('top_consumers', []),
+            'chokepoints':         cdata.get('chokepoints', []),
+            'sparkline':           sparklines.get(cid),
+            'total_score':         score,
+            'signal_count':        len(sigs),
+            'signal_type_counts':  signal_type_counts,
+            'top_signals':         sigs[:8],
+            'alert_level':         determine_alert_level(score),
         }
 
     # Phase 5: build country summaries
@@ -1569,6 +1703,13 @@ def _run_full_scan(days=7):
 
     scan_time = round(time.time() - scan_start, 1)
 
+    # Global signal-type counts across all commodities
+    # (e.g., this scan saw 18 cost_structure stories, 12 supply_disruption, etc.)
+    global_signal_type_counts = {}
+    for sig in all_signals:
+        for st in sig.get('signal_types', []):
+            global_signal_type_counts[st] = global_signal_type_counts.get(st, 0) + 1
+
     result = {
         'success':                True,
         'scan_time_seconds':      scan_time,
@@ -1577,6 +1718,7 @@ def _run_full_scan(days=7):
         'total_signals_detected': len(all_signals),
         'commodity_summaries':    commodity_summaries,
         'country_summaries':      country_summaries,
+        'signal_type_counts':     global_signal_type_counts,
         'top_signals':            sorted(all_signals, key=lambda s: s['weight'], reverse=True)[:30],
         'source_breakdown': {
             'rss':     len(rss_articles),
@@ -1587,12 +1729,13 @@ def _run_full_scan(days=7):
         },
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.0.0',
+        'version':                '1.1.0',
     }
 
     save_commodity_cache(result)
     print(f"[Commodity Tracker] ✅ Scan complete in {scan_time}s")
     print(f"[Commodity Tracker]    Articles: {len(all_articles)}, Signals: {len(all_signals)}")
+    print(f"[Commodity Tracker]    Signal types: {global_signal_type_counts}")
     print(f"[Commodity Tracker]    Sparklines: {sum(1 for s in sparklines.values() if s)}/{len(COMMODITY_TYPES)}")
     return result
 
