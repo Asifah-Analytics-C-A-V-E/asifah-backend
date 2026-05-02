@@ -300,6 +300,57 @@ COMMODITY_TYPES = {
         'top_producers':  ['chile', 'peru', 'china', 'drc', 'usa', 'australia'],
         'top_consumers':  ['china', 'eu', 'usa', 'japan', 'korea'],
     },
+    'silver': {
+        'name': 'Silver',
+        'icon': '🪙',
+        'tier': 2,
+        'category': 'precious_industrial',
+        'has_spot_price': True,
+        'yahoo_ticker': 'SI=F',
+        'yahoo_proxies': ['SLV', 'PSLV'],   # Silver ETFs
+        'unit': 'USD/oz',
+        'description': 'COMEX silver futures. Dual industrial (solar, electronics) + monetary metal. Mexico/Peru/China dominate production.',
+        'chokepoints': [
+            'fresnillo mexico', 'penoles', 'kghm poland',
+            'pan american silver', 'first majestic',
+        ],
+        'top_producers':  ['mexico', 'china', 'peru', 'poland', 'chile', 'russia'],
+        'top_consumers':  ['india', 'usa', 'china', 'eu', 'japan'],
+    },
+    'nickel': {
+        'name': 'Nickel',
+        'icon': '🔋',
+        'tier': 2,
+        'category': 'industrial_battery',
+        'has_spot_price': True,
+        'yahoo_ticker': 'NICKEL.MI',  # iShares Nickel Trust ETF; LME nickel not on Yahoo
+        'yahoo_proxies': ['VALE', 'BHP'],   # Vale + BHP as proxies
+        'unit': 'USD/MT',
+        'description': 'LME nickel futures. EV battery cathodes + stainless steel. Indonesia controls ~50% of supply; Russia/Philippines/New Caledonia next.',
+        'chokepoints': [
+            'sulawesi indonesia', 'morowali', 'norilsk',
+            'philex philippines', 'goro new caledonia',
+        ],
+        'top_producers':  ['indonesia', 'philippines', 'russia', 'new_caledonia', 'australia', 'canada'],
+        'top_consumers':  ['china', 'eu', 'usa', 'japan', 'korea'],
+    },
+    'cobalt': {
+        'name': 'Cobalt',
+        'icon': '⚙️',
+        'tier': 1,
+        'category': 'critical_battery',
+        'has_spot_price': True,
+        'yahoo_ticker': 'COBALT.MI',  # ETF proxy; LME cobalt sparse on Yahoo
+        'yahoo_proxies': ['GLEN.L'],   # Glencore — largest non-China cobalt producer
+        'unit': 'USD/lb',
+        'description': 'LME cobalt. Critical EV battery input. DRC controls ~70% of global supply — strategic vulnerability for US/EU. China controls most refining.',
+        'chokepoints': [
+            'lubumbashi drc', 'kolwezi', 'tenke fungurume',
+            'glencore katanga', 'china moly',
+        ],
+        'top_producers':  ['drc', 'indonesia', 'russia', 'australia', 'philippines', 'cuba'],
+        'top_consumers':  ['china', 'eu', 'usa', 'japan', 'korea'],
+    },
 }
 
 
@@ -475,6 +526,49 @@ COMMODITY_KEYWORDS = {
         # Chinese
         '铜', '铜价', '铜进口',
     ],
+    'silver': [
+        'silver', 'silver prices', 'silver futures',
+        'comex silver', 'lme silver', 'silver bullion',
+        'fresnillo silver', 'penoles silver', 'pan american silver',
+        'first majestic', 'kghm silver', 'mexico silver',
+        'silver demand', 'silver supply', 'silver eagle',
+        'silver etf', 'slv etf', 'silver ratio', 'gold-silver ratio',
+        'silver squeeze', 'silver shortage', 'industrial silver',
+        'photovoltaic silver', 'solar silver',
+        # Spanish
+        'plata', 'plata mexicana', 'plata peruana',
+        # Chinese
+        '白银', '银价',
+    ],
+    'nickel': [
+        'nickel', 'nickel prices', 'nickel futures',
+        'lme nickel', 'london metal exchange nickel',
+        'class 1 nickel', 'class 2 nickel', 'nickel sulfate',
+        'sulawesi nickel', 'morowali', 'tsingshan',
+        'norilsk nickel', 'nornickel',
+        'philippines nickel', 'indonesia nickel ban', 'indonesia nickel export',
+        'new caledonia nickel', 'goro nickel',
+        'battery nickel', 'ev nickel', 'nickel cathode',
+        'stainless steel nickel', 'nickel pig iron',
+        # Indonesian
+        'nikel', 'nikel indonesia',
+        # Chinese
+        '镍', '镍价',
+    ],
+    'cobalt': [
+        'cobalt', 'cobalt prices', 'cobalt futures',
+        'lme cobalt', 'cobalt hydroxide', 'cobalt sulfate',
+        'drc cobalt', 'congo cobalt', 'katanga cobalt',
+        'kolwezi', 'tenke fungurume', 'glencore katanga',
+        'china moly cobalt', 'cmoc cobalt',
+        'cobalt mining', 'cobalt refining', 'cobalt supply chain',
+        'battery cobalt', 'ev cobalt', 'cobalt-free battery',
+        'artisanal mining cobalt', 'child labor cobalt',
+        # French (DRC angle)
+        'cobalt rdc', 'cobalt congolais',
+        # Chinese
+        '钴', '钴价',
+    ],
 }
 
 
@@ -574,6 +668,22 @@ SIGNAL_PATTERNS = {
         'asset sale', 'divestiture', 'spinoff',
         'private equity', 'strategic buyer',
     ],
+}
+
+
+# ========================================
+# COUNTRY REGIONAL GROUPING
+# ========================================
+# Used by frontend to group the Country Exposure Matrix into collapsible
+# regional sections. Order here = display order on the page.
+# Add countries to a region when they're added to COUNTRY_COMMODITY_EXPOSURE.
+
+COUNTRY_REGIONS = {
+    'africa':       {'name': 'Africa',              'icon': '🌍', 'order': 1, 'countries': []},
+    'asia_pacific': {'name': 'Asia-Pacific',        'icon': '🌏', 'order': 2, 'countries': ['china']},
+    'europe':       {'name': 'Europe',              'icon': '🌍', 'order': 3, 'countries': ['belarus', 'russia', 'ukraine']},
+    'middle_east':  {'name': 'Middle East',         'icon': '🕌', 'order': 4, 'countries': ['israel']},
+    'wha':          {'name': 'Western Hemisphere',  'icon': '🌎', 'order': 5, 'countries': []},
 }
 
 
@@ -1718,6 +1828,7 @@ def _run_full_scan(days=7):
         'total_signals_detected': len(all_signals),
         'commodity_summaries':    commodity_summaries,
         'country_summaries':      country_summaries,
+        'country_regions':        COUNTRY_REGIONS,
         'signal_type_counts':     global_signal_type_counts,
         'top_signals':            sorted(all_signals, key=lambda s: s['weight'], reverse=True)[:30],
         'source_breakdown': {
@@ -1729,7 +1840,7 @@ def _run_full_scan(days=7):
         },
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.1.0',
+        'version':                '1.2.0',
     }
 
     save_commodity_cache(result)
