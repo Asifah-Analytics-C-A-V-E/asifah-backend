@@ -112,178 +112,24 @@ _background_scan_lock = threading.Lock()
 #                   + policy events instead (e.g. potash)
 
 COMMODITY_TYPES = {
-    'oil': {
-        'name': 'Oil (Crude)',
-        'icon': '🛢️',
+    'cobalt': {
+        'name': 'Cobalt',
+        'icon': '🔷',
         'tier': 1,
-        'category': 'energy',
-        'has_spot_price': True,
-        'yahoo_ticker': 'BZ=F',         # Brent crude
-        'yahoo_proxies': ['CL=F'],       # WTI fallback
-        'unit': 'USD/barrel',
-        'description': 'Brent crude futures. Global benchmark. WTI as fallback.',
-        'chokepoints': [
-            'strait of hormuz', 'bab el-mandeb', 'suez canal',
-            'fujairah', 'ras tanura', 'novorossiysk', 'primorsk',
-            'kozmino', 'jubail', 'hormuz blockade',
-            'baku-tbilisi-ceyhan', 'btc pipeline', 'sangachal terminal',
-            'caspian sea', 'ceyhan terminal'
-        ],
-        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan'],
-        'top_consumers':  ['china', 'usa', 'india', 'eu'],
-    },
-    'natural_gas': {
-        'name': 'Natural Gas / LNG',
-        'icon': '⛽',
-        'tier': 1,
-        'category': 'energy',
-        'has_spot_price': True,
-        'yahoo_ticker': 'NG=F',          # Henry Hub
-        'yahoo_proxies': ['UNG'],         # Natural gas ETF
-        'unit': 'USD/MMBtu',
-        'description': 'Henry Hub futures + TTF/JKM news context for European/Asian spot.',
-        'chokepoints': [
-            'turkstream', 'nord stream', 'yamal', 'tanap',
-            'qatar lng', 'sakhalin', 'arctic lng',
-        ],
-        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china', 'azerbaijan'],
-        'top_consumers':  ['eu', 'china', 'japan', 'korea'],
-    },
-    'wheat': {
-        'name': 'Wheat',
-        'icon': '🌾',
-        'tier': 1,
-        'category': 'agricultural',
-        'has_spot_price': True,
-        'yahoo_ticker': 'ZW=F',          # CBOT wheat
-        'yahoo_proxies': ['WEAT'],        # Teucrium Wheat ETF
-        'unit': 'USD/bushel',
-        'description': 'CBOT wheat futures. Russia + Ukraine = ~25% of global exports.',
-        'chokepoints': [
-            'black sea grain corridor', 'odesa port', 'mykolaiv port',
-            'novorossiysk', 'bosphorus',
-        ],
-        'top_producers':  ['russia', 'eu', 'china', 'india', 'usa', 'ukraine', 'canada', 'australia'],
-        'top_consumers':  ['china', 'india', 'eu', 'egypt', 'turkey'],
-    },
-    'corn': {
-        'name': 'Corn (Maize)',
-        'icon': '🌽',
-        'tier': 2,
-        'category': 'agricultural',
-        'has_spot_price': True,
-        'yahoo_ticker': 'ZC=F',
-        'yahoo_proxies': ['CORN'],
-        'unit': 'USD/bushel',
-        'description': 'CBOT corn futures. Animal feed + ethanol + food.',
-        'chokepoints': [
-            'mississippi river', 'panama canal', 'brazil port santos',
-            'paranaguá', 'odesa port',
-        ],
-        'top_producers':  ['usa', 'china', 'brazil', 'argentina', 'ukraine'],
-        'top_consumers':  ['china', 'usa', 'eu', 'mexico', 'japan'],
-    },
-    'soybeans': {
-        'name': 'Soybeans',
-        'icon': '🫘',
-        'tier': 2,
-        'category': 'agricultural',
-        'has_spot_price': True,
-        'yahoo_ticker': 'ZS=F',
-        'yahoo_proxies': ['SOYB'],
-        'unit': 'USD/bushel',
-        'description': 'CBOT soybeans. China is the dominant consumer (~60%).',
-        'chokepoints': [
-            'panama canal', 'brazil port santos', 'mississippi river',
-            'us gulf', 'paranaguá',
-        ],
-        'top_producers':  ['brazil', 'usa', 'argentina', 'china', 'india'],
-        'top_consumers':  ['china', 'eu', 'mexico', 'japan'],
-    },
-    'potash': {
-        'name': 'Potash (KCl)',
-        'icon': '🌱',
-        'tier': 1,
-        'category': 'agricultural',
-        'has_spot_price': False,    # NO PUBLIC SPOT PRICE
-        'yahoo_ticker': None,
-        'yahoo_proxies': ['NTR', 'MOS'],   # Nutrien + Mosaic stocks as soft proxies
-        'unit': 'production volume + sanctions cycle',
-        'description': 'No public spot price. Tracked via production volume (USGS), sanctions events, Belaruskali/Uralkali export news. Nutrien/Mosaic stock prices as soft proxy for market sentiment.',
-        'chokepoints': [
-            'klaipeda port', 'saskatchewan', 'belaruskali',
-            'uralkali', 'soligorsk', 'st petersburg port',
-        ],
-        'top_producers':  ['canada', 'russia', 'belarus', 'china', 'germany', 'israel', 'jordan'],
-        'top_consumers':  ['china', 'brazil', 'india', 'usa'],
-    },
-    'uranium': {
-        'name': 'Uranium',
-        'icon': '☢️',
-        'tier': 2,
         'category': 'strategic_mineral',
         'has_spot_price': True,
-        'yahoo_ticker': 'URA',           # Global X Uranium ETF (best public proxy)
-        'yahoo_proxies': ['SRUUF', 'CCJ'],  # Sprott Physical Uranium Trust + Cameco
-        'unit': 'USD (URA ETF price)',
-        'description': 'Global X Uranium ETF. Spot price (UxC) is paywalled; URA tracks the equity exposure. Sprott (SRUUF) and Cameco (CCJ) as proxies.',
+        'yahoo_ticker': 'BATT',          # Amplify Lithium & Battery Tech ETF (cobalt-exposed)
+        'yahoo_proxies': ['GLNCY', 'CMCLF'],  # Glencore + CMOC Group (DRC dominant)
+        'unit': 'USD (BATT ETF)',
+        'description': 'Cobalt is a critical battery metal essential for EV cathodes (NMC chemistry). DRC produces ~72% of global supply; China refines ~73%. Tracked via battery-metals ETF + Glencore/CMOC equity proxies. LME cobalt futures available but illiquid.',
         'chokepoints': [
-            'kazatomprom', 'cameco', 'orano', 'rosatom',
-            'niger uranium', 'arlit niger',
+            'drc cobalt belt', 'kolwezi', 'lubumbashi', 'tenke fungurume',
+            'mutanda', 'kisanfu', 'lobito corridor', 'glencore cobalt',
+            'cmoc cobalt', 'huayou cobalt', 'sulawesi indonesia',
+            'morowali industrial park', 'weda bay',
         ],
-        'top_producers':  ['kazakhstan', 'canada', 'australia', 'niger', 'russia', 'namibia'],
-        'top_consumers':  ['usa', 'france', 'china', 'russia', 'korea', 'japan'],
-    },
-    'rare_earths': {
-        'name': 'Rare Earth Elements',
-        'icon': '⚗️',
-        'tier': 2,
-        'category': 'strategic_mineral',
-        'has_spot_price': True,
-        'yahoo_ticker': 'MP',            # MP Materials (US REE producer)
-        'yahoo_proxies': ['REMX', 'LYC.AX'],  # VanEck REMX ETF + Lynas Australia
-        'unit': 'USD (MP Materials)',
-        'description': 'MP Materials (Mountain Pass mine, USA). REMX ETF as broader proxy. China dominates ~60% of production and ~85% of refining.',
-        'chokepoints': [
-            'baotou china', 'mountain pass usa', 'kvanefjeld greenland',
-            'lynas malaysia', 'mt weld australia',
-        ],
-        'top_producers':  ['china', 'usa', 'australia', 'myanmar', 'greenland'],
-        'top_consumers':  ['china', 'japan', 'usa', 'eu'],
-    },
-    'lithium': {
-        'name': 'Lithium',
-        'icon': '🔋',
-        'tier': 2,
-        'category': 'strategic_mineral',
-        'has_spot_price': True,
-        'yahoo_ticker': 'LIT',           # Global X Lithium & Battery Tech ETF
-        'yahoo_proxies': ['ALB', 'SQM'],  # Albemarle + SQM (Chile)
-        'unit': 'USD (LIT ETF)',
-        'description': 'Global X Lithium ETF. Albemarle (ALB) and SQM (Chile) as concentrated producer proxies. Spot lithium carbonate price tracked via news.',
-        'chokepoints': [
-            'salar de atacama', 'salar de uyuni', 'lithium triangle',
-            'greenbushes', 'kwinana', 'jiangxi china',
-        ],
-        'top_producers':  ['australia', 'chile', 'china', 'argentina'],
-        'top_consumers':  ['china', 'korea', 'japan', 'eu', 'usa'],
-    },
-    'gold': {
-        'name': 'Gold',
-        'icon': '🥇',
-        'tier': 2,
-        'category': 'precious',
-        'has_spot_price': True,
-        'yahoo_ticker': 'GC=F',
-        'yahoo_proxies': ['GLD', 'IAU'],
-        'unit': 'USD/oz',
-        'description': 'COMEX gold futures. Sanctions-evasion vehicle and BRICS+ reserve diversification signal.',
-        'chokepoints': [
-            'london bullion market', 'shanghai gold exchange',
-            'comex', 'switzerland refining',
-        ],
-        'top_producers':  ['china', 'russia', 'australia', 'usa', 'canada', 'south_africa'],
-        'top_consumers':  ['china', 'india', 'usa', 'eu', 'central banks'],
+        'top_producers':  ['drc', 'indonesia', 'russia', 'australia', 'canada', 'philippines'],
+        'top_consumers':  ['china', 'korea', 'japan', 'usa', 'eu'],
     },
     'copper': {
         'name': 'Copper',
@@ -302,9 +148,218 @@ COMMODITY_TYPES = {
         'top_producers':  ['chile', 'peru', 'china', 'drc', 'usa', 'australia'],
         'top_consumers':  ['china', 'eu', 'usa', 'japan', 'korea'],
     },
+    'corn': {
+        'name': 'Corn',
+        'icon': '🌽',
+        'tier': 2,
+        'category': 'agricultural',
+        'has_spot_price': True,
+        'yahoo_ticker': 'ZC=F',
+        'yahoo_proxies': ['CORN'],
+        'unit': 'USD/bushel',
+        'description': 'CBOT corn futures. Animal feed + ethanol + food.',
+        'chokepoints': [
+            'mississippi river', 'panama canal', 'brazil port santos',
+            'paranaguá', 'odesa port',
+        ],
+        'top_producers':  ['usa', 'china', 'brazil', 'argentina', 'ukraine'],
+        'top_consumers':  ['china', 'usa', 'eu', 'mexico', 'japan'],
+    },
+    'gold': {
+        'name': 'Gold',
+        'icon': '🥇',
+        'tier': 2,
+        'category': 'precious',
+        'has_spot_price': True,
+        'yahoo_ticker': 'GC=F',
+        'yahoo_proxies': ['GLD', 'IAU'],
+        'unit': 'USD/oz',
+        'description': 'COMEX gold futures. Sanctions-evasion vehicle and BRICS+ reserve diversification signal.',
+        'chokepoints': [
+            'london bullion market', 'shanghai gold exchange',
+            'comex', 'switzerland refining',
+        ],
+        'top_producers':  ['china', 'russia', 'australia', 'usa', 'canada', 'south_africa'],
+        'top_consumers':  ['china', 'india', 'usa', 'eu', 'central banks'],
+    },
+    'lithium': {
+        'name': 'Lithium',
+        'icon': '🔋',
+        'tier': 2,
+        'category': 'strategic_mineral',
+        'has_spot_price': True,
+        'yahoo_ticker': 'LIT',           # Global X Lithium & Battery Tech ETF
+        'yahoo_proxies': ['ALB', 'SQM'],  # Albemarle + SQM (Chile)
+        'unit': 'USD (LIT ETF)',
+        'description': 'Global X Lithium ETF. Albemarle (ALB) and SQM (Chile) as concentrated producer proxies. Spot lithium carbonate price tracked via news.',
+        'chokepoints': [
+            'salar de atacama', 'salar de uyuni', 'lithium triangle',
+            'greenbushes', 'kwinana', 'jiangxi china',
+        ],
+        'top_producers':  ['australia', 'chile', 'china', 'argentina'],
+        'top_consumers':  ['china', 'korea', 'japan', 'eu', 'usa'],
+    },
+    'natural_gas': {
+        'name': 'Natural Gas',
+        'icon': '⛽',
+        'tier': 1,
+        'category': 'energy',
+        'has_spot_price': True,
+        'yahoo_ticker': 'NG=F',          # Henry Hub
+        'yahoo_proxies': ['UNG'],         # Natural gas ETF
+        'unit': 'USD/MMBtu',
+        'description': 'Henry Hub futures + TTF/JKM news context for European/Asian spot.',
+        'chokepoints': [
+            'turkstream', 'nord stream', 'yamal', 'tanap',
+            'qatar lng', 'sakhalin', 'arctic lng', 'galkynysh',
+            'central asia china pipeline', 'tapi pipeline',
+        ],
+        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china', 'turkmenistan', 'azerbaijan'],
+        'top_consumers':  ['eu', 'china', 'japan', 'korea'],
+    },
+    'nickel': {
+        'name': 'Nickel',
+        'icon': '⚙️',
+        'tier': 2,
+        'category': 'industrial',
+        'has_spot_price': True,
+        'yahoo_ticker': 'JJN',           # iPath Nickel ETN
+        'yahoo_proxies': ['VALE', 'BHP'],  # Vale + BHP (major nickel producers)
+        'unit': 'USD (JJN ETN)',
+        'description': 'iPath Nickel ETN tracks LME nickel futures. Vale (Brazil) and BHP (Australia/Indonesia) as integrated producer proxies. Indonesia dominates ~50% of global mined supply via HPAL/RKEF processing.',
+        'chokepoints': [
+            'sulawesi indonesia', 'morowali industrial park', 'weda bay',
+            'norilsk russia', 'norilsk nickel', 'sorowako',
+            'voiseys bay canada', 'goro new caledonia',
+            'philippines nickel', 'surigao',
+        ],
+        'top_producers':  ['indonesia', 'philippines', 'russia', 'australia', 'canada', 'new_caledonia'],
+        'top_consumers':  ['china', 'eu', 'japan', 'korea', 'usa'],
+    },
+    'oil': {
+        'name': 'Oil',
+        'icon': '🛢️',
+        'tier': 1,
+        'category': 'energy',
+        'has_spot_price': True,
+        'yahoo_ticker': 'BZ=F',         # Brent crude
+        'yahoo_proxies': ['CL=F'],       # WTI fallback
+        'unit': 'USD/barrel',
+        'description': 'Brent crude futures. Global benchmark. WTI as fallback.',
+        'chokepoints': [
+            'strait of hormuz', 'bab el-mandeb', 'suez canal',
+            'fujairah', 'ras tanura', 'novorossiysk', 'primorsk',
+            'kozmino', 'jubail', 'hormuz blockade',
+            'baku-tbilisi-ceyhan', 'btc pipeline', 'sangachal terminal',
+            'caspian sea', 'ceyhan terminal', 'cpc pipeline', 'tengiz',
+        ],
+        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan', 'kazakhstan'],
+        'top_consumers':  ['china', 'usa', 'india', 'eu'],
+    },
+    'potash': {
+        'name': 'Potash',
+        'icon': '🌱',
+        'tier': 1,
+        'category': 'agricultural',
+        'has_spot_price': False,    # NO PUBLIC SPOT PRICE
+        'yahoo_ticker': None,
+        'yahoo_proxies': ['NTR', 'MOS'],   # Nutrien + Mosaic stocks as soft proxies
+        'unit': 'production volume + sanctions cycle',
+        'description': 'No public spot price. Tracked via production volume (USGS), sanctions events, Belaruskali/Uralkali export news. Nutrien/Mosaic stock prices as soft proxy for market sentiment.',
+        'chokepoints': [
+            'klaipeda port', 'saskatchewan', 'belaruskali',
+            'uralkali', 'soligorsk', 'st petersburg port',
+        ],
+        'top_producers':  ['canada', 'russia', 'belarus', 'china', 'germany', 'israel', 'jordan'],
+        'top_consumers':  ['china', 'brazil', 'india', 'usa'],
+    },
+    'rare_earths': {
+        'name': 'Rare Earths',
+        'icon': '⚗️',
+        'tier': 2,
+        'category': 'strategic_mineral',
+        'has_spot_price': True,
+        'yahoo_ticker': 'MP',            # MP Materials (US REE producer)
+        'yahoo_proxies': ['REMX', 'LYC.AX'],  # VanEck REMX ETF + Lynas Australia
+        'unit': 'USD (MP Materials)',
+        'description': 'MP Materials (Mountain Pass mine, USA). REMX ETF as broader proxy. China dominates ~60% of production and ~85% of refining.',
+        'chokepoints': [
+            'baotou china', 'mountain pass usa', 'kvanefjeld greenland',
+            'lynas malaysia', 'mt weld australia',
+        ],
+        'top_producers':  ['china', 'usa', 'australia', 'myanmar', 'greenland'],
+        'top_consumers':  ['china', 'japan', 'usa', 'eu'],
+    },
+    'silver': {
+        'name': 'Silver',
+        'icon': '🪙',
+        'tier': 2,
+        'category': 'precious',
+        'has_spot_price': True,
+        'yahoo_ticker': 'SI=F',          # COMEX silver futures
+        'yahoo_proxies': ['SLV', 'PSLV'],  # iShares Silver Trust + Sprott Physical Silver
+        'unit': 'USD/oz',
+        'description': 'COMEX silver futures. Mexico is world #1 producer (~6,120 MT). Industrial/photovoltaic demand + precious-metal monetary properties. China #2 producer + dominant in solar manufacturing.',
+        'chokepoints': [
+            'fresnillo mexico', 'saucito mexico', 'antamina peru',
+            'uchucchacua peru', 'cannington australia',
+            'comex silver', 'shanghai silver', 'london bullion',
+        ],
+        'top_producers':  ['mexico', 'china', 'peru', 'russia', 'poland', 'chile', 'australia'],
+        'top_consumers':  ['china', 'india', 'usa', 'eu', 'japan'],
+    },
+    'soybeans': {
+        'name': 'Soybeans',
+        'icon': '🫘',
+        'tier': 2,
+        'category': 'agricultural',
+        'has_spot_price': True,
+        'yahoo_ticker': 'ZS=F',
+        'yahoo_proxies': ['SOYB'],
+        'unit': 'USD/bushel',
+        'description': 'CBOT soybeans. China is the dominant consumer (~60%).',
+        'chokepoints': [
+            'panama canal', 'brazil port santos', 'mississippi river',
+            'us gulf', 'paranaguá',
+        ],
+        'top_producers':  ['brazil', 'usa', 'argentina', 'china', 'india'],
+        'top_consumers':  ['china', 'eu', 'mexico', 'japan'],
+    },
+    'uranium': {
+        'name': 'Uranium',
+        'icon': '☢️',
+        'tier': 2,
+        'category': 'strategic_mineral',
+        'has_spot_price': True,
+        'yahoo_ticker': 'URA',           # Global X Uranium ETF (best public proxy)
+        'yahoo_proxies': ['SRUUF', 'CCJ'],  # Sprott Physical Uranium Trust + Cameco
+        'unit': 'USD (URA ETF price)',
+        'description': 'Global X Uranium ETF. Spot price (UxC) is paywalled; URA tracks the equity exposure. Sprott (SRUUF) and Cameco (CCJ) as proxies.',
+        'chokepoints': [
+            'kazatomprom', 'cameco', 'orano', 'rosatom',
+            'niger uranium', 'arlit niger',
+        ],
+        'top_producers':  ['kazakhstan', 'canada', 'australia', 'niger', 'russia', 'namibia'],
+        'top_consumers':  ['usa', 'france', 'china', 'russia', 'korea', 'japan'],
+    },
+    'wheat': {
+        'name': 'Wheat',
+        'icon': '🌾',
+        'tier': 1,
+        'category': 'agricultural',
+        'has_spot_price': True,
+        'yahoo_ticker': 'ZW=F',          # CBOT wheat
+        'yahoo_proxies': ['WEAT'],        # Teucrium Wheat ETF
+        'unit': 'USD/bushel',
+        'description': 'CBOT wheat futures. Russia + Ukraine = ~25% of global exports.',
+        'chokepoints': [
+            'black sea grain corridor', 'odesa port', 'mykolaiv port',
+            'novorossiysk', 'bosphorus',
+        ],
+        'top_producers':  ['russia', 'eu', 'china', 'india', 'usa', 'ukraine', 'canada', 'australia'],
+        'top_consumers':  ['china', 'india', 'eu', 'egypt', 'turkey'],
+    },
 }
-
-
 # ========================================
 # COMMODITY KEYWORD SETS
 # ========================================
@@ -312,6 +367,127 @@ COMMODITY_TYPES = {
 # Each commodity has English + (where relevant) multilingual keywords.
 
 COMMODITY_KEYWORDS = {
+    'cobalt': [
+        # Producers / state actors
+        'cobalt', 'cobalt prices', 'cobalt market', 'cobalt sulphate',
+        'cobalt hydroxide', 'cobalt metal', 'cobalt concentrate',
+        'drc cobalt', 'congo cobalt', 'congolese cobalt',
+        'indonesia cobalt', 'indonesian cobalt',
+        # Companies
+        'glencore cobalt', 'cmoc cobalt', 'china molybdenum',
+        'huayou cobalt', 'jinchuan cobalt', 'umicore cobalt',
+        'tenke fungurume', 'kisanfu', 'mutanda',
+        'gecamines', 'ivanhoe mines',
+        # Geographic / logistical
+        'kolwezi', 'lubumbashi', 'katanga cobalt', 'lobito corridor',
+        'sulawesi cobalt', 'morowali', 'weda bay',
+        # Market events
+        'cobalt export ban', 'drc cobalt quota', 'cobalt sanctions',
+        'cobalt artisanal mining', 'cobalt child labor',
+        'cobalt refining china', 'lme cobalt',
+        'battery metal', 'nmc battery', 'nca battery',
+        'foreign entity of concern', 'feoc cobalt', 'ira critical minerals',
+        # French (DRC)
+        'cobalt rdc', 'cobalt congolais', 'mines de cobalt',
+        # Chinese
+        '钴', '钴价', '钴矿', '钴精矿',
+    ],
+    'copper': [
+        'copper', 'copper prices', 'copper futures',
+        'comex copper', 'lme copper', 'doctor copper',
+        'antofagasta copper', 'escondida', 'chuquicamata',
+        'codelco', 'freeport-mcmoran', 'glencore copper',
+        'first quantum', 'cobre panama', 'panama copper',
+        'lubumbashi', 'katanga copper', 'drc copper',
+        'china copper imports', 'copper smelter',
+        'copper concentrate', 'copper cathode',
+        # Spanish
+        'cobre', 'cobre chile', 'cobre perú',
+        # Chinese
+        '铜', '铜价', '铜进口',
+    ],
+    'corn': [
+        'corn', 'maize', 'corn prices', 'corn futures', 'cbot corn',
+        'corn harvest', 'corn ethanol', 'corn export',
+        'ukrainian corn', 'us corn', 'brazil corn safrinha',
+        'argentina corn', 'corn yields', 'corn drought',
+        'usda corn', 'wasde corn',
+        # Spanish
+        'maíz', 'cosecha de maíz',
+        # Chinese
+        '玉米',
+    ],
+    'gold': [
+        'gold', 'gold prices', 'gold futures', 'comex gold',
+        'gold reserves', 'central bank gold', 'gold buying',
+        'china gold reserves', 'russian gold', 'gold sanctions',
+        'london bullion', 'shanghai gold exchange',
+        'gold etf', 'gold etfs', 'gold imports',
+        'world gold council', 'gold demand', 'gold supply',
+        'brics gold', 'gold standard', 'gold-backed currency',
+        # Russian
+        'золото', 'золотовалютные резервы',
+        # Chinese
+        '黄金', '黄金储备', '黄金价格',
+        # Arabic
+        'الذهب', 'أسعار الذهب',
+    ],
+    'lithium': [
+        'lithium', 'lithium prices', 'lithium carbonate', 'lithium hydroxide',
+        'spodumene', 'salar de atacama', 'salar de uyuni',
+        'sqm lithium', 'albemarle', 'tianqi lithium',
+        'ganfeng lithium', 'pilbara lithium', 'greenbushes',
+        'lithium triangle', 'lithium argentina', 'lithium chile',
+        'lithium bolivia', 'lithium battery', 'ev battery lithium',
+        'lithium mining', 'lithium refinery', 'lithium tariff',
+        'china lithium', 'australian lithium',
+        # Spanish
+        'litio', 'litio chile', 'litio argentina', 'litio bolivia',
+        # Chinese
+        '锂', '碳酸锂', '锂电池',
+    ],
+    'natural_gas': [
+        'natural gas', 'lng', 'liquefied natural gas',
+        'henry hub', 'ttf gas', 'jkm price', 'gas prices',
+        'nord stream', 'turkstream', 'yamal lng',
+        'qatar lng', 'us lng exports', 'european gas',
+        'gas pipeline', 'gas storage europe', 'gas crisis',
+        'gazprom', 'novatek', 'qatargas', 'shell lng',
+        'sakhalin', 'arctic lng',
+        'galkynysh', 'central asia china pipeline', 'tapi pipeline',
+        'turkmenistan gas', 'turkmen gas',
+        # Russian
+        'природный газ', 'газпром', 'газопровод', 'спг',
+        # Chinese
+        '天然气', '液化天然气',
+    ],
+    'nickel': [
+        # Producers / state actors
+        'nickel', 'nickel prices', 'nickel futures', 'lme nickel',
+        'nickel pig iron', 'npi', 'ferronickel', 'nickel sulphate',
+        'class 1 nickel', 'class 2 nickel', 'high pressure acid leach', 'hpal',
+        # Companies
+        'norilsk nickel', 'nornickel', 'vale nickel',
+        'bhp nickel', 'sumitomo metal mining', 'tsingshan',
+        'huayou nickel', 'eramet', 'glencore nickel',
+        # Geographic / logistical
+        'indonesia nickel', 'indonesian nickel', 'sulawesi nickel',
+        'morowali industrial park', 'weda bay nickel', 'sorowako',
+        'philippines nickel', 'surigao', 'palawan nickel',
+        'norilsk russia', 'kun-manie', 'voiseys bay',
+        'goro new caledonia', 'koniambo new caledonia',
+        # Market events
+        'nickel export ban', 'indonesia nickel ban', 'nickel sanctions',
+        'nickel mining moratorium', 'nickel laterite',
+        'ev battery nickel', 'cathode nickel', 'tesla nickel',
+        'foreign entity of concern nickel',
+        # Russian
+        'никель', 'норильский никель',
+        # Chinese
+        '镍', '镍价', '镍矿', '不锈钢',
+        # Indonesian
+        'nikel indonesia', 'tambang nikel',
+    ],
     'oil': [
         # Producers / state actors
         'crude oil', 'oil prices', 'oil futures', 'brent crude', 'wti',
@@ -326,6 +502,7 @@ COMMODITY_KEYWORDS = {
         # Geographic / logistical
         'fujairah terminal', 'ras tanura', 'novorossiysk',
         'kozmino terminal', 'primorsk port',
+        'cpc pipeline', 'tengiz oil', 'kashagan', 'karachaganak',
         # Russian
         'нефть', 'цена на нефть', 'нефтепровод', 'нефтяные санкции',
         # Arabic
@@ -334,56 +511,6 @@ COMMODITY_KEYWORDS = {
         'نفت', 'صادرات نفت ایران', 'تحریم نفت',
         # Chinese
         '原油', '石油价格', '石油进口',
-    ],
-    'natural_gas': [
-        'natural gas', 'lng', 'liquefied natural gas',
-        'henry hub', 'ttf gas', 'jkm price', 'gas prices',
-        'nord stream', 'turkstream', 'yamal lng',
-        'qatar lng', 'us lng exports', 'european gas',
-        'gas pipeline', 'gas storage europe', 'gas crisis',
-        'gazprom', 'novatek', 'qatargas', 'shell lng',
-        'sakhalin', 'arctic lng',
-        # Russian
-        'природный газ', 'газпром', 'газопровод', 'спг',
-        # Chinese
-        '天然气', '液化天然气',
-    ],
-    'wheat': [
-        'wheat', 'wheat prices', 'wheat futures', 'cbot wheat',
-        'black sea grain', 'grain corridor', 'grain deal',
-        'russian wheat exports', 'ukrainian wheat',
-        'wheat shortage', 'wheat tariff', 'wheat ban',
-        'india wheat ban', 'bread prices', 'flour shortage',
-        'usda wheat report', 'wasde wheat', 'wheat harvest',
-        'wheat smuggling', 'odesa port wheat',
-        # Russian
-        'пшеница', 'экспорт пшеницы', 'зерновой коридор',
-        # Arabic
-        'القمح', 'أسعار القمح',
-        # Chinese
-        '小麦', '小麦进口',
-    ],
-    'corn': [
-        'corn', 'maize', 'corn prices', 'corn futures', 'cbot corn',
-        'corn harvest', 'corn ethanol', 'corn export',
-        'ukrainian corn', 'us corn', 'brazil corn safrinha',
-        'argentina corn', 'corn yields', 'corn drought',
-        'usda corn', 'wasde corn',
-        # Spanish
-        'maíz', 'cosecha de maíz',
-        # Chinese
-        '玉米',
-    ],
-    'soybeans': [
-        'soybeans', 'soybean prices', 'soybean futures',
-        'cbot soybeans', 'soybean meal', 'soybean oil',
-        'china soybean imports', 'brazil soybean', 'us soybean',
-        'argentina soybean', 'soybean tariff', 'trade war soybean',
-        'soybean crush', 'soybean rust',
-        # Portuguese (Brazil)
-        'soja', 'safra de soja',
-        # Chinese
-        '大豆', '中美大豆',
     ],
     'potash': [
         'potash', 'belaruskali', 'uralkali', 'nutrien',
@@ -402,6 +529,56 @@ COMMODITY_KEYWORDS = {
         # Chinese
         '钾肥', '氯化钾',
     ],
+    'rare_earths': [
+        'rare earth', 'rare earths', 'rare earth elements',
+        'neodymium', 'dysprosium', 'praseodymium', 'terbium',
+        'mp materials', 'mountain pass', 'lynas rare earths',
+        'china rare earth', 'baotou', 'china export controls',
+        'rare earth magnets', 'permanent magnets',
+        'rare earth processing', 'rare earth refining',
+        'kvanefjeld', 'tanbreez',
+        'gallium germanium', 'antimony export ban',
+        # Chinese
+        '稀土', '稀土出口', '稀土磁铁', '包头',
+    ],
+    'silver': [
+        # Producers / state actors
+        'silver', 'silver prices', 'silver futures', 'comex silver',
+        'silver ounces', 'silver metric tons', 'silver supply',
+        'silver demand', 'silver imports', 'silver exports',
+        # Companies
+        'fresnillo silver', 'pan american silver', 'first majestic',
+        'wheaton precious', 'hochschild mining', 'polymetal silver',
+        'kghm polska miedz', 'industrias peñoles',
+        # Geographic
+        'mexico silver', 'mexican silver', 'zacatecas silver',
+        'durango silver', 'chihuahua silver', 'fresnillo',
+        'peru silver', 'antamina silver', 'uchucchacua',
+        'china silver', 'poland silver', 'kazakhstan silver',
+        'cannington australia', 'broken hill',
+        # Market context
+        'silver photovoltaic', 'solar silver demand', 'silver solar',
+        'silver electronics', 'silver industrial demand',
+        'silver bullion', 'silver etf', 'slv etf',
+        'london silver fix', 'shanghai silver',
+        # Spanish
+        'plata', 'plata mexicana', 'plata peruana',
+        # Chinese
+        '白银', '银价', '白银市场',
+        # Russian
+        'серебро', 'серебряные руды',
+    ],
+    'soybeans': [
+        'soybeans', 'soybean prices', 'soybean futures',
+        'cbot soybeans', 'soybean meal', 'soybean oil',
+        'china soybean imports', 'brazil soybean', 'us soybean',
+        'argentina soybean', 'soybean tariff', 'trade war soybean',
+        'soybean crush', 'soybean rust',
+        # Portuguese (Brazil)
+        'soja', 'safra de soja',
+        # Chinese
+        '大豆', '中美大豆',
+    ],
     'uranium': [
         'uranium', 'uranium prices', 'yellowcake',
         'kazatomprom', 'cameco', 'orano', 'rosatom uranium',
@@ -411,75 +588,31 @@ COMMODITY_KEYWORDS = {
         'kazakhstan uranium', 'niger uranium', 'arlit',
         'uranium mining', 'uranium sanctions',
         'haleu', 'low-enriched uranium', 'high-assay',
-        'tenex russia', 'urenco',
-        'small modular reactor', 'smr fuel',
-        # Russian
-        'уран', 'росатом уран', 'тенекс',
-        # French (Niger)
+        'small modular reactor', 'smr uranium',
+        'cameco kazatomprom', 'kazakhstan nuclear',
+        # French (Niger / Orano)
         "uranium nigérien", 'orano niger',
-    ],
-    'rare_earths': [
-        'rare earth', 'rare earths', 'rare earth elements',
-        'ree', 'neodymium', 'dysprosium', 'samarium',
-        'praseodymium', 'terbium', 'cerium', 'lanthanum',
-        'mp materials', 'mountain pass', 'lynas',
-        'remx etf', 'china rare earth', 'baotou',
-        'rare earth export ban', 'rare earth sanctions',
-        'rare earth processing', 'rare earth refining',
-        'kvanefjeld greenland', 'tanbreez',
-        'shenghe resources', 'china northern rare earth',
-        'permanent magnet', 'ndfeb magnet',
-        # Chinese
-        '稀土', '稀土出口', '稀土禁令',
-    ],
-    'lithium': [
-        'lithium', 'lithium prices', 'lithium carbonate',
-        'lithium hydroxide', 'spodumene',
-        'albemarle', 'sqm lithium', 'tianqi lithium',
-        'ganfeng lithium', 'lithium triangle',
-        'salar de atacama', 'salar de uyuni',
-        'greenbushes mine', 'lithium battery',
-        'lithium ev', 'lithium australia', 'lithium chile',
-        'lithium argentina', 'lithium bolivia',
-        'lithium mining', 'lit etf',
-        # Spanish
-        'litio', 'litio chile', 'litio argentina',
-        # Chinese
-        '锂', '碳酸锂', '锂矿',
-    ],
-    'gold': [
-        'gold', 'gold prices', 'gold futures', 'gold spot',
-        'comex gold', 'lbma gold', 'shanghai gold exchange',
-        'central bank gold buying', 'gold reserves',
-        'russian gold', 'china gold reserves',
-        'india gold imports', 'gold smuggling',
-        'gold sanctions', 'sanctions evasion gold',
-        'brics gold', 'gold-backed', 'goldman gold',
-        'gold etf gld', 'iau gold',
         # Russian
-        'золото', 'золотовалютные резервы',
+        'уран', 'росатом',
         # Chinese
-        '黄金', '黄金储备', '黄金价格',
-        # Arabic
-        'الذهب', 'أسعار الذهب',
+        '铀', '核燃料',
     ],
-    'copper': [
-        'copper', 'copper prices', 'copper futures',
-        'comex copper', 'lme copper', 'doctor copper',
-        'antofagasta copper', 'escondida', 'chuquicamata',
-        'codelco', 'freeport-mcmoran', 'glencore copper',
-        'first quantum', 'cobre panama', 'panama copper',
-        'lubumbashi', 'katanga copper', 'drc copper',
-        'china copper imports', 'copper smelter',
-        'copper concentrate', 'copper cathode',
-        # Spanish
-        'cobre', 'cobre chile', 'cobre perú',
+    'wheat': [
+        'wheat', 'wheat prices', 'wheat futures', 'cbot wheat',
+        'black sea grain', 'grain corridor', 'grain deal',
+        'russian wheat exports', 'ukrainian wheat',
+        'wheat shortage', 'wheat tariff', 'wheat ban',
+        'india wheat ban', 'bread prices', 'flour shortage',
+        'usda wheat report', 'wasde wheat', 'wheat harvest',
+        'wheat smuggling', 'odesa port wheat',
+        # Russian
+        'пшеница', 'экспорт пшеницы', 'зерновой коридор',
+        # Arabic
+        'القمح', 'أسعار القمح',
         # Chinese
-        '铜', '铜价', '铜进口',
+        '小麦', '小麦进口',
     ],
 }
-
-
 # ========================================
 # COUNTRY EXPOSURE MATRIX (Phase 1)
 # ========================================
@@ -495,20 +628,6 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Druzhba pipeline, Mozyr/Naftan refineries (Russian crude)'},
         'natural_gas':  {'role': 'consumer',          'weight': 1.0,
                          'note': '100% Russian gas dependency'},
-    },
-    'russia': {
-        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 2,
-                         'note': 'World #2 producer; Urals crude; G7 price cap; shadow fleet'},
-        'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 2,
-                         'note': 'Gazprom, Novatek; Nord Stream; Yamal LNG; European market loss'},
-        'wheat':        {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 wheat exporter; Black Sea grain corridor leverage'},
-        'potash':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
-                         'note': 'Uralkali; partially sanctioned'},
-        'uranium':      {'role': 'producer',          'weight': 1.0, 'rank': 5,
-                         'note': 'Rosatom; HALEU enrichment dominance; Tenex sanctions risk'},
-        'gold':         {'role': 'producer',          'weight': 1.1,
-                         'note': 'BRICS+ gold reserves; sanctions evasion vehicle'},
     },
     'china': {
         'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -527,12 +646,74 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Central bank reserve diversification; Shanghai Gold Exchange'},
         'natural_gas':  {'role': 'consumer',          'weight': 1.0,
                          'note': 'Power of Siberia pipeline; LNG imports'},
+        'cobalt':       {'role': 'consumer',          'weight': 1.5, 'rank': 1,
+                         'note': '~73% of global cobalt refining; CMOC dominates DRC mining; Huayou vertically integrated; ~87% of cobalt consumption goes to lithium-ion batteries'},
+        'nickel':       {'role': 'consumer',          'weight': 1.4,
+                         'note': 'World #1 nickel consumer; stainless steel + EV batteries; Tsingshan/Huayou Indonesia investments dominate processing'},
+        'silver':       {'role': 'producer',          'weight': 1.2, 'rank': 2,
+                         'note': 'World #2 silver producer (~109 Moz, ~13% global); also leading consumer for solar PV manufacturing + electronics'},
+    },
+    'drc': {
+        'cobalt':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': 'World #1 cobalt producer (~72% of global supply, ~247kt projected 2026); CMOC, Glencore dominate; export quotas since Feb 2025; Lobito Corridor diversifies routes from China-controlled infrastructure'},
+        'copper':       {'role': 'producer',          'weight': 1.3,
+                         'note': 'Major copper producer (Katanga belt); cobalt is largely a copper-mining by-product; Lubumbashi industrial center'},
+    },
+    'indonesia': {
+        'nickel':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': 'World #1 nickel producer (~800K tons/yr); Sulawesi/Morowali Industrial Park + Weda Bay; HPAL processing dominant; Chinese capital deeply embedded (Tsingshan, Huayou); 2020 ore export ban transformed market'},
+        'cobalt':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
+                         'note': '~15% of global cobalt (HPAL nickel by-product); rapid growth via Pomalaa, Morowali; expected 20% global share by 2030'},
     },
     'israel': {
         'potash':       {'role': 'producer',          'weight': 1.0, 'rank': 6,
                          'note': 'ICL (Israel Chemicals); Dead Sea production'},
         'natural_gas':  {'role': 'producer',          'weight': 0.8,
                          'note': 'Leviathan + Tamar fields; exports to Egypt/Jordan'},
+    },
+    'kazakhstan': {
+        'uranium':      {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': 'World #1 uranium producer (~40% of global supply); Kazatomprom dominates ISR mining; 14 JVs hedge across Cameco/Orano/Rosatom/CGN; SMR demand wave 2025-2030 critical'},
+        'oil':          {'role': 'producer',          'weight': 1.3, 'rank': 8,
+                         'note': 'Tengiz, Karachaganak, Kashagan supergiants; CPC pipeline to Novorossiysk (Russia exposure); KazTransOil to China; Aktau Caspian port'},
+        'natural_gas':  {'role': 'producer',          'weight': 0.7,
+                         'note': 'Net producer/consumer balance; primarily domestic + neighbor exports'},
+        'silver':       {'role': 'producer',          'weight': 0.8,
+                         'note': '~12.6 Moz (~1.5% global); by-product of base-metal mining; strategic position between Russia/China for export routing'},
+    },
+    'mexico': {
+        'silver':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': 'World #1 silver producer (~6,120 MT, ~22% global); Zacatecas/Durango/Chihuahua; Fresnillo (largest primary silver mine); Peñoles/Fresnillo PLC dominant; ancient mining tradition'},
+    },
+    'peru': {
+        'silver':       {'role': 'producer',          'weight': 1.4, 'rank': 3,
+                         'note': 'World #3 silver producer (~107 Moz/~13% global); largest silver reserves globally per USGS; Antamina, Inmaculada, Uchucchacua mines; Andean polymetallic operations'},
+        'copper':       {'role': 'producer',          'weight': 1.3,
+                         'note': 'Major copper producer; Antamina, Toromocho; high-altitude Andean mining'},
+    },
+    'philippines': {
+        'nickel':       {'role': 'producer',          'weight': 1.4, 'rank': 2,
+                         'note': 'World #2 nickel producer (~420K tons/yr); Surigao region dominant; periodically exceeds Indonesia during Indonesian export bans; key Chinese feedstock'},
+    },
+    'russia': {
+        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 2,
+                         'note': 'World #2 producer; Urals crude; G7 price cap; shadow fleet'},
+        'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 2,
+                         'note': 'Gazprom, Novatek; Nord Stream; Yamal LNG; European market loss'},
+        'wheat':        {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': 'World #1 wheat exporter; Black Sea grain corridor leverage'},
+        'potash':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
+                         'note': 'Uralkali; partially sanctioned'},
+        'uranium':      {'role': 'producer',          'weight': 1.0, 'rank': 5,
+                         'note': 'Rosatom; HALEU enrichment dominance; Tenex sanctions risk'},
+        'gold':         {'role': 'producer',          'weight': 1.1,
+                         'note': 'BRICS+ gold reserves; sanctions evasion vehicle'},
+        'cobalt':       {'role': 'producer',          'weight': 1.0, 'rank': 3,
+                         'note': 'World #3 cobalt producer; Norilsk Nickel by-product; geopolitical risk reducing global prominence'},
+        'nickel':       {'role': 'producer',          'weight': 1.2, 'rank': 3,
+                         'note': 'World #3 nickel producer (~270K tons/yr); Norilsk Nickel/Nornickel dominant; Arctic Norilsk + Kun-Manie + Krasnoyarsk Krai operations'},
+        'silver':       {'role': 'producer',          'weight': 1.0, 'rank': 4,
+                         'note': '~39.8 Moz (~5% global); Polymetal International + Norilsk Nickel by-product; sanctions complicate Western supply'},
     },
     'saudi_arabia': {
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -541,6 +722,12 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Jafurah unconventional field (largest in ME); Master Gas System; primarily domestic power + petrochemicals'},
         'gold':         {'role': 'consumer',          'weight': 0.9,
                          'note': 'SAMA central bank reserves; significant retail demand; Vision 2030 mineral resources strategy'},
+    },
+    'turkmenistan': {
+        'natural_gas':  {'role': 'producer',          'weight': 1.4, 'rank': 4,
+                         'note': "World #4 natural gas reserves (~27.4 TCM); Galkynysh world's #2 onshore field; Phase 4 broke ground April 2026 with CNPC; ~80% exports flow to China via CAGP; TAPI pipeline progressing through Afghan war zone"},
+        'oil':          {'role': 'producer',          'weight': 0.6,
+                         'note': 'Modest oil production; primarily domestic + Caspian shipping; Turkmenbashi port modernization 2018'},
     },
     'uae': {
         'oil':          {'role': 'producer',          'weight': 1.4, 'rank': 7,
@@ -559,8 +746,6 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': '~50% of global sunflower oil; tracked under wheat/corn for Phase 1'},
     },
 }
-
-
 # ========================================
 # RSS FEEDS — Commodity-specific sources
 # ========================================
@@ -596,9 +781,16 @@ COMMODITY_RSS_FEEDS = {
     'Gold Markets': 'https://news.google.com/rss/search?q=gold+price+OR+gold+reserves+OR+central+bank+gold&hl=en&gl=US&ceid=US:en',
     # Copper
     'Copper News': 'https://news.google.com/rss/search?q=copper+OR+copper+prices+OR+codelco+OR+escondida&hl=en&gl=US&ceid=US:en',
+    # Cobalt (NEW)
+    'Cobalt News': 'https://news.google.com/rss/search?q=cobalt+OR+drc+cobalt+OR+glencore+cobalt+OR+CMOC&hl=en&gl=US&ceid=US:en',
+    'Battery Metals News': 'https://news.google.com/rss/search?q=battery+metals+OR+nmc+battery+OR+lfp+battery+OR+cobalt+lithium&hl=en&gl=US&ceid=US:en',
+    # Nickel (NEW)
+    'Nickel News': 'https://news.google.com/rss/search?q=nickel+OR+indonesia+nickel+OR+norilsk+nickel+OR+LME+nickel&hl=en&gl=US&ceid=US:en',
+    'Indonesia Mining': 'https://news.google.com/rss/search?q=indonesia+mining+OR+morowali+OR+sulawesi+nickel+OR+weda+bay&hl=en&gl=US&ceid=US:en',
+    # Silver (NEW)
+    'Silver News': 'https://news.google.com/rss/search?q=silver+OR+silver+prices+OR+fresnillo+OR+pan+american+silver&hl=en&gl=US&ceid=US:en',
+    'Precious Metals': 'https://news.google.com/rss/search?q=precious+metals+OR+gold+silver+OR+silver+demand+OR+silver+solar&hl=en&gl=US&ceid=US:en',
 }
-
-
 # ========================================
 # REDDIT SUBREDDITS
 # ========================================
@@ -616,6 +808,12 @@ COMMODITY_REDDIT_SUBREDDITS = [
     'EnergyAndPower',
     'oil',
     'naturalgas',
+    # NEW: cobalt / nickel / silver
+    'BatteryMetals',
+    'electricvehicles',   # battery-metals discussion
+    'Wallstreetsilver',
+    'silverbugs',
+    'PreciousMetals',
 ]
 
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -1059,6 +1257,24 @@ def fetch_all_gdelt_commodity(days=7):
         'copper prices china demand',
         'codelco escondida copper production',
         'first quantum cobre panama copper',
+        # Cobalt (NEW)
+        'cobalt prices DRC congo supply',
+        'cmoc cobalt tenke fungurume kisanfu',
+        'glencore cobalt mutanda mining',
+        'indonesia cobalt sulawesi morowali',
+        'cobalt export ban quota battery',
+        # Nickel (NEW)
+        'nickel prices indonesia LME',
+        'norilsk nickel russia production',
+        'philippines nickel surigao mining',
+        'nickel battery EV stainless steel',
+        'tsingshan huayou nickel china',
+        # Silver (NEW)
+        'silver prices comex demand',
+        'mexico silver fresnillo zacatecas',
+        'peru silver antamina mining',
+        'silver solar photovoltaic demand',
+        'china silver imports refining',
     ]
 
     russian_queries = [
@@ -1068,6 +1284,9 @@ def fetch_all_gdelt_commodity(days=7):
         'калий беларуськалий уралкалий',
         'уран росатом тенекс',
         'золото резервы брикс',
+        'никель норильский',
+        'серебро добыча',
+        'кобальт россия',
     ]
 
     chinese_queries = [
@@ -1078,6 +1297,9 @@ def fetch_all_gdelt_commodity(days=7):
         '黄金储备 中国',
         '小麦 进口',
         '大豆 美国',
+        '钴 电池 刚果',
+        '镍 印尼 不锈钢',
+        '白银 价格 太阳能',
     ]
 
     arabic_queries = [
