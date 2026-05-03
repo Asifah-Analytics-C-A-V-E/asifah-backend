@@ -226,59 +226,63 @@ def fetch_reliefweb_updates():
 #   IOM global displacement update, March 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-04-10',
-    'data_period': 'March 2 – April 10, 2026 (active war)',
-    'note': 'Static figures compiled from IOM DTM SitRep Update 5 (Mar 28-Apr 2), Lebanese MoPH, and OCHA reporting. April 8 strikes (deadliest single day of war) not yet fully captured in IOM figures. Updated manually.',
+    'last_manual_update': '2026-05-01',
+    'data_period': 'March 2 – April 30, 2026 (10-day ceasefire effective Apr 17, extended further 3 weeks)',
+    'note': 'Static figures compiled from OCHA Flash Update #22 (30 April 2026), Lebanese MoPH, WHO, IOM DTM, and UN Women reporting. Ceasefire effective April 17 has held; tentative and uneven return movements observed but limited. Updated manually.',
 
     'casualties': {
-        'killed': 1739,
-        'injured': 5873,
-        'children_killed': 130,
+        'killed': 2576,
+        'injured': 7962,
+        'children_killed': None,            # not separately reported in #22; was 130 mid-April
         'children_injured': None,
-        'women_killed': 102,
-        'rescue_workers_killed': 57,
+        'women_killed': None,                # not separately reported in #22; was 102 mid-April
+        'rescue_workers_killed': 103,        # WHO: health workers + first responders cumulative
         'april8_single_day_killed': 203,
         'april8_single_day_wounded': 1150,
-        'source': 'Lebanese Ministry of Public Health / Al Arabiya / AP',
-        'source_url': 'https://www.moph.gov.lb/',
-        'as_of': '2026-04-09',
-        'note': 'Cumulative since March 2, 2026. April 8 was the deadliest single day of the war — 203 killed, 1,150+ wounded in strikes on central Beirut without warning. Toll includes 102 women, 130 children, 57 healthcare workers. Death toll still rising as rescue workers pull victims from rubble.'
+        'idf_soldiers_killed_in_lebanon': 16,
+        'civilians_killed_in_israel': 2,
+        'source': 'Lebanese Ministry of Public Health / OCHA Flash Update #22',
+        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
+        'as_of': '2026-04-30',
+        'note': 'Cumulative since March 2, 2026. April 8 was the deadliest single day of the war — 203 killed, 1,150+ wounded in strikes on central Beirut without warning. April 29: 3 civil defence rescue workers killed in Tyre District (consecutive strikes on same building during rescue operation). 28 March: 9 rescue workers killed in single ambulance strike in Bint Jbeil; 3 journalists killed in Jezzine same day. Two civilians killed in Israel by Hezbollah attacks; 16 IDF soldiers died in Lebanon per Israel.'
     },
 
     'displacement': {
         'total_displaced_registered': 1000000,
         'total_displaced_pct_population': 20,
-        'in_government_shelters': 136156,
-        'shelters_opened': 669,
-        'shelters_at_capacity': 'Near full capacity — 90% of IDPs outside formal shelters',
-        'cross_border_to_syria': 196654,
-        'cross_border_to_jordan': 1800,
+        'in_government_shelters': 119000,           # Apr 30 — down from 136K peak; reflects partial return after Apr 17 ceasefire
+        'shelters_opened': 626,                       # Apr 30 — slight consolidation from 669
+        'shelters_at_capacity': 'Operating at limits — fluid as ceasefire enables tentative returns',
+        'cross_border_to_syria': 147823,              # IOM — since 1 March (latest IOM aggregate)
+        'cross_border_to_jordan': 1800,               # unchanged from prior
         'previously_displaced_2024': 65000,
-        'children_displaced': 300000,
-        'pct_idps_outside_formal_shelter': 90,
-        'source': 'IOM DTM SitRep Update 5 / DTM Syria cross-border tracking',
+        'children_displaced': 300000,                  # initial appeal estimate; ~nearly 300K registered
+        'pct_idps_outside_formal_shelter': 87,        # UN Women 30 March (slight improvement from 90%)
+        'returns_since_ceasefire': 'Tentative, uneven; 21% reduction in collective-shelter population by Apr 20 then partial re-displacement',
+        'source': 'OCHA Flash Update #22 / IOM DTM / UN Women',
         'source_urls': [
-            'https://crisisresponse.iom.int/sites/g/files/tmzbdl1481/files/appeal/documents/IOM-Lebanon-External-Sitrep-Update-5-28-March-2-April.pdf',
+            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
             'https://dtm.iom.int/lebanon',
+            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-19-escalation-hostilities-lebanon-20-april-2026',
         ],
-        'as_of': '2026-04-06',
-        'note': '1M+ displaced — ~20% of Lebanon\'s population. 90% rely on host families or informal sites; 669 collective sites near full capacity. Nabatieh governorate: 98% of IDPs relocated outside the governorate. 196,654 individuals crossed into Syria via 3 PoEs since March 2. IOM emergency transportation funding fully exhausted.'
+        'as_of': '2026-04-30',
+        'note': '1M+ displaced — ~20% of Lebanon\'s population. April 17 ceasefire enabled 21% reduction in collective-shelter population by April 20 (in Baalbek-Hermel down 85%; Bekaa down 56%); some governorates (Mount Lebanon, South) saw partial re-displacement in late April. 87% of IDPs reside outside formal shelters per UN Women. 147,823 individuals crossed into Syria via 3 PoEs since 1 March. Returns restricted by UXO, military presence, damaged bridges, and official warnings against premature returns.'
     },
 
     'shelters': {
-        'total_shelters': 669,
-        'at_full_capacity': 'Near full capacity — operating at limits',
-        'capacity_percentage': 98,
+        'total_shelters': 626,
+        'at_full_capacity': 'Operating at variable capacity post-ceasefire',
+        'capacity_percentage': None,                 # variable post-ceasefire
         'schools_as_shelters': 472,
         'children_education_affected': None,
         'school_aged_idps': None,
         'government_designated_sites': None,
-        'source': 'IOM DTM SitRep Update 5',
+        'source': 'OCHA Flash Update #22',
         'source_urls': [
-            'https://crisisresponse.iom.int/sites/g/files/tmzbdl1481/files/appeal/documents/IOM-Lebanon-External-Sitrep-Update-5-28-March-2-April.pdf',
+            'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
         ],
-        'as_of': '2026-04-02',
-        'note': '669 collective sites near full capacity. 472 schools converted to shelters. 90% of IDPs outside formal shelters — with relatives, in unfinished buildings, or informal sites. Overcrowding raising disease, fire, and GBV risks. Flash Appeal: $308.3M for March-May 2026.'
+        'as_of': '2026-04-30',
+        'note': '626 collective shelters with 119,000+ IDPs as of April 30. 472 schools converted to shelters. 87% of IDPs outside formal shelters — with relatives, in unfinished buildings, or informal sites. UN Women has flagged elevated GBV, harassment, and exploitation risks in informal/host arrangements. Flash Appeal: $308.3M for March-May 2026 — only 38% funded ($117M received).'
     },
 
     'evacuation_orders': {
@@ -294,35 +298,64 @@ STATIC_HUMANITARIAN = {
             'Tyre district including Palestinian camps',
             'Masnaa Border Crossing area (April 3-8, now reopened)',
         ],
-        'source': 'IOM DTM / Lebanese Civil Defence / IDF statements',
-        'source_url': 'https://dtm.iom.int/lebanon',
-        'as_of': '2026-04-09',
-        'note': 'Displacement orders cover ~14% of Lebanese territory. April 8 strikes hit central Beirut residential areas without warning during rush hour — new displacement pattern expanding beyond south/Dahiyeh. Many families displaced multiple times.'
+        'source': 'OCHA Flash Update #22 / Lebanese Civil Defence / IDF statements',
+        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
+        'as_of': '2026-04-30',
+        'note': 'Displacement orders cover ~14% of Lebanese territory. Continued shelling, airstrikes, demolitions and movement restrictions reported particularly in southern Lebanon and parts of Nabatieh and Bekaa governorates despite April 17 ceasefire. Conditions have not enabled safe and sustained returns.'
     },
 
     'healthcare': {
-        'health_workers_killed_since_mar2': 57,
-        'health_workers_injured_since_mar2': None,
-        'healthcare_attacks_since_mar2': 25,
-        'hospitals_closed': 5,
-        'phccs_closed': 49,
+        'health_workers_killed_since_mar2': 103,
+        'health_workers_injured_since_mar2': 234,
+        'healthcare_attacks_since_mar2': 131,
+        'hospitals_closed': 6,
+        'hospitals_damaged': 15,
+        'phccs_closed': 51,
+        'phccs_damaged': 7,
         'phccs_emergency_only': None,
         'iom_patients_reached': 5922,
         'iom_tb_screening': 3173,
-        'source': 'Lebanese MoPH / IOM SitRep Update 5 / WHO',
-        'source_url': 'https://www.moph.gov.lb/',
-        'as_of': '2026-04-02',
-        'note': '57 healthcare workers killed since March 2. 5 hospitals and 49+ PHCCs closed. IOM has supported 5,922 IDPs with primary healthcare access since March 2; TB screening ongoing. IOM emergency transportation funding exhausted — critical service gap. Hospitals overwhelmed after April 8 mass casualty event.'
+        'unifil_peacekeepers_killed': 3,            # Indonesian contingent (29-30 March)
+        'source': 'WHO / Lebanese MoPH / OCHA Flash Update #22 / UNIFIL',
+        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
+        'as_of': '2026-04-30',
+        'note': 'WHO has documented 131+ attacks on healthcare since March 2: 103 health workers killed, 234 injured. Six hospitals closed and 15 damaged; 51 PHCCs closed and 7 damaged. Three Indonesian UNIFIL peacekeepers killed in late March (Ett-Taibe + Bani Hayyan incidents). IOM emergency transportation funding exhausted — critical service gap. The April 8 mass casualty event (203 killed, 1,150+ wounded in central Beirut) overwhelmed surviving facilities.'
+    },
+
+    'food_security': {
+        'people_in_ipc_phase3_or_above': 1240000,
+        'pct_population_food_insecure': 24,
+        'period': 'April – August 2026 projection',
+        'driver': 'Escalation since March, large-scale displacement, livelihood disruption, projected aid decline',
+        'source': 'Lebanon Acute Food Insecurity Report (cited in OCHA Flash Update #22)',
+        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
+        'as_of': '2026-04-30',
+        'note': '1.24M people (~24% of assessed population) projected to face acute food insecurity at IPC Phase 3 (Crisis) or above between April-August 2026 — significant increase from prior periods. Food remains nationally available but affordability is the primary constraint as prices rise and incomes decline.'
     },
 
     'flash_appeal': {
-        'amount_usd': 308300000,
-        'period': 'March – May 2026',
-        'target_beneficiaries': 1000000,
-        'launched': '2026-03-13',
-        'source': 'OCHA Flash Appeal Lebanon March-May 2026',
-        'source_url': 'https://www.unocha.org/publications/report/lebanon/flash-appeal-lebanon-march-may-2026-march-2026-enar',
-        'note': 'Launched jointly with GoL by UN Secretary-General Guterres during March 13 solidarity visit to Beirut.'
+        'amount_usd':              308300000,
+        'period':                  'March – May 2026',
+        'target_beneficiaries':    1000000,
+        'launched':                '2026-03-13',
+        'received_usd':            117000000,
+        'funded_pct':              38,
+        'unfunded_usd':            191300000,
+        'source':                  'OCHA Flash Appeal Lebanon March-May 2026 / OCHA Funding Tracker',
+        'source_url':              'https://www.unocha.org/publications/report/lebanon/flash-appeal-lebanon-march-may-2026-march-2026-enar',
+        'note':                    'Launched jointly with GoL by UN Secretary-General Guterres during March 13 solidarity visit to Beirut. As of late April, $117M received against $308.3M target — only 38% funded. Funding shortfall is a key driver of projected food insecurity worsening through August 2026.'
+    },
+
+    'ceasefire': {
+        'in_effect':         True,
+        'effective_date':    '2026-04-17',
+        'initial_duration':  '10 days',
+        'extension':         'Further 3 weeks (as of late April)',
+        'compliance':        'Holding broadly; localized strikes in southern Lebanon, Nabatieh, Bekaa continue',
+        'source':            'OCHA Flash Update #22',
+        'source_url':        'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
+        'as_of':             '2026-04-30',
+        'note':              '10-day ceasefire took effect April 17, 2026; subsequently extended for further 3 weeks. Some return movements observed but largely limited and tentative. Continued shelling, airstrikes, demolitions reported particularly in southern Lebanon. Lebanese government has banned all Hezbollah military activities; Hezbollah has rejected demand to surrender weapons. Direct Lebanese-Israeli diplomatic engagement reportedly underway despite Hezbollah opposition.'
     },
 
     'source_links': {
