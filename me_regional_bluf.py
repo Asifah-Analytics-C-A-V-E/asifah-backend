@@ -32,6 +32,15 @@ import requests
 from datetime import datetime, timezone
 
 import os
+
+# Lebanon humanitarian module (in-process import — same backend, same Python process)
+# Wrapped in try/except so ME BLUF still works if the module is unavailable.
+try:
+    from lebanon_humanitarian import get_humanitarian_data
+    LEBANON_HUMANITARIAN_AVAILABLE = True
+except ImportError:
+    LEBANON_HUMANITARIAN_AVAILABLE = False
+    print('[ME BLUF] lebanon_humanitarian module not available — humanitarian signals disabled')
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
 
@@ -492,6 +501,108 @@ def _extract_key_signals(trackers):
     return deduped[:TOP_SIGNALS_COUNT]
 
 
+def _build_lebanon_humanitarian_signal():
+    """
+    Build a high-priority humanitarian signal for Lebanon, sourced from
+    lebanon_humanitarian.STATIC_HUMANITARIAN + live DTM/ReliefWeb feeds.
+
+    Returns a dict matching the top_signals canonical schema, or None if:
+      - module unavailable
+      - data fetch fails
+      - casualty/displacement counts below salience threshold
+
+    Pressure type: humanitarian (purple #a855f7) — gets dedicated treatment in GPI.
+    Priority:      9 (very high — humanitarian crises >L4 should lead the BLUF)
+    Category:      'humanitarian_lebanon' (uniqueness key for dedupe)
+    """
+    if not LEBANON_HUMANITARIAN_AVAILABLE:
+        return None
+
+    try:
+        data = get_humanitarian_data(force_refresh=False)
+    except Exception as e:
+        print(f'[ME BLUF] Humanitarian fetch failed: {e}')
+        return None
+
+    if not data:
+        return None
+
+    # Prefer live DTM displacement count, fall back to static
+    static = data.get('static', {}) or {}
+    live   = data.get('dtm_displacement', {}) or {}
+
+    casualties   = static.get('casualties', {}) or {}
+    displacement = static.get('displacement', {}) or {}
+    healthcare   = static.get('healthcare', {}) or {}
+    appeal       = static.get('flash_appeal', {}) or {}
+    food         = static.get('food_security', {}) or {}
+
+    killed   = casualties.get('killed') or 0
+    injured  = casualties.get('injured') or 0
+    hw_killed   = healthcare.get('health_workers_killed_since_mar2') or 0
+    hc_attacks  = healthcare.get('healthcare_attacks_since_mar2') or 0
+
+    # Live DTM total preferred over static when available
+    live_total = (live.get('total_idps')
+                  or displacement.get('total_displaced_registered')
+                  or 0)
+
+    # Salience filter — don't surface a humanitarian signal if all metrics are essentially zero
+    if killed < 100 and live_total < 100000:
+        return None
+
+    # Format numbers for display
+    killed_fmt   = f'{killed:,}'  if killed   else '?'
+    injured_fmt  = f'{injured:,}' if injured  else '?'
+    idp_fmt      = f'{live_total/1_000_000:.1f}M' if live_total >= 1_000_000 else f'{live_total:,}'
+    appeal_pct   = appeal.get('funded_pct')
+
+    # Compose human-readable signal text
+    short_text = (
+        f'LEBANON humanitarian crisis: {idp_fmt} displaced, '
+        f'{killed_fmt} killed, {injured_fmt} injured'
+    )
+    if hc_attacks and hw_killed:
+        short_text += f' ({hc_attacks} healthcare attacks, {hw_killed} health workers killed)'
+
+    # Compose long_text with full context
+    long_text_parts = [
+        f'Lebanon humanitarian situation as of {static.get("last_manual_update", "unknown")}: '
+        f'{idp_fmt} people displaced ({displacement.get("total_displaced_pct_population", "?")}% of population), '
+        f'{killed_fmt} killed and {injured_fmt} injured since 2 March 2026.',
+    ]
+    if hc_attacks:
+        long_text_parts.append(
+            f'WHO has documented {hc_attacks} attacks on healthcare; '
+            f'{hw_killed} health workers killed, '
+            f'{healthcare.get("hospitals_closed", "?")} hospitals closed.'
+        )
+    if food.get('people_in_ipc_phase3_or_above'):
+        food_count = food['people_in_ipc_phase3_or_above']
+        long_text_parts.append(
+            f'{food_count/1_000_000:.2f}M people projected to face acute food insecurity '
+            f'(IPC Phase 3+) through August 2026.'
+        )
+    if appeal_pct is not None and appeal_pct < 60:
+        long_text_parts.append(
+            f'Flash Appeal only {appeal_pct}% funded '
+            f'(${appeal.get("received_usd", 0)/1_000_000:.0f}M of '
+            f'${appeal.get("amount_usd", 0)/1_000_000:.0f}M target).'
+        )
+
+    return {
+        'priority':       9,
+        'category':       'humanitarian_lebanon',
+        'theatre':        'lebanon',
+        'level':          5 if killed >= 1000 or live_total >= 500000 else 4,
+        'icon':           '🆘',
+        'color':          '#a855f7',           # purple — humanitarian (matches GPI PRESSURE_HUMANITARIAN axis)
+        'pressure_type':  'humanitarian',       # explicit so GPI doesn't have to infer
+        'short_text':     short_text[:120],
+        'long_text':      ' '.join(long_text_parts),
+    }
+
+
 def _write_bluf_prose(trackers, levels, scores, max_level,
                       theatres_at_l3plus, top_signals):
     """
@@ -590,6 +701,15 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
             f'{" under Iranian direction" if iran_directing else ""}'
             f'{"; LAF enforcement gap persists" if laf_gap else ""}.'
         )
+
+    # Lebanon humanitarian crisis sentence — derived from top_signals injection upstream.
+    # Phrasing pulls directly from the humanitarian signal we built so prose + signal stay consistent.
+    leb_humanitarian = next(
+        (s for s in top_signals if s.get('category') == 'humanitarian_lebanon'),
+        None
+    )
+    if leb_humanitarian:
+        parts.append(leb_humanitarian['short_text'] + '.')
 
     # Houthi silence if detected
     yemen_data    = trackers.get('yemen', {}) or {}
@@ -698,6 +818,18 @@ def build_regional_bluf(force=False):
 
     # Extract top 5 signals (was 3)
     top_signals = _extract_key_signals(trackers)
+
+    # Inject Lebanon humanitarian signal (if available + salient).
+    # The function returns None if module unavailable, data missing, or below threshold.
+    humanitarian_sig = _build_lebanon_humanitarian_signal()
+    if humanitarian_sig:
+        # Insert at top — humanitarian crisis at this scale leads the analyst-prose BLUF.
+        # If we already have N signals, this becomes N+1 — let the global sort handle it.
+        top_signals = [humanitarian_sig] + top_signals
+        # Re-sort by priority then keep top N (humanitarian sig has priority 9 → leads naturally)
+        top_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
+        top_signals = top_signals[:TOP_SIGNALS_COUNT]
+        print(f'[ME BLUF] Lebanon humanitarian signal injected: {humanitarian_sig["short_text"][:60]}...')
 
     # Write BLUF prose (now uses normalized shape)
     bluf_prose = _write_bluf_prose(
