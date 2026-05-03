@@ -592,16 +592,19 @@ def _fetch_commodity_pressure(commodity_id):
         if not cache:
             return None
 
-        commodity_summaries = cache.get('commodity_summaries', []) or []
-        for cs in commodity_summaries:
-            if cs.get('commodity_id') == commodity_id or cs.get('id') == commodity_id:
-                return {
-                    'alert_level':     cs.get('alert_level', 'normal'),
-                    'pressure_score':  cs.get('pressure_score', 0),
-                    'signal_count':    cs.get('signal_count', 0),
-                    'top_signal':      (cs.get('top_signals') or [{}])[0].get('title', '') if cs.get('top_signals') else '',
-                }
-        return None
+        # commodity_summaries is a DICT keyed by commodity_id (e.g. 'wheat', 'oil', 'cobalt')
+        # Each value is a summary dict with alert_level, signal_count, top_signals, etc.
+        commodity_summaries = cache.get('commodity_summaries', {}) or {}
+        cs = commodity_summaries.get(commodity_id)
+        if not cs or not isinstance(cs, dict):
+            return None
+
+        return {
+            'alert_level':     cs.get('alert_level', 'normal'),
+            'pressure_score':  cs.get('total_score', 0),    # commodity_tracker uses 'total_score', not 'pressure_score'
+            'signal_count':    cs.get('signal_count', 0),
+            'top_signal':      (cs.get('top_signals') or [{}])[0].get('title', '') if cs.get('top_signals') else '',
+        }
     except ImportError:
         return None
     except Exception as e:
