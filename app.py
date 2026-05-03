@@ -901,6 +901,14 @@ try:
 except ImportError:
     TELEGRAM_AVAILABLE = False
     print("[Main Backend] ⚠️ Telegram signals not available")
+
+try:
+    from bluesky_signals_me import fetch_bluesky_for_target
+    BLUESKY_AVAILABLE = True
+    print("[Main Backend] ✅ Bluesky ME signals available")
+except ImportError:
+    BLUESKY_AVAILABLE = False
+    print("[Main Backend] ⚠️ Bluesky ME signals not available")
 # Rhetoric Tracker — runs scan thread + serves endpoints
 try:
     from rhetoric_tracker import register_rhetoric_endpoints
@@ -5273,12 +5281,7 @@ def api_threat(target):
                         else:
                             skipped += 1
                     print(f"[Threat Scan] Telegram: {len(telegram_articles)} relevant / {skipped} skipped for {target}")
-            except Exception as e:
-                print(f"[Threat Scan] Telegram error: {str(e)[:100]}")
-
-        all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ar + 
-                       articles_gdelt_he + articles_gdelt_fa + articles_reddit +
-                       telegram_articles)
+            print(f"[Threat Scan] Telegram error: {str(e)[:100]}")
         
         # NEW: Fetch ALL RSS feeds (leadership rhetoric + Israeli news)
         print(f"[RSS] Fetching RSS feeds...")
