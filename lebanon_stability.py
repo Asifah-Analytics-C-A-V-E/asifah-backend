@@ -739,15 +739,99 @@ ISRAEL_PRESENCE_TIERS = {
             'full ground invasion lebanon', 'full scale invasion lebanon',
             'idf invades lebanon', 'israel invades lebanon',
             'ground invasion southern lebanon', 'israeli invasion of lebanon',
-            'occupation of southern lebanon', 'idf occupies lebanon',
-            'israeli troops advance deep into lebanon',
             'idf pushes north of litani', 'litani river crossing',
+            'idf advances deep into lebanon', 'major ground offensive lebanon',
+            'large-scale invasion lebanon', 'multi-division invasion lebanon',
+            # Hebrew
+            'פלישה מלאה ללבנון', 'פלישה רחבת היקף ללבנון',
+            # Arabic
+            'غزو شامل للبنان', 'اجتياح بري واسع لبنان',
+        ],
+        'level': 5,
+        'label': 'Full Ground Invasion',
+        'color': '#7f1d1d',
+        'badge_color': '#450a0a',
+        'description': 'Large-scale IDF ground offensive across southern Lebanon, advancing past Litani'
+    },
+    'occupation_5_points': {
+        'keywords': [
+            # Five-points specific
+            'five points southern lebanon', '5 points lebanon',
+            'five strategic positions lebanon', 'five hilltops lebanon',
+            'idf five posts lebanon', 'five idf positions lebanon',
+            'idf remains at five points', 'idf at five positions lebanon',
+            'five strategic posts southern lebanon', 'five border posts lebanon',
+            # Specific point names
+            'labbouneh', 'jabal blat', 'aitaroun',
+            'maroun al-ras', 'maroun al ras',
+            'beaufort ridge', 'beaufort castle',
+            'shebaa farms idf', 'mount dov idf',
+            'ayta ash-shab', 'ayta ash shab',
+            # Yellow line / security zone language (April 2026)
+            'yellow line lebanon', 'idf yellow line',
+            'security zone lebanon', 'security zone southern lebanon',
+            'forward defense line lebanon', 'forward defense southern lebanon',
+            'idf security zone southern lebanon',
+            'reestablished security zone', 'restored security zone lebanon',
+            'restoring security zone lebanon', 'security zone restored',
+            'enhanced forward defense posture',
+            # Buffer zone language
+            'buffer zone southern lebanon', 'idf buffer zone lebanon',
+            'two buffer zones lebanon',
+            # Occupation language
+            'idf occupation lebanon', 'israeli occupation southern lebanon',
+            'occupation of southern lebanon', 'occupied southern lebanon',
+            'israel occupies lebanon', 'occupy lebanese territory',
+            'occupying lebanese territory', 'occupy southern lebanon',
+            'idf occupies southern lebanon',
+            'idf remains in lebanon', 'idf stays in lebanon',
+            'continued idf presence lebanon', 'idf continued presence lebanon',
+            'israel will remain in lebanon', 'idf will stay in lebanon',
+            'indefinite occupation lebanon',
+            # Demolition operations
+            'demolition southern lebanon', 'demolish buildings lebanon',
+            'controlled demolition lebanon', 'idf demolitions lebanon',
+            'destroyed buildings southern lebanon',
+            'demolished homes southern lebanon',
+            # Ongoing strikes despite ceasefire
+            'daily strikes southern lebanon', 'strikes despite ceasefire lebanon',
+            'idf strikes despite ceasefire', 'continued strikes lebanon',
+            'ceasefire violations strikes', 'post-ceasefire strikes lebanon',
+            # Avichay Adraee evacuation orders (high-signal indicator)
+            'avichay adraee', 'adraee evacuation', 'adraee evacuation order',
+            'idf arabic spokesperson evacuation lebanon',
+            'evacuate north of litani', 'move north of litani',
+            'idf evacuation order southern lebanon',
+            # Divisions deployed during March-April 2026 escalation
+            '36th division lebanon', '91st division lebanon',
+            '98th division lebanon', '146th division lebanon',
+            '162nd division lebanon',
+            'five divisions southern lebanon', 'five idf divisions lebanon',
+            'multiple divisions southern lebanon',
+            # Specific named operations / ground actions in this state
+            'bint jbeil battle', 'fighting in bint jbeil',
+            'khiam fighting', 'battle of khiam',
+            'rab el thalathine', 'qaouzah lebanon',
+            # Hebrew
+            'חמש נקודות', 'אזור ביטחון לבנון',
+            'הקו הצהוב', 'כיבוש דרום לבנון',
+            'נשארים בלבנון', 'נקודות אסטרטגיות',
+            'הריסת מבנים בדרום לבנון', 'אפיחי אדרעי',
+            'אזור הביטחון', 'קו הביטחון',
+            'נקודות צה״ל בלבנון',
+            # Arabic
+            'النقاط الخمس', 'احتلال جنوب لبنان',
+            'المنطقة العازلة', 'الخط الأصفر',
+            'خمس نقاط استراتيجية', 'المواقع الخمسة',
+            'إخلاء جنوب لبنان', 'أفيخاي أدرعي',
+            'الجيش الإسرائيلي يبقى', 'الانسحاب من جنوب لبنان',
+            'النقاط الإسرائيلية', 'المناطق الخمس',
         ],
         'level': 4,
-        'label': 'Full Ground Invasion',
+        'label': 'Occupation (5 Points + Buffer Zone)',
         'color': '#dc2626',
         'badge_color': '#991b1b',
-        'description': 'Large-scale IDF ground operations across southern Lebanon'
+        'description': 'IDF retains 5 strategic positions in southern Lebanon with active buffer zone, ongoing strikes and demolitions despite ceasefire'
     },
     'active_ground_ops': {
         'keywords': [
@@ -780,7 +864,7 @@ ISRAEL_PRESENCE_TIERS = {
         'label': 'Active Ground Operations',
         'color': '#ea580c',
         'badge_color': '#9a3412',
-        'description': 'IDF conducting ground operations in southern Lebanon border zone'
+        'description': 'IDF conducting active ground operations in southern Lebanon border zone'
     },
     'limited_incursions': {
         'keywords': [
@@ -1114,7 +1198,7 @@ def scan_security_situation(days=7):
     israel_presence = ISRAEL_PRESENCE_TIERS['no_presence'].copy()
     israel_presence['indicators'] = []
 
-    for tier_key in ['full_invasion', 'active_ground_ops', 'limited_incursions']:
+    for tier_key in ['full_invasion', 'occupation_5_points', 'active_ground_ops', 'limited_incursions']:
         tier = ISRAEL_PRESENCE_TIERS[tier_key]
         matched = []
         for kw in tier['keywords']:
@@ -1411,12 +1495,15 @@ def calculate_lebanon_stability(currency_data, bond_data, hezbollah_data, securi
     else:
         ceasefire_bonus = 0  # Collapsed or unknown — no bonus
     
-    # ── Israeli ground presence penalty (v3.0.0) ──
+    # ── Israeli ground presence penalty (v3.3.0 — expanded ladder) ──
+    # Ladder: L5 full invasion, L4 occupation/5 points, L3 active ops, L2 incursions, L1 none
     ground_ops_penalty = 0
     if security_data and 'israeli_presence' in security_data:
         presence_level = security_data['israeli_presence'].get('level', 1)
-        if presence_level >= 4:
-            ground_ops_penalty = 15  # Full invasion
+        if presence_level >= 5:
+            ground_ops_penalty = 18  # Full invasion
+        elif presence_level >= 4:
+            ground_ops_penalty = 13  # Occupation / 5 points + buffer zone
         elif presence_level >= 3:
             ground_ops_penalty = 10  # Active ground ops
         elif presence_level >= 2:
