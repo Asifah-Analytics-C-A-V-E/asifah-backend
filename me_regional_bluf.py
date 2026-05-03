@@ -32,17 +32,27 @@ import requests
 from datetime import datetime, timezone
 
 import os
-
-# Lebanon humanitarian module (in-process import — same backend, same Python process)
-# Wrapped in try/except so ME BLUF still works if the module is unavailable.
-try:
-    from lebanon_humanitarian import get_humanitarian_data
-    LEBANON_HUMANITARIAN_AVAILABLE = True
-except ImportError:
-    LEBANON_HUMANITARIAN_AVAILABLE = False
-    print('[ME BLUF] lebanon_humanitarian module not available — humanitarian signals disabled')
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
+
+# ============================================================
+# LEBANON HUMANITARIAN BACKEND (cross-backend HTTP fetch)
+# ============================================================
+# lebanon_humanitarian module lives on a SEPARATE Render backend
+# (lebanon-stability-backend.onrender.com). ME BLUF fetches via HTTP
+# and caches in its own Redis to avoid hammering the Lebanon backend.
+#
+# Pattern mirrors commodity_proxy_europe.py:
+#   1. Try Redis cache (12hr TTL) — return if fresh
+#   2. On miss → HTTP fetch from Lebanon backend
+#   3. Write-through cache → return fresh data
+#   4. On Lebanon backend failure → return None (humanitarian signal omitted, BLUF still works)
+LEBANON_HUMANITARIAN_BACKEND = os.environ.get(
+    'LEBANON_HUMANITARIAN_BACKEND_URL',
+    'https://lebanon-stability-backend.onrender.com'
+)
+LEBANON_HUMANITARIAN_CACHE_KEY = 'me_bluf:lebanon_humanitarian'
+LEBANON_HUMANITARIAN_CACHE_TTL = 12 * 3600    # 12 hours — humanitarian data is structural, not minute-by-minute
 
 BLUF_CACHE_KEY = 'rhetoric:me:regional_bluf'
 BLUF_CACHE_TTL = 14 * 3600  # 14h -- outlasts any individual tracker TTL
@@ -501,13 +511,62 @@ def _extract_key_signals(trackers):
     return deduped[:TOP_SIGNALS_COUNT]
 
 
+# ============================================================
+# LEBANON HUMANITARIAN — CROSS-BACKEND FETCH + CACHE
+# ============================================================
+def _fetch_lebanon_humanitarian():
+    """
+    Fetch Lebanon humanitarian data from lebanon-stability-backend with
+    Redis caching. Pattern mirrors commodity_proxy_europe.py.
+
+    Returns:
+        dict — humanitarian data payload (matches /api/lebanon/humanitarian schema)
+        None — if backend unreachable AND no cache available (BLUF continues without humanitarian)
+    """
+    # 1. Try cache first
+    cached = _redis_get(LEBANON_HUMANITARIAN_CACHE_KEY)
+    if cached:
+        try:
+            data = json.loads(cached) if isinstance(cached, str) else cached
+            cached_at_str = data.get('_cached_at')
+            if cached_at_str:
+                cached_at = datetime.fromisoformat(cached_at_str)
+                age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+                if age < LEBANON_HUMANITARIAN_CACHE_TTL:
+                    print(f'[ME BLUF] Lebanon humanitarian: cache hit (age {age/3600:.1f}h)')
+                    return data
+        except Exception as e:
+            print(f'[ME BLUF] Lebanon humanitarian cache parse error: {e}')
+
+    # 2. Cache miss or stale — fetch from Lebanon backend
+    try:
+        url = f'{LEBANON_HUMANITARIAN_BACKEND}/api/lebanon/humanitarian'
+        resp = requests.get(url, timeout=15)
+        if resp.status_code != 200:
+            print(f'[ME BLUF] Lebanon backend HTTP {resp.status_code}; using stale cache if any')
+            return cached  # may be stale but better than nothing
+        data = resp.json()
+        # Stamp cached_at and write through
+        data['_cached_at'] = datetime.now(timezone.utc).isoformat()
+        try:
+            _redis_set(LEBANON_HUMANITARIAN_CACHE_KEY, json.dumps(data, default=str),
+                       ttl=LEBANON_HUMANITARIAN_CACHE_TTL)
+            print(f'[ME BLUF] Lebanon humanitarian: fresh fetch + cached ({LEBANON_HUMANITARIAN_CACHE_TTL/3600:.0f}h TTL)')
+        except Exception as e:
+            print(f'[ME BLUF] Lebanon humanitarian cache write failed: {e}')
+        return data
+    except Exception as e:
+        print(f'[ME BLUF] Lebanon humanitarian fetch failed: {e}; returning stale cache if any')
+        return cached  # graceful degradation
+
+
 def _build_lebanon_humanitarian_signal():
     """
-    Build a high-priority humanitarian signal for Lebanon, sourced from
-    lebanon_humanitarian.STATIC_HUMANITARIAN + live DTM/ReliefWeb feeds.
+    Build a high-priority humanitarian signal for Lebanon, sourced via HTTP
+    from lebanon-stability-backend.
 
     Returns a dict matching the top_signals canonical schema, or None if:
-      - module unavailable
+      - backend unreachable AND no cache
       - data fetch fails
       - casualty/displacement counts below salience threshold
 
@@ -515,15 +574,7 @@ def _build_lebanon_humanitarian_signal():
     Priority:      9 (very high — humanitarian crises >L4 should lead the BLUF)
     Category:      'humanitarian_lebanon' (uniqueness key for dedupe)
     """
-    if not LEBANON_HUMANITARIAN_AVAILABLE:
-        return None
-
-    try:
-        data = get_humanitarian_data(force_refresh=False)
-    except Exception as e:
-        print(f'[ME BLUF] Humanitarian fetch failed: {e}')
-        return None
-
+    data = _fetch_lebanon_humanitarian()
     if not data:
         return None
 
@@ -547,7 +598,7 @@ def _build_lebanon_humanitarian_signal():
                   or displacement.get('total_displaced_registered')
                   or 0)
 
-    # Salience filter — don't surface a humanitarian signal if all metrics are essentially zero
+    # Salience filter — don't surface humanitarian signal if all metrics below threshold
     if killed < 100 and live_total < 100000:
         return None
 
@@ -703,7 +754,7 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
         )
 
     # Lebanon humanitarian crisis sentence — derived from top_signals injection upstream.
-    # Phrasing pulls directly from the humanitarian signal we built so prose + signal stay consistent.
+    # Phrasing pulls directly from the humanitarian signal so prose + signal stay consistent.
     leb_humanitarian = next(
         (s for s in top_signals if s.get('category') == 'humanitarian_lebanon'),
         None
@@ -819,14 +870,14 @@ def build_regional_bluf(force=False):
     # Extract top 5 signals (was 3)
     top_signals = _extract_key_signals(trackers)
 
-    # Inject Lebanon humanitarian signal (if available + salient).
-    # The function returns None if module unavailable, data missing, or below threshold.
+    # Inject Lebanon humanitarian signal (cross-backend fetch — see _build_lebanon_humanitarian_signal).
+    # Function returns None if backend unreachable, data missing, or below salience threshold.
     humanitarian_sig = _build_lebanon_humanitarian_signal()
     if humanitarian_sig:
         # Insert at top — humanitarian crisis at this scale leads the analyst-prose BLUF.
-        # If we already have N signals, this becomes N+1 — let the global sort handle it.
+        # If we already have N signals, this becomes N+1 — global sort handles it.
         top_signals = [humanitarian_sig] + top_signals
-        # Re-sort by priority then keep top N (humanitarian sig has priority 9 → leads naturally)
+        # Re-sort by priority and trim (humanitarian sig has priority 9 → leads naturally)
         top_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
         top_signals = top_signals[:TOP_SIGNALS_COUNT]
         print(f'[ME BLUF] Lebanon humanitarian signal injected: {humanitarian_sig["short_text"][:60]}...')
