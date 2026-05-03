@@ -620,6 +620,74 @@ def _narrative_arctic_convergence(blufs):
     return None
 
 
+# ════════════════════════════════════════════════════════════════════
+# REGISTRY-DRIVEN CONVERGENCE DETECTOR (Layer 1)
+# ════════════════════════════════════════════════════════════════════
+def _detect_convergences_from_registry(blufs):
+    """
+    Generic Tier-1 cross-axis convergence detector.
+
+    Loops CONVERGENCE_REGISTRY entries, checks each one's trigger signal in the
+    appropriate regional BLUF, and emits a narrative for any active convergence.
+
+    A convergence is "active" when:
+      - The trigger signal exists in the trigger_region's BLUF
+      - The signal carries the per-convergence flag (e.g. {id}_active = True)
+        which is set by ME BLUF's Layer 2 enrichment when commodity threshold is met
+
+    Adding a new convergence is now zero-code in this file — just add a registry entry
+    in convergence_registry.py and Layer 2 takes care of the flag-setting upstream.
+
+    Returns:
+        list of narrative dicts (possibly empty) — one per active convergence.
+    """
+    try:
+        from convergence_registry import (
+            CONVERGENCE_REGISTRY,
+            format_headline,
+        )
+    except ImportError:
+        # Registry module not available — silent no-op
+        return []
+
+    matches = []
+    for entry in CONVERGENCE_REGISTRY:
+        region = entry.get('trigger_region')
+        bluf = blufs.get(region)
+        if not bluf:
+            continue
+
+        # Find the trigger signal in this region's BLUF
+        signals = _signals_of(bluf)
+        trigger_sig = next(
+            (s for s in signals if s.get('category') == entry['trigger_signal_category']),
+            None
+        )
+        if not trigger_sig:
+            continue
+
+        # Check the per-convergence flag set by Layer 2
+        active_flag = f'{entry["id"]}_active'
+        if not trigger_sig.get(active_flag):
+            continue
+
+        # Pull the convergence state stamped by Layer 2 (alert level + signal count)
+        states = trigger_sig.get('convergence_states') or {}
+        state = states.get(entry['id']) or {}
+        alert_level = state.get('alert_level', 'elevated')
+
+        matches.append({
+            'priority': entry['priority'],
+            'category': entry['id'],
+            'regions':  list(entry.get('regions', [])),
+            'icon':     entry['icon'],
+            'color':    entry['color'],
+            'headline': format_headline(entry, alert_level),
+            'detail':   entry['detail'],
+        })
+    return matches
+
+
 def _narrative_houthi_fragility(blufs):
     """Yemen baseline + Iran-US off-ramp active = fragile quiescence narrative."""
     me = blufs.get('me')
@@ -744,6 +812,7 @@ NARRATIVE_DETECTORS = [
     _narrative_dual_chokepoint,
     _narrative_russia_iran_axis,
     _narrative_arctic_convergence,
+    _detect_convergences_from_registry,    # NEW: registry-driven (returns LIST of narratives)
     _narrative_dprk_russia_axis,
     _narrative_wha_cascade,
     _narrative_houthi_fragility,
@@ -753,13 +822,25 @@ NARRATIVE_DETECTORS = [
 
 
 def _detect_narratives(blufs):
-    """Run all detectors and return narratives sorted by priority descending."""
+    """Run all detectors and return narratives sorted by priority descending.
+
+    Detectors may return either:
+      - a single narrative dict
+      - a list of narrative dicts (e.g. registry-driven convergence detector)
+      - None (no match)
+    """
     narratives = []
     for detector in NARRATIVE_DETECTORS:
         try:
-            narrative = detector(blufs)
-            if narrative:
-                narratives.append(narrative)
+            result = detector(blufs)
+            if not result:
+                continue
+            if isinstance(result, list):
+                # List-returning detector — extend
+                narratives.extend(result)
+            else:
+                # Single-narrative detector — append
+                narratives.append(result)
         except Exception as e:
             print(f'[GPI v2.0] Narrative detector error ({detector.__name__}): {str(e)[:120]}')
     narratives.sort(key=lambda n: n.get('priority', 0), reverse=True)
@@ -880,7 +961,7 @@ def _build_global_top_signals(blufs, narratives):
                 'theatre':    region,
                 'level':      sig.get('level', 0),
                 'icon':       sig.get('icon', '\u2022'),
-                'color':      sig.get('color', '#38bdf8'),  # arctic cyan fallback (was #6b7280 gray) — draws eye to commodity + uncolored signals
+                'color':      sig.get('color', '#6b7280'),
                 'short_text': sig.get('short_text', sig.get('text', ''))[:80],
                 'long_text':  sig.get('long_text', sig.get('short_text', '')),
                 # No 'regions' key — single-region signals naturally Tier 2 or 4

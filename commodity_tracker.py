@@ -671,6 +671,10 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'natural_gas':  {'role': 'producer',          'weight': 0.8,
                          'note': 'Leviathan + Tamar fields; exports to Egypt/Jordan'},
     },
+    'lebanon': {
+        'wheat':        {'role': 'consumer',          'weight': 1.5,
+                         'note': 'Critical import dependency: ~60-67% of wheat from Ukraine alone, ~80-90% combined Black Sea (UA+RU). National wheat reserves ~1 month — never rebuilt after 2020 Beirut port explosion destroyed national grain silos. 2022 Ukraine war caused immediate rationing and price spike. Active humanitarian crisis (1M+ displaced, 1.24M IPC Phase 3+ projected through Aug 2026) compounds wheat-import vulnerability — any Black Sea disruption is materially worse during humanitarian crisis. Watch: Black Sea grain corridor status, Russian wheat export taxes, Lebanese Mills Association statements.'},
+    },
     'kazakhstan': {
         'uranium':      {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': 'World #1 uranium producer (~40% of global supply); Kazatomprom dominates ISR mining; 14 JVs hedge across Cameco/Orano/Rosatom/CGN; SMR demand wave 2025-2030 critical'},

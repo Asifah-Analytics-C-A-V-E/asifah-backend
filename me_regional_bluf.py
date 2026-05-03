@@ -560,6 +560,111 @@ def _fetch_lebanon_humanitarian():
         return cached  # graceful degradation
 
 
+def _fetch_commodity_pressure(commodity_id):
+    """
+    Generic helper: fetch the global commodity pressure state for any commodity.
+    Used by Layer 2 convergence enrichment — replaces bespoke per-commodity fetchers.
+
+    Reads commodity_tracker output via in-process helper. Imported lazily so
+    ME BLUF still works if commodity_tracker is unavailable.
+
+    Args:
+        commodity_id: e.g. 'wheat', 'oil', 'cobalt' — must match commodity_tracker.COMMODITY_TYPES key
+
+    Returns:
+        dict — {'alert_level': str, 'pressure_score': float, 'signal_count': int,
+                'top_signal': str}
+               where alert_level is one of: 'normal', 'elevated', 'high', 'surge'
+        None — if commodity_tracker unavailable or no data yet
+    """
+    try:
+        # commodity_tracker lives in the same backend process — direct import OK
+        from commodity_tracker import load_commodity_cache
+        cache = load_commodity_cache()
+        if not cache:
+            return None
+
+        commodity_summaries = cache.get('commodity_summaries', []) or []
+        for cs in commodity_summaries:
+            if cs.get('commodity_id') == commodity_id or cs.get('id') == commodity_id:
+                return {
+                    'alert_level':     cs.get('alert_level', 'normal'),
+                    'pressure_score':  cs.get('pressure_score', 0),
+                    'signal_count':    cs.get('signal_count', 0),
+                    'top_signal':      (cs.get('top_signals') or [{}])[0].get('title', '') if cs.get('top_signals') else '',
+                }
+        return None
+    except ImportError:
+        return None
+    except Exception as e:
+        print(f'[ME BLUF] Commodity pressure fetch failed for {commodity_id}: {e}')
+        return None
+
+
+def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
+    """
+    Generic Layer 2 enrichment: looks up CONVERGENCE_REGISTRY for any convergences
+    registered for this country. For each match, checks if the relevant commodity
+    is at or above its configured threshold. If yes, appends enrichment text to
+    long_text_parts AND sets the convergence flag on signal_dict.
+
+    Args:
+        country:       country name (must match registry entries)
+        signal_dict:   the signal dict being built — convergence flags get added IN PLACE
+        long_text_parts: list of strings being assembled into long_text — appended IN PLACE
+
+    Returns:
+        list of activated convergence ids (empty if none matched)
+    """
+    activated = []
+    try:
+        from convergence_registry import (
+            find_convergences_for_country,
+            alert_meets_threshold,
+            format_enrichment_text,
+        )
+    except ImportError:
+        # Registry module not available — silent no-op (defensive)
+        return activated
+
+    convergences = find_convergences_for_country(country)
+    if not convergences:
+        return activated
+
+    for entry in convergences:
+        commodity_id = entry['commodity']
+        threshold    = entry['commodity_threshold']
+
+        commodity_state = _fetch_commodity_pressure(commodity_id)
+        if not commodity_state:
+            continue
+
+        actual_alert = commodity_state.get('alert_level', 'normal')
+        if not alert_meets_threshold(actual_alert, threshold):
+            continue
+
+        # Convergence is active — enrich the signal
+        signals_count = commodity_state.get('signal_count', 0)
+        enrichment_text = format_enrichment_text(entry, actual_alert, signals_count)
+        long_text_parts.append(enrichment_text)
+
+        # Set per-convergence flag on the signal so Layer 1 (GPI) can detect it.
+        # Convention: signal['{convergence_id}_active'] = True
+        # AND signal['convergence_states'][{id}] = full state dict
+        signal_dict[f'{entry["id"]}_active'] = True
+        signal_dict.setdefault('convergence_states', {})[entry['id']] = {
+            'alert_level':     actual_alert,
+            'signal_count':    signals_count,
+            'commodity':       commodity_id,
+            'commodity_state': commodity_state,
+        }
+        activated.append(entry['id'])
+        print(f'[ME BLUF] Convergence activated: {entry["id"]} ({commodity_id} at {actual_alert.upper()})')
+
+    return activated
+
+
+
 def _build_lebanon_humanitarian_signal():
     """
     Build a high-priority humanitarian signal for Lebanon, sourced via HTTP
@@ -646,7 +751,10 @@ def _build_lebanon_humanitarian_signal():
             f'${appeal.get("amount_usd", 0)/1_000_000:.0f}M target).'
         )
 
-    return {
+    # Build the signal first so we can pass it into the registry-driven enrichment.
+    # The enrichment helper mutates signal_dict and long_text_parts in place,
+    # adding any active convergences (e.g. wheat-Lebanon if global wheat is in surge).
+    signal = {
         'priority':       9,
         'category':       'humanitarian_lebanon',
         'theatre':        'lebanon',
@@ -655,8 +763,18 @@ def _build_lebanon_humanitarian_signal():
         'color':          '#a855f7',           # purple — humanitarian (matches GPI PRESSURE_HUMANITARIAN axis)
         'pressure_type':  'humanitarian',       # explicit so GPI doesn't have to infer
         'short_text':     short_text[:120],
-        'long_text':      ' '.join(long_text_parts),
     }
+
+    # ── Layer 2 enrichment: registry-driven convergence detection ──
+    # Looks up CONVERGENCE_REGISTRY for any convergences registered for this country,
+    # checks each commodity's threshold, and appends enrichment text + sets flags.
+    # Adding a new convergence for Lebanon (e.g. lebanon-fertilizer) needs zero code change here.
+    _apply_convergence_enrichments('lebanon', signal, long_text_parts)
+
+    # Finalize long_text after all enrichments have appended
+    signal['long_text'] = ' '.join(long_text_parts)
+
+    return signal
 
 
 def _write_bluf_prose(trackers, levels, scores, max_level,
