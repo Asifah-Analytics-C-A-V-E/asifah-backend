@@ -578,15 +578,20 @@ def _build_lebanon_humanitarian_signal():
     if not data:
         return None
 
-    # Prefer live DTM displacement count, fall back to static
-    static = data.get('static', {}) or {}
-    live   = data.get('dtm_displacement', {}) or {}
+    # Lebanon humanitarian endpoint returns FLAT structure (not nested under 'static').
+    # Casualties / displacement / etc. are top-level keys.
+    # DTM live data lives under 'dtm_raw' (not 'dtm_displacement').
+    casualties   = data.get('casualties', {}) or {}
+    displacement = data.get('displacement', {}) or {}
+    healthcare   = data.get('healthcare', {}) or {}
+    appeal       = data.get('flash_appeal', {}) or {}
+    food         = data.get('food_security', {}) or {}
+    last_update  = data.get('last_manual_update', 'unknown')
 
-    casualties   = static.get('casualties', {}) or {}
-    displacement = static.get('displacement', {}) or {}
-    healthcare   = static.get('healthcare', {}) or {}
-    appeal       = static.get('flash_appeal', {}) or {}
-    food         = static.get('food_security', {}) or {}
+    # Live DTM displacement count — nested inside dtm_raw.country_level if present
+    dtm_raw      = data.get('dtm_raw', {}) or {}
+    dtm_country  = (dtm_raw.get('country_level') or {}) if dtm_raw else {}
+    live_idps    = dtm_country.get('total_idps') if dtm_country else None
 
     killed   = casualties.get('killed') or 0
     injured  = casualties.get('injured') or 0
@@ -594,7 +599,7 @@ def _build_lebanon_humanitarian_signal():
     hc_attacks  = healthcare.get('healthcare_attacks_since_mar2') or 0
 
     # Live DTM total preferred over static when available
-    live_total = (live.get('total_idps')
+    live_total = (live_idps
                   or displacement.get('total_displaced_registered')
                   or 0)
 
@@ -618,7 +623,7 @@ def _build_lebanon_humanitarian_signal():
 
     # Compose long_text with full context
     long_text_parts = [
-        f'Lebanon humanitarian situation as of {static.get("last_manual_update", "unknown")}: '
+        f'Lebanon humanitarian situation as of {last_update}: '
         f'{idp_fmt} people displaced ({displacement.get("total_displaced_pct_population", "?")}% of population), '
         f'{killed_fmt} killed and {injured_fmt} injured since 2 March 2026.',
     ]
