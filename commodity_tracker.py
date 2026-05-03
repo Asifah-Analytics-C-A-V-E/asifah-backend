@@ -1915,6 +1915,11 @@ def get_commodity_pressure(target):
                 'sparkline':       full_summary.get('sparkline'),
                 'signal_count':    breakdown.get('signal_count'),
                 'top_signals':     breakdown.get('top_signals', []),
+                # Global state of this commodity (from full_summary, not country breakdown)
+                # This is what country pages need to show "wheat is in SURGE globally"
+                'global_alert_level':   full_summary.get('alert_level', 'normal'),
+                'global_signal_count':  full_summary.get('signal_count', 0),
+                'global_total_score':   full_summary.get('total_score', 0),
             })
 
         return {
