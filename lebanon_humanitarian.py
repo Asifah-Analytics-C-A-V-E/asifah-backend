@@ -469,6 +469,8 @@ def get_humanitarian_data(force_refresh=False):
         'evacuation_orders': STATIC_HUMANITARIAN['evacuation_orders'],
         'healthcare': STATIC_HUMANITARIAN['healthcare'],
         'flash_appeal': STATIC_HUMANITARIAN['flash_appeal'],
+        'food_security': STATIC_HUMANITARIAN.get('food_security', {}),
+        'ceasefire': STATIC_HUMANITARIAN.get('ceasefire', {}),
 
         'dtm_raw': dtm_data,
         'reliefweb_reports': reliefweb_data.get('reports', []) if reliefweb_data else [],
