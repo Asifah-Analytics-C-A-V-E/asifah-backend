@@ -32,6 +32,14 @@ import requests
 from datetime import datetime, timezone
 
 import os
+
+# ════════════════════════════════════════════════════════════════════
+# DEPLOY MARKER v2.1.0 — fires ONCE when this module is imported.
+# If you see this in Render logs, the new code is loaded into the worker.
+# If you DON'T see this, Render is running an older cached version.
+# ════════════════════════════════════════════════════════════════════
+print('[ME BLUF DEPLOY MARKER v2.1.0] Module loaded — Lebanon humanitarian + convergence registry active')
+
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
 
@@ -679,8 +687,10 @@ def _build_lebanon_humanitarian_signal():
     Priority:      9 (very high — humanitarian crises >L4 should lead the BLUF)
     Category:      'humanitarian_lebanon' (uniqueness key for dedupe)
     """
+    print('[ME BLUF MARKER] _build_lebanon_humanitarian_signal() called')
     data = _fetch_lebanon_humanitarian()
     if not data:
+        print('[ME BLUF MARKER] _fetch_lebanon_humanitarian returned None — aborting signal build')
         return None
 
     # Lebanon humanitarian endpoint returns FLAT structure (not nested under 'static').
@@ -708,9 +718,13 @@ def _build_lebanon_humanitarian_signal():
                   or displacement.get('total_displaced_registered')
                   or 0)
 
+    print(f'[ME BLUF MARKER] Humanitarian metrics: killed={killed}, injured={injured}, live_total={live_total}, hc_attacks={hc_attacks}')
+
     # Salience filter — don't surface humanitarian signal if all metrics below threshold
     if killed < 100 and live_total < 100000:
+        print(f'[ME BLUF MARKER] Salience filter triggered — signal suppressed (killed={killed}, live_total={live_total})')
         return None
+    print('[ME BLUF MARKER] Salience filter passed — building signal')
 
     # Format numbers for display
     killed_fmt   = f'{killed:,}'  if killed   else '?'
