@@ -45,15 +45,14 @@ SESSION_NAME      = 'asifah_session'
 LEBANON_CHANNELS = [
     # Palestinian / Resistance axis breaking news
     'QudsN',                # Quds News Network — 722K subs, resistance-axis Arabic breaking news
-    # Israeli/IDF sources
-    'avichay_adraee',       # IDF Arabic spokesperson — evacuation warningsLEBANON_CHANNELS = [
-    # Israeli/IDF sources
-    'avichay_adraee',       # IDF Arabic spokesperson — evacuation warnings
-    'idfonline',            # IDF English spokesperson
+    # Israeli/IDF sources — IDF, IDF Arabic spokesperson, Hebrew media
+    'idfofficial',          # IDF English official (CORRECTED from idfonline which 404s)
+    'idfonline',            # IDF English (legacy fallback handle — kept in case any deploys still use it)
+    'avichay_adraee',       # IDF Arabic spokesperson — evacuation warnings, primary signal for L4 occupation detection
     'AbuAliExpress',        # Abu Ali Express — bilingual Hebrew/Arabic OSINT
     'kann_news',            # Kann News — Hebrew breaking alerts
     'channel14news',        # Channel 14 — right-leaning, fast on military
-    # Lebanese sources — existing
+    # Lebanese sources — Lebanese media (Arabic + English)
     'ManarNewsEN',          # Al-Manar English (FIXED: was almanar_tv)
     'almanarnews',          # Al-Manar Arabic (FIXED: was almanar_tv)
     'almayadeenenglish',    # Al-Mayadeen English (FIXED: was almayadeen_net)
@@ -66,8 +65,8 @@ LEBANON_CHANNELS = [
     'LebUpdate',            # Lebanese News and Updates — EN/AR mix, 75K subs, fast OSINT
     'lebanonnews2',         # Lebanon News 2 — Arabic, ground reporters across Lebanon
     'UNIFIL_Lebanon',       # UNIFIL official — bilingual, key for 1701 enforcement signals
-    'almanarnews',          # Al-Manar Arabic (duplicate guard handled by dedup logic)
 ]
+
 
 YEMEN_CHANNELS = [
     # Houthi / Ansar Allah
@@ -76,7 +75,8 @@ YEMEN_CHANNELS = [
     'almayadeenenglish',    # Al-Mayadeen -- Houthi resistance axis
     # Israeli/IDF — watching IDF actions against Houthis
     'avichay_adraee',       # IDF Arabic spokesperson
-    'idfonline',            # IDF English
+    'idfofficial',          # IDF English official (primary handle)
+    'idfonline',            # IDF English (legacy fallback)
     'AbuAliExpress',        # Abu Ali Express — bilingual OSINT
     'kann_news',            # Kan News — Hebrew
     # Red Sea / Maritime OSINT
@@ -109,7 +109,8 @@ SYRIA_CHANNELS = [
     'almayadeenenglish',    # Al-Mayadeen — HTS/Syria coverage
     # Israeli strikes in Syria
     'avichay_adraee',       # IDF Arabic — Israeli strike announcements
-    'idfonline',            # IDF English
+    'idfofficial',          # IDF English official (primary handle)
+    'idfonline',            # IDF English (legacy fallback)
     'AbuAliExpress',        # Abu Ali Express — Israel/Syria OSINT
     # Druze / Suwayda watch
     'OSINTdefender',        # Covers southern Syria Israeli activity
