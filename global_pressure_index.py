@@ -880,7 +880,7 @@ def _build_global_top_signals(blufs, narratives):
                 'theatre':    region,
                 'level':      sig.get('level', 0),
                 'icon':       sig.get('icon', '\u2022'),
-                'color':      sig.get('color', '#6b7280'),
+                'color':      sig.get('color', '#38bdf8'),  # arctic cyan fallback (was #6b7280 gray) — draws eye to commodity + uncolored signals
                 'short_text': sig.get('short_text', sig.get('text', ''))[:80],
                 'long_text':  sig.get('long_text', sig.get('short_text', '')),
                 # No 'regions' key — single-region signals naturally Tier 2 or 4
