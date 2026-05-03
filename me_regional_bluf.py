@@ -765,6 +765,28 @@ def _build_lebanon_humanitarian_signal():
             f'${appeal.get("amount_usd", 0)/1_000_000:.0f}M target).'
         )
 
+    # ── UNIFIL peacekeeper casualties — national-stake diplomatic signal ──
+    # Each killed peacekeeper triggers high-level reaction from contributing nation.
+    # Currently: 4 Indonesian + 2 French = 6 dead in 2026. France maintains Lebanon
+    # commitment after UNIFIL drawdown end-2026 per Macron April 22 statement.
+    unifil_killed = healthcare.get('unifil_peacekeepers_killed') or 0
+    if unifil_killed > 0:
+        unifil_id = healthcare.get('unifil_peacekeepers_killed_indonesian') or 0
+        unifil_fr = healthcare.get('unifil_peacekeepers_killed_french') or 0
+        if unifil_id and unifil_fr:
+            breakdown = f' ({unifil_id} Indonesian, {unifil_fr} French)'
+        elif unifil_id:
+            breakdown = f' ({unifil_id} Indonesian)'
+        elif unifil_fr:
+            breakdown = f' ({unifil_fr} French)'
+        else:
+            breakdown = ''
+        long_text_parts.append(
+            f'{unifil_killed} UNIFIL peacekeepers killed{breakdown} '
+            f'— national-stake diplomatic signal; April 18 Ghandouriyeh ambush '
+            f'attributed to Hezbollah by France/UNIFIL/Israel.'
+        )
+
     # Build the signal first so we can pass it into the registry-driven enrichment.
     # The enrichment helper mutates signal_dict and long_text_parts in place,
     # adding any active convergences (e.g. wheat-Lebanon if global wheat is in surge).
