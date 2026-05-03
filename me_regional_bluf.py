@@ -1113,7 +1113,54 @@ def register_me_bluf_routes(app):
         result = build_regional_bluf(force=force)
         return jsonify(result)
 
-    print('[ME BLUF] Routes registered: /api/rhetoric/me/bluf')
+    @app.route('/debug/me-bluf-version', methods=['GET'])
+    def me_bluf_version():
+        """
+        Diagnostic endpoint — returns version info from the live deployed code.
+        If you can hit this URL and see the v2.1.0 marker, new code is running.
+        If you get 404, the new code isn't deployed.
+        """
+        # Probe what functions exist in the current module
+        existing_functions = []
+        for fn_name in (
+            '_fetch_lebanon_humanitarian',
+            '_fetch_commodity_pressure',
+            '_apply_convergence_enrichments',
+            '_build_lebanon_humanitarian_signal',
+        ):
+            if fn_name in globals():
+                existing_functions.append(fn_name)
+
+        # Probe convergence registry availability
+        try:
+            from convergence_registry import CONVERGENCE_REGISTRY
+            registry_available = True
+            registry_count = len(CONVERGENCE_REGISTRY)
+            registry_ids = [e['id'] for e in CONVERGENCE_REGISTRY]
+        except ImportError:
+            registry_available = False
+            registry_count = 0
+            registry_ids = []
+
+        return jsonify({
+            'deploy_marker':         'v2.1.0',
+            'lebanon_humanitarian_backend': LEBANON_HUMANITARIAN_BACKEND,
+            'cache_key':             LEBANON_HUMANITARIAN_CACHE_KEY,
+            'cache_ttl_hours':       LEBANON_HUMANITARIAN_CACHE_TTL / 3600,
+            'expected_new_functions': [
+                '_fetch_lebanon_humanitarian',
+                '_fetch_commodity_pressure',
+                '_apply_convergence_enrichments',
+                '_build_lebanon_humanitarian_signal',
+            ],
+            'actual_existing_functions': existing_functions,
+            'all_functions_present':  len(existing_functions) == 4,
+            'convergence_registry_available': registry_available,
+            'convergence_registry_count':     registry_count,
+            'convergence_registry_ids':       registry_ids,
+        })
+
+    print('[ME BLUF] Routes registered: /api/rhetoric/me/bluf, /debug/me-bluf-version')
 
 
 # ============================================================
