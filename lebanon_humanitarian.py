@@ -226,9 +226,9 @@ def fetch_reliefweb_updates():
 #   IOM global displacement update, March 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-05-01',
-    'data_period': 'March 2 – April 30, 2026 (10-day ceasefire effective Apr 17, extended further 3 weeks)',
-    'note': 'Static figures compiled from OCHA Flash Update #22 (30 April 2026), Lebanese MoPH, WHO, IOM DTM, and UN Women reporting. Ceasefire effective April 17 has held; tentative and uneven return movements observed but limited. Updated manually.',
+    'last_manual_update': '2026-05-03',
+    'data_period': 'March 2 – April 30, 2026 (10-day ceasefire effective Apr 17, extended further 3 weeks; UNIFIL casualties ongoing)',
+    'note': 'Static figures compiled from OCHA Flash Update #22 (30 April 2026), Lebanese MoPH, WHO, IOM DTM, UN Women, UNIFIL, French MoD reporting. Ceasefire effective April 17 has held but UNIFIL peacekeeper attacks continue (April 18 Hezbollah-attributed ambush killed 2 French peacekeepers; April 24 Indonesian death from March wounds). Updated manually.',
 
     'casualties': {
         'killed': 2576,
@@ -315,11 +315,31 @@ STATIC_HUMANITARIAN = {
         'phccs_emergency_only': None,
         'iom_patients_reached': 5922,
         'iom_tb_screening': 3173,
-        'unifil_peacekeepers_killed': 3,            # Indonesian contingent (29-30 March)
-        'source': 'WHO / Lebanese MoPH / OCHA Flash Update #22 / UNIFIL',
+        'unifil_peacekeepers_killed': 6,                # 4 Indonesian + 2 French (as of late April 2026)
+        'unifil_peacekeepers_killed_indonesian': 4,
+        'unifil_peacekeepers_killed_french': 2,
+        'unifil_peacekeepers_wounded_recent': 5,        # 3 Ghanaian (early March) + 2 French still wounded post-April 18
+        'unifil_breakdown': (
+            '4 Indonesian peacekeepers killed in late March (Ett-Taibe + Bani Hayyan IED + Israeli tank fire); '
+            'one Indonesian (Cpl. Rico Pramudia) died April 24 from March 29 wounds. '
+            '2 French peacekeepers killed in April 18 Ghandouriyeh ambush attributed to Hezbollah '
+            '(SSgt Florian Montorio at scene; Cpl Anicet Girardin died April 22 in Paris). '
+            'Multiple Ghanaian peacekeepers wounded by Israeli missile strikes in early March.'
+        ),
+        'source': 'WHO / Lebanese MoPH / OCHA Flash Update #22 / UNIFIL / French MoD',
         'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
         'as_of': '2026-04-30',
-        'note': 'WHO has documented 131+ attacks on healthcare since March 2: 103 health workers killed, 234 injured. Six hospitals closed and 15 damaged; 51 PHCCs closed and 7 damaged. Three Indonesian UNIFIL peacekeepers killed in late March (Ett-Taibe + Bani Hayyan incidents). IOM emergency transportation funding exhausted — critical service gap. The April 8 mass casualty event (203 killed, 1,150+ wounded in central Beirut) overwhelmed surviving facilities.'
+        'note': (
+            'WHO has documented 131+ attacks on healthcare since March 2: 103 health workers killed, 234 injured. '
+            'Six hospitals closed and 15 damaged; 51 PHCCs closed and 7 damaged. '
+            'SIX UNIFIL peacekeepers killed in 2026 (4 Indonesian + 2 French) — '
+            'highest-level diplomatic incident given France contributes ~600 of UNIFIL\'s 7,505 troops '
+            'and Macron declared April 22 that France will maintain Lebanon ground commitment after UNIFIL departs end of 2026. '
+            'Hezbollah blamed by France/UNIFIL/Israel for April 18 ambush; Hezbollah denies. '
+            'Three Ghanaian peacekeepers wounded by Israeli missile strikes early March. '
+            'IOM emergency transportation funding exhausted — critical service gap. '
+            'The April 8 mass casualty event (203 killed, 1,150+ wounded in central Beirut) overwhelmed surviving facilities.'
+        )
     },
 
     'food_security': {
