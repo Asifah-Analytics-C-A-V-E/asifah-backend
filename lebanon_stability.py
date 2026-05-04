@@ -734,19 +734,34 @@ ABOVE the existing calculate_lebanon_stability() function.
 
 # Israeli military presence tier keywords
 ISRAEL_PRESENCE_TIERS = {
+    # Hybrid schema (v3.4.0):
+    #   actor_keywords    — at least one must match (Israeli actor)
+    #   location_keywords — at least one must match (Lebanon location)
+    #   activity_keywords — at least one must match (the actual activity)
+    #   threshold         — minimum number of articles meeting all 3 groups
+    # An article triggers a tier only if it contains keywords from ALL THREE groups.
+    # The tier triggers only if at least `threshold` articles match.
+    # Highest matching tier wins.
     'full_invasion': {
-        'keywords': [
-            'full ground invasion lebanon', 'full scale invasion lebanon',
-            'idf invades lebanon', 'israel invades lebanon',
-            'ground invasion southern lebanon', 'israeli invasion of lebanon',
-            'idf pushes north of litani', 'litani river crossing',
-            'idf advances deep into lebanon', 'major ground offensive lebanon',
-            'large-scale invasion lebanon', 'multi-division invasion lebanon',
-            # Hebrew
-            'פלישה מלאה ללבנון', 'פלישה רחבת היקף ללבנון',
-            # Arabic
-            'غزو شامل للبنان', 'اجتياح بري واسع لبنان',
+        'actor_keywords': [
+            'idf', 'israeli forces', 'israeli army', 'israeli military',
+            'israel ', 'israeli ',
         ],
+        'location_keywords': [
+            'lebanon', 'beirut', 'litani', 'bekaa',
+        ],
+        'activity_keywords': [
+            'full ground invasion', 'full scale invasion',
+            'invades lebanon', 'invasion of lebanon',
+            'major ground offensive', 'large-scale invasion',
+            'multi-division invasion', 'pushes north of litani',
+            'crosses litani', 'crossing the litani',
+            # Hebrew
+            'פלישה מלאה', 'פלישה רחבת היקף',
+            # Arabic
+            'غزو شامل', 'اجتياح بري واسع',
+        ],
+        'threshold': 2,  # Conservative — full invasion needs strong signal
         'level': 5,
         'label': 'Full Ground Invasion',
         'color': '#7f1d1d',
@@ -754,79 +769,79 @@ ISRAEL_PRESENCE_TIERS = {
         'description': 'Large-scale IDF ground offensive across southern Lebanon, advancing past Litani'
     },
     'occupation_5_points': {
-        'keywords': [
-            # Five-points specific
-            'five points southern lebanon', '5 points lebanon',
-            'five strategic positions lebanon', 'five hilltops lebanon',
-            'idf five posts lebanon', 'five idf positions lebanon',
-            'idf remains at five points', 'idf at five positions lebanon',
-            'five strategic posts southern lebanon', 'five border posts lebanon',
-            # Specific point names
-            'labbouneh', 'jabal blat', 'aitaroun',
-            'maroun al-ras', 'maroun al ras',
-            'beaufort ridge', 'beaufort castle',
-            'shebaa farms idf', 'mount dov idf',
+        'actor_keywords': [
+            'idf', 'israeli forces', 'israeli army', 'israeli military',
+            'israel ', 'israeli ', 'israel air force',
+            'avichay adraee', 'adraee',
+            'israel kills', 'israel strikes', 'israel says',
+            'israel hits', 'israel responds',
+            # Hebrew
+            'צה״ל', 'צבא ישראל', 'אדרעי',
+            # Arabic
+            'الجيش الإسرائيلي', 'إسرائيل', 'أدرعي',
+        ],
+        'location_keywords': [
+            'southern lebanon', 'south lebanon', 'south of lebanon',
+            'in lebanon', 'across lebanon', 'lebanese town',
+            "lebanon's", 'lebanon,', 'lebanon ',
+            # specific towns/areas in current ops
+            'bint jbeil', 'beirut suburbs', 'bekaa', 'litani',
+            'maroun al-ras', 'maroun al ras', 'aitaroun',
+            'beaufort', 'shebaa', 'mount dov',
             'ayta ash-shab', 'ayta ash shab',
-            # Yellow line / security zone language (April 2026)
-            'yellow line lebanon', 'idf yellow line',
-            'security zone lebanon', 'security zone southern lebanon',
-            'forward defense line lebanon', 'forward defense southern lebanon',
-            'idf security zone southern lebanon',
-            'reestablished security zone', 'restored security zone lebanon',
-            'restoring security zone lebanon', 'security zone restored',
-            'enhanced forward defense posture',
-            # Buffer zone language
-            'buffer zone southern lebanon', 'idf buffer zone lebanon',
-            'two buffer zones lebanon',
+            'khiam', 'nabatieh', 'tyre', 'sidon',
+            'jabal blat', 'labbouneh',
+            # Hebrew
+            'דרום לבנון', 'לבנון',
+            # Arabic
+            'جنوب لبنان', 'لبنان',
+        ],
+        'activity_keywords': [
+            # Demolitions / structural ops
+            'demolish', 'demolishes', 'demolition', 'demolitions',
+            'wiped out', 'destruction', 'destroyed', 'destroying',
+            'dismantles', 'dismantled', 'dismantling',
+            # Evacuation / displacement orders
+            'evacuation orders', 'evacuation order', 'evacuation warning',
+            'displacement orders', 'displacement order',
+            'evacuate', 'evacuating', 'evacuation',
+            # Strikes/attacks despite ceasefire (occupation tell)
+            'despite ceasefire', 'strikes despite', 'attacks despite',
+            'continues to operate', 'continued strikes', 'daily strikes',
+            'post-ceasefire strikes', 'ceasefire violations',
             # Occupation language
-            'idf occupation lebanon', 'israeli occupation southern lebanon',
-            'occupation of southern lebanon', 'occupied southern lebanon',
-            'israel occupies lebanon', 'occupy lebanese territory',
-            'occupying lebanese territory', 'occupy southern lebanon',
-            'idf occupies southern lebanon',
-            'idf remains in lebanon', 'idf stays in lebanon',
-            'continued idf presence lebanon', 'idf continued presence lebanon',
-            'israel will remain in lebanon', 'idf will stay in lebanon',
-            'indefinite occupation lebanon',
-            # Demolition operations
-            'demolition southern lebanon', 'demolish buildings lebanon',
-            'controlled demolition lebanon', 'idf demolitions lebanon',
-            'destroyed buildings southern lebanon',
-            'demolished homes southern lebanon',
-            # Ongoing strikes despite ceasefire
-            'daily strikes southern lebanon', 'strikes despite ceasefire lebanon',
-            'idf strikes despite ceasefire', 'continued strikes lebanon',
-            'ceasefire violations strikes', 'post-ceasefire strikes lebanon',
-            # Avichay Adraee evacuation orders (high-signal indicator)
-            'avichay adraee', 'adraee evacuation', 'adraee evacuation order',
-            'idf arabic spokesperson evacuation lebanon',
-            'evacuate north of litani', 'move north of litani',
-            'idf evacuation order southern lebanon',
+            'occupation', 'occupies', 'occupy', 'occupied',
+            'remains in', 'remain in', 'will stay', 'staying in',
+            'stationed in', 'continued presence', 'indefinite occupation',
+            # 5-points specific
+            'five points', 'five posts', 'five strategic',
+            'five hilltops', 'five positions',
+            'security zone', 'yellow line', 'buffer zone',
+            'forward defense line', 'forward defense posture',
+            # Tunnel / weapons / ground ops
+            'tunnel network', 'tunnel operation', 'uncovers',
+            'finds weapons', 'finds over', 'targets hit',
+            'launches strike', 'launches largest strike',
+            'struck buildings', 'strikes hezbollah', 'kills hezbollah',
+            'air force strikes', 'airstrikes on',
+            # Adraee evacuation orders
+            'arabic spokesperson',
+            # Annexation talk
+            'annex', 'occupy or annex', 'annexation',
             # Divisions deployed during March-April 2026 escalation
-            '36th division lebanon', '91st division lebanon',
-            '98th division lebanon', '146th division lebanon',
-            '162nd division lebanon',
-            'five divisions southern lebanon', 'five idf divisions lebanon',
-            'multiple divisions southern lebanon',
+            '36th division', '91st division', '98th division',
+            '146th division', '162nd division',
+            'five divisions', 'multiple divisions',
             # Specific named operations / ground actions in this state
             'bint jbeil battle', 'fighting in bint jbeil',
             'khiam fighting', 'battle of khiam',
-            'rab el thalathine', 'qaouzah lebanon',
-            # Hebrew
-            'חמש נקודות', 'אזור ביטחון לבנון',
-            'הקו הצהוב', 'כיבוש דרום לבנון',
-            'נשארים בלבנון', 'נקודות אסטרטגיות',
-            'הריסת מבנים בדרום לבנון', 'אפיחי אדרעי',
-            'אזור הביטחון', 'קו הביטחון',
-            'נקודות צה״ל בלבנון',
-            # Arabic
-            'النقاط الخمس', 'احتلال جنوب لبنان',
-            'المنطقة العازلة', 'الخط الأصفر',
-            'خمس نقاط استراتيجية', 'المواقع الخمسة',
-            'إخلاء جنوب لبنان', 'أفيخاي أدرعي',
-            'الجيش الإسرائيلي يبقى', 'الانسحاب من جنوب لبنان',
-            'النقاط الإسرائيلية', 'المناطق الخمس',
+            'rab el thalathine', 'qaouzah',
+            # Hebrew activity verbs
+            'הריסה', 'הריסת', 'תקיפ', 'פינוי', 'כיבוש', 'אזור ביטחון',
+            # Arabic activity verbs
+            'هدم', 'تدمير', 'قصف', 'إخلاء', 'احتلال', 'المنطقة العازلة',
         ],
+        'threshold': 3,  # 3+ articles meeting all 3 groups = solid signal
         'level': 4,
         'label': 'Occupation (5 Points + Buffer Zone)',
         'color': '#dc2626',
@@ -834,32 +849,27 @@ ISRAEL_PRESENCE_TIERS = {
         'description': 'IDF retains 5 strategic positions in southern Lebanon with active buffer zone, ongoing strikes and demolitions despite ceasefire'
     },
     'active_ground_ops': {
-        'keywords': [
-            'idf ground operation lebanon', 'israeli ground troops lebanon',
-            'idf operating inside lebanon', 'ground incursion lebanon',
-            'israeli forces entered lebanon', 'idf troops in lebanon',
-            'idf raids southern lebanon', 'armored vehicles lebanon',
-            'idf buffer zone lebanon', 'israeli troops southern lebanon',
-            'ground operation south lebanon', 'idf soldiers lebanon',
-            'tank lebanon border', 'idf patrol inside lebanon',
-            'idf engineering lebanon', 'tunnel operation lebanon',
-            'limited ground operation lebanon', 'ground maneuver lebanon',
-            'israeli soldiers killed lebanon', 'idf casualties lebanon',
-            'idf forces inside lebanon', 'israeli military inside lebanon',
-            'ground forces southern lebanon', 'troops inside lebanon',
-            'search in lebanon', 'israel search lebanon',
-            'idf operating in southern lebanon', 'israeli military operation southern lebanon',
-            'remains of long-lost weapons officer', 'shootout lebanon',
-            'deadly shootout lebanon', 'idf raid lebanon', 
-            'ron arad', 'ron arad remains', 'ron arad lebanon',
-            # Hebrew
-            'כוחות צה״ל בלבנון', 'פעולה קרקעית בלבנון',
-            'חיילים בדרום לבנון', 'כוחות יבשתיים לבנון',
-            'רון ארד', 'שרידי רון ארד',
-            # Arabic
-            'قوات إسرائيلية في لبنان', 'عملية برية جنوب لبنان',
-            'جنود إسرائيليون في لبنان', 'رون آراد',
+        'actor_keywords': [
+            'idf', 'israeli forces', 'israeli army', 'israeli military',
+            'israel ', 'israeli ',
         ],
+        'location_keywords': [
+            'lebanon', 'southern lebanon', 'south lebanon', 'litani',
+            'bekaa', 'border',
+        ],
+        'activity_keywords': [
+            'ground operation', 'ground troops', 'operating inside',
+            'ground incursion', 'ground forces', 'ground maneuver',
+            'troops in lebanon', 'troops inside', 'forces inside',
+            'soldiers in lebanon', 'soldiers killed in lebanon',
+            'idf casualties', 'armored vehicles', 'tank',
+            'tunnel operation', 'engineering',
+            # Hebrew
+            'פעולה קרקעית', 'כוחות יבשתיים',
+            # Arabic
+            'عملية برية', 'جنود إسرائيليون',
+        ],
+        'threshold': 2,
         'level': 3,
         'label': 'Active Ground Operations',
         'color': '#ea580c',
@@ -867,12 +877,19 @@ ISRAEL_PRESENCE_TIERS = {
         'description': 'IDF conducting active ground operations in southern Lebanon border zone'
     },
     'limited_incursions': {
-        'keywords': [
-            'cross border raid lebanon', 'limited incursion lebanon',
-            'idf brief incursion', 'special forces lebanon',
-            'commando raid lebanon', 'targeted raid lebanon',
-            'idf crossed border lebanon', 'border skirmish lebanon',
+        'actor_keywords': [
+            'idf', 'israeli forces', 'israeli army', 'israeli military',
+            'israel ', 'israeli ', 'special forces', 'commando',
         ],
+        'location_keywords': [
+            'lebanon', 'southern lebanon', 'south lebanon', 'border',
+        ],
+        'activity_keywords': [
+            'cross border raid', 'limited incursion', 'brief incursion',
+            'commando raid', 'targeted raid', 'crossed border',
+            'border skirmish', 'special operation',
+        ],
+        'threshold': 1,
         'level': 2,
         'label': 'Limited Incursions',
         'color': '#f59e0b',
@@ -880,7 +897,11 @@ ISRAEL_PRESENCE_TIERS = {
         'description': 'Periodic IDF cross-border raids and special operations'
     },
     'no_presence': {
-        'keywords': [],
+        # Fallback tier — no keywords needed; reached when no other tier triggers
+        'actor_keywords': [],
+        'location_keywords': [],
+        'activity_keywords': [],
+        'threshold': 999,  # never triggers via matching; only via fallback
         'level': 1,
         'label': 'No Ground Presence',
         'color': '#10b981',
@@ -1194,37 +1215,56 @@ def scan_security_situation(days=7):
     # Build combined text corpus for matching
     all_titles_lower = ' '.join(a['title'].lower() for a in all_articles)
 
-    # ── 2. Israeli Military Presence ──
+    # ── 2. Israeli Military Presence (v3.4.0 — hybrid actor+location+activity matcher) ──
+    # An article matches a tier only if it contains keywords from ALL THREE groups.
+    # The tier triggers if at least `threshold` distinct articles match.
+    # We walk tiers from highest level to lowest; the first tier to trigger wins.
     israel_presence = ISRAEL_PRESENCE_TIERS['no_presence'].copy()
     israel_presence['indicators'] = []
+    israel_presence['matched_keywords'] = []
+
+    def _article_matches_tier(article_title_lower, tier):
+        """True if title contains at least one keyword from each of the 3 groups."""
+        actor_kws    = tier.get('actor_keywords', [])
+        location_kws = tier.get('location_keywords', [])
+        activity_kws = tier.get('activity_keywords', [])
+        # Empty group lists are treated as "no requirement" (fallback tier safety)
+        has_actor    = (not actor_kws)    or any(kw in article_title_lower for kw in actor_kws)
+        has_location = (not location_kws) or any(kw in article_title_lower for kw in location_kws)
+        has_activity = (not activity_kws) or any(kw in article_title_lower for kw in activity_kws)
+        return has_actor and has_location and has_activity
 
     for tier_key in ['full_invasion', 'occupation_5_points', 'active_ground_ops', 'limited_incursions']:
         tier = ISRAEL_PRESENCE_TIERS[tier_key]
-        matched = []
-        for kw in tier['keywords']:
-            if kw in all_titles_lower:
-                matched.append(kw)
-                # Find the matching article
-                for a in all_articles:
-                    if kw in a['title'].lower():
-                        israel_presence['indicators'].append({
-                            'phrase': kw,
-                            'title': a['title'][:120],
-                            'url': a['url'],
-                            'published': a['published']
-                        })
-                        break
-        if matched:
+        threshold = tier.get('threshold', 1)
+        matched_articles = []
+        for a in all_articles:
+            title_lower = (a.get('title') or '').lower()
+            if _article_matches_tier(title_lower, tier):
+                matched_articles.append(a)
+        if len(matched_articles) >= threshold:
+            # Build indicators (capped at 5 for UI)
+            indicators = []
+            for a in matched_articles[:5]:
+                indicators.append({
+                    'title':     a['title'][:120],
+                    'url':       a['url'],
+                    'published': a.get('published', '')
+                })
             israel_presence = {
-                'level': tier['level'],
-                'label': tier['label'],
-                'color': tier['color'],
+                'level':       tier['level'],
+                'label':       tier['label'],
+                'color':       tier['color'],
                 'badge_color': tier['badge_color'],
                 'description': tier['description'],
-                'matched_keywords': matched[:5],
-                'indicators': israel_presence.get('indicators', [])[:5]
+                'matched_articles_count': len(matched_articles),
+                'threshold':   threshold,
+                'indicators':  indicators,
             }
-            break  # Take the highest tier that matched
+            print(f"[Security Situation] {tier_key}: {len(matched_articles)} articles matched (threshold {threshold}) — TIER TRIGGERED")
+            break  # Highest tier wins
+        else:
+            print(f"[Security Situation] {tier_key}: {len(matched_articles)} articles matched (threshold {threshold}) — not enough to trigger")
 
     print(f"[Security Situation] Israeli presence: {israel_presence['label']} (level {israel_presence['level']})")
 
