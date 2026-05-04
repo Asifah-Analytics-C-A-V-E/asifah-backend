@@ -251,11 +251,22 @@ def _normalize_tracker_data(theatre, raw_data):
 
     # ---- TOP SIGNALS (v2.0 native if present, else synthesize) ----
     if 'top_signals' in raw_data and isinstance(raw_data['top_signals'], list):
-        # v2.0 tracker — already self-emits
-        top_signals = raw_data['top_signals']
+        # v2.0 tracker — already self-emits kinetic/threat/anomaly signals
+        top_signals = list(raw_data['top_signals'])
     else:
         # Legacy tracker — synthesize from raw fields
         top_signals = _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int, score)
+
+    # ALWAYS augment with BLUF-level diplomatic signals (v3.2.0).
+    # Diplomatic propagation is a BLUF-level concern, not per-tracker. v2.0 trackers
+    # don't self-emit diplomatic signals (they emit kinetic/threat/anomaly), so without
+    # this we'd lose them entirely. We deduplicate by category to avoid double-add for
+    # the legacy path (where _synthesize_top_signals_legacy ALSO calls the helper).
+    diplomatic_sigs = _extract_diplomatic_signals(theatre, raw_data, threat_int)
+    existing_categories = {s.get('category') for s in top_signals}
+    for ds in diplomatic_sigs:
+        if ds.get('category') not in existing_categories:
+            top_signals.append(ds)
 
     return {
         'theatre':       theatre,
@@ -279,6 +290,92 @@ def _normalize_tracker_data(theatre, raw_data):
         'scanned_at':    raw_data.get('scanned_at') or raw_data.get('timestamp', ''),
         'raw':           raw_data,
     }
+
+
+def _extract_diplomatic_signals(theatre, raw_data, threat_int):
+    """
+    BLUF-level diplomatic signal extractor (v3.2.0 — extracted for cross-path reuse).
+
+    Reads diplomatic_track + green_lines from a tracker's interpretation block and
+    emits diplomatic-axis signals. Runs for EVERY tracker regardless of whether the
+    tracker is v2.0-self-emit or legacy-synthesized — diplomatic propagation is a
+    BLUF-level architectural responsibility, not a per-tracker concern.
+
+    Why this matters: v2.0 trackers like Lebanon emit their own top_signals[] but
+    don't include diplomatic signals (they emit kinetic/threat/anomaly). Without
+    this helper, diplomatic data exists in interpretation.diplomatic_track but never
+    surfaces to BLUF top_signals → GPI diplomatic axis stays at L0.
+
+    Returns list of signal dicts (possibly empty).
+    """
+    flag    = THEATRE_FLAGS.get(theatre, '')
+    interp  = raw_data.get('interpretation', {}) or {}
+    signals = []
+
+    # Green lines / diplomatic de-escalation (UNGATED + dual-schema).
+    # Previously gated on threat_int <= 2, which meant diplomatic signals were
+    # SUPPRESSED during exactly the periods (high-threat) when off-ramps matter
+    # most analytically. Now fires whenever ≥1 green-line trigger is active.
+    # Schema compat: handles both legacy {'count': N} (Russia, etc.) AND newer
+    # {'active_count': N, 'signaled_count': M, 'triggered': [...]} (Lebanon Apr 2026+).
+    green_lines = interp.get('green_lines') if interp else None
+    if green_lines and isinstance(green_lines, dict):
+        # Read count from whichever schema is present
+        if 'count' in green_lines:
+            gl_count = green_lines.get('count', 0)
+        else:
+            gl_count = green_lines.get('active_count', 0) + green_lines.get('signaled_count', 0)
+        if gl_count >= 1:
+            # Priority scales with threat — high threat + diplomatic signal is more
+            # analytically valuable than low-threat + diplomatic
+            gl_priority = 6 + min(threat_int, 4)   # 6→10 sliding scale
+            signals.append({
+                'priority':       gl_priority,
+                'category':       'green_line_active',
+                'theatre':        theatre,
+                'level':          min(threat_int, 4),  # cap at 4 — green lines never "active conflict"
+                'icon':           '✅',
+                'color':          '#10b981',
+                'pressure_type':  'diplomatic',
+                'short_text':     f'{flag} {theatre.upper()}: De-escalation signals ({gl_count})',
+                'long_text':      f'{flag} {theatre.upper()}: {gl_count} green-line de-escalation '
+                                  f'trigger{"s" if gl_count != 1 else ""} active.',
+            })
+
+    # Diplomatic track — Witkoff mediation, Salalah talks, LAF enforcement, etc.
+    # Tracker layer emits the rich data; BLUF surfaces it to top_signals → GPI.
+    diplomatic_track = interp.get('diplomatic_track') if interp else None
+    if diplomatic_track and isinstance(diplomatic_track, dict):
+        active_count   = diplomatic_track.get('active_count', 0)
+        signaled_count = diplomatic_track.get('signaled_count', 0)
+        scenario       = diplomatic_track.get('scenario', '')
+        score          = diplomatic_track.get('score', 0)
+        # Fire when there's any diplomatic activity (active OR signaled)
+        if active_count + signaled_count > 0:
+            # Priority scales with threat — diplomatic signals during high threat
+            # carry more analytical weight (off-ramp during crisis > off-ramp during calm)
+            dt_priority = 7 + min(threat_int, 4)   # 7→11 sliding scale
+            short_status = 'ACTIVE' if active_count > 0 else 'SIGNALED'
+            signals.append({
+                'priority':       dt_priority,
+                'category':       'diplomatic_track_active',
+                'theatre':        theatre,
+                'level':          min(threat_int, 4),
+                'icon':           '🕊️',
+                'color':          '#0ea5e9',          # sky blue — matches GPI diplomatic axis
+                'pressure_type':  'diplomatic',
+                'short_text':     f'{flag} {theatre.upper()}: Diplomatic track {short_status} ({scenario[:40]})',
+                'long_text':      f'{flag} {theatre.upper()} diplomatic track: {active_count} active + '
+                                  f'{signaled_count} signaled off-ramp triggers (score {score}/100). '
+                                  f'Scenario: {scenario}.',
+                # Pass through structured data for GPI / frontend rendering
+                'diplomatic_active_count':   active_count,
+                'diplomatic_signaled_count': signaled_count,
+                'diplomatic_score':          score,
+                'diplomatic_scenario':       scenario,
+            })
+
+    return signals
 
 
 def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int, score):
@@ -364,72 +461,10 @@ def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int,
                 'long_text':  f'CROSS-THEATER: Simultaneous elevation across {", ".join(t.upper() for t in theaters_in)} ({ct.get("confidence", 0)}% confidence) — {ct.get("signal", "")}',
             })
 
-    # Green lines / diplomatic de-escalation (v3.1.0 — UNGATED + dual-schema)
-    # Previously gated on threat_int <= 2, which meant diplomatic signals were
-    # SUPPRESSED during exactly the periods (high-threat) when off-ramps matter
-    # most analytically. Now fires whenever ≥1 green-line trigger is active.
-    # Pressure type: 'diplomatic' — feeds GPI's PRESSURE_DIPLOMATIC axis.
-    # Schema compat: handles both legacy {'count': N} (Russia, etc.) AND newer
-    # {'active_count': N, 'signaled_count': M, 'triggered': [...]} (Lebanon Apr 2026+).
-    green_lines = interp.get('green_lines') if interp else None
-    if green_lines and isinstance(green_lines, dict):
-        # Read count from whichever schema is present
-        if 'count' in green_lines:
-            gl_count = green_lines.get('count', 0)
-        else:
-            gl_count = green_lines.get('active_count', 0) + green_lines.get('signaled_count', 0)
-        if gl_count >= 1:
-            # Priority scales with threat — high threat + diplomatic signal is more
-            # analytically valuable than low-threat + diplomatic
-            gl_priority = 6 + min(threat_int, 4)   # 6→10 sliding scale
-            signals.append({
-                'priority':       gl_priority,
-                'category':       'green_line_active',
-                'theatre':        theatre,
-                'level':          min(threat_int, 4),  # cap at 4 — green lines never "active conflict"
-                'icon':           '✅',
-                'color':          '#10b981',
-                'pressure_type':  'diplomatic',
-                'short_text':     f'{flag} {theatre.upper()}: De-escalation signals ({gl_count})',
-                'long_text':      f'{flag} {theatre.upper()}: {gl_count} green-line de-escalation '
-                                  f'trigger{"s" if gl_count != 1 else ""} active.',
-            })
-
-    # Diplomatic track (v3.1.0 — NEW BUILDER)
-    # Reads `interp.diplomatic_track` from each tracker. When the diplomatic track
-    # has signaled or active off-ramp signals (LAF enforcement, Witkoff mediation,
-    # Salalah talks, etc.), emit a diplomatic-axis signal. Tracker emits the rich
-    # data; this builder surfaces it to BLUF and onward to GPI.
-    diplomatic_track = interp.get('diplomatic_track') if interp else None
-    if diplomatic_track and isinstance(diplomatic_track, dict):
-        active_count   = diplomatic_track.get('active_count', 0)
-        signaled_count = diplomatic_track.get('signaled_count', 0)
-        scenario       = diplomatic_track.get('scenario', '')
-        score          = diplomatic_track.get('score', 0)
-        # Fire when there's any diplomatic activity (active OR signaled)
-        if active_count + signaled_count > 0:
-            # Priority scales with threat — diplomatic signals during high threat
-            # carry more analytical weight (off-ramp during crisis > off-ramp during calm)
-            dt_priority = 7 + min(threat_int, 4)   # 7→11 sliding scale
-            short_status = 'ACTIVE' if active_count > 0 else 'SIGNALED'
-            signals.append({
-                'priority':       dt_priority,
-                'category':       'diplomatic_track_active',
-                'theatre':        theatre,
-                'level':          min(threat_int, 4),
-                'icon':           '🕊️',
-                'color':          '#0ea5e9',          # sky blue — matches GPI diplomatic axis
-                'pressure_type':  'diplomatic',
-                'short_text':     f'{flag} {theatre.upper()}: Diplomatic track {short_status} ({scenario[:40]})',
-                'long_text':      f'{flag} {theatre.upper()} diplomatic track: {active_count} active + '
-                                  f'{signaled_count} signaled off-ramp triggers (score {score}/100). '
-                                  f'Scenario: {scenario}.',
-                # Pass through structured data for GPI / frontend rendering
-                'diplomatic_active_count':   active_count,
-                'diplomatic_signaled_count': signaled_count,
-                'diplomatic_score':          score,
-                'diplomatic_scenario':       scenario,
-            })
+    # Diplomatic signals (green_lines + diplomatic_track) extracted via shared helper.
+    # The helper runs at the _normalize_tracker level too (for v2.0 trackers), but
+    # legacy synthesis also needs them — they're part of the canonical signal set.
+    signals.extend(_extract_diplomatic_signals(theatre, raw_data, threat_int))
 
     # Interpreter-specific flags (legacy support)
     if so_what.get('sadr_silent') and theatre == 'iraq':
@@ -536,13 +571,14 @@ def _build_posture_label(max_level, theatres_at_l3plus):
 
 def _extract_key_signals(trackers):
     """
-    v2.0 NEW PIPELINE.
+    v2.0 NEW PIPELINE — v2.3.0 update: returns FULL deduped pool (not capped).
     Each tracker — whether v2.0 self-emitting or v1.x shimmed —
     arrives with a 'top_signals' array attached. This function:
       1. Collects all top_signals from all trackers
       2. Globally sorts by priority (descending)
       3. Dedupes by (theatre, category) key
-      4. Returns top N (TOP_SIGNALS_COUNT, default 5)
+      4. Returns full deduped pool — caller is responsible for capping for display.
+         (Axis aggregation in GPI needs the full pool to honor axis-quota.)
     """
     all_signals = []
     for theatre, data in trackers.items():
@@ -569,7 +605,7 @@ def _extract_key_signals(trackers):
             seen.add(key)
             deduped.append(s)
 
-    return deduped[:TOP_SIGNALS_COUNT]
+    return deduped
 
 
 # ============================================================
@@ -1094,15 +1130,21 @@ def build_regional_bluf(force=False):
         # Insert at top — humanitarian crisis at this scale leads the analyst-prose BLUF.
         # If we already have N signals, this becomes N+1 — global sort handles it.
         top_signals = [humanitarian_sig] + top_signals
-        # Re-sort by priority and trim (humanitarian sig has priority 9 → leads naturally)
+        # Re-sort by priority (humanitarian sig at priority 12 → leads naturally)
         top_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
-        top_signals = top_signals[:TOP_SIGNALS_COUNT]
         print(f'[ME BLUF] Lebanon humanitarian signal injected: {humanitarian_sig["short_text"][:60]}...')
 
-    # Write BLUF prose (now uses normalized shape)
+    # v2.3.0: keep full signal pool separate from capped top_signals.
+    # `all_signals` retains every BLUF-level signal for downstream axis aggregation
+    # (GPI's diplomatic + humanitarian axis cards need the full pool, not top 5).
+    # `top_signals_capped` is the trimmed display version used for prose synthesis.
+    all_signals = list(top_signals)                          # full pool — preserved
+    top_signals_capped = top_signals[:TOP_SIGNALS_COUNT]      # capped for prose
+
+    # Write BLUF prose using capped top_signals (prose has limited word count)
     bluf_prose = _write_bluf_prose(
         trackers, levels, scores,
-        max_level, theatres_at_l3plus, top_signals
+        max_level, theatres_at_l3plus, top_signals_capped
     )
 
     # v2.0: Per-theatre summary (now includes BOTH axis levels for dual-axis trackers)
@@ -1136,8 +1178,8 @@ def build_regional_bluf(force=False):
         'success':           True,
         'from_cache':        False,
         'bluf':              bluf_prose,
-        'signals':           top_signals,
-        'top_signals':       top_signals,  # alias for GPI consumption
+        'signals':           all_signals,             # v2.3.0: FULL signal pool — for GPI axis aggregation
+        'top_signals':       top_signals_capped,      # v2.3.0: capped — for display + prose synthesis
         'posture_label':     posture_label,
         'posture_color':     posture_color,
         'max_level':         max_level,
@@ -1148,12 +1190,12 @@ def build_regional_bluf(force=False):
         'generated_at':      datetime.now(timezone.utc).isoformat(),
         'version':           '2.0.0',
         'region':            'middle_east',  # v2.0: GPI-readable
-        'top_signals_count': len(top_signals),
+        'top_signals_count': len(top_signals_capped),
     }
 
     _redis_set(BLUF_CACHE_KEY, result)
     print(f'[ME BLUF] Built: posture={posture_label}, max_level={max_level}, '
-          f'avg_score={avg_score}, signals={len(top_signals)}')
+          f'avg_score={avg_score}, signals={len(top_signals_capped)}')
     return result
 
 
