@@ -364,19 +364,72 @@ def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int,
                 'long_text':  f'CROSS-THEATER: Simultaneous elevation across {", ".join(t.upper() for t in theaters_in)} ({ct.get("confidence", 0)}% confidence) — {ct.get("signal", "")}',
             })
 
-    # Green lines / diplomatic de-escalation (Russia pattern, future trackers)
+    # Green lines / diplomatic de-escalation (v3.1.0 — UNGATED + dual-schema)
+    # Previously gated on threat_int <= 2, which meant diplomatic signals were
+    # SUPPRESSED during exactly the periods (high-threat) when off-ramps matter
+    # most analytically. Now fires whenever ≥1 green-line trigger is active.
+    # Pressure type: 'diplomatic' — feeds GPI's PRESSURE_DIPLOMATIC axis.
+    # Schema compat: handles both legacy {'count': N} (Russia, etc.) AND newer
+    # {'active_count': N, 'signaled_count': M, 'triggered': [...]} (Lebanon Apr 2026+).
     green_lines = interp.get('green_lines') if interp else None
-    if green_lines and green_lines.get('count', 0) >= 2 and threat_int <= 2:
-        signals.append({
-            'priority':  5 + threat_int,
-            'category':  'green_line_active',
-            'theatre':   theatre,
-            'level':     threat_int,
-            'icon':      '✅',
-            'color':     '#10b981',
-            'short_text': f'{flag} {theatre.upper()}: De-escalation signals',
-            'long_text':  f'{flag} {theatre.upper()}: {green_lines.get("count", 0)} green-line de-escalation triggers active.',
-        })
+    if green_lines and isinstance(green_lines, dict):
+        # Read count from whichever schema is present
+        if 'count' in green_lines:
+            gl_count = green_lines.get('count', 0)
+        else:
+            gl_count = green_lines.get('active_count', 0) + green_lines.get('signaled_count', 0)
+        if gl_count >= 1:
+            # Priority scales with threat — high threat + diplomatic signal is more
+            # analytically valuable than low-threat + diplomatic
+            gl_priority = 6 + min(threat_int, 4)   # 6→10 sliding scale
+            signals.append({
+                'priority':       gl_priority,
+                'category':       'green_line_active',
+                'theatre':        theatre,
+                'level':          min(threat_int, 4),  # cap at 4 — green lines never "active conflict"
+                'icon':           '✅',
+                'color':          '#10b981',
+                'pressure_type':  'diplomatic',
+                'short_text':     f'{flag} {theatre.upper()}: De-escalation signals ({gl_count})',
+                'long_text':      f'{flag} {theatre.upper()}: {gl_count} green-line de-escalation '
+                                  f'trigger{"s" if gl_count != 1 else ""} active.',
+            })
+
+    # Diplomatic track (v3.1.0 — NEW BUILDER)
+    # Reads `interp.diplomatic_track` from each tracker. When the diplomatic track
+    # has signaled or active off-ramp signals (LAF enforcement, Witkoff mediation,
+    # Salalah talks, etc.), emit a diplomatic-axis signal. Tracker emits the rich
+    # data; this builder surfaces it to BLUF and onward to GPI.
+    diplomatic_track = interp.get('diplomatic_track') if interp else None
+    if diplomatic_track and isinstance(diplomatic_track, dict):
+        active_count   = diplomatic_track.get('active_count', 0)
+        signaled_count = diplomatic_track.get('signaled_count', 0)
+        scenario       = diplomatic_track.get('scenario', '')
+        score          = diplomatic_track.get('score', 0)
+        # Fire when there's any diplomatic activity (active OR signaled)
+        if active_count + signaled_count > 0:
+            # Priority scales with threat — diplomatic signals during high threat
+            # carry more analytical weight (off-ramp during crisis > off-ramp during calm)
+            dt_priority = 7 + min(threat_int, 4)   # 7→11 sliding scale
+            short_status = 'ACTIVE' if active_count > 0 else 'SIGNALED'
+            signals.append({
+                'priority':       dt_priority,
+                'category':       'diplomatic_track_active',
+                'theatre':        theatre,
+                'level':          min(threat_int, 4),
+                'icon':           '🕊️',
+                'color':          '#0ea5e9',          # sky blue — matches GPI diplomatic axis
+                'pressure_type':  'diplomatic',
+                'short_text':     f'{flag} {theatre.upper()}: Diplomatic track {short_status} ({scenario[:40]})',
+                'long_text':      f'{flag} {theatre.upper()} diplomatic track: {active_count} active + '
+                                  f'{signaled_count} signaled off-ramp triggers (score {score}/100). '
+                                  f'Scenario: {scenario}.',
+                # Pass through structured data for GPI / frontend rendering
+                'diplomatic_active_count':   active_count,
+                'diplomatic_signaled_count': signaled_count,
+                'diplomatic_score':          score,
+                'diplomatic_scenario':       scenario,
+            })
 
     # Interpreter-specific flags (legacy support)
     if so_what.get('sadr_silent') and theatre == 'iraq':
@@ -794,7 +847,9 @@ def _build_lebanon_humanitarian_signal():
     # The enrichment helper mutates signal_dict and long_text_parts in place,
     # adding any active convergences (e.g. wheat-Lebanon if global wheat is in surge).
     signal = {
-        'priority':       9,
+        'priority':       12,                  # v3.1.0: bumped from 9 → 12 so a 1M-displaced humanitarian
+                                                #         crisis reliably leads BLUF over composite kinetic signals
+                                                #         (kinetic_pressure=14, multi_axis=11, inbound=10, etc.)
         'category':       'humanitarian_lebanon',
         'theatre':        'lebanon',
         'level':          5 if killed >= 1000 or live_total >= 500000 else 4,
