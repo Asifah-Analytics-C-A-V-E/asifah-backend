@@ -1070,11 +1070,25 @@ def _fetch_rss(feed_url, source_name, max_items=20):
     articles = []
     try:
         response = requests.get(feed_url, timeout=15, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.7,he;q=0.5,fa;q=0.3',
+            'Cache-Control': 'no-cache',
         })
         if response.status_code != 200:
             return []
-        root = ET.fromstring(response.content)
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError as e:
+            # When response isn't valid XML, peek at the first bytes to
+            # distinguish "feed returned HTML" (block/challenge/wrong path)
+            # from "feed returned malformed XML" — different remediation.
+            preview = response.text[:120].replace('\n', ' ').strip()
+            if '<html' in preview.lower() or '<!doctype' in preview.lower():
+                print(f"[Rhetoric RSS] {source_name}: returned HTML not RSS (likely blocked/wrong path) — preview: {preview[:80]}")
+            else:
+                print(f"[Rhetoric RSS] {source_name}: XML parse error: {e}")
+            return []
         for item in root.findall('.//item')[:max_items]:
             title_elem = item.find('title')
             link_elem  = item.find('link')
@@ -1110,14 +1124,17 @@ def fetch_lebanon_articles(days=3):
     # RSS Feeds — expanded for France, Cyprus, Syria border
     rss_feeds = {
         # ── Lebanese domestic sources (NEW) ──────────────────────
-        'Naharnet':           'https://www.naharnet.com/stories/en/rss',
-        'LBCI (EN)':          'https://www.lbcgroup.tv/rss/en',
+        # Naharnet/LBCI/Lebanon24 direct RSS endpoints return HTML challenges,
+        # not XML. Routed via Google News RSS for reliability — same pattern
+        # as Barak Ravid bylines below.
+        'Naharnet':           'https://news.google.com/rss/search?q=site:naharnet.com&hl=en&gl=US&ceid=US:en',
+        'LBCI (EN)':          'https://news.google.com/rss/search?q=site:lbcgroup.tv&hl=en&gl=US&ceid=US:en',
         'MTV Lebanon':        'https://www.mtv.com.lb/en/rss',
         'L\'Orient Today':    'https://today.lorientlejour.com/rss',
         'The961':             'https://www.the961.com/feed/',
         'An-Nahar (AR)':      'https://www.annahar.com/rss',
         # ── Regional Arabic (NEW) ─────────────────────────────────
-        'Lebanon24 (AR)':     'https://www.lebanon24.com/rss',
+        'Lebanon24 (AR)':     'https://news.google.com/rss/search?q=site:lebanon24.com&hl=ar&gl=LB&ceid=LB:ar',
         'NNA Lebanon':        'https://www.nna-leb.gov.lb/en/rss',
         # ── Existing sources ──────────────────────────────────────
         'Al-Manar (EN)':      'https://english.almanar.com.lb/rss',
@@ -1126,7 +1143,8 @@ def fetch_lebanon_articles(days=3):
         'MEMRI':              'https://www.memri.org/rss.xml',
         'Iran Wire (EN)':     'https://iranwire.com/en/feed/',
         'Times of Israel':    'https://www.timesofisrael.com/feed/',
-        'i24NEWS':            'https://www.i24news.tv/en/rss',
+        # i24NEWS direct RSS returns HTML — routed via Google News
+        'i24NEWS':            'https://news.google.com/rss/search?q=site:i24news.tv&hl=en&gl=US&ceid=US:en',
         'Jerusalem Post':     'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
         'Le Monde (FR)':      'https://www.lemonde.fr/rss/une.xml',
         'France24 (EN)':      'https://www.france24.com/en/rss',
