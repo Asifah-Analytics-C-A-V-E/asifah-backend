@@ -974,7 +974,7 @@ def _build_global_top_signals(blufs, narratives):
             'level':      5 if n['priority'] >= 13 else 4,
             'icon':       n['icon'],
             'color':      n['color'],
-            'short_text': n['headline'][:80],
+            'short_text': n['headline'][:120],     # v2.3.0: 80→120 — fits "Wheat-Lebanon convergence ... ELEVATED" (85 chars)
             'long_text':  n['detail'],
             'regions':    n.get('regions', []),
         })
@@ -992,7 +992,7 @@ def _build_global_top_signals(blufs, narratives):
                 'level':      sig.get('level', 0),
                 'icon':       sig.get('icon', '\u2022'),
                 'color':      sig.get('color', '#6b7280'),
-                'short_text': sig.get('short_text', sig.get('text', ''))[:80],
+                'short_text': sig.get('short_text', sig.get('text', ''))[:120],   # v2.3.0: 80→120 (consistency)
                 'long_text':  sig.get('long_text', sig.get('short_text', '')),
                 # No 'regions' key — single-region signals naturally Tier 2 or 4
             })
