@@ -174,10 +174,20 @@ def _fetch_all_regional_blufs():
 # SAFE-ACCESS HELPERS
 # ============================================================
 def _signals_of(bluf):
-    """Get top_signals[] from a BLUF dict, fallback to signals[]."""
+    """
+    Get the full signal pool from a BLUF dict.
+
+    v2.3.0 — Prefer `signals[]` (full pool) over `top_signals[]` (capped at 5).
+    This matters for axis aggregation: if BLUF emits 8 signals but only the top 5
+    make it into `top_signals[]`, axis cards reading the capped list miss any
+    signal that got bumped (e.g. diplomatic at priority 10 bumped by 5 kinetic
+    at priority 12-14). Reading `signals[]` first preserves axis-quota correctness.
+
+    Falls back to `top_signals[]` for older BLUFs that don't emit `signals[]`.
+    """
     if not bluf:
         return []
-    return bluf.get('top_signals') or bluf.get('signals') or []
+    return bluf.get('signals') or bluf.get('top_signals') or []
 
 
 # ============================================================
@@ -1107,6 +1117,11 @@ def _build_regional_card(region, bluf):
         else:
             excerpt += '...'
 
+    # v2.3.0 — Regional card top_signals uses axis-quota (one per non-empty axis,
+    # dynamic max 4). Previously took top 3 by priority, which on multi-axis-active
+    # regions (like ME with kinetic L5 + humanitarian L5 + diplomatic L1) showed only
+    # the 3 highest-priority kinetic signals and hid the other axes entirely. Now
+    # each non-empty axis gets its top signal represented on the card.
     return {
         'region':        region,
         'name':          REGION_DISPLAY[region]['name'],
@@ -1119,10 +1134,45 @@ def _build_regional_card(region, bluf):
         'posture_label': bluf.get('posture_label', '') or '',
         'posture_color': bluf.get('posture_color', '#6b7280'),
         'bluf_excerpt':  excerpt,
-        'top_signals':   _signals_of(bluf)[:3],
+        'top_signals':   _build_axis_quota_signals(bluf),
         'trackers_live': bluf.get('trackers_live', bluf.get('theatres_live', 0)),
         'avg_score':     bluf.get('avg_score', 0),
     }
+
+
+def _build_axis_quota_signals(bluf):
+    """
+    Build the regional card's top_signals using axis-quota:
+    one highest-priority signal per non-empty axis, dynamic max 4 (one per axis).
+
+    Why: prevents the regional card from showing all-kinetic when other axes are
+    active. Each card represents a region's posture across the four pressure
+    dimensions; the analytical principle is that one diplomatic signal in a
+    largely-kinetic region is more informative than the 3rd-ranked kinetic signal.
+
+    Returns list ordered by axis presence (kinetic, economic, diplomatic, humanitarian).
+    """
+    sigs = _signals_of(bluf)
+    if not sigs:
+        return []
+    tagged = _tag_pressure_axes(sigs)
+
+    # Walk axes in canonical order; pick top-priority signal per axis.
+    out = []
+    for axis in PRESSURE_AXES:
+        candidates = [s for s in tagged if s.get('pressure_type') == axis]
+        if not candidates:
+            continue
+        # Sort by priority desc, then level desc — pick the strongest per axis
+        candidates.sort(
+            key=lambda s: (
+                _safe_level(s.get('priority', 0)),
+                _safe_level(s.get('level', 0)),
+            ),
+            reverse=True,
+        )
+        out.append(candidates[0])
+    return out
 
 
 # ============================================================
