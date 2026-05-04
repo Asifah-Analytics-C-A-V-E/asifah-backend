@@ -6,6 +6,7 @@ v3.2.0 — February 2026
 
 Monitors:
 1. Leadership Rhetoric (MEMRI, Al-Manar, Iran Wire)
+
 2. Israeli News Sources (Ynet, Times of Israel, JPost, i24NEWS, Haaretz)
 3. Regional Arab News Sources (Arab News)
 4. Airline Flight Disruptions — CACHED, background refresh every 12h
@@ -413,8 +414,10 @@ def fetch_all_rss(feed_dict=None):
             print(f"[RSS] Fetching {feed_name}...")
 
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+                'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
+                'Accept-Language': 'en-US,en;q=0.9,ar;q=0.7,he;q=0.5,fa;q=0.3',
+                'Cache-Control': 'no-cache',
             }
 
             response = requests.get(feed_url, headers=headers, timeout=15)
@@ -426,7 +429,14 @@ def fetch_all_rss(feed_dict=None):
             try:
                 root = ET.fromstring(response.content)
             except ET.ParseError as e:
-                print(f"[RSS] {feed_name} XML parse error: {e}")
+                # When the response isn't valid XML, peek at the first bytes
+                # to identify the cause — HTML page (likely a block/challenge)
+                # vs. genuinely malformed XML
+                preview = response.text[:120].replace('\n', ' ').strip()
+                if '<html' in preview.lower() or '<!doctype' in preview.lower():
+                    print(f"[RSS] {feed_name}: returned HTML not RSS (likely blocked/challenged) — preview: {preview[:80]}")
+                else:
+                    print(f"[RSS] {feed_name}: XML parse error: {e} — preview: {preview[:80]}")
                 continue
 
             items = root.findall('.//item')
