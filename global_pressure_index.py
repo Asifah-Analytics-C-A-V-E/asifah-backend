@@ -652,23 +652,42 @@ def _detect_convergences_from_registry(blufs):
 
     matches = []
     for entry in CONVERGENCE_REGISTRY:
-        region = entry.get('trigger_region')
-        bluf = blufs.get(region)
-        if not bluf:
-            continue
+        # Primary detection: scan trigger_region first (canonical source).
+        # Fallback: if trigger_region's signal is unavailable (e.g. ME BLUF stale),
+        # fall through to OTHER regions in entry.regions[]. Layer 2 enrichments stamp
+        # the same {id}_active flag on cross-regional signals (e.g. Europe Ukraine
+        # commodity signal also carries wheat_lebanon_active when applicable). This
+        # is belt-and-suspenders cross-regional convergence detection.
+        primary_region = entry.get('trigger_region')
+        all_regions    = [primary_region] + [r for r in entry.get('regions', []) if r != primary_region]
 
-        # Find the trigger signal in this region's BLUF
-        signals = _signals_of(bluf)
-        trigger_sig = next(
-            (s for s in signals if s.get('category') == entry['trigger_signal_category']),
-            None
-        )
+        trigger_sig = None
+        found_in_region = None
+        for region in all_regions:
+            bluf = blufs.get(region)
+            if not bluf:
+                continue
+            signals = _signals_of(bluf)
+            # In primary region, look for the canonical trigger_signal_category.
+            # In fallback regions, look for ANY signal carrying the {id}_active flag.
+            active_flag = f'{entry["id"]}_active'
+            if region == primary_region:
+                candidate = next(
+                    (s for s in signals if s.get('category') == entry['trigger_signal_category']
+                     and s.get(active_flag)),
+                    None
+                )
+            else:
+                candidate = next(
+                    (s for s in signals if s.get(active_flag)),
+                    None
+                )
+            if candidate:
+                trigger_sig = candidate
+                found_in_region = region
+                break
+
         if not trigger_sig:
-            continue
-
-        # Check the per-convergence flag set by Layer 2
-        active_flag = f'{entry["id"]}_active'
-        if not trigger_sig.get(active_flag):
             continue
 
         # Pull the convergence state stamped by Layer 2 (alert level + signal count)
@@ -677,13 +696,14 @@ def _detect_convergences_from_registry(blufs):
         alert_level = state.get('alert_level', 'elevated')
 
         matches.append({
-            'priority': entry['priority'],
-            'category': entry['id'],
-            'regions':  list(entry.get('regions', [])),
-            'icon':     entry['icon'],
-            'color':    entry['color'],
-            'headline': format_headline(entry, alert_level),
-            'detail':   entry['detail'],
+            'priority':         entry['priority'],
+            'category':         entry['id'],
+            'regions':          list(entry.get('regions', [])),
+            'icon':             entry['icon'],
+            'color':            entry['color'],
+            'headline':         format_headline(entry, alert_level),
+            'detail':           entry['detail'],
+            'detected_via':     found_in_region,   # diagnostic: which region's signal triggered detection
         })
     return matches
 
