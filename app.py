@@ -5281,7 +5281,29 @@ def api_threat(target):
                         else:
                             skipped += 1
                     print(f"[Threat Scan] Telegram: {len(telegram_articles)} relevant / {skipped} skipped for {target}")
-            print(f"[Threat Scan] Telegram error: {str(e)[:100]}")
+            except Exception as e:
+                print(f"[Threat Scan] Telegram error: {str(e)[:100]}")
+
+        bluesky_articles = []
+        if BLUESKY_AVAILABLE:
+            try:
+                # Map ME backend target names to Bluesky module's geographic target keys
+                # ME backend uses militia/group names (hezbollah, houthis); Bluesky module uses
+                # country names (lebanon, yemen) for cleaner WHA/Asia/ME consistency.
+                BLUESKY_TARGET_MAP = {
+                    'hezbollah': 'lebanon',
+                    'houthis':   'yemen',
+                    # Pass-through: 'iran', 'israel', 'iraq', 'syria', 'oman', 'jordan'
+                }
+                bluesky_target = BLUESKY_TARGET_MAP.get(target, target)
+                bluesky_articles = fetch_bluesky_for_target(bluesky_target, days=days, max_posts_per_account=20)
+                print(f"[Threat Scan] Bluesky: {len(bluesky_articles)} posts for {target} (queried as {bluesky_target})")
+            except Exception as e:
+                print(f"[Threat Scan] Bluesky error: {str(e)[:100]}")
+
+        all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ar +
+                       articles_gdelt_he + articles_gdelt_fa + articles_reddit +
+                       telegram_articles + bluesky_articles)
         
         # NEW: Fetch ALL RSS feeds (leadership rhetoric + Israeli news)
         print(f"[RSS] Fetching RSS feeds...")
