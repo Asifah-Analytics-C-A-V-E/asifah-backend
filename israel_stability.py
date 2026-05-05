@@ -931,6 +931,109 @@ def build_leadership_status(conflict_data, knesset_data):
 # STABILITY SCORE CALCULATION
 # ========================================
 
+# ============================================
+# COMMODITY PRESSURE CONFIG (Phase 3, May 5 2026)
+# ============================================
+# Reads commodity_tracker_cache Redis key (written by commodity_tracker.py).
+# Israel has 6 commodity exposures: potash + natural_gas (producer side),
+# wheat + corn + soybeans + oil (consumer side).
+#
+# Stability penalty is dict-driven so it stays flexible — to add penalties
+# for other commodities later, just add entries here.
+#
+# CURRENT POLICY (May 5 2026): Wheat-only.
+#   - Wheat: bread inflation = coalition stress lever. Israel imports ~80%
+#            of wheat consumption (Black Sea + US). Penalty magnitude lower
+#            than Iran's because Israel = stronger institutions, not regime risk.
+#   - Other commodities tracked but not yet penalty-enabled.
+COMMODITY_REDIS_KEY = 'commodity_tracker_cache'
+
+COMMODITY_PENALTY_CONFIG = {
+    'wheat': {
+        'penalty_high':  -2,
+        'penalty_surge': -5,
+        'rationale':     'Wheat surge → bread inflation → coalition stress (Netanyahu fragile)',
+    },
+    # Future-flex (commented out, ready to enable):
+    # 'oil':          {'penalty_high': -2, 'penalty_surge': -4,
+    #                  'rationale': 'Oil surge → fuel inflation + military operations cost'},
+    # 'corn':         {'penalty_high': -1, 'penalty_surge': -2,
+    #                  'rationale': 'Corn surge → livestock + food prices'},
+    # 'soybeans':     {'penalty_high': -1, 'penalty_surge': -2,
+    #                  'rationale': 'Soy surge → food + feed cost stress'},
+    # 'natural_gas':  {'penalty_high': 0,  'penalty_surge': 0,
+    #                  'rationale': 'Israel is producer; surge = export revenue boost (no penalty)'},
+    # 'potash':       {'penalty_high': 0,  'penalty_surge': 0,
+    #                  'rationale': 'Israel is producer (ICL); surge benefits export revenue'},
+}
+
+
+def _read_israel_commodity_pressure():
+    """
+    Read commodity-pressure data for Israel from shared Redis cache.
+
+    Returns a dict shaped like:
+        {
+            'commodity_pressure': float,       # Israel-specific score
+            'alert_level':        str,         # normal|elevated|high|surge
+            'commodity_summaries': [...],
+            'last_updated':       str,
+        }
+    Returns None if cache cold, Israel not in bundle, or any error.
+    """
+    if not (UPSTASH_URL and UPSTASH_TOKEN):
+        return None
+    try:
+        resp = requests.get(
+            f"{UPSTASH_URL}/get/{COMMODITY_REDIS_KEY}",
+            headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+            timeout=5
+        )
+        data = resp.json()
+        if not data.get('result'):
+            return None
+        bundle = json.loads(data['result'])
+        if not isinstance(bundle, dict):
+            return None
+
+        country_summaries = bundle.get('country_summaries', {}) or {}
+        commodity_summary = bundle.get('commodity_summaries', {}) or {}
+        israel_country = country_summaries.get('israel') or {}
+        if not israel_country:
+            return None
+
+        israel_score = float(israel_country.get('total_score', 0) or 0)
+        israel_alert = str(israel_country.get('alert_level', 'normal') or 'normal')
+        israel_breakdown = israel_country.get('commodity_signals', {}) or {}
+
+        commodity_summaries_out = []
+        for commodity_id, breakdown in israel_breakdown.items():
+            full = commodity_summary.get(commodity_id, {}) or {}
+            commodity_summaries_out.append({
+                'commodity':           commodity_id,
+                'name':                full.get('name', commodity_id.title()),
+                'icon':                full.get('icon', '📊'),
+                'role':                breakdown.get('role'),
+                'rank':                breakdown.get('rank'),
+                'note':                breakdown.get('note'),
+                'signal_count':        int(breakdown.get('signal_count', 0) or 0),
+                'global_alert_level':  str(full.get('alert_level', 'normal') or 'normal'),
+                'global_signal_count': int(full.get('signal_count', 0) or 0),
+                'global_total_score':  float(full.get('total_score', 0) or 0),
+                'sparkline':           full.get('sparkline'),
+            })
+
+        return {
+            'commodity_pressure':  israel_score,
+            'alert_level':         israel_alert,
+            'commodity_summaries': commodity_summaries_out,
+            'last_updated':        bundle.get('last_updated', bundle.get('cached_at')),
+        }
+    except Exception as e:
+        print(f"[Israel Commodity] Read error (non-fatal): {str(e)[:120]}")
+        return None
+
+
 def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_data, strike_data):
     """
     Israel Stability Score (0–100)
@@ -1048,6 +1151,38 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
     except Exception as e:
         print(f"[Israel Stability] Rhetoric penalty skipped: {e}")
 
+    # ── Commodity penalty (Phase 3 — May 5 2026) ──
+    # Per-commodity stability penalties driven by COMMODITY_PENALTY_CONFIG.
+    # Currently wheat-only (bread → coalition stress lever).
+    commodity_pressure_data = _read_israel_commodity_pressure()
+    commodity_penalty = 0
+    commodity_penalty_detail = {}
+    try:
+        if commodity_pressure_data and commodity_pressure_data.get('commodity_summaries'):
+            for summary in commodity_pressure_data['commodity_summaries']:
+                cid = str(summary.get('commodity', '')).lower()
+                config = COMMODITY_PENALTY_CONFIG.get(cid)
+                if not config:
+                    continue
+                global_alert = str(summary.get('global_alert_level', 'normal')).lower()
+                if global_alert == 'surge':
+                    delta = config.get('penalty_surge', 0)
+                elif global_alert == 'high':
+                    delta = config.get('penalty_high', 0)
+                else:
+                    delta = 0
+                if delta != 0:
+                    commodity_penalty += delta
+                    commodity_penalty_detail[cid] = {
+                        'penalty':   delta,
+                        'alert':     global_alert,
+                        'rationale': config.get('rationale', ''),
+                    }
+            if commodity_penalty:
+                print(f"[Israel Stability] Commodity penalty: {commodity_penalty} (detail: {commodity_penalty_detail})")
+    except Exception as e:
+        print(f"[Israel Stability] Commodity penalty skipped: {e}")
+
     # ── Final score ──
     score = (
         base
@@ -1060,6 +1195,7 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
         + rhetoric_inbound
         + rhetoric_outbound
         + rhetoric_alerts
+        + commodity_penalty
     )
     score = max(0, min(100, int(score)))
 
@@ -1108,8 +1244,12 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
             'elections_proximity_score': conflict_data.get('elections_proximity_score', 0),
             'opposition_mentions': conflict_data.get('opposition_mentions', 0),
             'elections_mentions': conflict_data.get('elections_mentions', 0),
+            # v2.2.0 — commodity penalty exposure for frontend stability breakdown
+            'commodity_penalty': commodity_penalty,
+            'commodity_penalty_detail': commodity_penalty_detail,
         },
-        'version': '2.1.0-opposition-elections-vector'
+        '_commodity_pressure_for_payload': commodity_pressure_data,
+        'version': '2.2.0-commodity-aware'
     }
 
 # ========================================
@@ -1194,9 +1334,13 @@ def scan_israel_stability():
         }
         update_israel_history(snapshot)
 
+        # Pull commodity pressure off stability (private handoff key from calc)
+        commodity_pressure_for_response = stability.pop('_commodity_pressure_for_payload', None)
+
         payload = {
             'success': True,
             'stability': stability,
+            'commodity_pressure': commodity_pressure_for_response,
             'economic': {
                 'nis': economic,
                 'tase': tase
