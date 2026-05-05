@@ -1,2124 +1,1261 @@
 """
-Asifah Analytics — Cross-Cutting Commodity Tracker v1.0.0
-April 29, 2026
+iran_signal_interpreter.py
+Asifah Analytics -- ME Backend Module
+v1.0.0
 
-Tracks 11 strategic commodities and their country-level pressure signals.
-Mirrors military_tracker.py architecture.
+Signal interpretation engine for the Iran Rhetoric Tracker.
+Iran is the COMMAND NODE -- the analytical frame is fundamentally
+different from the Israel interpreter.
 
-COMMODITIES TRACKED (Phase 1):
-  Tier 1 (Strategic / Chokepoint):
-    - Oil (Brent + WTI futures)
-    - Natural Gas (Henry Hub + LNG)
-    - Wheat (CBOT)
-    - Potash (no spot price — production volume + sanctions cycle)
-  Tier 2 (Strategic Minerals + Agri):
-    - Corn (CBOT)
-    - Soybeans (CBOT)
-    - Uranium (URA ETF + Sprott proxy)
-    - Rare Earth Elements (MP Materials, REMX ETF)
-    - Lithium (LIT ETF, ALB stock)
-    - Gold (futures)
-  Tier 3 (Industrial):
-    - Copper (HG futures)
+Key question: Is Iran orchestrating a coordinated multi-theater
+axis activation, and how close is it to triggering direct
+US/Israeli military response?
 
-COUNTRY EXPOSURE — Phase 1:
-  Belarus, Russia, China, Israel, Ukraine
-  (Phase 2: KZ, CA, AU, SA, UAE, IR, US, BR, DRC, GL, NE, KZ, CL, PE)
+Three analytical outputs:
+  1. So What Summary  -- plain-language command node assessment
+  2. Red Line Status  -- Iran's red lines AND adversary red lines re: Iran
+  3. Historical Match -- documented pre-escalation patterns
 
-DATA SOURCES:
-  - Yahoo Finance (yfinance) — sparklines for 10/11 commodities
-  - GDELT (English + Russian + Chinese + Arabic) — news signals
-  - Defense/Industry RSS — USGS, USDA, IEA public, Argus public
-  - Reddit — r/commodities, r/Mining, r/uranium, r/RareEarthMetals,
-    r/agriculture, r/wallstreetbets (futures coverage)
-  - Brave Search (fallback when GDELT/NewsAPI rate limit)
+Iran-specific red lines fall into TWO categories:
+  A. Iran's own red lines (what would trigger Iranian direct action)
+  B. Adversary red lines re: Iran (what triggers US/Israeli response)
 
-ARCHITECTURE NOTES:
-  - Mirrors military_tracker.py exactly (Redis cache, /tmp fallback,
-    background scan daemon, register_*_endpoints pattern)
-  - Read-aware: country pages call /api/commodity-pressure/<target>
-    same shape as /api/military-posture/<target>
-  - yfinance is the only new dependency (~50MB pandas/numpy transitive)
-  - Honest UI: commodities WITHOUT public spot prices (potash) get
-    production volume + policy event signals instead of fake sparklines
-
-CHANGELOG:
-  v1.0.0 - Initial release. 11 commodities, 5 country mappings,
-           full backend wiring matching military_tracker pattern.
-
-COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
+Author: RCGG / Asifah Analytics
 """
 
-# ========================================
-# IMPORTS
-# ========================================
-import requests
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
-import re
-import json
-import time
-import os
-import threading
-
-# Yahoo Finance for sparklines
-try:
-    import yfinance as yf
-    YFINANCE_AVAILABLE = True
-    print("[Commodity Tracker] ✅ yfinance available")
-except ImportError:
-    YFINANCE_AVAILABLE = False
-    print("[Commodity Tracker] ⚠️ yfinance not available — sparklines disabled")
+from datetime import datetime, timezone
 
 
-# ========================================
-# CONFIGURATION
-# ========================================
 
-GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY')
-BRAVE_API_KEY = os.environ.get('BRAVE_API_KEY')
-
-# Upstash Redis (persistent cache across Render cold starts)
-UPSTASH_REDIS_URL = os.environ.get('UPSTASH_REDIS_URL')
-UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
-
-# Local fallback cache
-COMMODITY_CACHE_FILE = '/tmp/commodity_tracker_cache.json'
-COMMODITY_CACHE_TTL_HOURS = 4
-
-# Sparkline cache (separate, refreshed more frequently)
-SPARKLINE_CACHE_TTL_HOURS = 1     # Prices update faster than news
-SPARKLINE_REDIS_KEY = 'commodity_sparkline_bundle'
-
-# Background scan lock
-_background_scan_running = False
-_background_scan_lock = threading.Lock()
-
-
-# ========================================
-# COMMODITY DEFINITIONS
-# ========================================
-# Each commodity has:
-#   tier:           1 (chokepoint), 2 (strategic), 3 (industrial)
-#   category:       'energy', 'agricultural', 'strategic_mineral', 'precious'
-#   icon:           emoji for UI
-#   yahoo_ticker:   primary Yahoo Finance ticker for sparkline
-#   yahoo_proxies:  alternate tickers if primary fails (failover)
-#   keywords:       news keyword set
-#   chokepoints:    geographic/logistical chokepoints
-#   has_spot_price: True if a public ticker tracks it; False = production-volume
-#                   + policy events instead (e.g. potash)
-
-COMMODITY_TYPES = {
-    'cobalt': {
-        'name': 'Cobalt',
-        'icon': '🔷',
-        'tier': 1,
-        'category': 'strategic_mineral',
-        'has_spot_price': True,
-        'yahoo_ticker': 'BATT',          # Amplify Lithium & Battery Tech ETF (cobalt-exposed)
-        'yahoo_proxies': ['GLNCY', 'CMCLF'],  # Glencore + CMOC Group (DRC dominant)
-        'unit': 'USD (BATT ETF)',
-        'description': 'Cobalt is a critical battery metal essential for EV cathodes (NMC chemistry). DRC produces ~72% of global supply; China refines ~73%. Tracked via battery-metals ETF + Glencore/CMOC equity proxies. LME cobalt futures available but illiquid.',
-        'chokepoints': [
-            'drc cobalt belt', 'kolwezi', 'lubumbashi', 'tenke fungurume',
-            'mutanda', 'kisanfu', 'lobito corridor', 'glencore cobalt',
-            'cmoc cobalt', 'huayou cobalt', 'sulawesi indonesia',
-            'morowali industrial park', 'weda bay',
-        ],
-        'top_producers':  ['drc', 'indonesia', 'russia', 'australia', 'canada', 'philippines'],
-        'top_consumers':  ['china', 'korea', 'japan', 'usa', 'eu'],
+# ============================================================
+# RED LINE DEFINITIONS -- DUAL CATEGORY
+# ============================================================
+RED_LINES = [
+    # ── Category A: Iran's own escalation triggers ──────────
+    {
+        'id':       'direct_us_strike_iran',
+        'label':    'Direct US Strike on Iranian Territory',
+        'detail':   'CENTCOM conducts kinetic strike on Iranian soil or naval assets',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '🇺🇸',
+        'category': 'adversary_trigger',
+        'source':   'IRGC doctrine -- direct attack triggers mandatory retaliation (Operation True Promise precedent)',
     },
-    'copper': {
-        'name': 'Copper',
-        'icon': '🟫',
-        'tier': 3,
-        'category': 'industrial',
-        'has_spot_price': True,
-        'yahoo_ticker': 'HG=F',
-        'yahoo_proxies': ['CPER', 'FCX'],   # Copper ETF + Freeport-McMoRan
-        'unit': 'USD/lb',
-        'description': 'COMEX copper futures. Bellwether for global industrial demand. China consumes ~50%.',
-        'chokepoints': [
-            'antofagasta chile', 'escondida', 'chuquicamata',
-            'lubumbashi drc', 'glencore', 'panama copper',
-        ],
-        'top_producers':  ['chile', 'peru', 'china', 'drc', 'usa', 'australia'],
-        'top_consumers':  ['china', 'eu', 'usa', 'japan', 'korea'],
+    {
+        'id':       'strait_of_hormuz_closure',
+        'label':    'Strait of Hormuz Closure / Mining',
+        'detail':   'Iran moves to close or mine Strait of Hormuz -- triggers US/coalition military response',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '⚓',
+        'category': 'iran_trigger',
+        'source':   'US Central Command stated red line; triggers Article 5-equivalent response',
     },
-    'corn': {
-        'name': 'Corn',
-        'icon': '🌽',
-        'tier': 2,
-        'category': 'agricultural',
-        'has_spot_price': True,
-        'yahoo_ticker': 'ZC=F',
-        'yahoo_proxies': ['CORN'],
-        'unit': 'USD/bushel',
-        'description': 'CBOT corn futures. Animal feed + ethanol + food.',
-        'chokepoints': [
-            'mississippi river', 'panama canal', 'brazil port santos',
-            'paranaguá', 'odesa port',
-        ],
-        'top_producers':  ['usa', 'china', 'brazil', 'argentina', 'ukraine'],
-        'top_consumers':  ['china', 'usa', 'eu', 'mexico', 'japan'],
+    {
+        'id':       'nuclear_threshold_crossed',
+        'label':    'Nuclear Weapons-Grade Enrichment',
+        'detail':   'Iran enriches uranium to 90%+ weapons grade -- triggers Israeli/US preemptive consideration',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '☢️',
+        'category': 'adversary_trigger',
+        'source':   'Israeli red line -- stated multiple times by PM, Defense Minister, Mossad',
     },
-    'gold': {
-        'name': 'Gold',
-        'icon': '🥇',
-        'tier': 2,
-        'category': 'precious',
-        'has_spot_price': True,
-        'yahoo_ticker': 'GC=F',
-        'yahoo_proxies': ['GLD', 'IAU'],
-        'unit': 'USD/oz',
-        'description': 'COMEX gold futures. Sanctions-evasion vehicle and BRICS+ reserve diversification signal.',
-        'chokepoints': [
-            'london bullion market', 'shanghai gold exchange',
-            'comex', 'switzerland refining',
-        ],
-        'top_producers':  ['china', 'russia', 'australia', 'usa', 'canada', 'south_africa'],
-        'top_consumers':  ['china', 'india', 'usa', 'eu', 'central banks'],
+    {
+        'id':       'otp_wave_acceleration',
+        'label':    'Operation True Promise -- Wave Acceleration',
+        'detail':   'OTP wave count accelerating (multiple waves in 24h) signals coordinated campaign escalation',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '🌊',
+        'category': 'iran_trigger',
+        'source':   'Pattern analysis -- OTP wave acceleration preceded direct Iranian escalation in 2024',
     },
-    'lithium': {
-        'name': 'Lithium',
-        'icon': '🔋',
-        'tier': 2,
-        'category': 'strategic_mineral',
-        'has_spot_price': True,
-        'yahoo_ticker': 'LIT',           # Global X Lithium & Battery Tech ETF
-        'yahoo_proxies': ['ALB', 'SQM'],  # Albemarle + SQM (Chile)
-        'unit': 'USD (LIT ETF)',
-        'description': 'Global X Lithium ETF. Albemarle (ALB) and SQM (Chile) as concentrated producer proxies. Spot lithium carbonate price tracked via news.',
-        'chokepoints': [
-            'salar de atacama', 'salar de uyuni', 'lithium triangle',
-            'greenbushes', 'kwinana', 'jiangxi china',
-        ],
-        'top_producers':  ['australia', 'chile', 'china', 'argentina'],
-        'top_consumers':  ['china', 'korea', 'japan', 'eu', 'usa'],
+    {
+        'id':       'proxy_simultaneous_activation',
+        'label':    'Full Axis Simultaneous Activation',
+        'detail':   'Hezbollah + Houthi + PMF Iraq all activated simultaneously under Iranian direction',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '🔱',
+        'category': 'iran_trigger',
+        'source':   'CSIS / INSS -- simultaneous proxy activation is Iranian command node signal',
     },
-    'natural_gas': {
-        'name': 'Natural Gas',
-        'icon': '⛽',
-        'tier': 1,
-        'category': 'energy',
-        'has_spot_price': True,
-        'yahoo_ticker': 'NG=F',          # Henry Hub
-        'yahoo_proxies': ['UNG'],         # Natural gas ETF
-        'unit': 'USD/MMBtu',
-        'description': 'Henry Hub futures + TTF/JKM news context for European/Asian spot.',
-        'chokepoints': [
-            'turkstream', 'nord stream', 'yamal', 'tanap',
-            'qatar lng', 'sakhalin', 'arctic lng', 'galkynysh',
-            'central asia china pipeline', 'tapi pipeline',
-        ],
-        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china', 'turkmenistan', 'azerbaijan'],
-        'top_consumers':  ['eu', 'china', 'japan', 'korea'],
+    {
+        'id':       'khamenei_direct_statement',
+        'label':    'Khamenei Direct Threat Statement',
+        'detail':   'Supreme Leader issues direct public threat (not IRGC spokesperson) -- elevated authorization signal',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '👁️',
+        'category': 'iran_trigger',
+        'source':   'Pattern analysis -- Khamenei direct statements precede major IRGC operations',
     },
-    'nickel': {
-        'name': 'Nickel',
-        'icon': '⚙️',
-        'tier': 2,
-        'category': 'industrial',
-        'has_spot_price': True,
-        'yahoo_ticker': 'JJN',           # iPath Nickel ETN
-        'yahoo_proxies': ['VALE', 'BHP'],  # Vale + BHP (major nickel producers)
-        'unit': 'USD (JJN ETN)',
-        'description': 'iPath Nickel ETN tracks LME nickel futures. Vale (Brazil) and BHP (Australia/Indonesia) as integrated producer proxies. Indonesia dominates ~50% of global mined supply via HPAL/RKEF processing.',
-        'chokepoints': [
-            'sulawesi indonesia', 'morowali industrial park', 'weda bay',
-            'norilsk russia', 'norilsk nickel', 'sorowako',
-            'voiseys bay canada', 'goro new caledonia',
-            'philippines nickel', 'surigao',
-        ],
-        'top_producers':  ['indonesia', 'philippines', 'russia', 'australia', 'canada', 'new_caledonia'],
-        'top_consumers':  ['china', 'eu', 'japan', 'korea', 'usa'],
+    {
+        'id':       'trump_iran_ultimatum',
+        'label':    'Trump Issues Iran Ultimatum',
+        'detail':   'US president issues direct ultimatum to Iran with timeline -- forces Iranian response decision',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '⏱️',
+        'category': 'adversary_trigger',
+        'source':   'Historical pattern -- Trump maximum pressure + ultimatum language forces Iranian hand',
     },
-    'oil': {
-        'name': 'Oil',
-        'icon': '🛢️',
-        'tier': 1,
-        'category': 'energy',
-        'has_spot_price': True,
-        'yahoo_ticker': 'BZ=F',         # Brent crude
-        'yahoo_proxies': ['CL=F'],       # WTI fallback
-        'unit': 'USD/barrel',
-        'description': 'Brent crude futures. Global benchmark. WTI as fallback.',
-        'chokepoints': [
-            'strait of hormuz', 'bab el-mandeb', 'suez canal',
-            'fujairah', 'ras tanura', 'novorossiysk', 'primorsk',
-            'kozmino', 'jubail', 'hormuz blockade',
-            'baku-tbilisi-ceyhan', 'btc pipeline', 'sangachal terminal',
-            'caspian sea', 'ceyhan terminal', 'cpc pipeline', 'tengiz',
-        ],
-        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan', 'kazakhstan'],
-        'top_consumers':  ['china', 'usa', 'india', 'eu'],
+    {
+        'id':       'irgc_silence_pre_op',
+        'label':    'IRGC Command Silence Before Operation',
+        'detail':   'IRGC public statements drop to zero while proxy activation increases -- pre-operation pattern',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🤫',
+        'category': 'iran_trigger',
+        'source':   'Operational security pattern -- IRGC silence preceded OTP launches in 2024',
     },
-    'potash': {
-        'name': 'Potash',
-        'icon': '🌱',
-        'tier': 1,
-        'category': 'agricultural',
-        'has_spot_price': False,    # NO PUBLIC SPOT PRICE
-        'yahoo_ticker': None,
-        'yahoo_proxies': ['NTR', 'MOS'],   # Nutrien + Mosaic stocks as soft proxies
-        'unit': 'production volume + sanctions cycle',
-        'description': 'No public spot price. Tracked via production volume (USGS), sanctions events, Belaruskali/Uralkali export news. Nutrien/Mosaic stock prices as soft proxy for market sentiment.',
-        'chokepoints': [
-            'klaipeda port', 'saskatchewan', 'belaruskali',
-            'uralkali', 'soligorsk', 'st petersburg port',
-        ],
-        'top_producers':  ['canada', 'russia', 'belarus', 'china', 'germany', 'israel', 'jordan'],
-        'top_consumers':  ['china', 'brazil', 'india', 'usa'],
+    {
+        'id':       'hormuz_transit_threat',
+        'label':    'Strait of Hormuz Transit Threat Language',
+        'detail':   'Iranian officials threaten to close Hormuz -- escalatory signaling even before action',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🚢',
+        'category': 'iran_trigger',
+        'source':   'Escalation pattern -- Hormuz closure threats historically precede kinetic IRGC naval action',
     },
-    'rare_earths': {
-        'name': 'Rare Earths',
-        'icon': '⚗️',
-        'tier': 2,
-        'category': 'strategic_mineral',
-        'has_spot_price': True,
-        'yahoo_ticker': 'MP',            # MP Materials (US REE producer)
-        'yahoo_proxies': ['REMX', 'LYC.AX'],  # VanEck REMX ETF + Lynas Australia
-        'unit': 'USD (MP Materials)',
-        'description': 'MP Materials (Mountain Pass mine, USA). REMX ETF as broader proxy. China dominates ~60% of production and ~85% of refining.',
-        'chokepoints': [
-            'baotou china', 'mountain pass usa', 'kvanefjeld greenland',
-            'lynas malaysia', 'mt weld australia',
-        ],
-        'top_producers':  ['china', 'usa', 'australia', 'myanmar', 'greenland'],
-        'top_consumers':  ['china', 'japan', 'usa', 'eu'],
+    {
+        'id':       'us_carrier_deployment',
+        'label':    'US Carrier Strike Group Persian Gulf Deployment',
+        'detail':   'Additional US carrier deployed to Persian Gulf/Arabian Sea -- force posture signal to Iran',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🛳️',
+        'category': 'adversary_trigger',
+        'source':   'CENTCOM posture -- carrier deployment historically signals US strike readiness',
     },
-    'silver': {
-        'name': 'Silver',
-        'icon': '🪙',
-        'tier': 2,
-        'category': 'precious',
-        'has_spot_price': True,
-        'yahoo_ticker': 'SI=F',          # COMEX silver futures
-        'yahoo_proxies': ['SLV', 'PSLV'],  # iShares Silver Trust + Sprott Physical Silver
-        'unit': 'USD/oz',
-        'description': 'COMEX silver futures. Mexico is world #1 producer (~6,120 MT). Industrial/photovoltaic demand + precious-metal monetary properties. China #2 producer + dominant in solar manufacturing.',
-        'chokepoints': [
-            'fresnillo mexico', 'saucito mexico', 'antamina peru',
-            'uchucchacua peru', 'cannington australia',
-            'comex silver', 'shanghai silver', 'london bullion',
-        ],
-        'top_producers':  ['mexico', 'china', 'peru', 'russia', 'poland', 'chile', 'australia'],
-        'top_consumers':  ['china', 'india', 'usa', 'eu', 'japan'],
-    },
-    'soybeans': {
-        'name': 'Soybeans',
-        'icon': '🫘',
-        'tier': 2,
-        'category': 'agricultural',
-        'has_spot_price': True,
-        'yahoo_ticker': 'ZS=F',
-        'yahoo_proxies': ['SOYB'],
-        'unit': 'USD/bushel',
-        'description': 'CBOT soybeans. China is the dominant consumer (~60%).',
-        'chokepoints': [
-            'panama canal', 'brazil port santos', 'mississippi river',
-            'us gulf', 'paranaguá',
-        ],
-        'top_producers':  ['brazil', 'usa', 'argentina', 'china', 'india'],
-        'top_consumers':  ['china', 'eu', 'mexico', 'japan'],
-    },
-    'uranium': {
-        'name': 'Uranium',
-        'icon': '☢️',
-        'tier': 2,
-        'category': 'strategic_mineral',
-        'has_spot_price': True,
-        'yahoo_ticker': 'URA',           # Global X Uranium ETF (best public proxy)
-        'yahoo_proxies': ['SRUUF', 'CCJ'],  # Sprott Physical Uranium Trust + Cameco
-        'unit': 'USD (URA ETF price)',
-        'description': 'Global X Uranium ETF. Spot price (UxC) is paywalled; URA tracks the equity exposure. Sprott (SRUUF) and Cameco (CCJ) as proxies.',
-        'chokepoints': [
-            'kazatomprom', 'cameco', 'orano', 'rosatom',
-            'niger uranium', 'arlit niger',
-        ],
-        'top_producers':  ['kazakhstan', 'canada', 'australia', 'niger', 'russia', 'namibia'],
-        'top_consumers':  ['usa', 'france', 'china', 'russia', 'korea', 'japan'],
-    },
-    'wheat': {
-        'name': 'Wheat',
-        'icon': '🌾',
-        'tier': 1,
-        'category': 'agricultural',
-        'has_spot_price': True,
-        'yahoo_ticker': 'ZW=F',          # CBOT wheat
-        'yahoo_proxies': ['WEAT'],        # Teucrium Wheat ETF
-        'unit': 'USD/bushel',
-        'description': 'CBOT wheat futures. Russia + Ukraine = ~25% of global exports.',
-        'chokepoints': [
-            'black sea grain corridor', 'odesa port', 'mykolaiv port',
-            'novorossiysk', 'bosphorus',
-        ],
-        'top_producers':  ['russia', 'eu', 'china', 'india', 'usa', 'ukraine', 'canada', 'australia'],
-        'top_consumers':  ['china', 'india', 'eu', 'egypt', 'turkey'],
-    },
-}
-# ========================================
-# COMMODITY KEYWORD SETS
-# ========================================
-# Used for matching news articles to commodities.
-# Each commodity has English + (where relevant) multilingual keywords.
-
-COMMODITY_KEYWORDS = {
-    'cobalt': [
-        # Producers / state actors
-        'cobalt', 'cobalt prices', 'cobalt market', 'cobalt sulphate',
-        'cobalt hydroxide', 'cobalt metal', 'cobalt concentrate',
-        'drc cobalt', 'congo cobalt', 'congolese cobalt',
-        'indonesia cobalt', 'indonesian cobalt',
-        # Companies
-        'glencore cobalt', 'cmoc cobalt', 'china molybdenum',
-        'huayou cobalt', 'jinchuan cobalt', 'umicore cobalt',
-        'tenke fungurume', 'kisanfu', 'mutanda',
-        'gecamines', 'ivanhoe mines',
-        # Geographic / logistical
-        'kolwezi', 'lubumbashi', 'katanga cobalt', 'lobito corridor',
-        'sulawesi cobalt', 'morowali', 'weda bay',
-        # Market events
-        'cobalt export ban', 'drc cobalt quota', 'cobalt sanctions',
-        'cobalt artisanal mining', 'cobalt child labor',
-        'cobalt refining china', 'lme cobalt',
-        'battery metal', 'nmc battery', 'nca battery',
-        'foreign entity of concern', 'feoc cobalt', 'ira critical minerals',
-        # French (DRC)
-        'cobalt rdc', 'cobalt congolais', 'mines de cobalt',
-        # Chinese
-        '钴', '钴价', '钴矿', '钴精矿',
-    ],
-    'copper': [
-        'copper', 'copper prices', 'copper futures',
-        'comex copper', 'lme copper', 'doctor copper',
-        'antofagasta copper', 'escondida', 'chuquicamata',
-        'codelco', 'freeport-mcmoran', 'glencore copper',
-        'first quantum', 'cobre panama', 'panama copper',
-        'lubumbashi', 'katanga copper', 'drc copper',
-        'china copper imports', 'copper smelter',
-        'copper concentrate', 'copper cathode',
-        # Spanish
-        'cobre', 'cobre chile', 'cobre perú',
-        # Chinese
-        '铜', '铜价', '铜进口',
-    ],
-    'corn': [
-        'corn', 'maize', 'corn prices', 'corn futures', 'cbot corn',
-        'corn harvest', 'corn ethanol', 'corn export',
-        'ukrainian corn', 'us corn', 'brazil corn safrinha',
-        'argentina corn', 'corn yields', 'corn drought',
-        'usda corn', 'wasde corn',
-        # Spanish
-        'maíz', 'cosecha de maíz',
-        # Chinese
-        '玉米',
-    ],
-    'gold': [
-        'gold', 'gold prices', 'gold futures', 'comex gold',
-        'gold reserves', 'central bank gold', 'gold buying',
-        'china gold reserves', 'russian gold', 'gold sanctions',
-        'london bullion', 'shanghai gold exchange',
-        'gold etf', 'gold etfs', 'gold imports',
-        'world gold council', 'gold demand', 'gold supply',
-        'brics gold', 'gold standard', 'gold-backed currency',
-        # Russian
-        'золото', 'золотовалютные резервы',
-        # Chinese
-        '黄金', '黄金储备', '黄金价格',
-        # Arabic
-        'الذهب', 'أسعار الذهب',
-    ],
-    'lithium': [
-        'lithium', 'lithium prices', 'lithium carbonate', 'lithium hydroxide',
-        'spodumene', 'salar de atacama', 'salar de uyuni',
-        'sqm lithium', 'albemarle', 'tianqi lithium',
-        'ganfeng lithium', 'pilbara lithium', 'greenbushes',
-        'lithium triangle', 'lithium argentina', 'lithium chile',
-        'lithium bolivia', 'lithium battery', 'ev battery lithium',
-        'lithium mining', 'lithium refinery', 'lithium tariff',
-        'china lithium', 'australian lithium',
-        # Spanish
-        'litio', 'litio chile', 'litio argentina', 'litio bolivia',
-        # Chinese
-        '锂', '碳酸锂', '锂电池',
-    ],
-    'natural_gas': [
-        'natural gas', 'lng', 'liquefied natural gas',
-        'henry hub', 'ttf gas', 'jkm price', 'gas prices',
-        'nord stream', 'turkstream', 'yamal lng',
-        'qatar lng', 'us lng exports', 'european gas',
-        'gas pipeline', 'gas storage europe', 'gas crisis',
-        'gazprom', 'novatek', 'qatargas', 'shell lng',
-        'sakhalin', 'arctic lng',
-        'galkynysh', 'central asia china pipeline', 'tapi pipeline',
-        'turkmenistan gas', 'turkmen gas',
-        # Russian
-        'природный газ', 'газпром', 'газопровод', 'спг',
-        # Chinese
-        '天然气', '液化天然气',
-    ],
-    'nickel': [
-        # Producers / state actors
-        'nickel', 'nickel prices', 'nickel futures', 'lme nickel',
-        'nickel pig iron', 'npi', 'ferronickel', 'nickel sulphate',
-        'class 1 nickel', 'class 2 nickel', 'high pressure acid leach', 'hpal',
-        # Companies
-        'norilsk nickel', 'nornickel', 'vale nickel',
-        'bhp nickel', 'sumitomo metal mining', 'tsingshan',
-        'huayou nickel', 'eramet', 'glencore nickel',
-        # Geographic / logistical
-        'indonesia nickel', 'indonesian nickel', 'sulawesi nickel',
-        'morowali industrial park', 'weda bay nickel', 'sorowako',
-        'philippines nickel', 'surigao', 'palawan nickel',
-        'norilsk russia', 'kun-manie', 'voiseys bay',
-        'goro new caledonia', 'koniambo new caledonia',
-        # Market events
-        'nickel export ban', 'indonesia nickel ban', 'nickel sanctions',
-        'nickel mining moratorium', 'nickel laterite',
-        'ev battery nickel', 'cathode nickel', 'tesla nickel',
-        'foreign entity of concern nickel',
-        # Russian
-        'никель', 'норильский никель',
-        # Chinese
-        '镍', '镍价', '镍矿', '不锈钢',
-        # Indonesian
-        'nikel indonesia', 'tambang nikel',
-    ],
-    'oil': [
-        # Producers / state actors
-        'crude oil', 'oil prices', 'oil futures', 'brent crude', 'wti',
-        'opec', 'opec+', 'opec plus', 'saudi oil', 'aramco',
-        'russian oil', 'urals crude', 'iranian oil',
-        'venezuelan oil', 'pdvsa', 'oil sanctions',
-        'oil embargo', 'oil price cap', 'g7 price cap',
-        # Companies / refining
-        'rosneft', 'lukoil', 'gazprom neft', 'cnpc oil',
-        'chevron oil', 'exxonmobil', 'totalenergies',
-        'refinery attack', 'oil tanker attack', 'shadow fleet',
-        # Geographic / logistical
-        'fujairah terminal', 'ras tanura', 'novorossiysk',
-        'kozmino terminal', 'primorsk port',
-        'cpc pipeline', 'tengiz oil', 'kashagan', 'karachaganak',
-        # Russian
-        'нефть', 'цена на нефть', 'нефтепровод', 'нефтяные санкции',
-        # Arabic
-        'النفط', 'أسعار النفط', 'أرامكو', 'أوبك',
-        # Farsi
-        'نفت', 'صادرات نفت ایران', 'تحریم نفت',
-        # Chinese
-        '原油', '石油价格', '石油进口',
-    ],
-    'potash': [
-        'potash', 'belaruskali', 'uralkali', 'nutrien',
-        'mosaic potash', 'k+s potash', 'potash corp',
-        'potash sanctions', 'potash export', 'potash production',
-        'fertilizer prices', 'fertilizer sanctions',
-        'potassium chloride', 'mop fertilizer',
-        'potash klaipeda', 'belarusian potash',
-        'canpotex', 'soligorsk', 'jansen project',
-        'potash shortage', 'potash mining',
-        'belarus exports', 'belarus rail china',
-        'icl potash', 'arab potash company', 'dead sea potash',
-        # Russian
-        'калий', 'калийные удобрения', 'беларуськалий',
-        'уралкалий', 'хлористый калий',
-        # Chinese
-        '钾肥', '氯化钾',
-    ],
-    'rare_earths': [
-        'rare earth', 'rare earths', 'rare earth elements',
-        'neodymium', 'dysprosium', 'praseodymium', 'terbium',
-        'mp materials', 'mountain pass', 'lynas rare earths',
-        'china rare earth', 'baotou', 'china export controls',
-        'rare earth magnets', 'permanent magnets',
-        'rare earth processing', 'rare earth refining',
-        'kvanefjeld', 'tanbreez',
-        'gallium germanium', 'antimony export ban',
-        # Chinese
-        '稀土', '稀土出口', '稀土磁铁', '包头',
-    ],
-    'silver': [
-        # Producers / state actors
-        'silver', 'silver prices', 'silver futures', 'comex silver',
-        'silver ounces', 'silver metric tons', 'silver supply',
-        'silver demand', 'silver imports', 'silver exports',
-        # Companies
-        'fresnillo silver', 'pan american silver', 'first majestic',
-        'wheaton precious', 'hochschild mining', 'polymetal silver',
-        'kghm polska miedz', 'industrias peñoles',
-        # Geographic
-        'mexico silver', 'mexican silver', 'zacatecas silver',
-        'durango silver', 'chihuahua silver', 'fresnillo',
-        'peru silver', 'antamina silver', 'uchucchacua',
-        'china silver', 'poland silver', 'kazakhstan silver',
-        'cannington australia', 'broken hill',
-        # Market context
-        'silver photovoltaic', 'solar silver demand', 'silver solar',
-        'silver electronics', 'silver industrial demand',
-        'silver bullion', 'silver etf', 'slv etf',
-        'london silver fix', 'shanghai silver',
-        # Spanish
-        'plata', 'plata mexicana', 'plata peruana',
-        # Chinese
-        '白银', '银价', '白银市场',
-        # Russian
-        'серебро', 'серебряные руды',
-    ],
-    'soybeans': [
-        'soybeans', 'soybean prices', 'soybean futures',
-        'cbot soybeans', 'soybean meal', 'soybean oil',
-        'china soybean imports', 'brazil soybean', 'us soybean',
-        'argentina soybean', 'soybean tariff', 'trade war soybean',
-        'soybean crush', 'soybean rust',
-        # Portuguese (Brazil)
-        'soja', 'safra de soja',
-        # Chinese
-        '大豆', '中美大豆',
-    ],
-    'uranium': [
-        'uranium', 'uranium prices', 'yellowcake',
-        'kazatomprom', 'cameco', 'orano', 'rosatom uranium',
-        'sprott physical uranium', 'uranium etf',
-        'uranium enrichment', 'enriched uranium',
-        'natural uranium', 'uranium oxide',
-        'kazakhstan uranium', 'niger uranium', 'arlit',
-        'uranium mining', 'uranium sanctions',
-        'haleu', 'low-enriched uranium', 'high-assay',
-        'small modular reactor', 'smr uranium',
-        'cameco kazatomprom', 'kazakhstan nuclear',
-        # French (Niger / Orano)
-        "uranium nigérien", 'orano niger',
-        # Russian
-        'уран', 'росатом',
-        # Chinese
-        '铀', '核燃料',
-    ],
-    'wheat': [
-        'wheat', 'wheat prices', 'wheat futures', 'cbot wheat',
-        'black sea grain', 'grain corridor', 'grain deal',
-        'russian wheat exports', 'ukrainian wheat',
-        'wheat shortage', 'wheat tariff', 'wheat ban',
-        'india wheat ban', 'bread prices', 'flour shortage',
-        'usda wheat report', 'wasde wheat', 'wheat harvest',
-        'wheat smuggling', 'odesa port wheat',
-        # Russian
-        'пшеница', 'экспорт пшеницы', 'зерновой коридор',
-        # Arabic
-        'القمح', 'أسعار القمح',
-        # Chinese
-        '小麦', '小麦进口',
-    ],
-}
-# ========================================
-# COUNTRY EXPOSURE MATRIX (Phase 1)
-# ========================================
-# Which commodities does each country touch, and in what role?
-# role: 'producer' | 'consumer' | 'transit' | 'sanctions_target' | 'mediator'
-# weight: 0.5 (minor) → 1.5 (dominant role)
-
-COUNTRY_COMMODITY_EXPOSURE = {
-    'belarus': {
-        'potash':       {'role': 'producer',         'weight': 1.4, 'rank': 3,
-                         'note': 'Belaruskali, sanctioned 2021, rebuilt via Russian ports + China rail'},
-        'oil':          {'role': 'transit',           'weight': 0.8,
-                         'note': 'Druzhba pipeline, Mozyr/Naftan refineries (Russian crude)'},
-        'natural_gas':  {'role': 'consumer',          'weight': 1.0,
-                         'note': '100% Russian gas dependency'},
-    },
-    'china': {
-        'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': '60%+ of global production, 85% of refining; export controls leverage'},
-        'lithium':      {'role': 'consumer',          'weight': 1.5,
-                         'note': 'World #1 lithium consumer (EV batteries); also major producer via Tianqi/Ganfeng + dominant downstream battery industry'},
-        'potash':       {'role': 'consumer',          'weight': 1.4,
-                         'note': '~20% of global consumption; structural deficit; helping Belarus bypass sanctions'},
-        'soybeans':     {'role': 'consumer',          'weight': 1.5,
-                         'note': '~60% of global imports; trade war pressure point'},
-        'copper':       {'role': 'consumer',          'weight': 1.5,
-                         'note': '~50% of global consumption; industrial demand bellwether'},
-        'oil':          {'role': 'consumer',          'weight': 1.4,
-                         'note': 'World #1 importer; Iran/Russia discount buyer'},
-        'gold':         {'role': 'consumer',          'weight': 1.2,
-                         'note': 'Central bank reserve diversification; Shanghai Gold Exchange'},
-        'natural_gas':  {'role': 'consumer',          'weight': 1.0,
-                         'note': 'Power of Siberia pipeline; LNG imports'},
-        'cobalt':       {'role': 'consumer',          'weight': 1.5, 'rank': 1,
-                         'note': '~73% of global cobalt refining; CMOC dominates DRC mining; Huayou vertically integrated; ~87% of cobalt consumption goes to lithium-ion batteries'},
-        'nickel':       {'role': 'consumer',          'weight': 1.4,
-                         'note': 'World #1 nickel consumer; stainless steel + EV batteries; Tsingshan/Huayou Indonesia investments dominate processing'},
-        'silver':       {'role': 'producer',          'weight': 1.2, 'rank': 2,
-                         'note': 'World #2 silver producer (~109 Moz, ~13% global); also leading consumer for solar PV manufacturing + electronics'},
-    },
-    'drc': {
-        'cobalt':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 cobalt producer (~72% of global supply, ~247kt projected 2026); CMOC, Glencore dominate; export quotas since Feb 2025; Lobito Corridor diversifies routes from China-controlled infrastructure'},
-        'copper':       {'role': 'producer',          'weight': 1.3,
-                         'note': 'Major copper producer (Katanga belt); cobalt is largely a copper-mining by-product; Lubumbashi industrial center'},
-    },
-    'indonesia': {
-        'nickel':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 nickel producer (~800K tons/yr); Sulawesi/Morowali Industrial Park + Weda Bay; HPAL processing dominant; Chinese capital deeply embedded (Tsingshan, Huayou); 2020 ore export ban transformed market'},
-        'cobalt':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
-                         'note': '~15% of global cobalt (HPAL nickel by-product); rapid growth via Pomalaa, Morowali; expected 20% global share by 2030'},
-    },
-    'iran': {
-        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 6,
-                         'note': 'NIOC; world #6 producer (~3-4M bpd, sanctions-suppressed from ~6M capacity); world #3 proven reserves (~208B bbl, ~12% global); OPEC member; primary export to China via shadow fleet at discount; Hormuz leverage actor controls ~20% of global oil transit; OTP wave operations periodically threaten Gulf shipping; Fujairah terminal (UAE) struck during Iran war 2026'},
-        'natural_gas':  {'role': 'producer',          'weight': 1.3, 'rank': 3,
-                         'note': 'World #2-3 natural gas reserves (~29 TCM, after Russia); South Pars/North Dome shared field with Qatar is largest gas field globally; sanctions block major LNG exports despite reserves; pipeline gas to Iraq/Turkey/Armenia; IGAT pipeline network'},
-        'gold':         {'role': 'consumer',          'weight': 1.0,
-                         'note': 'Sanctions evasion vehicle: Iran-Russia-China gold trade; central bank reserve diversification under sanctions; Tehran Gold Exchange + bazaar physical demand; gold-for-oil barter arrangements with China/India during sanctions tightening cycles'},
-        'uranium':      {'role': 'producer',          'weight': 1.2,
-                         'note': 'Nuclear program enrichment: Natanz + Fordow facilities; ~60% enrichment threshold breached 2024; IAEA inspection access variable; AEOI manages domestic uranium mining (Saghand mine) + centrifuge cascades; weapons-grade (90%) red line for Israel/US'},
-        'wheat':        {'role': 'consumer',          'weight': 0.8,
-                         'note': 'Net wheat importer (~5-7M tonnes/yr); ~25-30% of consumption from imports; Russian wheat primary source post-2022; sanctions limit financing through Western banks; subsidized bread is political stability lever — wheat shortage = regime risk (1979 revolution had bread/inflation as core driver)'},
-    },
-    'israel': {
-        'potash':       {'role': 'producer',          'weight': 1.0, 'rank': 6,
-                         'note': 'ICL (Israel Chemicals); Dead Sea production'},
-        'natural_gas':  {'role': 'producer',          'weight': 0.8,
-                         'note': 'Leviathan + Tamar fields; exports to Egypt/Jordan'},
-    },
-    'lebanon': {
-        'wheat':        {'role': 'consumer',          'weight': 1.5,
-                         'note': 'Critical import dependency: ~60-67% of wheat from Ukraine alone, ~80-90% combined Black Sea (UA+RU). National wheat reserves ~1 month — never rebuilt after 2020 Beirut port explosion destroyed national grain silos. 2022 Ukraine war caused immediate rationing and price spike. Active humanitarian crisis (1M+ displaced, 1.24M IPC Phase 3+ projected through Aug 2026) compounds wheat-import vulnerability — any Black Sea disruption is materially worse during humanitarian crisis. Watch: Black Sea grain corridor status, Russian wheat export taxes, Lebanese Mills Association statements.'},
-    },
-    'kazakhstan': {
-        'uranium':      {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 uranium producer (~40% of global supply); Kazatomprom dominates ISR mining; 14 JVs hedge across Cameco/Orano/Rosatom/CGN; SMR demand wave 2025-2030 critical'},
-        'oil':          {'role': 'producer',          'weight': 1.3, 'rank': 8,
-                         'note': 'Tengiz, Karachaganak, Kashagan supergiants; CPC pipeline to Novorossiysk (Russia exposure); KazTransOil to China; Aktau Caspian port'},
-        'natural_gas':  {'role': 'producer',          'weight': 0.7,
-                         'note': 'Net producer/consumer balance; primarily domestic + neighbor exports'},
-        'silver':       {'role': 'producer',          'weight': 0.8,
-                         'note': '~12.6 Moz (~1.5% global); by-product of base-metal mining; strategic position between Russia/China for export routing'},
-    },
-    'mexico': {
-        'silver':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 silver producer (~6,120 MT, ~22% global); Zacatecas/Durango/Chihuahua; Fresnillo (largest primary silver mine); Peñoles/Fresnillo PLC dominant; ancient mining tradition'},
-    },
-    'peru': {
-        'silver':       {'role': 'producer',          'weight': 1.4, 'rank': 3,
-                         'note': 'World #3 silver producer (~107 Moz/~13% global); largest silver reserves globally per USGS; Antamina, Inmaculada, Uchucchacua mines; Andean polymetallic operations'},
-        'copper':       {'role': 'producer',          'weight': 1.3,
-                         'note': 'Major copper producer; Antamina, Toromocho; high-altitude Andean mining'},
-    },
-    'philippines': {
-        'nickel':       {'role': 'producer',          'weight': 1.4, 'rank': 2,
-                         'note': 'World #2 nickel producer (~420K tons/yr); Surigao region dominant; periodically exceeds Indonesia during Indonesian export bans; key Chinese feedstock'},
-    },
-    'russia': {
-        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 2,
-                         'note': 'World #2 producer; Urals crude; G7 price cap; shadow fleet'},
-        'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 2,
-                         'note': 'Gazprom, Novatek; Nord Stream; Yamal LNG; European market loss'},
-        'wheat':        {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 wheat exporter; Black Sea grain corridor leverage'},
-        'potash':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
-                         'note': 'Uralkali; partially sanctioned'},
-        'uranium':      {'role': 'producer',          'weight': 1.0, 'rank': 5,
-                         'note': 'Rosatom; HALEU enrichment dominance; Tenex sanctions risk'},
-        'gold':         {'role': 'producer',          'weight': 1.1,
-                         'note': 'BRICS+ gold reserves; sanctions evasion vehicle'},
-        'cobalt':       {'role': 'producer',          'weight': 1.0, 'rank': 3,
-                         'note': 'World #3 cobalt producer; Norilsk Nickel by-product; geopolitical risk reducing global prominence'},
-        'nickel':       {'role': 'producer',          'weight': 1.2, 'rank': 3,
-                         'note': 'World #3 nickel producer (~270K tons/yr); Norilsk Nickel/Nornickel dominant; Arctic Norilsk + Kun-Manie + Krasnoyarsk Krai operations'},
-        'silver':       {'role': 'producer',          'weight': 1.0, 'rank': 4,
-                         'note': '~39.8 Moz (~5% global); Polymetal International + Norilsk Nickel by-product; sanctions complicate Western supply'},
-    },
-    'saudi_arabia': {
-        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'Saudi Aramco; world #1 producer (~10M bpd capacity); OPEC institutional anchor; Ras Tanura export terminal; East-West Pipeline bypasses Hormuz'},
-        'natural_gas':  {'role': 'producer',          'weight': 0.9,
-                         'note': 'Jafurah unconventional field (largest in ME); Master Gas System; primarily domestic power + petrochemicals'},
-        'gold':         {'role': 'consumer',          'weight': 0.9,
-                         'note': 'SAMA central bank reserves; significant retail demand; Vision 2030 mineral resources strategy'},
-    },
-    'turkmenistan': {
-        'natural_gas':  {'role': 'producer',          'weight': 1.4, 'rank': 4,
-                         'note': "World #4 natural gas reserves (~27.4 TCM); Galkynysh world's #2 onshore field; Phase 4 broke ground April 2026 with CNPC; ~80% exports flow to China via CAGP; TAPI pipeline progressing through Afghan war zone"},
-        'oil':          {'role': 'producer',          'weight': 0.6,
-                         'note': 'Modest oil production; primarily domestic + Caspian shipping; Turkmenbashi port modernization 2018'},
-    },
-    'uae': {
-        'oil':          {'role': 'producer',          'weight': 1.4, 'rank': 7,
-                         'note': 'ADNOC; ~3M bpd capacity; Fujairah terminal + Habshan-Fujairah pipeline bypass Hormuz; left OPEC May 1 2026 over quota disputes; Fujairah struck during Iran war (2026)'},
-        'natural_gas':  {'role': 'consumer',          'weight': 0.9,
-                         'note': 'Dolphin Pipeline imports from Qatar; net importer despite domestic production; LNG terminal at Jebel Ali'},
-        'gold':         {'role': 'transit',           'weight': 1.0,
-                         'note': 'Dubai DMCC + Gold Souk; major global gold re-export hub; Africa→Asia routing; sanctions evasion concerns'},
-    },
-    'ukraine': {
-        'wheat':        {'role': 'producer',          'weight': 1.4, 'rank': 5,
-                         'note': 'Pre-war top-5 wheat exporter; corridor disruption signal'},
-        'corn':         {'role': 'producer',          'weight': 1.4,
-                         'note': 'Major corn exporter; Odesa port dependency'},
-        'sunflower_oil': {'role': 'producer',         'weight': 1.0,
-                         'note': '~50% of global sunflower oil; tracked under wheat/corn for Phase 1'},
-    },
-}
-# ========================================
-# RSS FEEDS — Commodity-specific sources
-# ========================================
-
-COMMODITY_RSS_FEEDS = {
-    # General commodity / market news
-    'Reuters Commodities': 'https://news.google.com/rss/search?q=site:reuters.com+commodity+OR+oil+OR+wheat+OR+gold&hl=en&gl=US&ceid=US:en',
-    'Bloomberg Markets': 'https://news.google.com/rss/search?q=site:bloomberg.com+commodity+OR+commodities&hl=en&gl=US&ceid=US:en',
-    'FT Commodities': 'https://news.google.com/rss/search?q=site:ft.com+commodities&hl=en&gl=US&ceid=US:en',
-    # Energy-specific
-    'Oil Price News': 'https://news.google.com/rss/search?q=oil+price+OR+brent+OR+WTI+OR+OPEC&hl=en&gl=US&ceid=US:en',
-    'IEA News': 'https://news.google.com/rss/search?q=site:iea.org+OR+international+energy+agency&hl=en&gl=US&ceid=US:en',
-    'Natural Gas Intel': 'https://news.google.com/rss/search?q=natural+gas+OR+LNG+OR+henry+hub+OR+TTF&hl=en&gl=US&ceid=US:en',
-    # Agriculture
-    'USDA Wheat Reports': 'https://news.google.com/rss/search?q=USDA+wheat+OR+WASDE+OR+grain+stocks&hl=en&gl=US&ceid=US:en',
-    'AgriCensus': 'https://news.google.com/rss/search?q=wheat+exports+OR+corn+exports+OR+soybean+exports&hl=en&gl=US&ceid=US:en',
-    # Strategic minerals
-    'USGS Mineral News': 'https://news.google.com/rss/search?q=USGS+mineral+OR+rare+earth+OR+lithium+OR+uranium&hl=en&gl=US&ceid=US:en',
-    'Mining.com': 'https://news.google.com/rss/search?q=site:mining.com+OR+mining+production&hl=en&gl=US&ceid=US:en',
-    'Mining Journal': 'https://news.google.com/rss/search?q=mining+journal+OR+mineral+production&hl=en&gl=US&ceid=US:en',
-    # Potash-specific (Peter's signal)
-    'Potash News': 'https://news.google.com/rss/search?q=potash+OR+belaruskali+OR+uralkali+OR+nutrien&hl=en&gl=US&ceid=US:en',
-    'Fertilizer News': 'https://news.google.com/rss/search?q=fertilizer+prices+OR+fertilizer+sanctions+OR+MOP+fertilizer&hl=en&gl=US&ceid=US:en',
-    # Uranium
-    'Uranium News': 'https://news.google.com/rss/search?q=uranium+OR+yellowcake+OR+kazatomprom+OR+cameco&hl=en&gl=US&ceid=US:en',
-    'Nuclear Fuel News': 'https://news.google.com/rss/search?q=enriched+uranium+OR+HALEU+OR+rosatom+OR+urenco&hl=en&gl=US&ceid=US:en',
-    # Rare earths
-    'Rare Earth News': 'https://news.google.com/rss/search?q=rare+earth+OR+neodymium+OR+MP+materials+OR+lynas&hl=en&gl=US&ceid=US:en',
-    'China REE': 'https://news.google.com/rss/search?q=china+rare+earth+OR+baotou+OR+REE+export&hl=en&gl=US&ceid=US:en',
-    # Lithium
-    'Lithium News': 'https://news.google.com/rss/search?q=lithium+OR+lithium+carbonate+OR+albemarle+OR+SQM&hl=en&gl=US&ceid=US:en',
-    # Gold
-    'Gold Markets': 'https://news.google.com/rss/search?q=gold+price+OR+gold+reserves+OR+central+bank+gold&hl=en&gl=US&ceid=US:en',
-    # Copper
-    'Copper News': 'https://news.google.com/rss/search?q=copper+OR+copper+prices+OR+codelco+OR+escondida&hl=en&gl=US&ceid=US:en',
-    # Cobalt (NEW)
-    'Cobalt News': 'https://news.google.com/rss/search?q=cobalt+OR+drc+cobalt+OR+glencore+cobalt+OR+CMOC&hl=en&gl=US&ceid=US:en',
-    'Battery Metals News': 'https://news.google.com/rss/search?q=battery+metals+OR+nmc+battery+OR+lfp+battery+OR+cobalt+lithium&hl=en&gl=US&ceid=US:en',
-    # Nickel (NEW)
-    'Nickel News': 'https://news.google.com/rss/search?q=nickel+OR+indonesia+nickel+OR+norilsk+nickel+OR+LME+nickel&hl=en&gl=US&ceid=US:en',
-    'Indonesia Mining': 'https://news.google.com/rss/search?q=indonesia+mining+OR+morowali+OR+sulawesi+nickel+OR+weda+bay&hl=en&gl=US&ceid=US:en',
-    # Silver (NEW)
-    'Silver News': 'https://news.google.com/rss/search?q=silver+OR+silver+prices+OR+fresnillo+OR+pan+american+silver&hl=en&gl=US&ceid=US:en',
-    'Precious Metals': 'https://news.google.com/rss/search?q=precious+metals+OR+gold+silver+OR+silver+demand+OR+silver+solar&hl=en&gl=US&ceid=US:en',
-}
-# ========================================
-# REDDIT SUBREDDITS
-# ========================================
-
-COMMODITY_REDDIT_SUBREDDITS = [
-    'commodities',
-    'Commodities',
-    'Mining',
-    'uranium',
-    'RareEarthMetals',
-    'agriculture',
-    'wheat',
-    'farming',
-    'wallstreetbets',     # Surprisingly active for futures
-    'EnergyAndPower',
-    'oil',
-    'naturalgas',
-    # NEW: cobalt / nickel / silver
-    'BatteryMetals',
-    'electricvehicles',   # battery-metals discussion
-    'Wallstreetsilver',
-    'silverbugs',
-    'PreciousMetals',
 ]
 
-REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+# ============================================================
+# HISTORICAL PRECEDENT LIBRARY
+# ============================================================
+HISTORICAL_PRECEDENTS = [
+    {
+        'id':          'otp1_april_2024',
+        'label':       'Operation True Promise 1 (April 2024)',
+        'description': 'First direct Iranian ballistic missile attack on Israeli soil -- 300+ projectiles',
+        'source':      'CSIS Missile Defense Project; INSS April 2024; ISW analysis',
+        'signals': {
+            'irgc_level_min':        4,
+            'proxy_activation_min':  3,
+            'otp_signals_min':       5,
+            'us_iran_level_min':     3,
+            'khamenei_level_min':    2,
+        },
+        'outcome':      'Direct Iranian ballistic + drone strike on Israel -- first in history. Israeli limited response within 72h.',
+        'window_hours': 72,
+        'confidence':   'High',
+    },
+    {
+        'id':          'otp2_october_2024',
+        'label':       'Operation True Promise 2 (October 2024)',
+        'description': 'Second direct Iranian attack following Nasrallah assassination',
+        'source':      'ISW / INSS post-event analysis, October 2024',
+        'signals': {
+            'irgc_level_min':        4,
+            'proxy_activation_min':  2,
+            'otp_signals_min':       3,
+            'khamenei_level_min':    3,
+        },
+        'outcome':      'Iranian ballistic missile salvo at Israel. More limited than OTP1 -- Israeli/US interception successful.',
+        'window_hours': 48,
+        'confidence':   'High',
+    },
+    {
+        'id':          'maximum_pressure_2019',
+        'label':       'Iran Maximum Pressure Response (2019)',
+        'description': 'IRGC tanker seizures and Abqaiq strike following US max pressure campaign',
+        'source':      'IISS Strategic Survey 2020; CSIS Gulf Security Analysis',
+        'signals': {
+            'us_iran_level_min':     4,
+            'irgc_level_min':        3,
+            'hormuz_threat':         True,
+            'khamenei_level_min':    2,
+        },
+        'outcome':      'IRGC seized tankers, struck Abqaiq oil facility via proxies. US did not respond militarily.',
+        'window_hours': 168,
+        'confidence':   'Medium',
+    },
+    {
+        'id':          'soleimani_retaliation_2020',
+        'label':       'Soleimani Assassination Retaliation (Jan 2020)',
+        'description': 'Iranian ballistic missile strike on Al Asad airbase following Soleimani killing',
+        'source':      'RAND Corporation; ISW; INSS January 2020 analysis',
+        'signals': {
+            'irgc_level_min':        5,
+            'khamenei_level_min':    4,
+            'us_iran_level_min':     5,
+            'proxy_activation_min':  2,
+        },
+        'outcome':      'Iran fired 16 ballistic missiles at Al Asad -- first direct Iranian state attack on US forces.',
+        'window_hours': 96,
+        'confidence':   'High',
+    },
+    {
+        'id':          'axis_coordination_otp4',
+        'label':       'OTP4 Multi-Theater Coordination (2026)',
+        'description': 'Iran coordinates simultaneous Hezbollah + Houthi + direct IRGC action',
+        'source':      'Current pattern analysis -- Asifah Analytics cross-theater fingerprint',
+        'signals': {
+            'irgc_level_min':        4,
+            'proxy_activation_min':  4,
+            'otp_signals_min':       10,
+            'us_iran_level_min':     2,
+            'khamenei_level_min':    2,
+        },
+        'outcome':      'Sustained multi-theater campaign with numbered wave operations. Israeli/US response ongoing.',
+        'window_hours': 48,
+        'confidence':   'Medium',
+    },
+]
 
 
-# ========================================
-# ALERT THRESHOLDS
-# ========================================
+# ============================================================
+# CORE SCORING FUNCTIONS
+# ============================================================
 
-ALERT_THRESHOLDS = {
-    'normal':   {'min_score': 0,  'label': 'Normal',    'color': 'green',  'icon': '🟢', 'banner': False},
-    'elevated': {'min_score': 8,  'label': 'Elevated',  'color': 'yellow', 'icon': '🟡', 'banner': True},
-    'high':     {'min_score': 20, 'label': 'High',      'color': 'orange', 'icon': '🟠', 'banner': True},
-    'surge':    {'min_score': 40, 'label': 'Surge',     'color': 'red',    'icon': '🔴', 'banner': True},
+def _score_red_lines(scan_data):
+    """
+    Evaluate current Iran signal state against each red line.
+    Handles both Iran-trigger and adversary-trigger red lines.
+    """
+    actors       = scan_data.get('actors', {})
+    fp           = scan_data
+
+    irgc_level    = actors.get('irgc', {}).get('escalation_level', 0)
+    khamenei_lv   = actors.get('khamenei', {}).get('escalation_level', 0)
+    us_iran_lv    = actors.get('us_iran', {}).get('escalation_level', 0)
+    israel_iran_lv = actors.get('israel_iran', {}).get('escalation_level', 0)
+
+    irgc_count    = actors.get('irgc', {}).get('statement_count', 0)
+    khamenei_cnt  = actors.get('khamenei', {}).get('statement_count', 0)
+
+    otp_signals   = fp.get('operation_true_promise_count', fp.get('otp_signal_count', 0))
+    proxy_level   = fp.get('proxy_activation_level', 0)
+    theatre_score = fp.get('theatre_score', 0)
+    theatre_level = fp.get('theatre_level', 0)
+
+    # Check for Hormuz language across ALL actors + us_iran articles
+    hormuz_threat = False
+    bab_mandeb_threat = False
+    for actor_id in actors:
+        for art in actors.get(actor_id, {}).get('top_articles', []):
+            title = art.get('title', '').lower()
+            if any(kw in title for kw in ['hormuz', 'strait of hormuz', 'close strait',
+                                           'block strait', 'hormuz strait', '48 hours',
+                                           'open hormuz', 'hell', 'all hell']):
+                hormuz_threat = True
+            if any(kw in title for kw in ['bab el-mandeb', 'bab al-mandeb', 'mandeb',
+                                           'red sea blockade', 'block red sea']):
+                bab_mandeb_threat = True
+
+    # Check for OTP wave acceleration (multiple waves in recent articles)
+    otp_wave_count = 0
+    for actor_id in ['irgc']:
+        for art in actors.get(actor_id, {}).get('top_articles', []):
+            title = art.get('title', '').lower()
+            if 'wave' in title and ('true promise' in title or 'otp' in title):
+                otp_wave_count += 1
+
+    triggered = []
+
+    # ── Direct US strike on Iran ──
+    if us_iran_lv >= 3:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'direct_us_strike_iran'),
+            'status':  'BREACHED' if us_iran_lv >= 5 else 'APPROACHING',
+            'trigger': f'US/CENTCOM actor at L{us_iran_lv} -- strike posture language detected',
+        })
+
+    # ── Strait of Hormuz closure ──
+    if hormuz_threat:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'strait_of_hormuz_closure'),
+            'status':  'APPROACHING',
+            'trigger': 'Hormuz closure/blocking language detected in Iranian actor statements',
+        })
+
+    # ── Nuclear threshold ──
+    if israel_iran_lv >= 3 and theatre_level >= 4:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'nuclear_threshold_crossed'),
+            'status':  'APPROACHING' if israel_iran_lv < 5 else 'BREACHED',
+            'trigger': f'Israel re: Iran at L{israel_iran_lv} -- nuclear red line language elevated',
+        })
+
+    # ── OTP wave acceleration ──
+    if otp_signals >= 10 or otp_wave_count >= 2:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'otp_wave_acceleration'),
+            'status':  'BREACHED' if otp_signals >= 20 else 'APPROACHING',
+            'trigger': f'{otp_signals} OTP signals detected, {otp_wave_count} wave announcements',
+        })
+
+    # ── Full proxy axis simultaneous activation ──
+    if proxy_level >= 4:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'proxy_simultaneous_activation'),
+            'status':  'BREACHED' if proxy_level >= 5 else 'APPROACHING',
+            'trigger': f'Proxy activation level L{proxy_level} -- multiple theater coordination detected',
+        })
+
+    # ── Khamenei direct statement ──
+    if khamenei_lv >= 3 and khamenei_cnt >= 2:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'khamenei_direct_statement'),
+            'status':  'BREACHED' if khamenei_lv >= 4 else 'APPROACHING',
+            'trigger': f'Khamenei at L{khamenei_lv} with {khamenei_cnt} statements -- direct authorization signal',
+        })
+
+    # ── Trump ultimatum -- scan articles at any level ──
+    ultimatum_found = False
+    for actor_id in ['us_iran', 'khamenei', 'iran_gov']:
+        for art in actors.get(actor_id, {}).get('top_articles', []):
+            title = art.get('title', '').lower()
+            if any(kw in title for kw in ['ultimatum', '60 days', '48 hours', 'deadline',
+                                           'final warning', 'last chance', 'all hell',
+                                           'hell will rain', 'make a deal or', 'open hormuz']):
+                ultimatum_found = True
+                break
+    if ultimatum_found or us_iran_lv >= 2:
+        status = 'BREACHED' if ultimatum_found else 'APPROACHING'
+        trigger = 'Ultimatum language detected in US/Trump statements -- forces Iranian response decision' if ultimatum_found \
+                  else f'US/CENTCOM at L{us_iran_lv} -- escalatory pressure language present'
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'trump_iran_ultimatum'),
+            'status':  status,
+            'trigger': trigger,
+        })
+
+    # ── IRGC silence pre-operation ──
+    if irgc_count == 0 and proxy_level >= 3 and theatre_score >= 50:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'irgc_silence_pre_op'),
+            'status':  'APPROACHING',
+            'trigger': f'IRGC 0 direct statements while proxy activation at L{proxy_level} -- operational security pattern',
+        })
+
+    # ── Hormuz transit threat ──
+    if hormuz_threat:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'hormuz_transit_threat'),
+            'status':  'BREACHED' if irgc_level >= 3 else 'APPROACHING',
+            'trigger': f'Hormuz {"closure/48h ultimatum" if hormuz_threat else "threat"} language detected + IRGC L{irgc_level}',
+        })
+
+    # ── Bab el-Mandeb coordination signal (new -- Iran/Houthi chokepoint coordination) ──
+    if bab_mandeb_threat:
+        triggered.append({
+            'id':       'bab_mandeb_coordination',
+            'label':    'Bab el-Mandeb Blockade Signal',
+            'detail':   'Iran hinting at Bab el-Mandeb blockade -- coordinates with Houthi Red Sea ops',
+            'severity': 3,
+            'color':    '#dc2626',
+            'icon':     '🚢',
+            'category': 'iran_trigger',
+            'source':   'Strategic pattern -- simultaneous Hormuz+Mandeb threats = dual chokepoint strategy',
+            'status':   'APPROACHING',
+            'trigger':  'Bab el-Mandeb blockade language detected -- Iran/Houthi chokepoint coordination signal',
+        })
+
+    # ── US carrier deployment ──
+    if us_iran_lv >= 3:
+        for art in actors.get('us_iran', {}).get('top_articles', []):
+            title = art.get('title', '').lower()
+            if any(kw in title for kw in ['carrier', 'strike group', 'b-52', 'b-2', 'diego garcia', 'persian gulf']):
+                triggered.append({
+                    **next(r for r in RED_LINES if r['id'] == 'us_carrier_deployment'),
+                    'status':  'APPROACHING',
+                    'trigger': 'US carrier/strategic bomber deployment language detected',
+                })
+                break
+
+    # Sort: BREACHED first, then severity
+    triggered.sort(key=lambda x: (0 if x['status'] == 'BREACHED' else 1, -x['severity']))
+    return triggered
+
+
+def _match_historical(scan_data):
+    """
+    Match current Iran signal state against historical precedents.
+    """
+    actors       = scan_data.get('actors', {})
+    fp           = scan_data
+
+    irgc_level    = actors.get('irgc', {}).get('escalation_level', 0)
+    khamenei_lv   = actors.get('khamenei', {}).get('escalation_level', 0)
+    us_iran_lv    = actors.get('us_iran', {}).get('escalation_level', 0)
+    proxy_level   = fp.get('proxy_activation_level', 0)
+    otp_signals   = fp.get('operation_true_promise_count', fp.get('otp_signal_count', 0))
+
+    # Hormuz check
+    hormuz = False
+    for actor_id in ['irgc', 'iran_gov']:
+        for art in actors.get(actor_id, {}).get('top_articles', []):
+            if any(kw in art.get('title', '').lower() for kw in ['hormuz', 'strait']):
+                hormuz = True
+
+    matches = []
+
+    for precedent in HISTORICAL_PRECEDENTS:
+        sigs = precedent['signals']
+        score = 0
+        max_score = 0
+        matched_signals = []
+        missed_signals = []
+
+        def check(condition, label, weight=1):
+            nonlocal score, max_score
+            max_score += weight
+            if condition:
+                score += weight
+                matched_signals.append(label)
+            else:
+                missed_signals.append(label)
+
+        if 'irgc_level_min' in sigs:
+            check(irgc_level >= sigs['irgc_level_min'],
+                  f'IRGC L{irgc_level} ≥ L{sigs["irgc_level_min"]}', weight=3)
+
+        if 'khamenei_level_min' in sigs:
+            check(khamenei_lv >= sigs['khamenei_level_min'],
+                  f'Khamenei L{khamenei_lv} ≥ L{sigs["khamenei_level_min"]}', weight=2)
+
+        if 'proxy_activation_min' in sigs:
+            check(proxy_level >= sigs['proxy_activation_min'],
+                  f'Proxy activation L{proxy_level} ≥ L{sigs["proxy_activation_min"]}', weight=2)
+
+        if 'otp_signals_min' in sigs:
+            check(otp_signals >= sigs['otp_signals_min'],
+                  f'{otp_signals} OTP signals ≥ {sigs["otp_signals_min"]}', weight=2)
+
+        if 'us_iran_level_min' in sigs:
+            check(us_iran_lv >= sigs['us_iran_level_min'],
+                  f'US/Iran L{us_iran_lv} ≥ L{sigs["us_iran_level_min"]}', weight=1)
+
+        if 'hormuz_threat' in sigs:
+            check(hormuz == sigs['hormuz_threat'],
+                  'Hormuz closure threat language', weight=2)
+
+        if max_score == 0:
+            continue
+
+        similarity = round((score / max_score) * 100)
+
+        if similarity >= 50:
+            matches.append({
+                'id':              precedent['id'],
+                'label':           precedent['label'],
+                'description':     precedent['description'],
+                'source':          precedent['source'],
+                'outcome':         precedent['outcome'],
+                'window_hours':    precedent['window_hours'],
+                'confidence':      precedent['confidence'],
+                'similarity':      similarity,
+                'matched_signals': matched_signals,
+                'missed_signals':  missed_signals,
+            })
+
+    matches.sort(key=lambda x: x['similarity'], reverse=True)
+    return matches[:3]
+
+
+def _build_so_what(scan_data, red_lines_triggered, historical_matches):
+    """
+    Generate plain-language Iran command node assessment.
+    Frame: Is Iran orchestrating a coordinated axis activation?
+    """
+    actors        = scan_data.get('actors', {})
+    fp            = scan_data
+
+    irgc_level    = actors.get('irgc', {}).get('escalation_level', 0)
+    khamenei_lv   = actors.get('khamenei', {}).get('escalation_level', 0)
+    us_iran_lv    = actors.get('us_iran', {}).get('escalation_level', 0)
+    israel_iran_lv = actors.get('israel_iran', {}).get('escalation_level', 0)
+    irgc_count    = actors.get('irgc', {}).get('statement_count', 0)
+
+    theatre_score = fp.get('theatre_score', 0)
+    theatre_level = fp.get('theatre_level', 0)
+    proxy_level   = fp.get('proxy_activation_level', 0)
+    otp_signals   = fp.get('operation_true_promise_count', fp.get('otp_signal_count', 0))
+    delta         = fp.get('delta', {}) or {}
+    delta_dir     = delta.get('direction', 'stable')
+    score_change  = delta.get('score_change', 0)
+
+    breached_count = sum(1 for r in red_lines_triggered if r['status'] == 'BREACHED')
+    top_match      = historical_matches[0] if historical_matches else None
+
+    # ── Scenario label ──
+    if theatre_level >= 5 and irgc_level >= 5:
+        scenario       = 'ACTIVE COMMAND -- Iran Directing Multi-Theater Campaign'
+        scenario_color = '#dc2626'
+        scenario_icon  = '🔴'
+    elif theatre_level >= 4 or (irgc_level >= 4 and proxy_level >= 3):
+        scenario       = 'ELEVATED -- Iran Coordinating Proxy Activation'
+        scenario_color = '#f97316'
+        scenario_icon  = '🟠'
+    elif theatre_level >= 3 or irgc_level >= 3:
+        scenario       = 'WARNING -- Escalatory Command Signals'
+        scenario_color = '#f59e0b'
+        scenario_icon  = '🟡'
+    else:
+        scenario       = 'MONITORING -- Below Escalation Threshold'
+        scenario_color = '#6b7280'
+        scenario_icon  = '⚪'
+
+    # ── Situation ──
+    situation_parts = []
+
+    if irgc_level >= 4:
+        otp_txt = f' -- Operation True Promise active ({otp_signals} wave signals detected)' if otp_signals >= 3 else ''
+        situation_parts.append(
+            f'Iran\'s IRGC is operating at L{irgc_level}{otp_txt}.'
+        )
+
+    if proxy_level >= 3:
+        situation_parts.append(
+            f'Proxy activation level L{proxy_level} -- Iran is coordinating simultaneous '
+            f'operations across multiple theaters (Hezbollah, Houthi, PMF Iraq).'
+        )
+
+    if khamenei_lv >= 3:
+        situation_parts.append(
+            f'Supreme Leader Khamenei is at L{khamenei_lv} -- direct leadership authorization '
+            f'signals present, not just IRGC spokesperson statements.'
+        )
+
+    if us_iran_lv >= 3:
+        situation_parts.append(
+            f'US/CENTCOM posture re: Iran at L{us_iran_lv} -- significant adversary pressure '
+            f'signals including {"Trump direct statements and " if us_iran_lv >= 4 else ""}CENTCOM force posture language.'
+        )
+
+    if israel_iran_lv >= 3:
+        situation_parts.append(
+            f'Israeli strike posture re: Iran at L{israel_iran_lv} -- '
+            f'IDF and war cabinet language targeting Iranian assets elevated.'
+        )
+
+    if delta_dir == 'rising' and score_change >= 8:
+        situation_parts.append(
+            f'Command node score rising sharply (+{round(score_change, 1)} from recent average) '
+            f'-- accelerating trajectory, not steady-state.'
+        )
+
+    # ── Key indicators ──
+    indicators = []
+
+    if irgc_count == 0 and proxy_level >= 3:
+        indicators.append(
+            'IRGC has issued zero direct public statements while proxy activation is elevated -- '
+            'operational security pattern historically precedes major IRGC operations.'
+        )
+
+    if otp_signals >= 10:
+        indicators.append(
+            f'{otp_signals} Operation True Promise signals detected -- numbered wave operations '
+            f'indicate sustained coordinated campaign, not isolated strikes.'
+        )
+
+    if us_iran_lv >= 3 and israel_iran_lv >= 3:
+        indicators.append(
+            f'Both US (L{us_iran_lv}) and Israel (L{israel_iran_lv}) adversary postures elevated '
+            f'simultaneously -- Iran facing dual-front pressure with limited diplomatic off-ramp.'
+        )
+
+    if breached_count >= 2:
+        indicators.append(
+            f'{breached_count} red lines currently breached or approaching -- '
+            f'including adversary-defined thresholds that could trigger US/Israeli response.'
+        )
+
+    # ── Assessment ──
+    assessment_parts = []
+
+    if top_match and top_match['similarity'] >= 70:
+        assessment_parts.append(
+            f'Current signal pattern shows {top_match["similarity"]}% similarity to '
+            f'{top_match["label"]}. In that case: {top_match["outcome"].lower()}'
+        )
+        assessment_parts.append(
+            f'Assess: Iran is operating in command node mode -- directing rather than merely '
+            f'supporting proxy operations. Confidence: {top_match["confidence"]} -- '
+            f'{_confidence_caveat(top_match["confidence"])}.'
+        )
+        assessment_parts.append(
+            f'Historical response window in comparable scenarios: {top_match["window_hours"]} hours. '
+            f'Analytical estimate only -- not a prediction.'
+        )
+    elif top_match and top_match['similarity'] >= 50:
+        assessment_parts.append(
+            f'Partial pattern match ({top_match["similarity"]}%) to {top_match["label"]}. '
+            f'Signals are suggestive but not conclusive of imminent escalation.'
+        )
+    else:
+        if theatre_level >= 3:
+            assessment_parts.append(
+                'Active command node signals present. No strong historical pattern match -- '
+                'situation may be evolving in novel direction or data insufficient for confident pattern match.'
+            )
+
+    # ── Watch list ──
+    watch_items = []
+    if irgc_count == 0:
+        watch_items.append('IRGC public statements resuming (signals decision made or operation underway)')
+    watch_items.append('Strait of Hormuz -- any Iranian naval movement or mining language')
+    watch_items.append('Trump/Rubio direct Iran statements (ultimatum language = forced Iranian response)')
+    watch_items.append('IDF strike posture changes (Israeli preemptive action would reset Iranian calculus)')
+    watch_items.append('NOTAM closures over Iranian or Israeli airspace')
+    if otp_signals >= 5:
+        watch_items.append(f'OTP wave count -- currently at {otp_signals} signals, acceleration = escalation')
+
+    return {
+        'scenario':        scenario,
+        'scenario_color':  scenario_color,
+        'scenario_icon':   scenario_icon,
+        'situation':       ' '.join(situation_parts),
+        'key_indicators':  indicators,
+        'assessment':      ' '.join(assessment_parts),
+        'watch_list':      watch_items[:5],
+        'generated_at':    datetime.now(timezone.utc).isoformat(),
+        'confidence_note': (
+            'Iran command node assessment generated from open-source signal data. '
+            'Not a prediction. Verify through official channels before any operational decision.'
+        ),
+    }
+
+
+def _confidence_caveat(label):
+    caveats = {
+        'High':       'multiple strong signal matches with well-documented precedent',
+        'Medium':     'partial signal match; outcome not determinative',
+        'Medium-Low': 'pattern suggestive but historical base rate limited',
+        'Low':        'weak match only -- treat as background signal',
+    }
+    return caveats.get(label, 'confidence assessment pending more data')
+
+
+# ============================================================
+# COMMODITY PRESSURE EXTRACTION (Phase 2B)
+# ============================================================
+# Reads commodity-pressure data injected into scan_data by
+# rhetoric_tracker_iran.py (which fetches it from the shared
+# commodity_tracker_cache Redis key).
+#
+# Iran has 5 commodity exposures (defined in commodity_tracker.py):
+#   oil           -- producer, Hormuz leverage           → dual_chokepoint
+#   natural_gas   -- producer, Hormuz/sanctions          → dual_chokepoint
+#   uranium       -- producer, nuclear program           → nuclear_signaling
+#   gold          -- consumer, sanctions evasion         → commodity_pressure (NEW)
+#   wheat         -- consumer, bread/regime stability    → commodity_pressure (NEW)
+#
+# The first three map to existing Iran categories (oil/gas reinforce
+# Hormuz signal; uranium reinforces nuclear signal). Gold and wheat
+# are genuinely different stories (sanctions evasion + domestic
+# stability) and need their own category.
+# ============================================================
+
+# Commodity → canonical category mapping for Iran
+_IRAN_COMMODITY_CATEGORY_MAP = {
+    'oil':         'dual_chokepoint',
+    'natural_gas': 'dual_chokepoint',
+    'uranium':     'nuclear_signaling',
+    'gold':        'commodity_pressure',
+    'wheat':       'commodity_pressure',
+}
+
+# Threshold: only emit if global commodity is at this level or above
+# normal=skip, elevated=skip (too much noise), high=emit, surge=emit (priority boost)
+_IRAN_COMMODITY_EMIT_THRESHOLD = {'high', 'surge'}
+
+
+def _extract_commodity_signals(scan_data):
+    """
+    Extract canonical-schema signals from commodity_pressure data.
+
+    Looks for scan_data['commodity_pressure'] (injected by rhetoric_tracker_iran
+    after it reads commodity_tracker_cache from Redis). Returns a list of
+    canonical signal dicts ready to merge into top_signals[].
+
+    Expected input shape (from commodity_tracker.get_commodity_pressure('iran')):
+        {
+            'commodity_pressure': N,
+            'alert_level': 'normal'|'elevated'|'high'|'surge',
+            'commodity_summaries': [
+                {
+                    'commodity': 'oil',
+                    'name': 'Oil',
+                    'icon': '🛢️',
+                    'role': 'producer',
+                    'rank': 6,
+                    'note': '...',
+                    'signal_count': N,
+                    'global_alert_level': 'normal'|...,
+                    'global_signal_count': N,
+                    ...
+                },
+                ...
+            ],
+        }
+
+    Returns: list of canonical signal dicts (may be empty).
+    """
+    signals = []
+
+    cp = scan_data.get('commodity_pressure') or {}
+    summaries = cp.get('commodity_summaries') or []
+    if not summaries:
+        return signals
+
+    # Iran-flag emoji constant (already defined elsewhere in module)
+    iran_flag = '\U0001f1ee\U0001f1f7'
+
+    # Track categories already emitted, to avoid duplicates from oil+gas
+    # both mapping to dual_chokepoint. NOTE: commodity_pressure is allowed
+    # to emit multiple times (gold and wheat are genuinely different stories).
+    emitted_categories = set()
+    _DEDUPE_CATEGORIES = {'dual_chokepoint', 'nuclear_signaling'}
+
+    for summary in summaries:
+        commodity_id = str(summary.get('commodity', '')).lower()
+        if not commodity_id:
+            continue
+
+        category = _IRAN_COMMODITY_CATEGORY_MAP.get(commodity_id)
+        if not category:
+            continue  # Unknown commodity for Iran, skip
+
+        # Use GLOBAL alert level (e.g. wheat surging worldwide is meaningful
+        # for Iran the consumer even if Iran-specific signals are quiet)
+        global_alert = str(summary.get('global_alert_level', 'normal')).lower()
+        if global_alert not in _IRAN_COMMODITY_EMIT_THRESHOLD:
+            continue
+
+        # Dedupe ONLY for categories where multiple commodities reinforce
+        # the same narrative (oil+gas → dual_chokepoint, both sing Hormuz).
+        # commodity_pressure category covers gold AND wheat which are
+        # different stories — let both emit.
+        if category in _DEDUPE_CATEGORIES and category in emitted_categories:
+            continue
+        emitted_categories.add(category)
+
+        commodity_name = summary.get('name', commodity_id.title())
+        commodity_icon = summary.get('icon', '📊')
+        role           = summary.get('role', '')
+        rank           = summary.get('rank')
+        signal_count   = int(summary.get('global_signal_count', 0) or 0)
+        is_surge       = (global_alert == 'surge')
+
+        # ── Build signal based on category ──────────────────
+        if category == 'dual_chokepoint':
+            # Reinforces Hormuz/oil-gas chokepoint story — Iran as producer
+            priority   = 12 if is_surge else 11
+            level      = 5 if is_surge else 4
+            color      = '#dc2626' if is_surge else '#f97316'
+            rank_txt   = f' (#{rank} producer)' if rank else ''
+            short_text = (f'{iran_flag} IRAN: {commodity_name} market '
+                          f'{global_alert.upper()}{rank_txt}')
+            long_text  = (f'{iran_flag} IRAN {commodity_name} commodity pressure '
+                          f'{global_alert.upper()}: {signal_count} global signals. '
+                          f'Iran is {role}{rank_txt}. Hormuz transit leverage '
+                          f'reinforces chokepoint signal.')
+            icon = '⚓'
+
+        elif category == 'nuclear_signaling':
+            # Reinforces nuclear program story
+            priority   = 12 if is_surge else 11
+            level      = 5 if is_surge else 4
+            color      = '#dc2626' if is_surge else '#f97316'
+            short_text = (f'{iran_flag} IRAN: Uranium market '
+                          f'{global_alert.upper()} (nuclear signal)')
+            long_text  = (f'{iran_flag} IRAN uranium commodity pressure '
+                          f'{global_alert.upper()}: {signal_count} global signals. '
+                          f'Reinforces nuclear program signaling — '
+                          f'Natanz/Fordow/enrichment narrative.')
+            icon = '☢️'
+
+        elif category == 'commodity_pressure':
+            # Gold (sanctions evasion) or wheat (regime stability)
+            if commodity_id == 'gold':
+                priority   = 9 if is_surge else 8
+                level      = 4 if is_surge else 3
+                color      = '#f59e0b' if is_surge else '#facc15'
+                short_text = (f'{iran_flag} IRAN: Gold market '
+                              f'{global_alert.upper()} (sanctions evasion)')
+                long_text  = (f'{iran_flag} IRAN gold commodity pressure '
+                              f'{global_alert.upper()}: {signal_count} global signals. '
+                              f'Iran-Russia-China gold trade + central bank '
+                              f'reserve diversification under sanctions.')
+                icon = '🥇'
+            elif commodity_id == 'wheat':
+                priority   = 10 if is_surge else 9
+                level      = 4 if is_surge else 3
+                color      = '#f59e0b' if is_surge else '#facc15'
+                short_text = (f'{iran_flag} IRAN: Wheat market '
+                              f'{global_alert.upper()} (bread / regime risk)')
+                long_text  = (f'{iran_flag} IRAN wheat commodity pressure '
+                              f'{global_alert.upper()}: {signal_count} global signals. '
+                              f'Iran net importer ~5-7M tonnes/yr. Subsidized '
+                              f'bread = political stability lever (1979 echo).')
+                icon = '🌾'
+            else:
+                # Generic fallback (shouldn't happen given the map)
+                priority   = 8
+                level      = 3
+                color      = '#facc15'
+                short_text = (f'{iran_flag} IRAN: {commodity_name} market '
+                              f'{global_alert.upper()}')
+                long_text  = (f'{iran_flag} IRAN {commodity_name} commodity '
+                              f'pressure {global_alert.upper()}.')
+                icon = commodity_icon
+
+        else:
+            continue  # Defensive: unknown category
+
+        signals.append({
+            'priority':   priority,
+            'category':   category,
+            'theatre':    'iran',
+            'level':      level,
+            'icon':       icon,
+            'color':      color,
+            'short_text': short_text[:80],
+            'long_text':  long_text[:200],
+        })
+
+    return signals
+
+
+# ============================================================
+# PUBLIC ENTRY POINT
+# ============================================================
+
+def interpret_signals(scan_data):
+    """
+    Main entry point. Takes full scan_data dict from rhetoric_tracker_iran.
+    Returns structured interpretation dict added to API response as
+    result['interpretation'].
+    """
+    try:
+        red_lines  = _score_red_lines(scan_data)
+        historical = _match_historical(scan_data)
+        so_what    = _build_so_what(scan_data, red_lines, historical)
+
+        breached    = [r for r in red_lines if r['status'] == 'BREACHED']
+        approaching = [r for r in red_lines if r['status'] == 'APPROACHING']
+
+        return {
+            'so_what':             so_what,
+            'red_lines': {
+                'triggered':         red_lines,
+                'breached_count':    len(breached),
+                'approaching_count': len(approaching),
+                'highest_severity':  max((r['severity'] for r in red_lines), default=0),
+            },
+            'historical_matches':  historical,
+            'interpreter_version': '1.0.0',
+            'interpreted_at':      datetime.now(timezone.utc).isoformat(),
+        }
+
+    except Exception as e:
+        print(f'[Iran Interpreter] Error: {str(e)[:120]}')
+        return {
+            'so_what':            {'scenario': 'Interpreter error', 'assessment': str(e)[:200]},
+            'red_lines':          {'triggered': [], 'breached_count': 0, 'approaching_count': 0, 'highest_severity': 0},
+            'historical_matches': [],
+            'interpreter_version': '1.0.0',
+            'error':              str(e)[:200],
+        }
+
+
+# ============================================================
+# CANONICAL SIGNAL EMITTER (v2.0)
+# ============================================================
+# Iran is the COMMAND NODE — its signals carry the richest cross-theater
+# weight in the platform. This emitter maps Iran's six-vector matrix
+# (irgc_direct / proxy_activation / nuclear / domestic / regional /
+# soft_power) plus the diplomatic track plus axis posture (China-Iran,
+# Russia-Iran) into canonical platform-wide signal categories consumed
+# by me_regional_bluf.py and global_pressure_index.py.
+#
+# Categories Iran emits:
+#   red_line_breached            -- severity 3 red lines triggered
+#   nuclear_signaling            -- nuclear_level >= 3 (GPI cross-theater)
+#   dual_chokepoint              -- Hormuz mining/closure language (paired
+#                                   with Yemen BAM = global supply-chain risk)
+#   kinetic_pressure             -- IRGC direct L4+ or active OTP wave
+#   crosstheater_iran_proxies    -- proxy_activation_level >= 4
+#                                   (Hezbollah/Houthi/IRGC orchestration)
+#   crosstheater_russia_iran     -- russia_iran axis activation
+#   crosstheater_china_iran      -- china_iran axis activation
+#   theatre_high                 -- composite L4+ catch-all
+#   regime_fracture              -- domestic stress L4+
+#   influence_high               -- soft_power / influence ops L3+
+#                                   (PressTV, Lego/rap viral, "resistance" framing)
+#   silence_anomaly              -- IRGC/Khamenei suspicious quiet
+#   diplomatic_active            -- ceasefire_level >= 2 (off-ramp)
+#   commodity_pressure           -- Gold sanctions evasion / wheat bread
+#                                   stability surge (oil/gas reinforce
+#                                   dual_chokepoint, uranium reinforces
+#                                   nuclear_signaling — see _extract_
+#                                   commodity_signals helper)
+# ============================================================
+
+IRAN_FLAG = '\U0001f1ee\U0001f1f7'  # 🇮🇷
+
+_IRAN_ESC_LABELS = {
+    0: 'Monitoring',
+    1: 'Routine',
+    2: 'Elevated Rhetoric',
+    3: 'Heightened Posture',
+    4: 'Active Signaling',
+    5: 'Active Conflict',
 }
 
 
-# ========================================
-# REDIS CACHE (mirrors military_tracker pattern)
-# ========================================
-
-COMMODITY_REDIS_KEY = 'commodity_tracker_cache'
-
-
-def load_commodity_cache():
-    """Load cached commodity tracker data from Upstash Redis, fallback to /tmp"""
-    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
-        try:
-            resp = requests.get(
-                f"{UPSTASH_REDIS_URL}/get/{COMMODITY_REDIS_KEY}",
-                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-                timeout=5
-            )
-            data = resp.json()
-            if data.get("result"):
-                cache = json.loads(data["result"])
-                print(f"[Commodity Cache] Loaded from Redis (cached_at: {cache.get('cached_at', 'unknown')})")
-                return cache
-            print("[Commodity Cache] No existing cache in Redis")
-        except Exception as e:
-            print(f"[Commodity Cache] Redis load error: {e}")
-
-    try:
-        from pathlib import Path
-        if Path(COMMODITY_CACHE_FILE).exists():
-            with open(COMMODITY_CACHE_FILE, 'r') as f:
-                cache = json.load(f)
-                print("[Commodity Cache] Loaded from /tmp fallback")
-                return cache
-    except Exception as e:
-        print(f"[Commodity Cache] /tmp load error: {e}")
-
-    return {}
-
-
-def save_commodity_cache(data):
-    """Save commodity tracker data to Upstash Redis + /tmp fallback"""
-    data['cached_at'] = datetime.now(timezone.utc).isoformat()
-
-    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
-        try:
-            payload = json.dumps(data, default=str)
-            resp = requests.post(
-                f"{UPSTASH_REDIS_URL}/set/{COMMODITY_REDIS_KEY}",
-                headers={
-                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
-                    "Content-Type": "application/json"
-                },
-                data=payload,
-                timeout=10
-            )
-            if resp.status_code == 200:
-                print("[Commodity Cache] ✅ Saved to Redis")
-            else:
-                print(f"[Commodity Cache] Redis save HTTP {resp.status_code}")
-        except Exception as e:
-            print(f"[Commodity Cache] Redis save error: {e}")
-
-    try:
-        with open(COMMODITY_CACHE_FILE, 'w') as f:
-            json.dump(data, f, indent=2, default=str)
-        print("[Commodity Cache] Saved /tmp fallback")
-    except Exception as e:
-        print(f"[Commodity Cache] /tmp save error: {e}")
-
-
-def is_commodity_cache_fresh():
-    """Check if commodity cache is still valid"""
-    try:
-        cache = load_commodity_cache()
-        if not cache or 'cached_at' not in cache:
-            return False
-        cached_at = datetime.fromisoformat(cache['cached_at'])
-        age = datetime.now(timezone.utc) - cached_at
-        is_fresh = age.total_seconds() < (COMMODITY_CACHE_TTL_HOURS * 3600)
-        if is_fresh:
-            age_min = age.total_seconds() / 60
-            print(f"[Commodity Cache] Fresh ({age_min:.0f}min old)")
-        return is_fresh
-    except:
-        return False
-
-
-def load_sparkline_cache():
-    """Load sparkline cache (separate from main cache, refreshed hourly)."""
-    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
-        try:
-            resp = requests.get(
-                f"{UPSTASH_REDIS_URL}/get/{SPARKLINE_REDIS_KEY}",
-                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
-                timeout=5
-            )
-            data = resp.json()
-            if data.get("result"):
-                return json.loads(data["result"])
-        except Exception as e:
-            print(f"[Sparkline Cache] Redis load error: {e}")
-    return {}
-
-
-def save_sparkline_cache(data):
-    """Save sparkline cache to Redis."""
-    data['cached_at'] = datetime.now(timezone.utc).isoformat()
-    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
-        try:
-            payload = json.dumps(data, default=str)
-            resp = requests.post(
-                f"{UPSTASH_REDIS_URL}/set/{SPARKLINE_REDIS_KEY}",
-                headers={
-                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
-                    "Content-Type": "application/json"
-                },
-                data=payload,
-                timeout=10
-            )
-            if resp.status_code == 200:
-                print("[Sparkline Cache] ✅ Saved to Redis")
-        except Exception as e:
-            print(f"[Sparkline Cache] Redis save error: {e}")
-
-
-def is_sparkline_cache_fresh():
-    """Sparklines have shorter TTL (1hr) since prices move."""
-    try:
-        cache = load_sparkline_cache()
-        if not cache or 'cached_at' not in cache:
-            return False
-        cached_at = datetime.fromisoformat(cache['cached_at'])
-        age = datetime.now(timezone.utc) - cached_at
-        return age.total_seconds() < (SPARKLINE_CACHE_TTL_HOURS * 3600)
-    except:
-        return False
-
-
-# ========================================
-# YAHOO FINANCE — Sparkline Fetcher
-# ========================================
-
-def _fetch_yahoo_sparkline(ticker, period='1mo'):
+def build_top_signals(scan_data):
     """
-    Fetch 30-day OHLC for a single ticker via yfinance.
+    Convert Iran scan_data into canonical top_signals[] for ME regional BLUF
+    and Global Pressure Index. Returns a list (possibly empty), sorted by
+    priority desc.
 
-    Returns a dict:
-        {
-            'ticker':       'BZ=F',
-            'price':        72.40,
-            'change_1d':    0.85,
-            'change_pct_1d': 1.18,
-            'change_30d':   -2.10,
-            'change_pct_30d': -2.81,
-            'spark':        [70.1, 70.4, 71.2, ...],     # 30 closing prices
-            'currency':     'USD',
-            'last_updated': iso8601,
-        }
-    or None on failure.
+    Signal schema (canonical platform-wide):
+        priority   int 0-15  (higher == more urgent)
+        category   str       (canonical bucket)
+        theatre    'iran'
+        level      int 0-5
+        icon       str (emoji)
+        color      str (hex)
+        short_text str (<=80 char)
+        long_text  str (<=200 char)
     """
-    if not YFINANCE_AVAILABLE:
-        return None
-
-    try:
-        t = yf.Ticker(ticker)
-        hist = t.history(period=period)
-        if hist is None or hist.empty:
-            return None
-
-        closes = hist['Close'].dropna().tolist()
-        if not closes or len(closes) < 2:
-            return None
-
-        # Round closes for compact JSON payload
-        closes_rounded = [round(float(c), 2) for c in closes]
-        latest = closes_rounded[-1]
-        previous = closes_rounded[-2] if len(closes_rounded) >= 2 else latest
-        first = closes_rounded[0]
-
-        change_1d  = round(latest - previous, 2)
-        change_pct = round(((latest - previous) / previous) * 100, 2) if previous else 0.0
-        change_30d = round(latest - first, 2)
-        change_30d_pct = round(((latest - first) / first) * 100, 2) if first else 0.0
-
-        return {
-            'ticker':         ticker,
-            'price':          latest,
-            'change_1d':      change_1d,
-            'change_pct_1d':  change_pct,
-            'change_30d':     change_30d,
-            'change_pct_30d': change_30d_pct,
-            'spark':          closes_rounded,
-            'point_count':    len(closes_rounded),
-            'currency':       'USD',
-            'last_updated':   datetime.now(timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        print(f"[Sparkline] {ticker} fetch error: {str(e)[:120]}")
-        return None
-
-
-def _fetch_with_failover(commodity_id, commodity_data):
-    """
-    Try the primary yahoo_ticker, then fall back through yahoo_proxies.
-    Returns the first successful sparkline result, or None.
-    """
-    if not commodity_data.get('has_spot_price'):
-        # Potash: production-volume-only, no sparkline
-        return None
-
-    primary = commodity_data.get('yahoo_ticker')
-    proxies = commodity_data.get('yahoo_proxies', []) or []
-
-    candidates = []
-    if primary:
-        candidates.append(primary)
-    candidates.extend(proxies)
-
-    for ticker in candidates:
-        spark = _fetch_yahoo_sparkline(ticker)
-        if spark:
-            spark['source_ticker_used'] = ticker
-            spark['fallback_used'] = (ticker != primary)
-            return spark
-        print(f"[Sparkline] {commodity_id}: {ticker} returned no data, trying next...")
-
-    print(f"[Sparkline] {commodity_id}: ALL tickers failed (tried {len(candidates)})")
-    return None
-
-
-def fetch_all_sparklines(force=False):
-    """
-    Fetch sparklines for all commodities with public spot prices.
-    Uses 1hr cache. Set force=True to bypass.
-    Returns dict keyed by commodity_id.
-    """
-    if not force and is_sparkline_cache_fresh():
-        cache = load_sparkline_cache()
-        if cache.get('sparklines'):
-            return cache['sparklines']
-
-    print("[Sparkline] Refreshing all commodity sparklines...")
-    results = {}
-    for commodity_id, commodity_data in COMMODITY_TYPES.items():
-        spark = _fetch_with_failover(commodity_id, commodity_data)
-        results[commodity_id] = spark   # may be None for potash, or on failure
-        time.sleep(0.3)                  # polite pause between Yahoo calls
-
-    save_sparkline_cache({'sparklines': results})
-
-    success_count = sum(1 for v in results.values() if v is not None)
-    print(f"[Sparkline] ✅ {success_count}/{len(COMMODITY_TYPES)} commodities have live prices")
-    return results
-
-
-# ========================================
-# RSS FETCHER (mirrors military pattern)
-# ========================================
-
-def fetch_commodity_rss(feed_name, feed_url, max_articles=15):
-    """Fetch articles from a single commodity-relevant RSS feed."""
-    articles = []
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(feed_url, headers=headers, timeout=15)
-
-        if response.status_code != 200:
-            print(f"[Commodity RSS] {feed_name}: HTTP {response.status_code}")
-            return []
-
-        root = ET.fromstring(response.content)
-        items = root.findall('.//item')
-
-        for item in items[:max_articles]:
-            title_elem = item.find('title')
-            link_elem = item.find('link')
-            pubDate_elem = item.find('pubDate')
-            desc_elem = item.find('description')
-
-            if title_elem is None or link_elem is None:
-                continue
-
-            pub_date = ''
-            if pubDate_elem is not None and pubDate_elem.text:
-                try:
-                    pub_date = parsedate_to_datetime(pubDate_elem.text).isoformat()
-                except:
-                    pub_date = datetime.now(timezone.utc).isoformat()
-
-            description = ''
-            if desc_elem is not None and desc_elem.text:
-                description = desc_elem.text[:500]
-
-            articles.append({
-                'title':       title_elem.text or '',
-                'description': description,
-                'url':         link_elem.text or '',
-                'publishedAt': pub_date,
-                'source':      {'name': feed_name},
-                'content':     description,
-                'feed_type':   'commodity_rss',
-            })
-
-        print(f"[Commodity RSS] {feed_name}: ✓ {len(articles)} articles")
-        return articles
-
-    except ET.ParseError as e:
-        print(f"[Commodity RSS] {feed_name}: XML parse error: {str(e)[:100]}")
-        return []
-    except Exception as e:
-        print(f"[Commodity RSS] {feed_name}: Error: {str(e)[:100]}")
-        return []
-
-
-def fetch_all_commodity_rss():
-    """Aggregate from all configured commodity RSS feeds."""
-    all_articles = []
-    for feed_name, feed_url in COMMODITY_RSS_FEEDS.items():
-        articles = fetch_commodity_rss(feed_name, feed_url)
-        all_articles.extend(articles)
-        time.sleep(0.4)
-    print(f"[Commodity RSS] Total: {len(all_articles)} articles")
-    return all_articles
-
-
-# ========================================
-# GDELT FETCHER (multilingual)
-# ========================================
-
-def fetch_gdelt_commodity(query, days=7, language='eng'):
-    """Fetch commodity-relevant articles from GDELT."""
-    try:
-        params = {
-            'query':      query,
-            'mode':       'artlist',
-            'maxrecords': 50,
-            'timespan':   f'{days}d',
-            'format':     'json',
-            'sourcelang': language,
-        }
-        response = None
-        for attempt in range(2):
-            try:
-                response = requests.get(GDELT_BASE_URL, params=params, timeout=(5, 15))
-                if response.status_code == 200:
-                    break
-                if response.status_code == 429:
-                    print(f"[Commodity GDELT] 429 rate limit -- skipping: {query[:50]}")
-                    return []
-            except requests.Timeout:
-                if attempt == 0:
-                    time.sleep(2)
-                    continue
-                raise
-        if not response or response.status_code != 200:
-            return []
-
-        try:
-            data = response.json()
-        except (json.JSONDecodeError, ValueError):
-            return []
-        articles = data.get('articles', [])
-
-        return [{
-            'title':       a.get('title', ''),
-            'description': a.get('title', ''),
-            'url':         a.get('url', ''),
-            'publishedAt': a.get('seendate', ''),
-            'source':      {'name': a.get('domain', 'GDELT')},
-            'content':     a.get('title', ''),
-            'feed_type':   'gdelt',
-        } for a in articles]
-
-    except Exception as e:
-        print(f"[Commodity GDELT] Error: {str(e)[:100]}")
-        return []
-
-
-def fetch_all_gdelt_commodity(days=7):
-    """Fetch commodity articles across English + multilingual queries."""
-    english_queries = [
-        # General commodity / market
-        'commodity prices market',
-        'fertilizer prices sanctions',
-        'critical minerals supply chain',
-        # Oil
-        'oil prices brent OPEC sanctions',
-        'russian oil exports shadow fleet',
-        'iran oil exports china',
-        'saudi arabia oil production OPEC',
-        # Natural gas / LNG
-        'LNG exports natural gas TTF',
-        'european gas supply russia',
-        'qatar lng us lng exports',
-        # Wheat / corn / soybeans
-        'wheat prices black sea grain',
-        'russian wheat exports global',
-        'ukraine grain corridor odesa',
-        'corn exports brazil ukraine',
-        'soybean china trade tariff',
-        # Potash (Peter's signal)
-        'potash exports belaruskali sanctions',
-        'belarus potash russian ports china rail',
-        'potash production canada nutrien',
-        'fertilizer market mosaic potash',
-        # Uranium
-        'uranium prices kazatomprom enrichment',
-        'rosatom uranium tenex sanctions',
-        'niger uranium orano arlit',
-        'cameco uranium production',
-        # Rare earths
-        'china rare earth export controls',
-        'mp materials mountain pass rare earth',
-        'lynas rare earth australia',
-        'neodymium dysprosium magnet',
-        # Lithium
-        'lithium prices battery EV',
-        'albemarle SQM lithium chile',
-        'china lithium ganfeng tianqi',
-        # Gold
-        'gold prices central bank reserves',
-        'russia gold reserves brics',
-        'china gold buying shanghai',
-        # Copper
-        'copper prices china demand',
-        'codelco escondida copper production',
-        'first quantum cobre panama copper',
-        # Cobalt (NEW)
-        'cobalt prices DRC congo supply',
-        'cmoc cobalt tenke fungurume kisanfu',
-        'glencore cobalt mutanda mining',
-        'indonesia cobalt sulawesi morowali',
-        'cobalt export ban quota battery',
-        # Nickel (NEW)
-        'nickel prices indonesia LME',
-        'norilsk nickel russia production',
-        'philippines nickel surigao mining',
-        'nickel battery EV stainless steel',
-        'tsingshan huayou nickel china',
-        # Silver (NEW)
-        'silver prices comex demand',
-        'mexico silver fresnillo zacatecas',
-        'peru silver antamina mining',
-        'silver solar photovoltaic demand',
-        'china silver imports refining',
-    ]
-
-    russian_queries = [
-        'нефть санкции цена',
-        'газ европейский экспорт',
-        'пшеница экспорт черное море',
-        'калий беларуськалий уралкалий',
-        'уран росатом тенекс',
-        'золото резервы брикс',
-        'никель норильский',
-        'серебро добыча',
-        'кобальт россия',
-    ]
-
-    chinese_queries = [
-        '原油价格 制裁',
-        '稀土出口 限制',
-        '锂矿 电池',
-        '钾肥 进口',
-        '黄金储备 中国',
-        '小麦 进口',
-        '大豆 美国',
-        '钴 电池 刚果',
-        '镍 印尼 不锈钢',
-        '白银 价格 太阳能',
-    ]
-
-    arabic_queries = [
-        'أسعار النفط أوبك',
-        'صادرات القمح روسيا',
-        'الذهب احتياطيات',
-    ]
-
-    spanish_queries = [
-        'cobre chile producción',
-        'litio chile argentina',
-        'soja brasil exportación',
-        'maíz argentina cosecha',
-    ]
-
-    portuguese_queries = [
-        'soja brasil exportação china',
-        'milho safrinha brasil',
-    ]
-
-    all_articles = []
-    blocks = [
-        (english_queries,    'eng', 'English'),
-        (russian_queries,    'rus', 'Russian'),
-        (chinese_queries,    'zho', 'Chinese'),
-        (arabic_queries,     'ara', 'Arabic'),
-        (spanish_queries,    'spa', 'Spanish'),
-        (portuguese_queries, 'por', 'Portuguese'),
-    ]
-
-    for queries, lang_code, lang_name in blocks:
-        block_count = 0
-        for query in queries:
-            articles = fetch_gdelt_commodity(query, days, language=lang_code)
-            all_articles.extend(articles)
-            block_count += len(articles)
-            time.sleep(0.5)
-        if block_count > 0:
-            print(f"[Commodity GDELT] {lang_name} ({lang_code}): {block_count} articles")
-
-    print(f"[Commodity GDELT] Total: {len(all_articles)} articles")
-    return all_articles
-
-
-# ========================================
-# NewsAPI FETCHER
-# ========================================
-
-def fetch_newsapi_commodity(query, days=7):
-    """Fetch a single commodity-relevant query from NewsAPI."""
-    if not NEWSAPI_KEY:
-        return []
-
-    from_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-    url = "https://newsapi.org/v2/everything"
-    params = {
-        'q':         query,
-        'from':      from_date,
-        'sortBy':    'publishedAt',
-        'language':  'en',
-        'apiKey':    NEWSAPI_KEY,
-        'pageSize':  50,
-    }
-
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            articles = data.get('articles', [])
-            for a in articles:
-                a['feed_type'] = 'newsapi'
-            return articles
-        return []
-    except:
-        return []
-
-
-def fetch_all_newsapi_commodity(days=7):
-    """Aggregate NewsAPI commodity coverage."""
-    queries = [
-        'oil prices brent OR WTI OR OPEC',
-        'natural gas LNG OR henry hub OR TTF',
-        'wheat exports OR grain corridor OR black sea',
-        'corn exports OR soybean trade',
-        'potash OR belaruskali OR fertilizer sanctions',
-        'uranium OR kazatomprom OR rosatom enrichment',
-        'rare earth OR mp materials OR neodymium',
-        'lithium prices OR albemarle OR EV battery',
-        'gold prices OR central bank reserves',
-        'copper prices OR codelco OR china demand',
-    ]
-    all_articles = []
-    for q in queries:
-        articles = fetch_newsapi_commodity(q, days)
-        all_articles.extend(articles)
-        time.sleep(0.3)
-    print(f"[Commodity NewsAPI] Total: {len(all_articles)} articles")
-    return all_articles
-
-
-# ========================================
-# BRAVE SEARCH FALLBACK
-# ========================================
-
-def fetch_brave_commodity(query, count=20):
-    """
-    Brave Search fallback when GDELT/NewsAPI are insufficient.
-    Free tier: 2000 queries/month, 1 req/sec — use sparingly.
-    """
-    if not BRAVE_API_KEY:
-        return []
-    try:
-        resp = requests.get(
-            'https://api.search.brave.com/res/v1/news/search',
-            headers={
-                'Accept': 'application/json',
-                'X-Subscription-Token': BRAVE_API_KEY,
-            },
-            params={'q': query, 'count': count},
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            print(f"[Commodity Brave] HTTP {resp.status_code}")
-            return []
-        data = resp.json()
-        results = data.get('results', [])
-        return [{
-            'title':       r.get('title', ''),
-            'description': r.get('description', '')[:500],
-            'url':         r.get('url', ''),
-            'publishedAt': r.get('age', ''),
-            'source':      {'name': r.get('meta_url', {}).get('hostname', 'Brave')},
-            'content':     r.get('description', ''),
-            'feed_type':   'brave',
-        } for r in results]
-    except Exception as e:
-        print(f"[Commodity Brave] Error: {str(e)[:100]}")
-        return []
-
-
-def fetch_all_brave_commodity():
-    """
-    Brave fallback — only fires for a small set of high-priority queries
-    to conserve free-tier quota. Used when GDELT yields <40 articles.
-    """
-    if not BRAVE_API_KEY:
-        return []
-    queries = [
-        'potash sanctions belarus 2026',
-        'uranium prices haleu 2026',
-        'rare earth export ban china 2026',
-        'wheat global supply russia ukraine',
-    ]
-    all_articles = []
-    for q in queries:
-        articles = fetch_brave_commodity(q)
-        all_articles.extend(articles)
-        time.sleep(1.1)   # respect 1 req/sec free tier limit
-    print(f"[Commodity Brave] Fallback: {len(all_articles)} articles")
-    return all_articles
-
-
-# ========================================
-# REDDIT FETCHER
-# ========================================
-
-def fetch_reddit_commodity(days=7):
-    """Fetch commodity discussions from Reddit subreddits."""
-    all_posts = []
-    keywords = ['oil', 'gas', 'wheat', 'potash', 'uranium', 'lithium', 'gold', 'copper']
-    query = " OR ".join(keywords)
-    time_filter = "week" if days <= 7 else "month"
-
-    for subreddit in COMMODITY_REDDIT_SUBREDDITS[:8]:
-        try:
-            url = f"https://www.reddit.com/r/{subreddit}/search.json"
-            params = {
-                "q":           query,
-                "restrict_sr": "true",
-                "sort":        "new",
-                "t":           time_filter,
-                "limit":       15,
-            }
-            headers = {"User-Agent": REDDIT_USER_AGENT}
-
-            time.sleep(2)
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-
-            if response.status_code == 200:
-                data = response.json()
-                if "data" in data and "children" in data["data"]:
-                    for post in data["data"]["children"]:
-                        post_data = post.get("data", {})
-                        all_posts.append({
-                            'title':       post_data.get('title', '')[:200],
-                            'description': post_data.get('selftext', '')[:300],
-                            'url':         f"https://www.reddit.com{post_data.get('permalink', '')}",
-                            'publishedAt': datetime.fromtimestamp(
-                                post_data.get('created_utc', 0),
-                                tz=timezone.utc,
-                            ).isoformat(),
-                            'source':      {'name': f'r/{subreddit}'},
-                            'content':     post_data.get('selftext', ''),
-                            'feed_type':   'reddit',
-                        })
-        except Exception:
+    signals = []
+
+    interp        = scan_data.get('interpretation') or {}
+    so_what       = interp.get('so_what') or {}
+    rl_block      = interp.get('red_lines') or {}
+    triggered_rls = rl_block.get('triggered') or []
+
+    theatre_level   = int(scan_data.get('theatre_level', 0) or 0)
+    theatre_score   = int(scan_data.get('theatre_score', 0) or 0)
+    irgc_lvl        = int(scan_data.get('irgc_direct_level', 0) or 0)
+    proxy_lvl       = int(scan_data.get('proxy_activation_level', 0) or 0)
+    nuclear_lvl     = int(scan_data.get('nuclear_level', 0) or 0)
+    domestic_lvl    = int(scan_data.get('domestic_level', 0) or 0)
+    regional_lvl    = int(scan_data.get('regional_level', 0) or 0)
+    soft_power_lvl  = int(scan_data.get('soft_power_level', 0) or 0)
+    ceasefire_lvl   = int(scan_data.get('ceasefire_level', 0) or 0)
+    otp_count       = int(scan_data.get('operation_true_promise_count', 0) or 0)
+
+    actors          = scan_data.get('actors') or {}
+    silence_alerts  = scan_data.get('silence_anomalies') or []
+
+    # ── Color helpers ────────────────────────────────────────────────
+    def lvl_color(lvl):
+        return {0:'#6b7280', 1:'#16a34a', 2:'#facc15', 3:'#f59e0b',
+                4:'#f97316', 5:'#dc2626'}.get(int(lvl), '#6b7280')
+
+    # ── 1. Red lines BREACHED ────────────────────────────────────────
+    for rl in triggered_rls:
+        if not isinstance(rl, dict):
             continue
-
-    print(f"[Commodity Reddit] Total: {len(all_posts)} posts")
-    return all_posts
-
-
-# ========================================
-# ARTICLE ANALYZER
-# ========================================
-
-def analyze_article_commodity(article):
-    """
-    Analyze a single article for commodity signals.
-
-    Returns:
-        {
-            'commodities':    [list of commodity_ids matched],
-            'countries':      [list of country_ids matched (via exposure mapping)],
-            'score':          numeric weight,
-            'signals':        [list of structured signal dicts],
-        }
-    """
-    title       = (article.get('title') or '').lower()
-    description = (article.get('description') or '').lower()
-    content     = (article.get('content') or '').lower()
-    text        = f"{title} {description} {content}"
-
-    result = {
-        'commodities': set(),
-        'countries':   set(),
-        'score':       0,
-        'signals':     [],
-    }
-
-    for commodity_id, keywords in COMMODITY_KEYWORDS.items():
-        for kw in keywords:
-            if kw.lower() in text:
-                result['commodities'].add(commodity_id)
-                commodity_data = COMMODITY_TYPES.get(commodity_id, {})
-
-                # Tier-based weight: tier 1 = 1.0, tier 2 = 0.7, tier 3 = 0.5
-                tier = commodity_data.get('tier', 3)
-                tier_weight = {1: 1.0, 2: 0.7, 3: 0.5}.get(tier, 0.5)
-
-                signal_score = tier_weight
-
-                # Country attribution: any country exposed to this commodity gets the signal.
-                # Note: per-country score weighting happens in _run_full_scan(); we just
-                # record the country list here.
-                for country_id, exposures in COUNTRY_COMMODITY_EXPOSURE.items():
-                    if commodity_id in exposures:
-                        result['countries'].add(country_id)
-
-                # Build signal entry
-                signal_entry = {
-                    'commodity':         commodity_id,
-                    'commodity_name':    commodity_data.get('name', commodity_id),
-                    'commodity_icon':    commodity_data.get('icon', '📊'),
-                    'commodity_tier':    tier,
-                    'category':          commodity_data.get('category', 'unknown'),
-                    'matched_keyword':   kw,
-                    'weight':            round(signal_score, 2),
-                    'article_title':     article.get('title', '')[:200],
-                    'article_url':       article.get('url', ''),
-                    'source':            article.get('source', {}).get('name', 'Unknown'),
-                    'published':         article.get('publishedAt', ''),
-                    'feed_type':         article.get('feed_type', 'unknown'),
-                }
-                result['signals'].append(signal_entry)
-                result['score'] += signal_score
-                break   # one keyword match per commodity per article
-
-    result['commodities'] = list(result['commodities'])
-    result['countries']   = list(result['countries'])
-    result['score']       = round(result['score'], 2)
-    return result
-
-
-def determine_alert_level(score):
-    """Convert raw country-commodity score to alert level."""
-    if score >= ALERT_THRESHOLDS['surge']['min_score']:
-        return 'surge'
-    elif score >= ALERT_THRESHOLDS['high']['min_score']:
-        return 'high'
-    elif score >= ALERT_THRESHOLDS['elevated']['min_score']:
-        return 'elevated'
-    return 'normal'
-
-
-# ========================================
-# SCAN ORCHESTRATOR
-# ========================================
-
-def _build_empty_skeleton():
-    """Return a valid but empty scan response."""
-    commodity_summaries = {}
-    for cid, cdata in COMMODITY_TYPES.items():
-        commodity_summaries[cid] = {
-            'name':           cdata.get('name', cid),
-            'icon':           cdata.get('icon', '📊'),
-            'tier':           cdata.get('tier', 3),
-            'category':       cdata.get('category', 'unknown'),
-            'has_spot_price': cdata.get('has_spot_price', False),
-            'unit':           cdata.get('unit', ''),
-            'description':    cdata.get('description', ''),
-            'top_producers':  cdata.get('top_producers', []),
-            'top_consumers':  cdata.get('top_consumers', []),
-            'chokepoints':    cdata.get('chokepoints', []),
-            'sparkline':      None,
-            'total_score':    0,
-            'signal_count':   0,
-            'top_signals':    [],
-            'alert_level':    'normal',
-        }
-
-    country_summaries = {}
-    for cid in COUNTRY_COMMODITY_EXPOSURE.keys():
-        country_summaries[cid] = {
-            'country':           cid,
-            'total_score':       0,
-            'alert_level':       'normal',
-            'commodity_signals': {},
-            'top_signals':       [],
-        }
-
-    return {
-        'success':                  True,
-        'scan_time_seconds':        0,
-        'days_analyzed':            7,
-        'total_articles_scanned':   0,
-        'total_signals_detected':   0,
-        'commodity_summaries':      commodity_summaries,
-        'country_summaries':        country_summaries,
-        'top_signals':              [],
-        'source_breakdown':         {
-            'rss': 0, 'gdelt': 0, 'newsapi': 0, 'reddit': 0, 'brave': 0,
-        },
-        'last_updated':             datetime.now(timezone.utc).isoformat(),
-        'cached':                   False,
-        'scan_in_progress':         True,
-        'message':                  'Initial scan in progress. Data will appear shortly.',
-        'version':                  '1.0.0',
-    }
-
-
-def scan_commodity_pressure(days=7, force_refresh=False):
-    """Main entry point — returns full commodity intelligence bundle."""
-    if not force_refresh and is_commodity_cache_fresh():
-        cache = load_commodity_cache()
-        cache['cached'] = True
-        print("[Commodity Tracker] Returning fresh cached data")
-        return cache
-
-    if not force_refresh:
-        stale = load_commodity_cache()
-        if stale and 'cached_at' in stale:
-            stale['cached'] = True
-            stale['stale']  = True
-            _trigger_background_scan(days)
-            print("[Commodity Tracker] Returning stale cache, background refresh triggered")
-            return stale
-
-        print("[Commodity Tracker] No cache found, returning skeleton. Periodic scan will populate.")
-        return _build_empty_skeleton()
-
-    return _run_full_scan(days)
-
-
-def _trigger_background_scan(days=7):
-    """Start a background scan if one isn't already running."""
-    global _background_scan_running
-    with _background_scan_lock:
-        if _background_scan_running:
-            print("[Commodity Tracker] Background scan already in progress, skipping")
-            return
-        _background_scan_running = True
-
-    def _do_scan():
-        global _background_scan_running
-        try:
-            print("[Commodity Tracker] Background scan starting...")
-            _run_full_scan(days)
-        except Exception as e:
-            print(f"[Commodity Tracker] Background scan error: {e}")
-        finally:
-            with _background_scan_lock:
-                _background_scan_running = False
-
-    thread = threading.Thread(target=_do_scan, daemon=True)
-    thread.start()
-
-
-def _run_full_scan(days=7):
-    """Execute the full scan pipeline."""
-    print(f"[Commodity Tracker] Starting fresh scan ({days} days)...")
-    scan_start = time.time()
-
-    # Phase 1: fetch all signal sources in parallel-ish sequence
-    print("[Commodity Tracker] Phase 1: Fetching data...")
-    rss_articles     = fetch_all_commodity_rss()
-    gdelt_articles   = fetch_all_gdelt_commodity(days)
-    newsapi_articles = fetch_all_newsapi_commodity(days)
-    reddit_posts     = fetch_reddit_commodity(days)
-
-    # Brave fallback only fires if GDELT yielded thin results
-    brave_articles = []
-    if len(gdelt_articles) < 40 and BRAVE_API_KEY:
-        print("[Commodity Tracker] GDELT thin — firing Brave fallback...")
-        brave_articles = fetch_all_brave_commodity()
-
-    all_articles = (
-        rss_articles + gdelt_articles + newsapi_articles
-        + reddit_posts + brave_articles
-    )
-    print(f"[Commodity Tracker] Total articles: {len(all_articles)}")
-
-    # Phase 2: fetch sparklines (cheap, 11 Yahoo calls, cached separately)
-    print("[Commodity Tracker] Phase 2: Fetching sparklines...")
-    sparklines = fetch_all_sparklines(force=force_refresh if False else False)
-    # Note: sparklines have their own 1hr TTL; main scan respects that
-
-    # Phase 3: analyze articles
-    print("[Commodity Tracker] Phase 3: Analyzing articles...")
-    all_signals = []
-    per_commodity_signals = {cid: [] for cid in COMMODITY_TYPES.keys()}
-    per_country_signals   = {cid: [] for cid in COUNTRY_COMMODITY_EXPOSURE.keys()}
-    per_commodity_score   = {cid: 0  for cid in COMMODITY_TYPES.keys()}
-    per_country_score     = {cid: 0  for cid in COUNTRY_COMMODITY_EXPOSURE.keys()}
-
-    for article in all_articles:
-        analysis = analyze_article_commodity(article)
-        if not analysis['signals']:
+        if rl.get('status') != 'BREACHED':
             continue
-        for sig in analysis['signals']:
-            all_signals.append(sig)
-            cid = sig['commodity']
-            if cid in per_commodity_signals:
-                per_commodity_signals[cid].append(sig)
-                per_commodity_score[cid] += sig['weight']
-            for country_id in analysis['countries']:
-                if country_id in per_country_signals:
-                    # Country signal score weighted by its exposure to this commodity
-                    exposure = COUNTRY_COMMODITY_EXPOSURE[country_id].get(cid, {})
-                    country_weight = exposure.get('weight', 1.0)
-                    weighted_sig = dict(sig)
-                    weighted_sig['country_weight'] = country_weight
-                    weighted_sig['country_role']   = exposure.get('role', 'unknown')
-                    weighted_sig['country_note']   = exposure.get('note', '')
-                    per_country_signals[country_id].append(weighted_sig)
-                    per_country_score[country_id] += sig['weight'] * country_weight
-
-    # Phase 4: build commodity summaries
-    commodity_summaries = {}
-    for cid, cdata in COMMODITY_TYPES.items():
-        sigs = sorted(per_commodity_signals[cid], key=lambda s: s['weight'], reverse=True)
-        score = round(per_commodity_score[cid], 2)
-        commodity_summaries[cid] = {
-            'name':           cdata.get('name', cid),
-            'icon':           cdata.get('icon', '📊'),
-            'tier':           cdata.get('tier', 3),
-            'category':       cdata.get('category', 'unknown'),
-            'has_spot_price': cdata.get('has_spot_price', False),
-            'unit':           cdata.get('unit', ''),
-            'description':    cdata.get('description', ''),
-            'top_producers':  cdata.get('top_producers', []),
-            'top_consumers':  cdata.get('top_consumers', []),
-            'chokepoints':    cdata.get('chokepoints', []),
-            'sparkline':      sparklines.get(cid),
-            'total_score':    score,
-            'signal_count':   len(sigs),
-            'top_signals':    sigs[:8],
-            'alert_level':    determine_alert_level(score),
-        }
-
-    # Phase 5: build country summaries
-    country_summaries = {}
-    for cid in COUNTRY_COMMODITY_EXPOSURE.keys():
-        sigs = sorted(per_country_signals[cid], key=lambda s: s['weight'], reverse=True)
-        score = round(per_country_score[cid], 2)
-
-        # Per-commodity breakdown for this country
-        commodity_breakdown = {}
-        for commodity_id, exposure in COUNTRY_COMMODITY_EXPOSURE[cid].items():
-            commodity_sigs = [s for s in sigs if s['commodity'] == commodity_id]
-            commodity_breakdown[commodity_id] = {
-                'role':         exposure.get('role'),
-                'weight':       exposure.get('weight'),
-                'rank':         exposure.get('rank'),
-                'note':         exposure.get('note'),
-                'signal_count': len(commodity_sigs),
-                'top_signals':  commodity_sigs[:3],
-            }
-
-        country_summaries[cid] = {
-            'country':            cid,
-            'total_score':        score,
-            'alert_level':        determine_alert_level(score),
-            'commodity_signals':  commodity_breakdown,
-            'top_signals':        sigs[:10],
-        }
-
-    scan_time = round(time.time() - scan_start, 1)
-
-    # ── PAGE-LEVEL top_signals: round-robin across commodities ──
-    # Bug fix May 2 2026: previous logic was sort-by-weight which let one
-    # commodity (typically oil) monopolize the top 30. This caused
-    # commodities.html bottom feed to show "no signals" for any non-oil
-    # commodity even though those commodities had 18-53 signals each.
-    # Now: take top N from each commodity, then sort by weight within tier.
-    PER_COMMODITY_QUOTA = 5   # each commodity gets up to 5 slots
-    diversified_signals = []
-    for commodity_id, summary in commodity_summaries.items():
-        commodity_top = sorted(
-            summary.get('top_signals', []),
-            key=lambda s: s.get('weight', 0),
-            reverse=True
-        )[:PER_COMMODITY_QUOTA]
-        diversified_signals.extend(commodity_top)
-    # Final sort: by tier (1 first), then by weight within tier
-    diversified_signals.sort(
-        key=lambda s: (s.get('commodity_tier', 3), -s.get('weight', 0))
-    )
-
-    result = {
-        'success':                True,
-        'scan_time_seconds':      scan_time,
-        'days_analyzed':          days,
-        'total_articles_scanned': len(all_articles),
-        'total_signals_detected': len(all_signals),
-        'commodity_summaries':    commodity_summaries,
-        'country_summaries':      country_summaries,
-        'top_signals':            diversified_signals,
-        'source_breakdown': {
-            'rss':     len(rss_articles),
-            'gdelt':   len(gdelt_articles),
-            'newsapi': len(newsapi_articles),
-            'reddit':  len(reddit_posts),
-            'brave':   len(brave_articles),
-        },
-        'last_updated':           datetime.now(timezone.utc).isoformat(),
-        'cached':                 False,
-        'version':                '1.1.0',
-    }
-
-    save_commodity_cache(result)
-    print(f"[Commodity Tracker] ✅ Scan complete in {scan_time}s")
-    print(f"[Commodity Tracker]    Articles: {len(all_articles)}, Signals: {len(all_signals)}")
-    print(f"[Commodity Tracker]    Sparklines: {sum(1 for s in sparklines.values() if s)}/{len(COMMODITY_TYPES)}")
-    return result
-
-
-# ========================================
-# DASHBOARD INTEGRATION HELPER
-# ========================================
-
-def get_commodity_pressure(target):
-    """
-    Quick lookup for a country stability page. Returns the country's
-    commodity exposure summary, ready to drop into a stability page card.
-
-    Mirrors get_military_posture(target) signature.
-    """
-    try:
-        if target not in COUNTRY_COMMODITY_EXPOSURE:
-            return {
-                'success':              True,
-                'country':              target,
-                'commodity_pressure':   None,
-                'message':              f'No commodity exposure mapping for {target} (Phase 1 covers: belarus, russia, china, israel, ukraine).',
-                'commodity_summaries':  [],
-                'top_signals':          [],
-                'alert_level':          'normal',
-            }
-
-        data = scan_commodity_pressure()
-        country = data.get('country_summaries', {}).get(target, {})
-        if not country:
-            return {
-                'success':              True,
-                'country':              target,
-                'commodity_pressure':   0,
-                'alert_level':          'normal',
-                'commodity_summaries':  [],
-                'top_signals':          [],
-                'message':              'Awaiting first scan.',
-            }
-
-        # Build a compact list of this country's commodity exposures with sparklines attached
-        commodity_summaries = []
-        for commodity_id, breakdown in country.get('commodity_signals', {}).items():
-            full_summary = data.get('commodity_summaries', {}).get(commodity_id, {})
-            commodity_summaries.append({
-                'commodity':       commodity_id,
-                'name':            full_summary.get('name'),
-                'icon':            full_summary.get('icon'),
-                'tier':            full_summary.get('tier'),
-                'category':        full_summary.get('category'),
-                'role':            breakdown.get('role'),
-                'rank':            breakdown.get('rank'),
-                'note':            breakdown.get('note'),
-                'has_spot_price':  full_summary.get('has_spot_price'),
-                'unit':            full_summary.get('unit'),
-                'sparkline':       full_summary.get('sparkline'),
-                'signal_count':    breakdown.get('signal_count'),
-                'top_signals':     breakdown.get('top_signals', []),
-                # Global state of this commodity (from full_summary, not country breakdown)
-                # This is what country pages need to show "wheat is in SURGE globally"
-                'global_alert_level':   full_summary.get('alert_level', 'normal'),
-                'global_signal_count':  full_summary.get('signal_count', 0),
-                'global_total_score':   full_summary.get('total_score', 0),
+        sev   = int(rl.get('severity', 0) or 0)
+        label = str(rl.get('label', 'Red line'))[:55]
+        # Hormuz red line gets special dual_chokepoint flavor
+        rl_id = str(rl.get('id', '')).lower()
+        if 'hormuz' in rl_id or 'hormuz' in label.lower():
+            signals.append({
+                'priority':   13,
+                'category':   'dual_chokepoint',
+                'theatre':    'iran',
+                'level':      max(theatre_level, 4),
+                'icon':       '⚓',
+                'color':      '#dc2626',
+                'short_text': (f'{IRAN_FLAG} IRAN: Hormuz chokepoint pressure — '
+                               f'{label[:35]}'),
+                'long_text':  (f'{IRAN_FLAG} IRAN Strait of Hormuz pressure language '
+                               f'detected: {rl.get("label", "")[:130]}. '
+                               f'Watch Yemen BAM for paired chokepoint risk.'),
             })
-
-        return {
-            'success':              True,
-            'country':              target,
-            'commodity_pressure':   country.get('total_score', 0),
-            'alert_level':          country.get('alert_level', 'normal'),
-            'commodity_summaries':  commodity_summaries,
-            'top_signals':          country.get('top_signals', [])[:8],
-            'detail_url':           '/commodities.html',
-            'last_updated':         data.get('last_updated'),
-        }
-
-    except Exception as e:
-        print(f"[Commodity Pressure] Error for {target}: {str(e)[:200]}")
-        return {
-            'success':            False,
-            'country':            target,
-            'commodity_pressure': 0,
-            'alert_level':        'normal',
-            'commodity_summaries': [],
-            'top_signals':        [],
-            'error':              str(e)[:120],
-        }
-
-
-# ========================================
-# FLASK ENDPOINT REGISTRATION
-# ========================================
-
-def register_commodity_endpoints(app, start_background=True):
-    """
-    Register commodity tracker endpoints with the Flask app.
-
-    Endpoints:
-      GET  /api/commodity-pressure              full bundle (commodities + countries)
-      GET  /api/commodity-pressure/<target>     per-country summary (for stability pages)
-      GET  /api/commodity-prices                sparklines only (lightweight)
-
-    Parameters:
-        app: Flask app instance
-        start_background: If True (default), spawn a periodic scan thread
-                          that refreshes the cache every 12 hours.
-                          Set to False on read-only backends sharing Redis.
-    """
-
-    @app.route('/api/commodity-pressure', methods=['GET', 'OPTIONS'])
-    def api_commodity_pressure():
-        """Full commodity intelligence bundle for commodities.html."""
-        from flask import request as flask_request
-
-        if flask_request.method == 'OPTIONS':
-            return '', 200
-
-        try:
-            days    = int(flask_request.args.get('days', 7))
-            refresh = flask_request.args.get('refresh', 'false').lower() == 'true'
-
-            if refresh:
-                _trigger_background_scan(days)
-            result = scan_commodity_pressure(days=days, force_refresh=False)
-            return app.response_class(
-                response=json.dumps(result, default=str),
-                status=200,
-                mimetype='application/json',
-            )
-        except Exception as e:
-            print(f"[Commodity API] Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return app.response_class(
-                response=json.dumps({'success': False, 'error': str(e)[:200]}),
-                status=500,
-                mimetype='application/json',
-            )
-
-    @app.route('/api/commodity-pressure/<target>', methods=['GET', 'OPTIONS'])
-    def api_commodity_pressure_target(target):
-        """Quick commodity-pressure check for a specific country."""
-        from flask import request as flask_request
-
-        if flask_request.method == 'OPTIONS':
-            return '', 200
-
-        try:
-            pressure = get_commodity_pressure(target)
-            return app.response_class(
-                response=json.dumps(pressure, default=str),
-                status=200,
-                mimetype='application/json',
-            )
-        except Exception as e:
-            return app.response_class(
-                response=json.dumps({'success': False, 'error': str(e)[:200]}),
-                status=500,
-                mimetype='application/json',
-            )
-
-    @app.route('/api/commodity-prices', methods=['GET', 'OPTIONS'])
-    def api_commodity_prices():
-        """Lightweight: just sparklines + current prices, no news context."""
-        from flask import request as flask_request
-
-        if flask_request.method == 'OPTIONS':
-            return '', 200
-
-        try:
-            force = flask_request.args.get('force', 'false').lower() == 'true'
-            sparklines = fetch_all_sparklines(force=force)
-            payload = {
-                'success':       True,
-                'sparklines':    sparklines,
-                'commodity_meta': {
-                    cid: {
-                        'name':           c.get('name'),
-                        'icon':           c.get('icon'),
-                        'tier':           c.get('tier'),
-                        'category':       c.get('category'),
-                        'has_spot_price': c.get('has_spot_price'),
-                        'unit':           c.get('unit'),
-                    } for cid, c in COMMODITY_TYPES.items()
-                },
-                'last_updated':  datetime.now(timezone.utc).isoformat(),
-            }
-            return app.response_class(
-                response=json.dumps(payload, default=str),
-                status=200,
-                mimetype='application/json',
-            )
-        except Exception as e:
-            return app.response_class(
-                response=json.dumps({'success': False, 'error': str(e)[:200]}),
-                status=500,
-                mimetype='application/json',
-            )
-
-    @app.route('/api/commodity-debug', methods=['GET'])
-    def api_commodity_debug():
-        """Diagnostic — config snapshot + cache freshness."""
-        from flask import jsonify
-        return jsonify({
-            'version':                '1.0.0',
-            'commodity_count':        len(COMMODITY_TYPES),
-            'commodities':            list(COMMODITY_TYPES.keys()),
-            'country_exposure_count': len(COUNTRY_COMMODITY_EXPOSURE),
-            'countries_mapped':       list(COUNTRY_COMMODITY_EXPOSURE.keys()),
-            'rss_feeds':              len(COMMODITY_RSS_FEEDS),
-            'reddit_subs':            len(COMMODITY_REDDIT_SUBREDDITS),
-            'yfinance_available':     YFINANCE_AVAILABLE,
-            'newsapi_configured':     bool(NEWSAPI_KEY),
-            'brave_configured':       bool(BRAVE_API_KEY),
-            'redis_configured':       bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
-            'main_cache_fresh':       is_commodity_cache_fresh(),
-            'sparkline_cache_fresh':  is_sparkline_cache_fresh(),
-            'main_cache_ttl_hours':   COMMODITY_CACHE_TTL_HOURS,
-            'sparkline_cache_ttl_hours': SPARKLINE_CACHE_TTL_HOURS,
+            continue
+        # Nuclear red line gets nuclear_signaling category
+        if 'nuclear' in rl_id or 'nuclear' in label.lower():
+            signals.append({
+                'priority':   13,
+                'category':   'nuclear_signaling',
+                'theatre':    'iran',
+                'level':      max(theatre_level, 4),
+                'icon':       '☢️',
+                'color':      '#dc2626',
+                'short_text': (f'{IRAN_FLAG} IRAN: Nuclear red line — {label[:40]}'),
+                'long_text':  (f'{IRAN_FLAG} IRAN nuclear red line breached: '
+                               f'{rl.get("label", "")[:130]}'),
+            })
+            continue
+        # Generic breach
+        signals.append({
+            'priority':   12 if sev >= 3 else 10,
+            'category':   'red_line_breached',
+            'theatre':    'iran',
+            'level':      max(theatre_level, 4),
+            'icon':       rl.get('icon', '🚨'),
+            'color':      '#dc2626',
+            'short_text': f'{IRAN_FLAG} IRAN: BREACH — {label}',
+            'long_text':  (f'{IRAN_FLAG} IRAN red line breached: '
+                           f'{rl.get("label", "")[:140]}'),
         })
 
-    print("[Commodity Tracker] ✅ Endpoints registered:")
-    print("  GET  /api/commodity-pressure")
-    print("  GET  /api/commodity-pressure/<target>")
-    print("  GET  /api/commodity-prices")
-    print("  GET  /api/commodity-debug")
+    # ── 2. Nuclear signaling (vector >= 3, even without red-line breach) ──
+    if nuclear_lvl >= 3:
+        signals.append({
+            'priority':   10 + nuclear_lvl,   # L3=13, L4=14, L5=15
+            'category':   'nuclear_signaling',
+            'theatre':    'iran',
+            'level':      nuclear_lvl,
+            'icon':       '☢️',
+            'color':      lvl_color(nuclear_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: Nuclear posture L{nuclear_lvl} '
+                           f'({_IRAN_ESC_LABELS.get(nuclear_lvl, "")})'),
+            'long_text':  (f'{IRAN_FLAG} IRAN nuclear vector L{nuclear_lvl} — '
+                           f'enrichment / breakout / facility signaling above '
+                           f'baseline. JCPOA / Natanz / Fordow language elevated.'),
+        })
 
-    # PERIODIC BACKGROUND SCAN (every 12 hours)
-    if not start_background:
-        print("[Commodity Tracker] ℹ️ Background scan disabled on this instance")
-        return
+    # ── 3. Kinetic pressure: IRGC direct L4+ or OTP wave ─────────────
+    if irgc_lvl >= 4 or otp_count >= 5:
+        kinetic_lvl = max(irgc_lvl, 4 if otp_count >= 5 else 0)
+        otp_note = f' OTP wave at {otp_count} signals.' if otp_count >= 5 else ''
+        signals.append({
+            'priority':   9 + kinetic_lvl,    # L4=13, L5=14
+            'category':   'kinetic_pressure',
+            'theatre':    'iran',
+            'level':      kinetic_lvl,
+            'icon':       '🚀',
+            'color':      lvl_color(kinetic_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: IRGC direct L{irgc_lvl}'
+                           f'{" + OTP wave" if otp_count >= 5 else ""}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN IRGC direct vector L{irgc_lvl} '
+                           f'({_IRAN_ESC_LABELS.get(irgc_lvl, "")}).{otp_note} '
+                           f'Operation True Promise = direct missile/drone '
+                           f'retaliation signaling.'),
+        })
 
-    def _periodic_scan():
-        time.sleep(15)  # initial delay so app finishes booting
-        while True:
-            try:
-                print("[Commodity Tracker] Periodic scan starting...")
-                _trigger_background_scan(days=7)
-                time.sleep(60)
-                while _background_scan_running:
-                    time.sleep(30)
-                print("[Commodity Tracker] Periodic scan complete. Sleeping 12 hours.")
-                time.sleep(43200)  # 12 hours
-            except Exception as e:
-                print(f"[Commodity Tracker] Periodic scan error: {e}")
-                time.sleep(3600)
+    # ── 4. Cross-theater proxy orchestration (axis activation) ───────
+    if proxy_lvl >= 4:
+        signals.append({
+            'priority':   10 + (proxy_lvl - 4),  # L4=10, L5=11
+            'category':   'crosstheater_iran_proxies',
+            'theatre':    'iran',
+            'level':      proxy_lvl,
+            'icon':       '🕸️',
+            'color':      '#7c3aed',
+            'short_text': (f'{IRAN_FLAG} IRAN: Proxy activation L{proxy_lvl} '
+                           f'(axis orchestrating)'),
+            'long_text':  (f'{IRAN_FLAG} IRAN proxy activation L{proxy_lvl} — '
+                           f'Hezbollah (Hizbullah), Houthis, Iraqi militias, '
+                           f'PMF coordinated directive language detected. '
+                           f'Command node tempo elevated.'),
+        })
 
-    periodic_thread = threading.Thread(
-        target=_periodic_scan,
-        name='commodity-tracker-periodic',
-        daemon=True,
-    )
-    periodic_thread.start()
+    # ── 5. Cross-theater axis: Russia-Iran ───────────────────────────
+    russia_actor = actors.get('russia_iran_axis') or {}
+    russia_lvl   = int(russia_actor.get('max_level',
+                       russia_actor.get('escalation_level', 0)) or 0)
+    if russia_lvl >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_russia_iran',
+            'theatre':    'iran',
+            'level':      russia_lvl,
+            'icon':       '🇷🇺',
+            'color':      '#7c3aed',
+            'short_text': (f'{IRAN_FLAG} IRAN: Russia-Iran axis L{russia_lvl}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN Russia-Iran axis L{russia_lvl} '
+                           f'— Moscow-Tehran defense / drone / sanctions '
+                           f'coordination signaling above baseline.'),
+        })
+
+    # ── 6. Cross-theater axis: China-Iran ────────────────────────────
+    china_actor = actors.get('china_iran_axis') or {}
+    china_lvl   = int(china_actor.get('max_level',
+                      china_actor.get('escalation_level', 0)) or 0)
+    if china_lvl >= 3:
+        signals.append({
+            'priority':   10,
+            'category':   'crosstheater_china_iran',
+            'theatre':    'iran',
+            'level':      china_lvl,
+            'icon':       '🇨🇳',
+            'color':      '#7c3aed',
+            'short_text': (f'{IRAN_FLAG} IRAN: China-Iran axis L{china_lvl}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN China-Iran axis L{china_lvl} '
+                           f'— Beijing-Tehran economic / oil / diplomatic '
+                           f'cover signaling above baseline.'),
+        })
+
+    # ── 7. Theatre composite high (catch-all) ────────────────────────
+    if theatre_level >= 4 or theatre_score >= 70:
+        signals.append({
+            'priority':   9,
+            'category':   'theatre_high',
+            'theatre':    'iran',
+            'level':      theatre_level,
+            'icon':       '🔴' if theatre_level >= 4 else '🟠',
+            'color':      lvl_color(theatre_level),
+            'short_text': (f'{IRAN_FLAG} IRAN L{theatre_level} — '
+                           f'{_IRAN_ESC_LABELS.get(theatre_level, "")}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN command node at L{theatre_level} '
+                           f'{_IRAN_ESC_LABELS.get(theatre_level, "")} '
+                           f'(score {theatre_score}/100).'),
+        })
+
+    # ── 8. Regime fracture: domestic stress ──────────────────────────
+    if domestic_lvl >= 4:
+        signals.append({
+            'priority':   9,
+            'category':   'regime_fracture',
+            'theatre':    'iran',
+            'level':      domestic_lvl,
+            'icon':       '🪧',
+            'color':      lvl_color(domestic_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: Domestic stress L{domestic_lvl}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN domestic vector L{domestic_lvl} — '
+                           f'protest / strike / clerical fracture / IRGC '
+                           f'internal coercion language elevated.'),
+        })
+
+    # ── 9. Influence operations / soft power (Iran-specific) ─────────
+    if soft_power_lvl >= 3:
+        signals.append({
+            'priority':   7 + soft_power_lvl,   # L3=10, L4=11, L5=12
+            'category':   'influence_high',
+            'theatre':    'iran',
+            'level':      soft_power_lvl,
+            'icon':       '📡',
+            'color':      '#0ea5e9',
+            'short_text': (f'{IRAN_FLAG} IRAN: Influence ops L{soft_power_lvl} '
+                           f'(PressTV / viral media)'),
+            'long_text':  (f'{IRAN_FLAG} IRAN soft-power vector L{soft_power_lvl} '
+                           f'— Iranian state media (PressTV, Tasnim) / viral '
+                           f'artifacts / "resistance" framing targeting Western '
+                           f'audiences elevated.'),
+        })
+
+    # ── 10. Silence anomalies (Khamenei/IRGC suspicious quiet) ───────
+    for sa in silence_alerts[:2]:
+        if not isinstance(sa, dict):
+            continue
+        actor_id   = sa.get('actor_id', 'actor')
+        actor_name = sa.get('actor_name', actor_id)
+        # IRGC silence is the most operationally significant
+        is_irgc = 'irgc' in str(actor_id).lower() or 'khamenei' in str(actor_id).lower()
+        signals.append({
+            'priority':   11 if is_irgc else 9,
+            'category':   'silence_anomaly',
+            'theatre':    'iran',
+            'level':      4 if is_irgc else 3,
+            'icon':       '🔇',
+            'color':      '#dc2626' if is_irgc else '#f59e0b',
+            'short_text': (f'{IRAN_FLAG} IRAN: Silence anomaly — '
+                           f'{actor_name[:35]}'),
+            'long_text':  (f'{IRAN_FLAG} IRAN unusual silence from '
+                           f'{actor_name}. '
+                           f'{"IRGC quiet during active tempo = operational " if is_irgc else ""}'
+                           f'{"planning indicator." if is_irgc else "May indicate message coordination or internal stress."}'),
+        })
+
+    # ── 11. Diplomatic active (off-ramp signaling) ───────────────────
+    if ceasefire_lvl >= 2:
+        prio = 6 + min(ceasefire_lvl, 3)   # L2=8, L3=9, L4=9, L5=9
+        dipl_label = scan_data.get('diplomatic_label_detailed', 'Diplomatic Push')
+        signals.append({
+            'priority':   prio,
+            'category':   'diplomatic_active',
+            'theatre':    'iran',
+            'level':      ceasefire_lvl,
+            'icon':       '🕊️',
+            'color':      '#10b981',
+            'short_text': (f'{IRAN_FLAG} IRAN: Diplomatic track L{ceasefire_lvl} '
+                           f'({dipl_label})'),
+            'long_text':  (f'{IRAN_FLAG} IRAN diplomatic momentum L{ceasefire_lvl} '
+                           f'— {dipl_label}. Witkoff envoy / Muscat back-channel '
+                           f'/ JCPOA framing detected. Modifier: '
+                           f'{scan_data.get("diplomatic_modifier", 0)} pts.'),
+        })
+
+    # ── 12. Commodity pressure (Phase 2B) ────────────────────────────
+    # Pull from commodity_pressure dict injected by rhetoric_tracker_iran.
+    # Maps to 3 categories: dual_chokepoint (oil/gas), nuclear_signaling
+    # (uranium), commodity_pressure (gold/wheat). Helper handles dedupe
+    # so oil+gas don't both emit dual_chokepoint.
+    try:
+        commodity_signals = _extract_commodity_signals(scan_data)
+        if commodity_signals:
+            signals.extend(commodity_signals)
+    except Exception as _cp_err:
+        # Non-fatal — never let a commodity bug break top_signals
+        print(f'[Iran Interpreter] Commodity signals error (non-fatal): {str(_cp_err)[:100]}')
+
+    # ── Sort and return ──────────────────────────────────────────────
+    signals.sort(key=lambda s: s.get('priority', 0), reverse=True)
+    return signals
+
+
+# ============================================================
+# STANDALONE TEST
+# ============================================================
+if __name__ == '__main__':
+    test_data = {
+        'theatre_score':          56,
+        'theatre_level':          5,
+        'proxy_activation_level': 4,
+        'otp_signal_count':       79,
+        'delta': {'direction': 'stable', 'score_change': 2.1},
+        'actors': {
+            'irgc':        {'escalation_level': 5, 'statement_count': 0, 'top_articles': []},
+            'khamenei':    {'escalation_level': 2, 'statement_count': 1, 'top_articles': []},
+            'iran_gov':    {'escalation_level': 1, 'statement_count': 4, 'top_articles': []},
+            'us_iran':     {'escalation_level': 3, 'statement_count': 2, 'top_articles': [
+                {'title': 'Trump warns Iran: 60 days to make deal or face consequences', 'published': ''}
+            ]},
+            'israel_iran': {'escalation_level': 3, 'statement_count': 5, 'top_articles': []},
+            'houthi_iran': {'escalation_level': 4, 'statement_count': 8, 'top_articles': []},
+            'hezbollah_iran': {'escalation_level': 5, 'statement_count': 12, 'top_articles': []},
+        },
+    }
+
+    result = interpret_signals(test_data)
+
+    print('\n' + '='*60)
+    print('SCENARIO:', result['so_what']['scenario'])
+    print('='*60)
+    print('\nSITUATION:')
+    print(result['so_what']['situation'])
+    print('\nKEY INDICATORS:')
+    for ind in result['so_what']['key_indicators']:
+        print(f'  • {ind}')
+    print('\nASSESSMENT:')
+    print(result['so_what']['assessment'])
+    print('\nWATCH LIST:')
+    for item in result['so_what']['watch_list']:
+        print(f'  → {item}')
+    print('\nRED LINES:')
+    for rl in result['red_lines']['triggered']:
+        print(f'  {rl["icon"]} [{rl["status"]}] {rl["label"]} (Sev {rl["severity"]})')
+        print(f'     {rl["trigger"]}')
+    print('\nHISTORICAL MATCHES:')
+    for hm in result['historical_matches']:
+        print(f'  {hm["similarity"]}% -- {hm["label"]}')
+        print(f'     {hm["outcome"]}')
+        print(f'     Window: {hm["window_hours"]}h | Confidence: {hm["confidence"]}')
