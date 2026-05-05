@@ -666,10 +666,23 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': '~15% of global cobalt (HPAL nickel by-product); rapid growth via Pomalaa, Morowali; expected 20% global share by 2030'},
     },
     'israel': {
+        # ── Producer side (existing, kept) ──
         'potash':       {'role': 'producer',          'weight': 1.0, 'rank': 6,
                          'note': 'ICL (Israel Chemicals); Dead Sea production'},
         'natural_gas':  {'role': 'producer',          'weight': 0.8,
                          'note': 'Leviathan + Tamar fields; exports to Egypt/Jordan'},
+        # ── Consumer side (Phase 3 expansion, May 2026) ──
+        # Israel is a small consumer market deeply tied to global supply chains.
+        # Mediterranean shipping, Eilat pipeline, and Black Sea grain corridor
+        # are all single-points-of-failure for Israeli food/fuel security.
+        'wheat':        {'role': 'consumer',          'weight': 1.3,
+                         'note': '~80% of consumption imported (Black Sea + US); bread = coalition stress lever'},
+        'corn':         {'role': 'consumer',          'weight': 0.9,
+                         'note': 'Animal feed dependency; Ukraine + US imports; livestock cost driver'},
+        'soybeans':     {'role': 'consumer',          'weight': 0.7,
+                         'note': 'Food + feed imports; soy-oil + animal protein supply chain'},
+        'oil':          {'role': 'consumer',          'weight': 1.2,
+                         'note': 'Net importer; Eilat-Ashkelon pipeline + Mediterranean tankers; Hormuz/Suez vulnerable'},
     },
     'lebanon': {
         'wheat':        {'role': 'consumer',          'weight': 1.5,
