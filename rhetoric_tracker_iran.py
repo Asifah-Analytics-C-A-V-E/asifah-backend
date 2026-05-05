@@ -219,6 +219,30 @@ ACTORS = {
             'iran opposition', 'mek iran', 'zan zendegi azadi',
             'اعتراضات ایران', 'اعتراض مردم', 'بحران اقتصادی ایران',
             'تورم ایران', 'احتجاجات إيران', 'الشعب الإيراني',
+            # ── v1.3 (May 2026) — Execution & regime crackdown signals ──
+            # Wave-of-executions is a classic pre-crackdown / regime-hardening
+            # pattern. Detection here boosts iran_people actor signal AND feeds
+            # DOMESTIC_TRIGGERS scoring below.
+            'iran executions', 'iran executes', 'iran executed',
+            'tehran executes', 'iranian regime executes',
+            'mass executions iran', 'wave of executions iran',
+            'iran death sentence', 'iran death penalty',
+            'iran hangs', 'iran hanged', 'iran hanging',
+            'iran political prisoners executed',
+            'iran journalist executed', 'iran activist executed',
+            'iran kurd executed', 'iran baluch executed',
+            'iran dual national executed', 'iran foreign national executed',
+            'iran judiciary executions', 'iran prisons executions',
+            # Persian
+            'اعدام در ایران', 'اعدام‌های ایران',
+            'موج اعدام', 'اعدام دسته‌جمعی',
+            'اعدام زندانیان سیاسی',
+            'حکم اعدام', 'احکام اعدام',
+            'به دار آویخته شد', 'اعدام شد',
+            # Arabic
+            'إعدامات إيران', 'إعدام في إيران',
+            'موجة إعدامات', 'الإعدام الجماعي',
+            'حكم الإعدام إيران',
         ],
         'baseline_statements_per_week': 4,
     },
@@ -238,6 +262,54 @@ ACTORS = {
             'islamic resistance lebanon', 'resistance axis lebanon',
             'حزب الله وإيران', 'توجيهات إيران لحزب الله',
             'المقاومة الإسلامية لبنان بأوامر إيرانية',
+            # ── v1.3 (May 2026) — IRGC-Hezbollah specific command coordination ──
+            # Qaani trips to Beirut are a classic command signal — historically
+            # precede major Hezbollah escalations. Joint operations / liaison
+            # language captures directive command beyond the generic patterns
+            # above.
+            'irgc liaison lebanon', 'quds force lebanon liaison',
+            'irgc officer beirut', 'irgc commander lebanon',
+            'iran quds force lebanon', 'iranian advisor lebanon',
+            'iranian advisors lebanon', 'iran trainer lebanon',
+            'iran trainers lebanon', 'iran iranian advisors hezbollah',
+            'qaani lebanon visit', 'qaani beirut',
+            'qaani hezbollah meeting', 'qaani trip to lebanon',
+            'qaani in beirut', 'qaani secretly visit',
+            'esmail qaani lebanon', 'esmail qaani beirut',
+            'joint operations room iran hezbollah',
+            'joint operations room lebanon iran',
+            'iran hezbollah targeting cell',
+            'iran hezbollah command cell',
+            'iran command lebanon', 'iran orchestrating lebanon',
+            'iran orchestrates hezbollah', 'iran commands hezbollah',
+            'irgc embedded lebanon', 'iranian operatives lebanon',
+            # Persian
+            'فرمانده سپاه لبنان', 'مستشار ایرانی لبنان',
+            'مستشاران ایرانی لبنان',
+            'قاآنی بیروت', 'قاآنی لبنان',
+            'سفر قاآنی به لبنان', 'دیدار قاآنی',
+            'سپاه پاسداران لبنان',
+            'هماهنگی سپاه و حزب الله',
+            'مرکز عملیات مشترک لبنان',
+            'مرکز فرماندهی مشترک لبنان',
+            'مربیان ایرانی لبنان',
+            'افسر سپاه در بیروت',
+            # Arabic
+            'مستشار إيراني لبنان', 'مستشارون إيرانيون لبنان',
+            'فيلق القدس لبنان', 'فيلق القدس في لبنان',
+            'الحرس الثوري لبنان', 'الحرس الثوري في لبنان',
+            'قاآني بيروت', 'قاآني حزب الله',
+            'قاآني في بيروت', 'زيارة قاآني لبنان',
+            'إسماعيل قاآني لبنان', 'إسماعيل قاآني بيروت',
+            'ضباط إيرانيون بيروت', 'ضابط إيراني بيروت',
+            'غرفة عمليات مشتركة إيران حزب الله',
+            'غرفة العمليات المشتركة لبنان إيران',
+            'تنسيق إيراني مع حزب الله',
+            'تنسيق إيراني حزب الله',
+            'مدربون إيرانيون لبنان',
+            'مدرب إيراني لبنان',
+            'إيران توجه حزب الله',
+            'إيران تشرف على عمليات حزب الله',
         ],
         'baseline_statements_per_week': 10,
     },
@@ -274,6 +346,47 @@ ACTORS = {
             'إيران والبحر الأحمر', 'عمليات الحوثيين بدعم إيراني',
             'الحوثيون يطلقون', 'صاروخ الحوثيين',
             'هجوم الحوثيين', 'أنصار الله يهاجم',
+            # ── v1.3 (May 2026) — IRGC-Houthi specific command coordination ──
+            # Captures liaison officers, joint operations rooms, advisor language
+            # — directive command signals beyond generic "iran directs houthi"
+            # patterns above. Single rich source for cross-proxy command tempo.
+            'irgc liaison yemen', 'quds force yemen liaison',
+            'irgc officer sanaa', 'irgc commander yemen',
+            'iran quds force yemen', 'iranian advisor yemen',
+            'iranian advisors yemen', 'iran trainer yemen',
+            'iran trainers yemen', 'iran iranian advisors yemen',
+            'joint operations room iran houthi',
+            'joint operations room yemen iran',
+            'joint targeting yemen iran',
+            'iran houthi targeting cell', 'iran houthi command cell',
+            'irgc directs red sea operations',
+            'iran red sea operations room',
+            'iran orchestrates houthi', 'iran commands houthi',
+            'irgc embedded yemen', 'iranian operatives yemen',
+            'abdul reza shahlai',  # Documented Quds Force-Yemen point man
+            'shahlai yemen',
+            # Persian
+            'فرمانده سپاه یمن', 'مستشار ایرانی یمن',
+            'مستشاران ایرانی یمن',
+            'سپاه پاسداران یمن',
+            'مرکز عملیات مشترک یمن',
+            'مرکز فرماندهی مشترک یمن',
+            'هماهنگی سپاه و انصار الله',
+            'مربیان ایرانی یمن',
+            'افسر سپاه در صنعا',
+            # Arabic
+            'مستشار إيراني اليمن', 'مستشارون إيرانيون اليمن',
+            'فيلق القدس اليمن', 'فيلق القدس في اليمن',
+            'الحرس الثوري اليمن', 'الحرس الثوري في اليمن',
+            'ضباط إيرانيون صنعاء', 'ضابط إيراني صنعاء',
+            'غرفة عمليات مشتركة إيران الحوثيين',
+            'غرفة العمليات المشتركة اليمن إيران',
+            'تنسيق إيراني حوثي مباشر',
+            'تنسيق إيراني حوثي',
+            'مدربون إيرانيون اليمن',
+            'مدرب إيراني اليمن',
+            'إيران توجه الحوثيين',
+            'إيران تشرف على عمليات الحوثيين',
         ],
         'baseline_statements_per_week': 8,
         'tripwires': [
@@ -646,6 +759,21 @@ DOMESTIC_TRIGGERS = {
         'iran internet blackout', 'iran generals arrested',
         'اعتراضات گسترده ایران', 'سرکوب ایران',
         'احتجاجات واسعة في إيران',
+        # ── v1.3 (May 2026) — Mass / wave executions = regime hardening ──
+        'iran mass executions', 'iran wave of executions',
+        'iran multiple executions', 'iran execution wave',
+        'iran executes journalist', 'iran executes activist',
+        'iran executes dissident', 'iran executes protester',
+        'iran executes dual national', 'iran executes foreign national',
+        'iran executes kurd', 'iran executes baluch',
+        # Persian
+        'موج اعدام', 'اعدام دسته‌جمعی',
+        'اعدام روزنامه‌نگار', 'اعدام فعال',
+        'اعدام معترضان',
+        # Arabic
+        'موجة إعدامات', 'الإعدام الجماعي إيران',
+        'إعدام صحفي إيران', 'إعدام ناشط إيران',
+        'إعدام معارضين إيران',
     ],
     3: [
         'iran protests', 'iran demonstrations',
@@ -654,12 +782,37 @@ DOMESTIC_TRIGGERS = {
         'iran dissent', 'iran opposition',
         'اعتراض ایران', 'بحران اقتصادی',
         'احتجاجات إيران', 'الأزمة الاقتصادية الإيرانية',
+        # ── v1.3 (May 2026) — Specific named / acted executions ──
+        'iran executes', 'iran executed today',
+        'iran death sentence carried out', 'iran hangs prisoner',
+        'iran hangs activist', 'iran hangs dissident',
+        'iran judiciary executions', 'iran intelligence executes',
+        'iran executes minor', 'iran executes woman',
+        'iranian regime executes', 'tehran executes',
+        # Persian
+        'اعدام شد', 'اعدام انجام شد',
+        'قوه قضائیه اعدام',
+        'اعدام در زندان',
+        # Arabic
+        'إعدام في إيران', 'تنفيذ حكم الإعدام إيران',
+        'النظام الإيراني يعدم',
     ],
     2: [
         'iran inflation', 'iran sanctions', 'iran economy',
         'iran currency', 'iran unemployment',
         'تورم ایران', 'تحریم‌های ایران',
         'اقتصاد إيران', 'العقوبات على إيران',
+        # ── v1.3 (May 2026) — General execution language / death sentence announcements ──
+        'iran death penalty', 'iran death sentence',
+        'iran political prisoner sentenced',
+        'iran political prisoner death',
+        'iran sentences to death',
+        # Persian
+        'حکم اعدام', 'احکام اعدام',
+        'محکوم به اعدام',
+        # Arabic
+        'حكم الإعدام', 'حكم بالإعدام إيران',
+        'محكوم بالإعدام إيران',
     ],
     1: [
         'iran economy', 'iran people', 'iran society',
@@ -689,10 +842,6 @@ DIPLOMATIC_TRIGGERS = {
         'iran ceasefire negotiations', 'iran us second round',
         'us iran ceasefire talks', 'iran us framework',
         'pakistan iran us mediator', 'oman iran us mediator',
-        # Hormuz-for-blockade-lift exchange (WSJ Apr 28 2026 — specific bargain)
-        'hormuz for blockade lift', 'stop hormuz attacks in exchange',
-        'iran hormuz ceasefire deal', 'iran offers stop hormuz',
-        'iran lift blockade exchange', 'iran shipping resumes deal',
         'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
     ],
     3: [
@@ -706,10 +855,6 @@ DIPLOMATIC_TRIGGERS = {
         'trump iran ceasefire extension', 'jones act waiver',
         'us extends iran ceasefire', 'iran ceasefire extension',
         'iran nuclear envoy', 'special envoy iran',
-        # Hormuz/blockade conditional offers via mediators (WSJ Apr 28 2026)
-        'iran hormuz offer mediator', 'iran ceasefire offer mediator',
-        'iran offers hormuz halt', 'tehran offers hormuz',
-        'iran us blockade lift talks', 'iran sanctions relief offer',
         'پاکستان وساطت', 'وساطة باكستانية',
     ],
     2: [
@@ -719,11 +864,6 @@ DIPLOMATIC_TRIGGERS = {
         'iran diplomatic outreach', 'iran ceasefire offer',
         'pakistan iran diplomacy', 'oman iran diplomacy',
         'tehran offers talks', 'iran open to talks',
-        # General Hormuz/blockade off-ramp signaling (WSJ Apr 28 2026)
-        'stop hormuz attacks', 'lift blockade iran', 'iran lift blockade',
-        'iran shipping resumes', 'blockade lift in exchange',
-        'iran end war exchange', 'iran sanctions relief',
-        'iran reconstruction relief', 'iran economic off-ramp',
         'مذاکرات هسته‌ای ایران', 'دبلوماسية إيرانية',
     ],
     1: [
