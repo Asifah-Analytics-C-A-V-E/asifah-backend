@@ -68,6 +68,48 @@ _iran_scan_thread = None
 
 
 # ============================================
+# COMMODITY PRESSURE CONFIG (Phase 3, May 5 2026)
+# ============================================
+# Reads commodity_tracker_cache Redis key (written by commodity_tracker.py).
+# Iran has 5 commodity exposures: oil, natural_gas, uranium, gold, wheat.
+#
+# Stability penalty is dict-driven so it stays flexible — to add penalties
+# for other commodities later, just add entries here. Per-commodity tuning:
+#   {
+#     'commodity_id': {
+#         'penalty_high':  -X,   # subtracted from stability when global=high
+#         'penalty_surge': -Y,   # subtracted from stability when global=surge
+#         'rationale':     str,  # for logs / audit trail
+#     }
+#   }
+#
+# CURRENT POLICY (May 5 2026): Wheat-only.
+#   - Oil/gas: already captured via Hormuz traffic in economic component
+#   - Uranium: already captured via Geopolitical (nuclear language)
+#   - Gold: indirect — sanctions evasion not a regime-stability lever
+#   - Wheat: NEW signal — bread/regime stability (1979 echo). Iran is
+#            net importer ~5-7M tonnes/yr, ~25-30% from imports.
+COMMODITY_REDIS_KEY = 'commodity_tracker_cache'
+
+COMMODITY_PENALTY_CONFIG = {
+    'wheat': {
+        'penalty_high':  -3,
+        'penalty_surge': -8,
+        'rationale':     'Wheat surge → bread inflation → 1979 stability lever',
+    },
+    # Future-flex (commented out, ready to enable):
+    # 'gold':        {'penalty_high': -2, 'penalty_surge': -5,
+    #                 'rationale': 'Gold surge → reserves stress → economic war'},
+    # 'oil':         {'penalty_high': 0,  'penalty_surge': 0,
+    #                 'rationale': 'Already captured via Hormuz traffic in economic'},
+    # 'natural_gas': {'penalty_high': 0,  'penalty_surge': 0,
+    #                 'rationale': 'Already captured via Hormuz traffic in economic'},
+    # 'uranium':     {'penalty_high': 0,  'penalty_surge': 0,
+    #                 'rationale': 'Already captured via Geopolitical nuclear vector'},
+}
+
+
+# ============================================
 # CACHE: Upstash Redis + /tmp fallback
 # (v3.1.0: same pattern as military_tracker.py)
 # ============================================
@@ -211,6 +253,94 @@ def _build_empty_skeleton():
         'message': 'Initial scan in progress. Data will appear shortly.',
         'version': '3.2.0'
     }
+
+
+# ============================================
+# COMMODITY PRESSURE READER (Phase 3, May 5 2026)
+# ============================================
+# Reads shared commodity_tracker_cache Redis key and extracts Iran's
+# exposure summary in a shape the stability scorer + frontend can consume.
+# Returns None on failure — callers degrade gracefully.
+
+def _read_iran_commodity_pressure():
+    """
+    Read commodity-pressure data for Iran from shared Redis cache.
+
+    Returns a dict shaped like:
+        {
+            'commodity_pressure': float,       # Iran-specific score
+            'alert_level':        str,         # normal|elevated|high|surge
+            'commodity_summaries': [
+                {
+                    'commodity':           str,
+                    'name':                str,
+                    'icon':                str,
+                    'role':                str,
+                    'rank':                int|None,
+                    'note':                str,
+                    'signal_count':        int,
+                    'global_alert_level':  str,
+                    'global_signal_count': int,
+                    'global_total_score':  float,
+                    'sparkline':           dict|None,  # for frontend rendering
+                },
+                ...
+            ],
+            'last_updated':       str,
+        }
+    Returns None if cache cold, Iran not in bundle, or any error.
+    """
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return None
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{COMMODITY_REDIS_KEY}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5
+        )
+        data = resp.json()
+        if not data.get('result'):
+            return None
+        bundle = json.loads(data['result'])
+        if not isinstance(bundle, dict):
+            return None
+
+        country_summaries = bundle.get('country_summaries', {}) or {}
+        commodity_summary = bundle.get('commodity_summaries', {}) or {}
+        iran_country = country_summaries.get('iran') or {}
+        if not iran_country:
+            return None
+
+        iran_score = float(iran_country.get('total_score', 0) or 0)
+        iran_alert = str(iran_country.get('alert_level', 'normal') or 'normal')
+        iran_breakdown = iran_country.get('commodity_signals', {}) or {}
+
+        commodity_summaries_out = []
+        for commodity_id, breakdown in iran_breakdown.items():
+            full = commodity_summary.get(commodity_id, {}) or {}
+            commodity_summaries_out.append({
+                'commodity':           commodity_id,
+                'name':                full.get('name', commodity_id.title()),
+                'icon':                full.get('icon', '📊'),
+                'role':                breakdown.get('role'),
+                'rank':                breakdown.get('rank'),
+                'note':                breakdown.get('note'),
+                'signal_count':        int(breakdown.get('signal_count', 0) or 0),
+                'global_alert_level':  str(full.get('alert_level', 'normal') or 'normal'),
+                'global_signal_count': int(full.get('signal_count', 0) or 0),
+                'global_total_score':  float(full.get('total_score', 0) or 0),
+                'sparkline':           full.get('sparkline'),  # for frontend
+            })
+
+        return {
+            'commodity_pressure':  iran_score,
+            'alert_level':         iran_alert,
+            'commodity_summaries': commodity_summaries_out,
+            'last_updated':        bundle.get('last_updated', bundle.get('cached_at')),
+        }
+    except Exception as e:
+        print(f"[Iran Commodity] Read error (non-fatal): {str(e)[:120]}")
+        return None
 
 
 # ============================================
@@ -1536,7 +1666,40 @@ def calculate_regime_stability(all_articles, casualties, exchange_rate, oil_pric
     except Exception as e:
         print(f"[Iran Stability] Rhetoric penalty skipped: {e}")
 
-    stability_score = int(max(5, min(95, composite + rhetoric_penalty + proxy_penalty)))
+    # ── Commodity penalty (Phase 3, v3.4.0 — May 5 2026) ──
+    # Per-commodity stability penalties driven by COMMODITY_PENALTY_CONFIG.
+    # Currently wheat-only (bread → regime stability lever). Architecture
+    # is dict-driven so future commodities can be added without code changes.
+    commodity_penalty = 0
+    commodity_penalty_detail = {}
+    commodity_data_for_response = cache.get('_iran_commodity_data')
+    try:
+        if commodity_data_for_response and commodity_data_for_response.get('commodity_summaries'):
+            for summary in commodity_data_for_response['commodity_summaries']:
+                cid = str(summary.get('commodity', '')).lower()
+                config = COMMODITY_PENALTY_CONFIG.get(cid)
+                if not config:
+                    continue
+                global_alert = str(summary.get('global_alert_level', 'normal')).lower()
+                if global_alert == 'surge':
+                    delta = config.get('penalty_surge', 0)
+                elif global_alert == 'high':
+                    delta = config.get('penalty_high', 0)
+                else:
+                    delta = 0
+                if delta != 0:
+                    commodity_penalty += delta
+                    commodity_penalty_detail[cid] = {
+                        'penalty':   delta,
+                        'alert':     global_alert,
+                        'rationale': config.get('rationale', ''),
+                    }
+            if commodity_penalty:
+                print(f"[Iran Stability] Commodity penalty: {commodity_penalty} (detail: {commodity_penalty_detail})")
+    except Exception as e:
+        print(f"[Iran Stability] Commodity penalty skipped: {e}")
+
+    stability_score = int(max(5, min(95, composite + rhetoric_penalty + proxy_penalty + commodity_penalty)))
 
     if stability_score >= 70: risk_level = "STABLE - Low Risk"
     elif stability_score >= 50: risk_level = "MODERATE RISK - Elevated Tensions"
@@ -1756,6 +1919,17 @@ def _run_iran_scan(days=7):
     # Store Hormuz traffic level in cache for stability calculation
     cache['_hormuz_traffic_pct'] = hormuz_status.get('traffic_level_pct', 100)
 
+    # Read commodity pressure (Phase 3) — feeds stability penalty + frontend card
+    commodity_pressure = _read_iran_commodity_pressure()
+    if commodity_pressure:
+        cache['_iran_commodity_data'] = commodity_pressure
+        n_summaries = len(commodity_pressure.get('commodity_summaries', []))
+        c_alert = commodity_pressure.get('alert_level', 'normal')
+        print(f"[Iran] 🌾 Commodity pressure: alert={c_alert}, {n_summaries} exposures")
+    else:
+        cache['_iran_commodity_data'] = None
+        print(f"[Iran] ℹ️ Commodity pressure: no data (cache cold or Iran not in bundle yet)")
+
     stability = calculate_regime_stability(
         all_articles, casualties, exchange_rate, oil_data,
         num_cities, hrana_data, cache
@@ -1803,6 +1977,7 @@ def _run_iran_scan(days=7):
             'production_status': production_status,
             'hormuz_status': hormuz_status
         },
+        'commodity_pressure': commodity_pressure,
         'government': government,
         'articles_en': [a for a in all_articles if a.get('language') == 'en'
                         and not a.get('source', {}).get('name', '').startswith('r/')][:20],
