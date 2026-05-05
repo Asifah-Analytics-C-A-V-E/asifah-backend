@@ -119,6 +119,7 @@ RHETORIC_CACHE_KEY_LEGACY = 'iran_rhetoric_cache'
 HISTORY_KEY               = 'rhetoric:iran:history'
 BASELINE_KEY              = 'rhetoric_baseline:iran'
 CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'
+COMMODITY_CACHE_KEY       = 'commodity_tracker_cache'  # Phase 2B: read-only
 
 RHETORIC_CACHE_TTL  = 6 * 3600
 SCAN_INTERVAL_HOURS = 6
@@ -219,30 +220,6 @@ ACTORS = {
             'iran opposition', 'mek iran', 'zan zendegi azadi',
             'اعتراضات ایران', 'اعتراض مردم', 'بحران اقتصادی ایران',
             'تورم ایران', 'احتجاجات إيران', 'الشعب الإيراني',
-            # ── v1.3 (May 2026) — Execution & regime crackdown signals ──
-            # Wave-of-executions is a classic pre-crackdown / regime-hardening
-            # pattern. Detection here boosts iran_people actor signal AND feeds
-            # DOMESTIC_TRIGGERS scoring below.
-            'iran executions', 'iran executes', 'iran executed',
-            'tehran executes', 'iranian regime executes',
-            'mass executions iran', 'wave of executions iran',
-            'iran death sentence', 'iran death penalty',
-            'iran hangs', 'iran hanged', 'iran hanging',
-            'iran political prisoners executed',
-            'iran journalist executed', 'iran activist executed',
-            'iran kurd executed', 'iran baluch executed',
-            'iran dual national executed', 'iran foreign national executed',
-            'iran judiciary executions', 'iran prisons executions',
-            # Persian
-            'اعدام در ایران', 'اعدام‌های ایران',
-            'موج اعدام', 'اعدام دسته‌جمعی',
-            'اعدام زندانیان سیاسی',
-            'حکم اعدام', 'احکام اعدام',
-            'به دار آویخته شد', 'اعدام شد',
-            # Arabic
-            'إعدامات إيران', 'إعدام في إيران',
-            'موجة إعدامات', 'الإعدام الجماعي',
-            'حكم الإعدام إيران',
         ],
         'baseline_statements_per_week': 4,
     },
@@ -262,54 +239,6 @@ ACTORS = {
             'islamic resistance lebanon', 'resistance axis lebanon',
             'حزب الله وإيران', 'توجيهات إيران لحزب الله',
             'المقاومة الإسلامية لبنان بأوامر إيرانية',
-            # ── v1.3 (May 2026) — IRGC-Hezbollah specific command coordination ──
-            # Qaani trips to Beirut are a classic command signal — historically
-            # precede major Hezbollah escalations. Joint operations / liaison
-            # language captures directive command beyond the generic patterns
-            # above.
-            'irgc liaison lebanon', 'quds force lebanon liaison',
-            'irgc officer beirut', 'irgc commander lebanon',
-            'iran quds force lebanon', 'iranian advisor lebanon',
-            'iranian advisors lebanon', 'iran trainer lebanon',
-            'iran trainers lebanon', 'iran iranian advisors hezbollah',
-            'qaani lebanon visit', 'qaani beirut',
-            'qaani hezbollah meeting', 'qaani trip to lebanon',
-            'qaani in beirut', 'qaani secretly visit',
-            'esmail qaani lebanon', 'esmail qaani beirut',
-            'joint operations room iran hezbollah',
-            'joint operations room lebanon iran',
-            'iran hezbollah targeting cell',
-            'iran hezbollah command cell',
-            'iran command lebanon', 'iran orchestrating lebanon',
-            'iran orchestrates hezbollah', 'iran commands hezbollah',
-            'irgc embedded lebanon', 'iranian operatives lebanon',
-            # Persian
-            'فرمانده سپاه لبنان', 'مستشار ایرانی لبنان',
-            'مستشاران ایرانی لبنان',
-            'قاآنی بیروت', 'قاآنی لبنان',
-            'سفر قاآنی به لبنان', 'دیدار قاآنی',
-            'سپاه پاسداران لبنان',
-            'هماهنگی سپاه و حزب الله',
-            'مرکز عملیات مشترک لبنان',
-            'مرکز فرماندهی مشترک لبنان',
-            'مربیان ایرانی لبنان',
-            'افسر سپاه در بیروت',
-            # Arabic
-            'مستشار إيراني لبنان', 'مستشارون إيرانيون لبنان',
-            'فيلق القدس لبنان', 'فيلق القدس في لبنان',
-            'الحرس الثوري لبنان', 'الحرس الثوري في لبنان',
-            'قاآني بيروت', 'قاآني حزب الله',
-            'قاآني في بيروت', 'زيارة قاآني لبنان',
-            'إسماعيل قاآني لبنان', 'إسماعيل قاآني بيروت',
-            'ضباط إيرانيون بيروت', 'ضابط إيراني بيروت',
-            'غرفة عمليات مشتركة إيران حزب الله',
-            'غرفة العمليات المشتركة لبنان إيران',
-            'تنسيق إيراني مع حزب الله',
-            'تنسيق إيراني حزب الله',
-            'مدربون إيرانيون لبنان',
-            'مدرب إيراني لبنان',
-            'إيران توجه حزب الله',
-            'إيران تشرف على عمليات حزب الله',
         ],
         'baseline_statements_per_week': 10,
     },
@@ -346,47 +275,6 @@ ACTORS = {
             'إيران والبحر الأحمر', 'عمليات الحوثيين بدعم إيراني',
             'الحوثيون يطلقون', 'صاروخ الحوثيين',
             'هجوم الحوثيين', 'أنصار الله يهاجم',
-            # ── v1.3 (May 2026) — IRGC-Houthi specific command coordination ──
-            # Captures liaison officers, joint operations rooms, advisor language
-            # — directive command signals beyond generic "iran directs houthi"
-            # patterns above. Single rich source for cross-proxy command tempo.
-            'irgc liaison yemen', 'quds force yemen liaison',
-            'irgc officer sanaa', 'irgc commander yemen',
-            'iran quds force yemen', 'iranian advisor yemen',
-            'iranian advisors yemen', 'iran trainer yemen',
-            'iran trainers yemen', 'iran iranian advisors yemen',
-            'joint operations room iran houthi',
-            'joint operations room yemen iran',
-            'joint targeting yemen iran',
-            'iran houthi targeting cell', 'iran houthi command cell',
-            'irgc directs red sea operations',
-            'iran red sea operations room',
-            'iran orchestrates houthi', 'iran commands houthi',
-            'irgc embedded yemen', 'iranian operatives yemen',
-            'abdul reza shahlai',  # Documented Quds Force-Yemen point man
-            'shahlai yemen',
-            # Persian
-            'فرمانده سپاه یمن', 'مستشار ایرانی یمن',
-            'مستشاران ایرانی یمن',
-            'سپاه پاسداران یمن',
-            'مرکز عملیات مشترک یمن',
-            'مرکز فرماندهی مشترک یمن',
-            'هماهنگی سپاه و انصار الله',
-            'مربیان ایرانی یمن',
-            'افسر سپاه در صنعا',
-            # Arabic
-            'مستشار إيراني اليمن', 'مستشارون إيرانيون اليمن',
-            'فيلق القدس اليمن', 'فيلق القدس في اليمن',
-            'الحرس الثوري اليمن', 'الحرس الثوري في اليمن',
-            'ضباط إيرانيون صنعاء', 'ضابط إيراني صنعاء',
-            'غرفة عمليات مشتركة إيران الحوثيين',
-            'غرفة العمليات المشتركة اليمن إيران',
-            'تنسيق إيراني حوثي مباشر',
-            'تنسيق إيراني حوثي',
-            'مدربون إيرانيون اليمن',
-            'مدرب إيراني اليمن',
-            'إيران توجه الحوثيين',
-            'إيران تشرف على عمليات الحوثيين',
         ],
         'baseline_statements_per_week': 8,
         'tripwires': [
@@ -759,21 +647,6 @@ DOMESTIC_TRIGGERS = {
         'iran internet blackout', 'iran generals arrested',
         'اعتراضات گسترده ایران', 'سرکوب ایران',
         'احتجاجات واسعة في إيران',
-        # ── v1.3 (May 2026) — Mass / wave executions = regime hardening ──
-        'iran mass executions', 'iran wave of executions',
-        'iran multiple executions', 'iran execution wave',
-        'iran executes journalist', 'iran executes activist',
-        'iran executes dissident', 'iran executes protester',
-        'iran executes dual national', 'iran executes foreign national',
-        'iran executes kurd', 'iran executes baluch',
-        # Persian
-        'موج اعدام', 'اعدام دسته‌جمعی',
-        'اعدام روزنامه‌نگار', 'اعدام فعال',
-        'اعدام معترضان',
-        # Arabic
-        'موجة إعدامات', 'الإعدام الجماعي إيران',
-        'إعدام صحفي إيران', 'إعدام ناشط إيران',
-        'إعدام معارضين إيران',
     ],
     3: [
         'iran protests', 'iran demonstrations',
@@ -782,37 +655,12 @@ DOMESTIC_TRIGGERS = {
         'iran dissent', 'iran opposition',
         'اعتراض ایران', 'بحران اقتصادی',
         'احتجاجات إيران', 'الأزمة الاقتصادية الإيرانية',
-        # ── v1.3 (May 2026) — Specific named / acted executions ──
-        'iran executes', 'iran executed today',
-        'iran death sentence carried out', 'iran hangs prisoner',
-        'iran hangs activist', 'iran hangs dissident',
-        'iran judiciary executions', 'iran intelligence executes',
-        'iran executes minor', 'iran executes woman',
-        'iranian regime executes', 'tehran executes',
-        # Persian
-        'اعدام شد', 'اعدام انجام شد',
-        'قوه قضائیه اعدام',
-        'اعدام در زندان',
-        # Arabic
-        'إعدام في إيران', 'تنفيذ حكم الإعدام إيران',
-        'النظام الإيراني يعدم',
     ],
     2: [
         'iran inflation', 'iran sanctions', 'iran economy',
         'iran currency', 'iran unemployment',
         'تورم ایران', 'تحریم‌های ایران',
         'اقتصاد إيران', 'العقوبات على إيران',
-        # ── v1.3 (May 2026) — General execution language / death sentence announcements ──
-        'iran death penalty', 'iran death sentence',
-        'iran political prisoner sentenced',
-        'iran political prisoner death',
-        'iran sentences to death',
-        # Persian
-        'حکم اعدام', 'احکام اعدام',
-        'محکوم به اعدام',
-        # Arabic
-        'حكم الإعدام', 'حكم بالإعدام إيران',
-        'محكوم بالإعدام إيران',
     ],
     1: [
         'iran economy', 'iran people', 'iran society',
@@ -1075,6 +923,102 @@ def _redis_set(key, value, ttl=RHETORIC_CACHE_TTL):
     except Exception as e:
         print(f"[Iran Rhetoric Redis] SET error: {e}")
     return False
+
+
+# ============================================
+# COMMODITY PRESSURE READER (Phase 2B)
+# ============================================
+# Reads the shared commodity_tracker_cache Redis key (written by
+# commodity_tracker.py's periodic scan) and extracts Iran's exposure
+# summary in a shape the signal interpreter can consume.
+#
+# Iran has 5 commodity exposures (defined in commodity_tracker.py):
+#   oil, natural_gas, uranium, gold, wheat.
+#
+# Returns a dict with the Iran-specific summary, suitable for direct
+# injection as scan_data['commodity_pressure'].  Returns None on
+# failure or if Iran isn't found in the bundle.
+# ============================================
+
+def _read_iran_commodity_pressure():
+    """
+    Read commodity-pressure data for Iran from the shared
+    commodity_tracker_cache Redis key.
+
+    Returns a dict shaped like:
+        {
+            'commodity_pressure': float,       # Iran-specific score
+            'alert_level':        str,         # normal|elevated|high|surge
+            'commodity_summaries': [           # Iran's 5 commodities
+                {
+                    'commodity':           str,
+                    'name':                str,
+                    'icon':                str,
+                    'role':                str,
+                    'rank':                int|None,
+                    'note':                str,
+                    'signal_count':        int,
+                    'global_alert_level':  str,
+                    'global_signal_count': int,
+                    'global_total_score':  float,
+                },
+                ...
+            ],
+            'last_updated':       str,         # iso8601
+        }
+
+    Returns None on any failure -- callers should treat None as "no
+    commodity data available, skip the feature".
+    """
+    try:
+        bundle = _redis_get(COMMODITY_CACHE_KEY)
+        if not bundle or not isinstance(bundle, dict):
+            return None
+
+        country_summaries  = bundle.get('country_summaries', {}) or {}
+        commodity_summary  = bundle.get('commodity_summaries', {}) or {}
+        iran_country       = country_summaries.get('iran') or {}
+        if not iran_country:
+            # Iran not in the bundle yet (commodity tracker may have just
+            # started; commodity_tracker.py adds Iran in Phase 2A).
+            return None
+
+        # Iran-specific overall score + alert level
+        iran_score   = float(iran_country.get('total_score', 0) or 0)
+        iran_alert   = str(iran_country.get('alert_level', 'normal') or 'normal')
+
+        # Per-commodity breakdown for Iran (oil/natural_gas/uranium/gold/wheat)
+        iran_breakdown   = iran_country.get('commodity_signals', {}) or {}
+
+        commodity_summaries_out = []
+        for commodity_id, breakdown in iran_breakdown.items():
+            full = commodity_summary.get(commodity_id, {}) or {}
+            commodity_summaries_out.append({
+                'commodity':           commodity_id,
+                'name':                full.get('name', commodity_id.title()),
+                'icon':                full.get('icon', '📊'),
+                'role':                breakdown.get('role'),
+                'rank':                breakdown.get('rank'),
+                'note':                breakdown.get('note'),
+                'signal_count':        int(breakdown.get('signal_count', 0) or 0),
+                # Global pressure on this commodity (matters even when Iran
+                # itself is quiet -- e.g. global wheat surge → Iran the
+                # consumer feels it regardless of Iranian-actor language)
+                'global_alert_level':  str(full.get('alert_level', 'normal') or 'normal'),
+                'global_signal_count': int(full.get('signal_count', 0) or 0),
+                'global_total_score':  float(full.get('total_score', 0) or 0),
+            })
+
+        return {
+            'commodity_pressure':  iran_score,
+            'alert_level':         iran_alert,
+            'commodity_summaries': commodity_summaries_out,
+            'last_updated':        bundle.get('last_updated', bundle.get('cached_at')),
+        }
+
+    except Exception as e:
+        print(f"[Iran Rhetoric Commodity] Read error (non-fatal): {str(e)[:120]}")
+        return None
 
 
 # ============================================
@@ -2283,6 +2227,23 @@ def run_iran_rhetoric_scan(days=3):
     result['crosstheater_coordination'] = _detect_crosstheater_coordination(
         proxy_activation_level, proxy_detail
     )
+
+    # ── Commodity pressure (Phase 2B) ──
+    # Read from shared commodity_tracker_cache Redis key. Inject into
+    # scan_data BEFORE interpreter + build_top_signals so they can
+    # emit canonical commodity_pressure / dual_chokepoint / nuclear_signaling
+    # signals derived from oil/gas/uranium/gold/wheat exposure.
+    try:
+        commodity_data = _read_iran_commodity_pressure()
+        if commodity_data:
+            result['commodity_pressure'] = commodity_data
+            n_summaries = len(commodity_data.get('commodity_summaries', []))
+            iran_alert  = commodity_data.get('alert_level', 'normal')
+            print(f"[Iran Rhetoric] 🌾 Commodity pressure: alert={iran_alert}, {n_summaries} exposures")
+        else:
+            print(f"[Iran Rhetoric] ℹ️ Commodity pressure: no data (cache cold or Iran not in bundle yet)")
+    except Exception as e:
+        print(f"[Iran Rhetoric] ⚠️ Commodity read error (non-fatal): {str(e)[:120]}")
 
     # Signal interpretation — So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
