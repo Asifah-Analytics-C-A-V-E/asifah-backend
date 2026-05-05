@@ -402,6 +402,88 @@ def _match_historical(scan_data):
     return matches[:3]  # Return top 3 matches
 
 
+def _extract_commodity_signals(scan_data):
+    """
+    Phase 3 — extract commodity pressure signals for Israel.
+    Returns:
+        {
+          'has_signal':     bool,
+          'global_alert':   str,   # normal|elevated|high|surge
+          'wheat_surge':    bool,
+          'oil_pressure':   bool,
+          'watch_text':     str | None,   # always emitted if any pressure
+          'indicator_text': str | None,   # only if surge — promoted to key indicators
+        }
+    Returns has_signal=False if no commodity data or all clear.
+    """
+    cp = scan_data.get('commodity_pressure') or {}
+    summaries = cp.get('commodity_summaries') or []
+    global_alert = str(cp.get('alert_level', 'normal')).lower()
+
+    if not summaries or global_alert == 'normal':
+        return {'has_signal': False}
+
+    wheat_alert  = 'normal'
+    oil_alert    = 'normal'
+    elevated_commodities = []
+
+    for s in summaries:
+        cid    = str(s.get('commodity', '')).lower()
+        alert  = str(s.get('global_alert_level', 'normal')).lower()
+        if cid == 'wheat':
+            wheat_alert = alert
+        if cid == 'oil':
+            oil_alert = alert
+        if alert in ('high', 'surge'):
+            elevated_commodities.append((cid, alert))
+
+    if not elevated_commodities:
+        return {'has_signal': False}
+
+    # Watch list text — always emitted when any pressure detected
+    watch_parts = []
+    if wheat_alert in ('high', 'surge'):
+        watch_parts.append(f'wheat ({wheat_alert})')
+    if oil_alert in ('high', 'surge'):
+        watch_parts.append(f'oil ({oil_alert})')
+    other = [c for c, a in elevated_commodities if c not in ('wheat', 'oil')]
+    if other:
+        watch_parts.append('+ ' + ', '.join(other))
+
+    watch_text = (
+        'Commodity supply chain pressure: ' + ', '.join(watch_parts) +
+        ' — Black Sea grain corridor, Hormuz, Suez are bread/fuel chokepoints for Israel.'
+    )
+
+    # Key indicator text — only on surge (promoted to top-level indicator)
+    indicator_text = None
+    if global_alert == 'surge':
+        if wheat_alert == 'surge':
+            indicator_text = (
+                'Wheat in SURGE — bread inflation reaching coalition-stress threshold. '
+                'Israel imports ~80% of consumption; Black Sea or Suez disruption directly hits food security.'
+            )
+        elif oil_alert == 'surge':
+            indicator_text = (
+                'Oil in SURGE — fuel cost spike compounds wartime operational expense. '
+                'Eilat-Ashkelon pipeline + Mediterranean tankers = single-points-of-failure.'
+            )
+        else:
+            indicator_text = (
+                f'Commodity pressure index in SURGE across {len(elevated_commodities)} exposures — '
+                'multi-commodity stress on Israeli supply chains.'
+            )
+
+    return {
+        'has_signal':     True,
+        'global_alert':   global_alert,
+        'wheat_surge':    wheat_alert == 'surge',
+        'oil_pressure':   oil_alert in ('high', 'surge'),
+        'watch_text':     watch_text,
+        'indicator_text': indicator_text,
+    }
+
+
 def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     """
     Generate plain-language executive assessment from current signals.
@@ -560,6 +642,16 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     watch_items.append('IDF mobilization orders or reserve call-up announcements')
     watch_items.append('NOTAM closures over Israeli or Iranian airspace')
 
+    # ── Phase 3 commodity signals (May 5 2026) ──
+    # Promote SURGE-level commodity pressure to key_indicators (rare, high-signal).
+    # Always inject pressure into watch_list (broad situational awareness).
+    commodity_signals = _extract_commodity_signals(scan_data)
+    if commodity_signals.get('has_signal'):
+        if commodity_signals.get('indicator_text'):
+            indicators.insert(0, commodity_signals['indicator_text'])  # Prepend — high-priority signal
+        if commodity_signals.get('watch_text'):
+            watch_items.insert(0, commodity_signals['watch_text'])
+
     return {
         'scenario':          scenario,
         'scenario_color':    scenario_color,
@@ -567,7 +659,7 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         'situation':         ' '.join(situation_parts),
         'key_indicators':    indicators,
         'assessment':        ' '.join(assessment_parts),
-        'watch_list':        watch_items[:4],  # Top 4 most relevant
+        'watch_list':        watch_items[:5],  # Top 5 most relevant (was 4 — bumped to fit commodity)
         'generated_at':      datetime.now(timezone.utc).isoformat(),
         'confidence_note':   (
             'This assessment is generated algorithmically from open-source signal data. '
