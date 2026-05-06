@@ -684,9 +684,30 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'oil':          {'role': 'consumer',          'weight': 1.2,
                          'note': 'Net importer; Eilat-Ashkelon pipeline + Mediterranean tankers; Hormuz/Suez vulnerable'},
     },
+    'iran': {
+        # ── Producer side (war-degraded but structural) ──
+        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 6,
+                         'note': 'World #6 oil producer pre-strike (~3.2M bpd OPEC); also primary control of Strait of Hormuz transit (~20% of global oil). Kharg Island terminal struck Feb 2026; export capacity severely degraded. Hormuz closure remains active leverage even when production stalled.'},
+        'natural_gas':  {'role': 'producer',          'weight': 1.4, 'rank': 3,
+                         'note': 'World #3 natural gas reserves (~33.99 trillion cubic meters); South Pars supergiant (shared with Qatar) struck during 2026 strikes; export infrastructure limited even at peak'},
+        'uranium':      {'role': 'producer',          'weight': 1.3,
+                         'note': 'Domestic enrichment program (Natanz, Fordow); pre-strike enriched to 60%; not market commodity but strategic signaling vector. Tracker watches IAEA + nuclear language.'},
+        # ── Consumer side ──
+        'wheat':        {'role': 'consumer',          'weight': 1.4,
+                         'note': '~25-30% of consumption imported (~5-7M tonnes/yr); subsidized bread is the central political stability lever — wheat shortage = regime risk (1979 Revolution echo). Russian wheat primary import source; sanctions complicate payment routing.'},
+        'gold':         {'role': 'consumer',          'weight': 1.2,
+                         'note': 'Iran-Russia-China gold barter as sanctions evasion; Tehran Gold Exchange + bazaar physical demand surging during currency crisis; central bank reserves obscured but estimated ~$15-30B'},
+    },
     'lebanon': {
+        # ── Consumer side (acute import dependency) ──
         'wheat':        {'role': 'consumer',          'weight': 1.5,
                          'note': 'Critical import dependency: ~60-67% of wheat from Ukraine alone, ~80-90% combined Black Sea (UA+RU). National wheat reserves ~1 month — never rebuilt after 2020 Beirut port explosion destroyed national grain silos. 2022 Ukraine war caused immediate rationing and price spike. Active humanitarian crisis (1M+ displaced, 1.24M IPC Phase 3+ projected through Aug 2026) compounds wheat-import vulnerability — any Black Sea disruption is materially worse during humanitarian crisis. Watch: Black Sea grain corridor status, Russian wheat export taxes, Lebanese Mills Association statements.'},
+        'oil':          {'role': 'consumer',          'weight': 1.3,
+                         'note': 'Zero domestic refining capacity since post-2020 economic collapse; ~100% reliant on refined fuel imports (diesel/gasoline) for power generation, transport, and household generators. National grid produces only ~3-6 hours/day; private generators run the country. Fuel subsidy collapse (2021) means import disruption translates immediately to street-level cost-of-living crisis.'},
+        'natural_gas':  {'role': 'consumer',          'weight': 0.9,
+                         'note': 'Power generation increasingly LNG-dependent; offshore Mediterranean exploration (Block 8/9, Qana field) ongoing under TotalEnergies/ENI/QatarEnergy consortium following 2022 US-brokered maritime border agreement with Israel — no commercial finds confirmed yet, but represents long-term upside if Qana proves productive. Currently 100% importer despite aspirational producer status.'},
+        'corn':         {'role': 'consumer',          'weight': 0.8,
+                         'note': 'Animal feed import dependency mirrors Israel + Egypt patterns; livestock + poultry sector cost-driver; Black Sea corridor (Ukraine + Russia) primary source. Compounds wheat vulnerability — Lebanese household food costs amplified at every link of food supply chain.'},
     },
     'kazakhstan': {
         'uranium':      {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1878,62 +1899,210 @@ def _run_full_scan(days=7):
 # DASHBOARD INTEGRATION HELPER
 # ========================================
 
+# ============================================
+# COUNTRY EXPOSURE PROFILE + PROSE BUILDER (Phase 4 Gold Standard)
+# ============================================
+# Generates the canonical "always-shown" commodity exposure data for any country.
+# Returns static profile data (role, rank, note) + plain-English prose summary.
+# Independent of live signal data — describes what each country IS, not what's
+# happening this week.
+
+def _natural_join(items):
+    """Build a comma-separated list with 'and' before the last item."""
+    items = [i for i in items if i]
+    if not items:
+        return ''
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f'{items[0]} and {items[1]}'
+    return ', '.join(items[:-1]) + f', and {items[-1]}'
+
+
+def _build_country_prose(target):
+    """
+    Generate a plain-English commodity exposure paragraph for a country.
+    Reads from COUNTRY_COMMODITY_EXPOSURE — single source of truth.
+
+    Returns a 2-4 sentence summary suitable for a stability page header.
+    Falls back to a generic message if country not in registry.
+    """
+    profile = COUNTRY_COMMODITY_EXPOSURE.get(target)
+    if not profile:
+        return f"{target.title()} commodity exposure profile is not yet registered in the tracker."
+
+    # Bucket commodities by role
+    producer_items = []
+    consumer_items = []
+    transit_items  = []
+    for cid, cinfo in profile.items():
+        role = cinfo.get('role', '').lower()
+        rank = cinfo.get('rank')
+        # Build a label like "wheat (#1 producer)" or "oil (consumer)"
+        label = cid.replace('_', ' ')
+        if rank and role == 'producer':
+            label = f"{label} (#{rank} globally)"
+        if role == 'producer':
+            producer_items.append(label)
+        elif role == 'consumer':
+            consumer_items.append(label)
+        elif role == 'transit':
+            transit_items.append(label)
+
+    parts = []
+    target_name = target.replace('_', ' ').title()
+
+    # Producer sentence
+    if producer_items:
+        if len(producer_items) == 1:
+            parts.append(f"{target_name} is a producer of {producer_items[0]}.")
+        else:
+            parts.append(f"{target_name} is a producer of {_natural_join(producer_items)}.")
+
+    # Consumer sentence
+    if consumer_items:
+        if not producer_items:
+            parts.append(f"{target_name} is a major consumer of {_natural_join(consumer_items)}.")
+        else:
+            parts.append(f"It is also a major consumer of {_natural_join(consumer_items)}.")
+
+    # Transit sentence
+    if transit_items:
+        connector = "It is also" if (producer_items or consumer_items) else f"{target_name} is"
+        parts.append(f"{connector} a critical transit point for {_natural_join(transit_items)}.")
+
+    # Country-specific strategic appendix (the "why this matters" sentence)
+    appendix = _country_strategic_appendix(target, profile)
+    if appendix:
+        parts.append(appendix)
+
+    return ' '.join(parts)
+
+
+def _country_strategic_appendix(target, profile):
+    """
+    Country-specific strategic context line. Hand-tuned per country for
+    the unique geopolitical narrative each commodity profile implies.
+    Returns empty string if no special context applies.
+    """
+    appendices = {
+        'iran': (
+            "Iran's primary commodity leverage is the Strait of Hormuz, through which "
+            "approximately 20% of global oil transit passes. Its wheat dependency creates "
+            "domestic stability risk (1979 Revolution echo); its gold trade is the primary "
+            "sanctions evasion vehicle."
+        ),
+        'lebanon': (
+            "Lebanon's commodity vulnerability is structural — zero domestic refining capacity, "
+            "destroyed national grain silos (2020 Beirut port), and acute Black Sea import "
+            "dependency. Any combined wheat + fuel disruption translates directly to "
+            "street-level crisis. Mediterranean offshore exploration represents long-term "
+            "upside but no commercial production yet."
+        ),
+        'israel': (
+            "Israel is structurally tied to global supply chains — Mediterranean shipping, "
+            "Black Sea grain, and the Eilat-Ashkelon pipeline are single-points-of-failure for "
+            "food and fuel security. Domestic natural gas production (Leviathan/Tamar) provides "
+            "energy autonomy; consumer-side wheat and oil exposure remains the coalition stress lever."
+        ),
+        'ukraine': (
+            "Ukraine's pre-war agricultural exports anchored the Black Sea grain corridor — "
+            "wartime disruption directly impacts MENA food security (Egypt, Lebanon, Yemen). "
+            "Recovery of corridor capacity is the single largest commodity-flow signal in Europe."
+        ),
+        'russia': (
+            "Russia's commodity profile is structural global leverage — #1 wheat exporter, "
+            "#2 oil and gas producer, and a vehicle for sanctions-evading gold trade. "
+            "Western sanctions reroute (not replace) these flows."
+        ),
+        'china': (
+            "China's commodity profile is dual-natured — dominant rare earth + cobalt refining "
+            "creates supply leverage, while soybean and oil consumption creates demand-side "
+            "vulnerability. Trade war pressure points cut both ways."
+        ),
+        'belarus': (
+            "Belarus's potash production (Belaruskali) was sanctioned in 2021 but rebuilt routing "
+            "via Russian ports + China rail. Druzhba pipeline transit and Russian gas dependency "
+            "lock Belarus into the Russian commodity ecosystem."
+        ),
+    }
+    return appendices.get(target, '')
+
+
 def get_commodity_pressure(target):
     """
     Quick lookup for a country stability page. Returns the country's
     commodity exposure summary, ready to drop into a stability page card.
 
+    Phase 4 Gold Standard contract:
+      - ALWAYS returns the static exposure profile (one tile per registered commodity)
+      - ALWAYS returns the prose paragraph
+      - When live signal data is available, tiles upgrade with alert badges + sparklines
+      - When no live signal data, tiles show 'normal' alert + structural exposure data only
+
     Mirrors get_military_posture(target) signature.
     """
+    target = (target or '').lower().strip()
     try:
-        if target not in COUNTRY_COMMODITY_EXPOSURE:
+        # ── Static exposure profile (always available) ──
+        profile = COUNTRY_COMMODITY_EXPOSURE.get(target)
+        if not profile:
             return {
                 'success':              True,
                 'country':              target,
                 'commodity_pressure':   None,
-                'message':              f'No commodity exposure mapping for {target} (Phase 1 covers: belarus, russia, china, israel, ukraine).',
+                'message':              f'No commodity exposure mapping for {target}. Country not yet registered.',
                 'commodity_summaries':  [],
                 'top_signals':          [],
                 'alert_level':          'normal',
+                'prose':                _build_country_prose(target),
             }
 
-        data = scan_commodity_pressure()
-        country = data.get('country_summaries', {}).get(target, {})
-        if not country:
-            return {
-                'success':              True,
-                'country':              target,
-                'commodity_pressure':   0,
-                'alert_level':          'normal',
-                'commodity_summaries':  [],
-                'top_signals':          [],
-                'message':              'Awaiting first scan.',
-            }
+        # ── Live signal data (best-effort; fall back to static profile if scan fails) ──
+        try:
+            data = scan_commodity_pressure()
+        except Exception as scan_err:
+            print(f"[Commodity Pressure] Live scan failed for {target}, falling back to static profile: {scan_err}")
+            data = {'country_summaries': {}, 'commodity_summaries': {}, 'last_updated': None}
 
-        # Build a compact list of this country's commodity exposures with sparklines attached
+        country = data.get('country_summaries', {}).get(target, {}) or {}
+        country_signals = country.get('commodity_signals', {}) or {}
+
+        # ── Build commodity_summaries: ALWAYS one tile per registered commodity ──
+        # If live signal data exists for that commodity, merge it in. Otherwise use static.
         commodity_summaries = []
-        for commodity_id, breakdown in country.get('commodity_signals', {}).items():
-            full_summary = data.get('commodity_summaries', {}).get(commodity_id, {})
-            commodity_summaries.append({
-                'commodity':       commodity_id,
-                'name':            full_summary.get('name'),
-                'icon':            full_summary.get('icon'),
-                'tier':            full_summary.get('tier'),
-                'category':        full_summary.get('category'),
-                'role':            breakdown.get('role'),
-                'rank':            breakdown.get('rank'),
-                'note':            breakdown.get('note'),
-                'has_spot_price':  full_summary.get('has_spot_price'),
-                'unit':            full_summary.get('unit'),
-                'sparkline':       full_summary.get('sparkline'),
-                'signal_count':    breakdown.get('signal_count'),
-                'top_signals':     breakdown.get('top_signals', []),
-                # Global state of this commodity (from full_summary, not country breakdown)
-                # This is what country pages need to show "wheat is in SURGE globally"
+        for commodity_id, profile_entry in profile.items():
+            full_summary = data.get('commodity_summaries', {}).get(commodity_id, {}) or {}
+            live_breakdown = country_signals.get(commodity_id, {}) or {}
+
+            # Static fields (always from registry)
+            tile = {
+                'commodity':            commodity_id,
+                'name':                 full_summary.get('name', commodity_id.replace('_', ' ').title()),
+                'icon':                 full_summary.get('icon', '📊'),
+                'tier':                 full_summary.get('tier'),
+                'category':             full_summary.get('category'),
+                'role':                 profile_entry.get('role'),
+                'rank':                 profile_entry.get('rank'),
+                'note':                 profile_entry.get('note'),
+                'has_spot_price':       full_summary.get('has_spot_price'),
+                'unit':                 full_summary.get('unit'),
+                'sparkline':            full_summary.get('sparkline'),
+                # Live signal fields (zero/normal when no signals)
+                'signal_count':         live_breakdown.get('signal_count', 0),
+                'top_signals':          live_breakdown.get('top_signals', []),
                 'global_alert_level':   full_summary.get('alert_level', 'normal'),
                 'global_signal_count':  full_summary.get('signal_count', 0),
                 'global_total_score':   full_summary.get('total_score', 0),
-            })
+            }
+            commodity_summaries.append(tile)
+
+        # Sort: producers (with rank) first by rank, then transit, then consumers
+        def _sort_key(t):
+            role_priority = {'producer': 0, 'transit': 1, 'consumer': 2}.get(t.get('role'), 3)
+            rank = t.get('rank') or 999
+            return (role_priority, rank)
+        commodity_summaries.sort(key=_sort_key)
 
         return {
             'success':              True,
@@ -1944,19 +2113,35 @@ def get_commodity_pressure(target):
             'top_signals':          country.get('top_signals', [])[:8],
             'detail_url':           '/commodities.html',
             'last_updated':         data.get('last_updated'),
+            'prose':                _build_country_prose(target),
+            'profile_count':        len(profile),
+            'has_live_data':        bool(country),
         }
 
     except Exception as e:
         print(f"[Commodity Pressure] Error for {target}: {str(e)[:200]}")
-        return {
-            'success':            False,
-            'country':            target,
-            'commodity_pressure': 0,
-            'alert_level':        'normal',
-            'commodity_summaries': [],
-            'top_signals':        [],
-            'error':              str(e)[:120],
-        }
+        # Even on error, try to return the static profile for graceful degradation
+        try:
+            return {
+                'success':            False,
+                'country':            target,
+                'commodity_pressure': 0,
+                'alert_level':        'normal',
+                'commodity_summaries': [],
+                'top_signals':        [],
+                'error':              str(e)[:120],
+                'prose':              _build_country_prose(target),
+            }
+        except Exception:
+            return {
+                'success':            False,
+                'country':            target,
+                'commodity_pressure': 0,
+                'alert_level':        'normal',
+                'commodity_summaries': [],
+                'top_signals':        [],
+                'error':              str(e)[:120],
+            }
 
 
 # ========================================
