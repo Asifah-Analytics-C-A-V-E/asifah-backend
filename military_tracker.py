@@ -636,6 +636,101 @@ MILITARY_ACTORS = {
         ]
     },
 
+    'japan': {
+        'name': 'Japan',
+        'flag': '🇯🇵',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.8,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # ── Maritime presence / Taiwan Strait transit ──
+            'jmsdf taiwan strait', 'japan warship taiwan strait',
+            'japan destroyer taiwan strait', 'js ikazuchi', 'js ise',
+            'japan maritime self-defense force', 'japan taiwan strait transit',
+            'jmsdf destroyer', 'japan freedom of navigation',
+            'jmsdf deployment', 'japan helicopter destroyer',
+
+            # ── Senkaku / Diaoyu (China–Japan flashpoint) ──
+            'senkaku islands', 'senkaku incursion', 'senkaku intrusion',
+            'diaoyu islands japan', 'chinese vessels senkaku',
+            'japan coast guard senkaku', 'jcg senkaku', 'jcg patrol',
+            'japan coast guard china', 'china coast guard senkaku',
+            'east china sea japan', 'japan east china sea standoff',
+
+            # ── Okinawa / Ryukyu / Southwest islands ──
+            'okinawa us base', 'okinawa military', 'futenma', 'henoko',
+            'yonaguni deployment', 'miyako missile', 'ishigaki garrison',
+            'southwest islands defense', 'ryukyu deployment',
+            'japan southwest islands', 'okinawa marines',
+            'japan amphibious rapid deployment brigade',
+
+            # ── Strike capability / counter-strike ──
+            'tomahawk japan', 'long-range strike japan',
+            'japan counter-strike capability', 'japan counterstrike',
+            'type 12 missile', 'japan hypersonic',
+            'jsdf stand-off missile', 'japan strike posture',
+            'japan stand-off defense', 'japan missile deployment',
+
+            # ── JSDF deployments / scrambles ──
+            'jsdf scramble', 'asdf intercept', 'japan air defense scramble',
+            'japan air self-defense force', 'japan ground self-defense force',
+            'self-defense force exercise', 'japan-us joint exercise',
+            'us-japan exercise', 'jsdf deployment',
+
+            # ── Taiwan defense rhetoric (constitutional) ──
+            'article 9 japan', 'article 9 reinterpretation',
+            'collective self-defense taiwan', 'japan taiwan defense',
+            'potentially critical situation', 'existential threat taiwan',
+            'takaichi taiwan', 'takaichi defense', 'japan taiwan contingency',
+            'japan taiwan emergency',
+
+            # ── Regional alliance posture ──
+            'quad military exercise', 'aukus japan', 'japan-philippines defense',
+            'japan-philippines security', 'japan-australia exercise',
+            'us-japan-korea trilateral', 'japan reciprocal access agreement',
+            'japan raa', 'japan-uk military', 'japan nato',
+
+            # ── DPRK threat axis (Japan as missile target) ──
+            'north korea missile japan', 'dprk missile japan',
+            'j-alert', 'missile flies over japan', 'missile defense japan',
+            'aegis ashore japan', 'sm-3 japan', 'japan missile shield',
+            'kim missile japan',
+
+            # ── Russia far east (Japan-Russia) ──
+            'northern territories', 'kuril islands japan',
+            'russia japan exercise', 'russian bombers hokkaido',
+            'tsushima strait russia', 'russia japan tension',
+            'russia far east japan',
+
+            # ── Embassy / diplomatic incident category ──
+            'japan embassy beijing', 'chinese embassy tokyo',
+            'jgsdf officer embassy', 'diplomatic incident japan china',
+            'japan china embassy incident',
+
+            # ── Defense budget / posture ──
+            'japan defense budget', 'japan rearmament', 'japan 2 percent gdp',
+            'japan defense spending', 'japan national security strategy',
+            'japan defense buildup', 'kishida defense', 'takaichi defense budget',
+
+            # ── Eastern Theater Command pressure (Japan as target) ──
+            'eastern theater command okinawa', 'pla eastern theater japan',
+            'pla aircraft japan', 'chinese drone japan',
+            'pla navy okinawa', 'pla east china sea',
+
+            # ── Japanese language signals ──
+            '自衛隊', '尖閣諸島', '台湾海峡', '反撃能力',
+            '高市', '中国軍', '北朝鮮ミサイル', '南西諸島',
+            '海上自衛隊', '航空自衛隊', '陸上自衛隊',
+            '日米同盟', 'スクランブル',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=jsdf+OR+%22japan+self-defense%22+OR+japan+military&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=senkaku+OR+%22japan+china+military%22+OR+japan+taiwan+strait&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=okinawa+military+OR+japan+missile+OR+japan+strike+capability&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
     'north_korea': {
         'name': 'North Korea',
         'flag': '🇰🇵',
@@ -3369,6 +3464,72 @@ def fetch_nitter_military(days=7):
     return all_posts
 
 
+# ========================================
+# DATA FETCHING — BlueSky (global-scope aggregator)
+# ========================================
+# Added May 6 2026. Replaces Nitter (which has been chronically failing).
+# Pulls posts from accounts marked with '*' target scope across the regional
+# bluesky_signals_* modules. These are the global-relevance accounts:
+# POTUS, SecDef, SecState, INDOPACOM, OSINT Defender, WarTranslated, etc.
+#
+# Pattern: Option A — reuse existing per-theater modules rather than building
+# a parallel military-specific account list. Each module already exposes its
+# globally-relevant accounts via the '*' scope flag.
+
+def fetch_bluesky_military_aggregated(days=7):
+    """Aggregate BlueSky posts from global-scoped ('*') accounts across all
+    regional bluesky_signals_* modules. Returns list of article dicts ready
+    for downstream military signal analysis.
+    Non-fatal: any module that fails to import is silently skipped."""
+    all_posts = []
+    seen_urls = set()
+
+    # ── Asia module ──
+    try:
+        from bluesky_signals_asia import fetch_bluesky_for_target as fetch_asia
+        # 'china' is just a target key — accounts marked '*' will return
+        # regardless of which target we pass. Theatre-specific accounts
+        # (PLA Primer, etc.) are still pulled but they're high-signal anyway.
+        asia_posts = fetch_asia('china', days=days, max_posts_per_account=15)
+        for p in asia_posts:
+            url = p.get('url', '')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                p['feed_type'] = 'bluesky'
+                all_posts.append(p)
+    except Exception as e:
+        print(f"[Military BlueSky] Asia module error (non-fatal): {str(e)[:100]}")
+
+    # ── Middle East module ──
+    try:
+        from bluesky_signals_me import fetch_bluesky_for_target as fetch_me
+        me_posts = fetch_me('iran', days=days, max_posts_per_account=15)
+        for p in me_posts:
+            url = p.get('url', '')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                p['feed_type'] = 'bluesky'
+                all_posts.append(p)
+    except Exception as e:
+        print(f"[Military BlueSky] ME module error (non-fatal): {str(e)[:100]}")
+
+    # ── Western Hemisphere module ──
+    try:
+        from bluesky_signals_wha import fetch_bluesky_for_target as fetch_wha
+        wha_posts = fetch_wha('cuba', days=days, max_posts_per_account=15)
+        for p in wha_posts:
+            url = p.get('url', '')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                p['feed_type'] = 'bluesky'
+                all_posts.append(p)
+    except Exception as e:
+        print(f"[Military BlueSky] WHA module error (non-fatal): {str(e)[:100]}")
+
+    print(f"[Military BlueSky] Total aggregated posts: {len(all_posts)}")
+    return all_posts
+
+
 def fetch_all_defense_rss():
     """Fetch articles from all configured defense RSS feeds"""
     all_articles = []
@@ -3834,11 +3995,31 @@ def fetch_all_gdelt_military(days=7):
         'India Pakistan line of control',
         'India missile test Agni',
         'India military exercise',
-        # Japan
+        # Japan — expanded May 6 2026 (Takaichi-era posture changes)
         'Japan JSDF scramble China',
         'Japan North Korea missile alert',
         'Japan defense budget rearmament',
         'Senkaku islands China Japan',
+        'JMSDF Taiwan Strait transit',
+        'Japan Taiwan defense Takaichi',
+        'Japan Article 9 reinterpretation',
+        'Japan counter-strike capability Tomahawk',
+        'Okinawa PLA pressure',
+        'Japan Philippines security cooperation',
+        'JGSDF officer Chinese Embassy incident',
+        'Japan long-range strike deployment',
+        'Eastern Theater Command Japan',
+        'Yonaguni Miyako Ishigaki garrison',
+    ]
+
+    japanese_queries = [
+        '自衛隊 中国',
+        '尖閣諸島 中国',
+        '高市 台湾',
+        '反撃能力 配備',
+        '北朝鮮 ミサイル 日本',
+        '南西諸島 防衛',
+        '日米共同訓練',
     ]
 
     korean_queries = [
@@ -3982,6 +4163,7 @@ def fetch_all_gdelt_military(days=7):
         (korean_queries, 'kor', 'Korean'),
         (urdu_queries, 'urd', 'Urdu'),
         (spanish_queries, 'spa', 'Spanish'),
+        (japanese_queries, 'jpn', 'Japanese'),
     ]
 
     for queries, lang_code, lang_name in query_blocks:
@@ -4089,6 +4271,85 @@ def fetch_all_newsapi_military(days=7):
 # ========================================
 # DATA FETCHING — Reddit
 # ========================================
+
+# ========================================
+# DATA FETCHING — Brave Search (tertiary fallback)
+# ========================================
+# Added May 6 2026. Free tier: 2000 queries/month, 1 req/sec.
+# Pattern: only fires when GDELT + NewsAPI combined return < 10 articles
+# (i.e., both upstream sources failed or rate-limited). Same pattern as
+# WHA backend.
+
+BRAVE_API_KEY = os.environ.get('BRAVE_API_KEY')
+BRAVE_API_URL = 'https://api.search.brave.com/res/v1/news/search'
+
+
+def fetch_brave_military(query, days=7):
+    """Fetch military articles from Brave Search News API (tertiary fallback).
+    Returns empty list if no API key configured or request fails."""
+    if not BRAVE_API_KEY:
+        return []
+    headers = {
+        'Accept':              'application/json',
+        'Accept-Encoding':     'gzip',
+        'X-Subscription-Token': BRAVE_API_KEY,
+    }
+    params = {
+        'q':           query,
+        'count':       20,
+        'freshness':   'pw' if days <= 7 else 'pm',  # past week / past month
+        'spellcheck':  'false',
+    }
+    try:
+        response = requests.get(BRAVE_API_URL, headers=headers, params=params, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            results = data.get('results', []) or []
+            articles = []
+            for r in results:
+                articles.append({
+                    'title':       r.get('title', '')[:200],
+                    'description': r.get('description', '')[:500],
+                    'url':         r.get('url', ''),
+                    'publishedAt': r.get('age', '') or r.get('page_age', ''),
+                    'source':      {'name': (r.get('meta_url', {}) or {}).get('hostname', 'Brave')},
+                    'content':     r.get('description', '')[:500],
+                    'feed_type':   'brave',
+                })
+            return articles
+        return []
+    except Exception:
+        return []
+
+
+def fetch_all_brave_military(days=7):
+    """Fetch military articles from Brave Search across high-priority queries.
+    Only fires as a tertiary fallback — keeps the query list short to respect
+    the 2000/month free tier quota. Brave's strength is recency and de-Googling
+    coverage gaps, not breadth."""
+    if not BRAVE_API_KEY:
+        return []
+    queries = [
+        # Highest-signal global military queries (mirror GDELT priorities)
+        'military deployment escalation',
+        'carrier strike group deployment',
+        'PLA Taiwan Strait incursion',
+        'JSDF scramble China',
+        'Senkaku islands incursion',
+        'Iran military strike',
+        'Israel IDF operation',
+        'North Korea missile launch',
+        'Russia Ukraine military',
+        'NATO eastern flank deployment',
+    ]
+    all_articles = []
+    for query in queries:
+        articles = fetch_brave_military(query, days)
+        all_articles.extend(articles)
+        time.sleep(1.0)  # Brave free tier: 1 req/sec hard limit
+    print(f"[Military Brave] Total Brave military articles: {len(all_articles)}")
+    return all_articles
+
 
 def fetch_reddit_military(days=7):
     """Fetch military-related Reddit posts"""
@@ -4374,6 +4635,15 @@ def _run_full_scan(days=7):
     newsapi_articles = fetch_all_newsapi_military(days)
     reddit_posts = fetch_reddit_military(days)
 
+    # Brave tertiary fallback — fires only when GDELT+NewsAPI underperformed.
+    # Threshold: <10 combined articles signals upstream failure or rate limit.
+    brave_articles = []
+    if (len(gdelt_articles) + len(newsapi_articles)) < 10:
+        print(f"[Military Tracker] Upstream sparse (GDELT={len(gdelt_articles)}, NewsAPI={len(newsapi_articles)}); firing Brave fallback")
+        brave_articles = fetch_all_brave_military(days)
+    else:
+        print(f"[Military Tracker] Upstream healthy (GDELT={len(gdelt_articles)}, NewsAPI={len(newsapi_articles)}); skipping Brave")
+
     telegram_articles = []
     if TELEGRAM_AVAILABLE:
         try:
@@ -4393,25 +4663,46 @@ def _run_full_scan(days=7):
         except Exception as e:
             print(f"[Military Tracker] Telegram error: {str(e)[:100]}")
 
-    # Nitter OSINT accounts
-    nitter_articles = []
-    try:
-        nitter_posts = fetch_nitter_military(days=days)
-        for p in nitter_posts:
-            nitter_articles.append({
-                'title':       p.get('title', '')[:200],
-                'description': p.get('title', '')[:500],
-                'url':         p.get('url', ''),
-                'publishedAt': p.get('publishedAt', ''),
-                'source':      p.get('source', {'name': 'Nitter'}),
-                'content':     p.get('title', '')[:500],
-                'feed_type':   'nitter',
-            })
-        print(f"[Military Tracker] Nitter: {len(nitter_articles)} posts")
-    except Exception as e:
-        print(f"[Military Tracker] Nitter error: {str(e)[:100]}")
+    # ─────────────────────────────────────────────────────────────
+    # Nitter OSINT accounts — DEPRECATED May 6 2026
+    # Nitter has been chronically failing across all theaters.
+    # Migrating to BlueSky aggregator below. Code preserved (commented)
+    # for emergency rollback if BlueSky migration has issues.
+    # ─────────────────────────────────────────────────────────────
+    # nitter_articles = []
+    # try:
+    #     nitter_posts = fetch_nitter_military(days=days)
+    #     for p in nitter_posts:
+    #         nitter_articles.append({
+    #             'title':       p.get('title', '')[:200],
+    #             'description': p.get('title', '')[:500],
+    #             'url':         p.get('url', ''),
+    #             'publishedAt': p.get('publishedAt', ''),
+    #             'source':      p.get('source', {'name': 'Nitter'}),
+    #             'content':     p.get('title', '')[:500],
+    #             'feed_type':   'nitter',
+    #         })
+    #     print(f"[Military Tracker] Nitter: {len(nitter_articles)} posts")
+    # except Exception as e:
+    #     print(f"[Military Tracker] Nitter error: {str(e)[:100]}")
+    nitter_articles = []  # legacy — kept for downstream concatenation compat
 
-    all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles + nitter_articles
+    # ─────────────────────────────────────────────────────────────
+    # BlueSky OSINT — global '*'-scoped accounts from regional modules
+    # Aggregates POTUS, SecDef, INDOPACOM, OSINT Defender, WarTranslated,
+    # State Dept, etc. — accounts marked with '*' target scope across the
+    # bluesky_signals_asia, bluesky_signals_me, bluesky_signals_wha modules.
+    # Theatre-specific accounts (e.g. NK News for DPRK) are pulled by
+    # the rhetoric trackers, not here.
+    # ─────────────────────────────────────────────────────────────
+    bluesky_articles = []
+    try:
+        bluesky_articles = fetch_bluesky_military_aggregated(days=days)
+        print(f"[Military Tracker] BlueSky: {len(bluesky_articles)} posts from global-scoped accounts")
+    except Exception as e:
+        print(f"[Military Tracker] BlueSky error (non-fatal): {str(e)[:100]}")
+
+    all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles + nitter_articles + bluesky_articles + brave_articles
 
     print(f"[Military Tracker] Total articles to analyze: {len(all_articles)}")
 
