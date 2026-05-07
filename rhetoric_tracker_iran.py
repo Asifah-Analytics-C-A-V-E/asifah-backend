@@ -809,6 +809,229 @@ SOFT_POWER_KEYWORDS = {
     ],
 }
 
+
+# ============================================
+# REGIME SIGNALS (May 7 2026)
+# Six sub-detection ladders for structural shifts in the international system.
+# Distinct from kinetic/nuclear/proxy axes — these measure the post-1971 dollar
+# order, sanctions architecture, OPEC discipline, and arms-trade flows.
+# Each fires from Iran-origin content and writes to the cross-theater
+# fingerprint for the convergence registry to consume.
+# ============================================
+
+# Sub-signal 1: Gold-for-Oil / Sanctions Evasion Behavior
+# Feeds: sanctions_evasion_cluster, financial_system_fragmentation
+# FIRING TODAY (5/7/2026): Iran gold market SURGE — L4 economic
+GOLD_FOR_OIL_TRIGGERS = {
+    5: [
+        'gold for oil settlement confirmed', 'iran oil settled gold',
+        'tehran bourse surge gold', 'iranian oil paid gold',
+        'gold-backed oil trade iran',
+        'تسویه طلا نفت', 'النفط بالذهب إيران',
+    ],
+    4: [
+        'iran gold market surge', 'gold for oil iran',
+        'tehran bourse gold', 'sepah bank gold',
+        'iran sanctions evasion gold', 'iranian gold reserves',
+        'gold-denominated oil iran', 'iran circumvent sanctions gold',
+        'shadow fleet gold payment', 'iran gold yuan settlement',
+        'بازار طلا ایران', 'بانک سپه طلا',
+        'الذهب الإيراني', 'إيران تتحايل العقوبات',
+    ],
+    3: [
+        'iran gold reserves growing', 'iran central bank gold',
+        'iranian gold accumulation', 'iran gold purchase',
+        'sanctions evasion iran', 'iran circumvents sanctions',
+        'iran shadow oil trade', 'iran sanctions workaround',
+        'تجارت طلا ایران', 'دور زدن تحریم',
+        'تجارة الذهب الإيرانية', 'الالتفاف على العقوبات',
+    ],
+    2: [
+        'iran sanctions impact', 'iran sanctions evasion',
+        'iran gold trade', 'iran reserves',
+        'iran financial pressure',
+        'تحریم ایران طلا', 'العقوبات الإيرانية',
+    ],
+    1: [
+        'iran sanctions', 'iran gold', 'tehran bourse',
+        'تحریم', 'الذهب', 'بورس تهران',
+    ],
+}
+
+# Sub-signal 2: Dedollarization Rhetoric (Iranian leadership / MFA / state media)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+DEDOLLARIZATION_TRIGGERS = {
+    5: [
+        'iran abandons dollar', 'iran dollar trade banned',
+        'iran exits dollar system', 'iran dollar-free trade',
+        'ایران ترک دلار', 'إيران تتخلى عن الدولار',
+    ],
+    4: [
+        'iran non-dollar trade', 'iran de-dollarization',
+        'iran dollar replacement', 'iran resistance economy',
+        'iran swift alternative', 'iran economic sovereignty',
+        'iran financial independence west',
+        'اقتصاد مقاومتی', 'اقتصاد المقاومة',
+        'استقلال مالی ایران', 'الاستقلال المالي',
+    ],
+    3: [
+        'iran swift sanctions', 'iran payment alternative',
+        'iran non-western trade', 'iran multipolar economy',
+        'iran financial sovereignty', 'iran sanctions-resistant',
+        'iran trade in national currencies',
+        'سوئیفت ایران', 'سويفت إيران',
+        'استقلال اقتصادی', 'الاستقلال الاقتصادي',
+    ],
+    2: [
+        'iran economic resistance', 'iran trade sanctions',
+        'iran financial system', 'iran swift',
+        'مقاومت اقتصادی', 'الاقتصاد المقاوم',
+    ],
+    1: [
+        'iran economy', 'iran trade', 'resistance economy',
+        'اقتصاد ایران', 'الاقتصاد الإيراني',
+    ],
+}
+
+# Sub-signal 3: Yuan Settlement (China-Iran specific trade behavior)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+# Distinct from rhetoric: this is BEHAVIOR (actual yuan-denominated trade)
+YUAN_SETTLEMENT_TRIGGERS = {
+    5: [
+        'iran china oil yuan confirmed', 'iran sells oil yuan settled',
+        'iran-china yuan trade scaled', 'petroyuan iran china',
+        'پتروپوآن ایران چین', 'البترويوان الإيراني',
+    ],
+    4: [
+        'iran yuan settlement', 'iran china yuan trade',
+        'iran oil yuan', 'iran-china rmb',
+        'iran cips integration', 'iran china currency swap',
+        'cross-border interbank payment iran', 'iran yuan oil',
+        'تسویه یوآن', 'التسوية باليوان',
+        'یوآن ایران چین', 'اليوان الإيراني الصيني',
+    ],
+    3: [
+        'iran china currency', 'iran yuan trade',
+        'iran rmb settlement', 'iran-china financial',
+        'iran china non-dollar', 'china iran payment',
+        'یوآن چین ایران', 'اليوان الصيني إيران',
+    ],
+    2: [
+        'iran china trade', 'iran china financial',
+        'iran china oil', 'china iran economy',
+        'تجارت ایران چین', 'التجارة الإيرانية الصينية',
+    ],
+    1: [
+        'iran china', 'china iran', 'yuan iran',
+        'ایران چین', 'إيران الصين',
+    ],
+}
+
+# Sub-signal 4: BRICS Alignment (multilateral system signaling)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+BRICS_ALIGNMENT_TRIGGERS = {
+    5: [
+        'iran brics formal member', 'iran brics integration complete',
+        'iran brics pay activated', 'iran ndb member',
+        'عضویت بریکس ایران', 'إيران بريكس عضوية',
+    ],
+    4: [
+        'iran brics summit', 'iran brics expansion',
+        'iran brics pay', 'iran brics payment system',
+        'iran new development bank', 'iran brics currency',
+        'iran brics financial', 'iran brics trade',
+        'بریکس ایران', 'بريكس إيران',
+    ],
+    3: [
+        'iran brics partnership', 'iran brics cooperation',
+        'iran multipolar order', 'iran shanghai cooperation',
+        'iran sco brics', 'iran multilateral trade',
+        'سازمان شانگهای ایران', 'منظمة شنغهاي إيران',
+    ],
+    2: [
+        'iran brics', 'iran sco',
+        'iran emerging economies', 'iran multipolar',
+        'بریکس', 'بريكس',
+    ],
+    1: [
+        'brics iran', 'shanghai cooperation',
+        'برکس', 'شنغهاي',
+    ],
+}
+
+# Sub-signal 5: OPEC Realignment (energy-bloc fragmentation)
+# Feeds: energy_bloc_consolidation
+# Anchored to UAE-leaving-OPEC story (per memory: 4/28/2026 Mamdouh Salameh signal)
+OPEC_REALIGNMENT_TRIGGERS = {
+    5: [
+        'iran exits opec', 'iran leaves opec',
+        'opec collapse iran', 'opec dissolved iran',
+        'خروج ایران اوپک', 'إيران تغادر أوبك',
+    ],
+    4: [
+        'iran outside opec quota', 'iran non-opec oil',
+        'iran china oil non-opec', 'iran defies opec',
+        'opec fragmentation iran', 'iran opec discipline',
+        'uae opec departure', 'uae leaves opec',
+        'gcc opec rift', 'saudi iran opec',
+        'iran opec realignment', 'iran energy bloc',
+        'اوپک ایران', 'أوبك إيران',
+        'تشکیل بلوک انرژی', 'كتلة الطاقة',
+    ],
+    3: [
+        'iran opec tension', 'iran opec quota',
+        'iran oil discipline', 'iran energy alliance',
+        'opec plus iran', 'iran russia oil cooperation',
+        'تنش اوپک ایران', 'توتر أوبك إيران',
+    ],
+    2: [
+        'iran opec', 'iran oil quota',
+        'iran energy market', 'opec iran',
+        'اوپک', 'أوبك',
+    ],
+    1: [
+        'iran oil market', 'opec', 'oil exporters',
+        'صادرکنندگان نفت', 'مصدري النفط',
+    ],
+}
+
+# Sub-signal 6: Iranian Arms Export (parallel arms trade ecosystem)
+# Feeds: arms_trade_realignment
+# Iran as SUPPLIER to Russia/Venezuela/proxy networks (Shahed exports primary signal)
+ARMS_EXPORT_TRIGGERS = {
+    5: [
+        'iran exports advanced missiles', 'iran ships ballistic missiles abroad',
+        'iran arms major non-state actor confirmed',
+        'صادرات موشک ایران', 'صواريخ إيرانية مصدرة',
+    ],
+    4: [
+        'iran shahed export', 'iran drone export russia',
+        'iran weapons russia ukraine', 'iran arms venezuela',
+        'iran missile export', 'irgc export drones',
+        'iran arms transfer confirmed', 'shahed-136 export',
+        'iran ballistic export', 'iran weapons supplier',
+        'صادرات شاهد', 'تصدير شاهد',
+        'صادرات تسلیحات ایران', 'تصدير الأسلحة الإيرانية',
+    ],
+    3: [
+        'iran arms supplier', 'iran weapons supply',
+        'iran drone transfer', 'iran missile transfer',
+        'iran defense export', 'iran arms deal',
+        'iran weapons proliferation', 'iran arms partner',
+        'تامین تسلیحات ایران', 'توريد الأسلحة الإيرانية',
+    ],
+    2: [
+        'iran defense industry', 'iran arms cooperation',
+        'iran military export', 'iran defense partnership',
+        'صنایع دفاعی ایران', 'الصناعات الدفاعية الإيرانية',
+    ],
+    1: [
+        'iran weapons', 'iran arms', 'iran defense',
+        'تسلیحات ایران', 'الأسلحة الإيرانية',
+    ],
+}
+
+
 # ============================================
 # SPECIFICITY SCORER
 # ============================================
