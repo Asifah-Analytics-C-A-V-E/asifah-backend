@@ -315,8 +315,63 @@ COMMODITY_TYPES = {
         ],
         'top_producers':  ['taiwan', 'south_korea', 'japan', 'usa', 'netherlands', 'china'],
         'top_consumers':  ['china', 'usa', 'eu', 'japan', 'south_korea', 'taiwan'],
-    },
-    'silver': {
+
+        # ════════════════════════════════════════════════════════════════
+        # CAVE BREADCRUMBS (May 7 2026) — annotations for future investment
+        # overlay. NOT consumed by Asifah; reserved for CAVE schema work.
+        # See: conversation thread May 7 2026 (Rachel + Peter, Path A decision).
+        # When CAVE work begins, these may migrate to a separate
+        # commodity_investment_overlay.py file rather than living inline here.
+        # ════════════════════════════════════════════════════════════════
+        'decomposition_hint': {
+            'future_sub_categories': [
+                'foundry',     # leading-edge logic (TSM, Samsung Foundry)
+                'memory',      # DRAM/NAND (Micron, SK Hynix, Samsung)
+                'equipment',   # ASML, AMAT, LRCX, KLAC, TEL — picks-and-shovels
+                'design',      # NVDA, AMD, AVGO, QCOM — AI accelerator scarcity
+                'materials',   # Shin-Etsu, SUMCO, JSR — wafers + photoresist
+                'legacy',      # UMC, GlobalFoundries, SMIC — mature node cyclical
+            ],
+            'rationale': (
+                'Unified in v1 for geopolitical signal concentration: TSM as '
+                'foundry-weighted proxy captures the strategic chokepoint '
+                '(~60% global foundry, ~90% leading-edge) where Asifah\'s lens '
+                'matters most. CAVE will need to split into sub-markets that '
+                'move differently and represent different theses: foundry tracks '
+                'AI capex cycle, memory is cyclical-commodity-like, equipment is '
+                'picks-and-shovels for capex booms. Country exposure entries will '
+                'also need re-splitting (Taiwan = foundry #1, Korea = memory #1, '
+                'Netherlands = equipment #1).'
+            ),
+            'decided_at':  '2026-05-07',
+            'decided_by':  'Rachel + Peter (Path A — ship unified, decompose later)',
+        },
+        'market_impact': {
+            # Heuristic only — directionality may be commodity-specific.
+            # CAVE will replace with calibrated betas + asymmetric exposure
+            # (e.g. NVDA benefits from AI demand surge, but TSM benefits from
+            # ANY semiconductor demand — different beta profiles).
+            'price_up':   {'producers': 'benefit', 'consumers': 'hurt'},
+            'price_down': {'producers': 'hurt',    'consumers': 'benefit'},
+        },
+        'market_proxies': {
+            # Tradable instruments associated with this commodity.
+            # CAVE bridge from signal → trade. Note that exposure type varies:
+            # ETFs are diversified semi exposure; individual equities have
+            # specific theses (TSM = foundry/Taiwan-risk; NVDA = AI accelerator;
+            # ASML = EUV monopoly; 005930.KS = Samsung memory).
+            'etfs':     ['SOXX', 'SMH'],
+            'equities': [
+                'TSM',         # TSMC ADR — foundry/Taiwan risk
+                'NVDA',        # AI accelerator design
+                'AMD',         # AI accelerator design
+                'AVGO',        # broad design + networking
+                'ASML',        # EUV equipment monopoly (Netherlands)
+                '005930.KS',   # Samsung Electronics — memory + foundry (Korea)
+                'MU',          # Micron — memory (US)
+                'INTC',        # Intel — IDM + foundry reshoring (US)
+            ],
+            'futures':  None,  # no liquid semiconductor
         'name': 'Silver',
         'icon': '🪙',
         'tier': 2,
