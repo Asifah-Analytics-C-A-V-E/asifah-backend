@@ -1108,6 +1108,59 @@ def _score_specificity(text):
 
 
 # ============================================
+# REGIME SIGNAL SUB-SCORER (May 7 2026)
+# Mirrors china tracker's _score_china_iran_axis_subscores pattern.
+# Runs all six regime-signal ladders against the article corpus and
+# returns per-dimension max levels. Output flows to (a) the
+# cross-theater fingerprint write, and (b) the score modifier.
+# ============================================
+def _score_iran_regime_signals(articles):
+    """
+    Score each regime-signal dimension separately.
+    Returns dict: {
+        'gold_for_oil':       0-5,
+        'dedollarization':    0-5,
+        'yuan_settlement':    0-5,
+        'brics_alignment':    0-5,
+        'opec_realignment':   0-5,
+        'arms_export':        0-5,
+        'max':                0-5,  # highest across all dimensions
+        'active_count':       int,  # count of dimensions at L3+
+    }
+    Active count is what feeds the score modifier (capped at +5 in
+    _calculate_rhetoric_score). Per-dimension levels are written to the
+    cross-theater fingerprint so the convergence registry can read them.
+    """
+    dimensions = {
+        'gold_for_oil':     GOLD_FOR_OIL_TRIGGERS,
+        'dedollarization':  DEDOLLARIZATION_TRIGGERS,
+        'yuan_settlement':  YUAN_SETTLEMENT_TRIGGERS,
+        'brics_alignment':  BRICS_ALIGNMENT_TRIGGERS,
+        'opec_realignment': OPEC_REALIGNMENT_TRIGGERS,
+        'arms_export':      ARMS_EXPORT_TRIGGERS,
+    }
+    scores = {dim: 0 for dim in dimensions}
+
+    for article in articles:
+        title = (article.get('title', '') or '').lower()
+        desc  = (article.get('description', '') or '').lower()
+        text  = f"{title} {desc}"
+
+        for dim, ladder in dimensions.items():
+            # Find highest level matched in this article for this dimension
+            for level in range(5, 0, -1):
+                phrases = ladder.get(level, [])
+                if any(phrase.lower() in text for phrase in phrases):
+                    if level > scores[dim]:
+                        scores[dim] = level
+                    break
+
+    scores['max'] = max(scores.values()) if scores else 0
+    scores['active_count'] = sum(1 for dim in dimensions if scores[dim] >= 3)
+    return scores
+
+
+# ============================================
 # REDIS HELPERS
 # ============================================
 def _redis_get(key):
@@ -1544,8 +1597,28 @@ def _write_crosstheater_signal(result):
             'salalah_targeted':       salalah_targeted,
             'duqm_logistics_active':  duqm_logistics_active,
             'oman_diplomatic_active': oman_diplomatic_active,
-        }
 
+            # ── Regime Signals (May 7 2026) — Convergence Registry Consumer Surface ──
+            # Per-dimension max levels for the 6 regime-signal sub-detection ladders.
+            # Read by convergence_registry entries: financial_system_fragmentation,
+            # dedollarization_drumbeat, sanctions_evasion_cluster, energy_bloc_consolidation,
+            # arms_trade_realignment. Active flag = level >= 3 (Directive or above).
+            'iran_gold_for_oil_level':     result.get('regime_signals', {}).get('gold_for_oil', 0),
+            'iran_gold_for_oil_active':    result.get('regime_signals', {}).get('gold_for_oil', 0) >= 3,
+            'iran_dedollarization_level':  result.get('regime_signals', {}).get('dedollarization', 0),
+            'iran_dedollarization_active': result.get('regime_signals', {}).get('dedollarization', 0) >= 3,
+            'iran_yuan_settlement_level':  result.get('regime_signals', {}).get('yuan_settlement', 0),
+            'iran_yuan_settlement_active': result.get('regime_signals', {}).get('yuan_settlement', 0) >= 3,
+            'iran_brics_alignment_level':  result.get('regime_signals', {}).get('brics_alignment', 0),
+            'iran_brics_alignment_active': result.get('regime_signals', {}).get('brics_alignment', 0) >= 3,
+            'iran_opec_realignment_level': result.get('regime_signals', {}).get('opec_realignment', 0),
+            'iran_opec_realignment_active': result.get('regime_signals', {}).get('opec_realignment', 0) >= 3,
+            'iran_arms_export_level':      result.get('regime_signals', {}).get('arms_export', 0),
+            'iran_arms_export_active':     result.get('regime_signals', {}).get('arms_export', 0) >= 3,
+            # Aggregate flags for convergence registry simple-AND logic
+            'iran_regime_signals_max':     result.get('regime_signals', {}).get('max', 0),
+            'iran_regime_signals_active':  result.get('regime_signals', {}).get('active_count', 0),
+        }
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
         print(f"[Iran Rhetoric] ✅ Command node fingerprint written (is_command_node: True)")
         if salalah_targeted or duqm_logistics_active or oman_diplomatic_active:
@@ -2248,9 +2321,17 @@ def classify_articles(articles, proxy_activation_level):
 # SCORING — Proxy Activation is a weighted input
 # ============================================
 def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
-                               actor_results, operation_true_promise_count):
+                               actor_results, operation_true_promise_count,
+                               regime_signals=None):
     """
     Weighted score with proxy activation as a direct input.
+
+    v1.2 (May 7 2026) — adds optional regime_signals parameter. When 3+ regime
+    signals fire at L3+, applies a capped +5 modifier reflecting that Iran is
+    contributing to structural-system fragmentation (parallel financial
+    infrastructure, OPEC realignment, arms trade realignment). The cap prevents
+    rhetoric noise from inflating the score; only L3+ (Directive level) signals
+    count toward the modifier.
     """
     irgc    = theatre_summary['irgc_direct_max']
     nuclear = theatre_summary['nuclear_max']
@@ -2295,6 +2376,19 @@ def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
     }
     base += diplomatic_modifier_map.get(diplomatic_level, 0)
 
+    # ── v1.2 (May 7 2026): Regime Signal Modifier (capped +5) ──
+    # When Iran is contributing to structural-system fragmentation
+    # (gold-for-oil, yuan settlement, OPEC realignment, arms exports),
+    # bump the score modestly. Capped so rhetoric noise can't dominate.
+    if regime_signals:
+        active_count = regime_signals.get('active_count', 0)
+        # +1 per active dimension (L3+), capped at +5
+        regime_modifier = min(active_count, 5)
+        if regime_modifier > 0:
+            base += regime_modifier
+            print(f"[Iran Rhetoric] 🌐 Regime signal modifier: +{regime_modifier} "
+                  f"({active_count} dimensions at L3+)")
+
     return max(0, min(100, int(base)))
 
 
@@ -2331,12 +2425,25 @@ def run_iran_rhetoric_scan(days=3):
     max_level = min(max_level, 5)
 
     rhetoric_score = _calculate_rhetoric_score(
-        theatre_summary, proxy_activation_level, actor_results, otp_count
+        theatre_summary, proxy_activation_level, actor_results, otp_count,
+        regime_signals=regime_signals
     )
 
     # Theatre specificity
     all_specs = theatre_summary.get('all_specificity_scores', [])
     theatre_specificity = round(sum(all_specs) / len(all_specs), 1) if all_specs else 0
+
+    # ── Regime Signals (May 7 2026) ──
+    # Six sub-detection ladders for structural shifts in the international system.
+    # Output feeds (a) cross-theater fingerprint, (b) score modifier (capped +5).
+    regime_signals = _score_iran_regime_signals(articles)
+    if regime_signals.get('active_count', 0) > 0:
+        active_dims = [d for d in
+                       ['gold_for_oil', 'dedollarization', 'yuan_settlement',
+                        'brics_alignment', 'opec_realignment', 'arms_export']
+                       if regime_signals.get(d, 0) >= 3]
+        print(f"[Iran Rhetoric] 🌐 Regime signals: {regime_signals['active_count']} active "
+              f"({', '.join(active_dims)}) — max L{regime_signals['max']}")
 
     scan_time = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
 
@@ -2396,6 +2503,12 @@ def run_iran_rhetoric_scan(days=3):
         'delta': None,
         'silence_anomalies': [],
         'crosstheater_coordination': [],
+
+        # ── Regime Signals (May 7 2026) ──
+        # Per-dimension max levels for cross-theater fingerprint + GPI consumption.
+        'regime_signals': regime_signals,
+        'regime_signals_active_count': regime_signals.get('active_count', 0),
+        'regime_signals_max_level':    regime_signals.get('max', 0),
 
         # Actors
         'actors': actor_results,
