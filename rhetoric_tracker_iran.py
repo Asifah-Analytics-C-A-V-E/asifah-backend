@@ -79,6 +79,7 @@ import time
 import requests
 import xml.etree.ElementTree as ET
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
@@ -2654,10 +2655,32 @@ def register_iran_rhetoric_routes(app):
     def iran_rhetoric():
         force = request.args.get('force', '').lower() in ('true', '1', 'yes')
         if force:
-            print("[Iran Rhetoric] Force refresh requested")
+            print("[Iran Rhetoric] Force refresh requested — running with 25s gateway-safe timeout")
+            # Iran scans take ~6 minutes; Render's gateway times out at 30s.
+            # Run scan in background thread with 25s ceiling. If it finishes in time,
+            # return fresh data. Otherwise return last cached response with a flag
+            # indicating a fresh scan is in progress — Render won't 502.
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(run_iran_rhetoric_scan)
+            executor.shutdown(wait=False)  # Let scan continue in background after timeout
             try:
-                result = run_iran_rhetoric_scan()
+                result = future.result(timeout=25)
                 return jsonify(result)
+            except FuturesTimeoutError:
+                print("[Iran Rhetoric] Force scan exceeded 25s — returning cached + scan_triggered flag")
+                cached = _redis_get(RHETORIC_CACHE_KEY) or _redis_get(RHETORIC_CACHE_KEY_LEGACY)
+                if cached:
+                    cached['cached'] = True
+                    cached['scan_triggered'] = True
+                    cached['scan_status'] = 'in_progress'
+                    cached['message'] = 'Fresh scan in progress (background). Cached data shown — refresh in 3-5 min for updated regime signals.'
+                    return jsonify(cached)
+                return jsonify({
+                    'success': False,
+                    'awaiting_scan': True,
+                    'scan_triggered': True,
+                    'message': 'Fresh scan triggered, no cached data available yet. Check back in 3-5 min.',
+                }), 503
             except Exception as e:
                 return jsonify({'success': False, 'error': str(e)[:200]}), 500
 
