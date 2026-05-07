@@ -290,6 +290,32 @@ COMMODITY_TYPES = {
         'top_producers':  ['china', 'usa', 'australia', 'myanmar', 'greenland'],
         'top_consumers':  ['china', 'japan', 'usa', 'eu'],
     },
+    'semiconductors': {
+        'name': 'Semiconductors',
+        'icon': '💎',
+        'tier': 1,
+        'category': 'strategic_chokepoint',
+        'has_spot_price': True,
+        'yahoo_ticker': 'TSM',           # TSMC ADR — ~60% of global foundry, ~90% of leading-edge nodes
+        'yahoo_proxies': ['SOXX', 'SMH'], # iShares Semiconductor ETF + VanEck Semiconductor ETF
+        'unit': 'USD (TSM ADR)',
+        'description': 'TSMC ADR (TSM) as primary proxy — TSMC manufactures ~60% of global foundry output and ~90% of leading-edge (sub-7nm) chips. SOXX/SMH ETFs track broader industry. Semiconductors are THE strategic chokepoint of 21st-century geopolitics: concentrated manufacturing + concentrated equipment supply (ASML EUV monopoly) + concentrated design (US-led) creates triple-leverage geometry. Taiwan blockade scenarios, China export controls, CHIPS Act reshoring, and ASML restrictions all live here.',
+        'chokepoints': [
+            'tsmc fab 18', 'tsmc arizona', 'tsmc kumamoto japan',
+            'samsung pyeongtaek', 'samsung austin texas',
+            'sk hynix icheon', 'sk hynix wuxi china',
+            'asml veldhoven netherlands', 'asml euv lithography',
+            'applied materials santa clara', 'kla corporation',
+            'lam research', 'tokyo electron',
+            'smic shanghai', 'ymtc wuhan', 'cxmt hefei',
+            'micron boise idaho', 'intel hillsboro oregon',
+            'globalfoundries malta new york',
+            'nvidia design', 'amd design', 'arm holdings cambridge',
+            'imec leuven belgium',  # research consortium
+        ],
+        'top_producers':  ['taiwan', 'south_korea', 'japan', 'usa', 'netherlands', 'china'],
+        'top_consumers':  ['china', 'usa', 'eu', 'japan', 'south_korea', 'taiwan'],
+    },
     'silver': {
         'name': 'Silver',
         'icon': '🪙',
@@ -541,6 +567,46 @@ COMMODITY_KEYWORDS = {
         # Chinese
         '稀土', '稀土出口', '稀土磁铁', '包头',
     ],
+    'semiconductors': [
+        # Core terms
+        'semiconductor', 'semiconductors', 'chip', 'chips', 'silicon',
+        'integrated circuit', 'wafer', 'foundry', 'fabless',
+        # Process / nodes
+        'leading edge', 'leading-edge', '3nm', '5nm', '7nm', '2nm',
+        'advanced node', 'mature node', 'legacy node',
+        'EUV lithography', 'EUV', 'extreme ultraviolet',
+        'DUV', 'photolithography',
+        # Companies — foundries / IDMs
+        'TSMC', 'taiwan semiconductor', 'tsm stock',
+        'samsung electronics', 'samsung foundry',
+        'SK hynix', 'sk hynix memory',
+        'micron technology', 'intel foundry', 'intel fab',
+        'globalfoundries', 'umc', 'united microelectronics',
+        'smic', 'semiconductor manufacturing international',
+        'ymtc', 'cxmt', 'hua hong',
+        # Companies — equipment / EDA / fabless
+        'asml', 'asml euv', 'asml lithography',
+        'applied materials', 'lam research', 'kla corporation',
+        'tokyo electron', 'screen holdings', 'advantest',
+        'nvidia', 'amd chips', 'qualcomm', 'broadcom',
+        'arm holdings', 'cadence design', 'synopsys',
+        # Geopolitical / policy
+        'CHIPS act', 'chips and science act', 'tech war',
+        'export controls', 'chip export ban', 'semiconductor sanctions',
+        'entity list', 'foreign direct product rule',
+        'taiwan strait chips', 'taiwan semiconductor risk',
+        'chip4 alliance', 'semiconductor reshoring',
+        'tech sovereignty', 'chip independence',
+        # Memory / specialty
+        'DRAM', 'NAND', 'HBM', 'high bandwidth memory',
+        'GAAFET', 'gate all around',
+        # Chinese
+        '半导体', '芯片', '台积电', '中芯国际', '光刻机', '芯片出口',
+        # Japanese
+        '半導体', 'チップ', 'TSMC熊本', 'ラピダス',
+        # Korean
+        '반도체', '삼성전자', 'SK하이닉스',
+    ],
     'silver': [
         # Producers / state actors
         'silver', 'silver prices', 'silver futures', 'comex silver',
@@ -652,6 +718,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'World #1 nickel consumer; stainless steel + EV batteries; Tsingshan/Huayou Indonesia investments dominate processing'},
         'silver':       {'role': 'producer',          'weight': 1.2, 'rank': 2,
                          'note': 'World #2 silver producer (~109 Moz, ~13% global); also leading consumer for solar PV manufacturing + electronics'},
+        'semiconductors': {'role': 'consumer',        'weight': 1.5, 'rank': 1,
+                         'note': "World's largest semiconductor consumer (~50% of global imports for assembly + domestic use); aspirant producer pushed to legacy nodes by US export controls. SMIC, YMTC, CXMT struggle to advance beyond ~7nm without ASML EUV access. China responds with self-reliance push, REE export controls (retaliatory), and Taiwan unification rhetoric — semiconductors are THE structural reason cross-strait stakes are global. Watch SMIC node announcements, US entity list updates, ASML China revenue reports."},
     },
     'drc': {
         'cobalt':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -698,6 +766,20 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'gold':         {'role': 'consumer',          'weight': 1.2,
                          'note': 'Iran-Russia-China gold barter as sanctions evasion; Tehran Gold Exchange + bazaar physical demand surging during currency crisis; central bank reserves obscured but estimated ~$15-30B'},
     },
+    'japan': {
+        'semiconductors': {'role': 'producer',        'weight': 1.4, 'rank': 3,
+                         'note': "World #3 semiconductor producer with critical equipment + materials dominance. Tokyo Electron (TEL) #2 globally for fab equipment after Applied Materials; Screen Holdings + Advantest dominant in cleaning/test. JSR + Shin-Etsu + SUMCO control ~60-70% of high-purity silicon wafers and EUV photoresist. TSMC Kumamoto fab (JASM) operational since 2024 — Japan's reshoring linchpin. Rapidus (Hokkaido) targeting 2nm by 2027 with IBM/imec partnership. Chip4 alliance member; G7 export-control coordinator. Watch: Rapidus milestones, TEL/SEH earnings, METI semiconductor subsidy announcements."},
+        'oil':          {'role': 'consumer',          'weight': 1.3,
+                         'note': '~99% oil imported; Middle East dependency (~90% from Gulf); Hormuz exposure; strategic petroleum reserve ~240 days (largest IEA-mandate stockpile). ENEOS + Idemitsu refineries.'},
+        'natural_gas':  {'role': 'consumer',          'weight': 1.3,
+                         'note': 'World #2 LNG importer (post-Fukushima nuclear shutdown); ~95% imported. Australia + Qatar + Malaysia + USA primary suppliers; Sakhalin-2 (Russia) sanctions-complicated. LNG vulnerability central to Japan-US alliance energy security framing.'},
+        'rare_earths':  {'role': 'consumer',          'weight': 1.3,
+                         'note': 'Major REE consumer for electronics + magnets + EVs. 2010 China export embargo (Senkaku dispute) catalyzed Lynas Australia partnership and recycling/substitution R&D. Still ~60% China-dependent for heavy rare earths. JOGMEC strategic stockpile.'},
+        'wheat':        {'role': 'consumer',          'weight': 1.0,
+                         'note': '~90% imported, primarily US + Canada + Australia; managed via MAFF state trading; food security strategy.'},
+        'uranium':      {'role': 'consumer',          'weight': 1.0,
+                         'note': '100% uranium imported; nuclear restart program post-Fukushima; Australia + Kazakhstan primary suppliers; TEPCO + Kansai Electric major buyers.'},
+    },
     'lebanon': {
         # ── Consumer side (acute import dependency) ──
         'wheat':        {'role': 'consumer',          'weight': 1.5,
@@ -722,6 +804,10 @@ COUNTRY_COMMODITY_EXPOSURE = {
     'mexico': {
         'silver':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': 'World #1 silver producer (~6,120 MT, ~22% global); Zacatecas/Durango/Chihuahua; Fresnillo (largest primary silver mine); Peñoles/Fresnillo PLC dominant; ancient mining tradition'},
+    },
+    'netherlands': {
+        'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 4,
+                         'note': "Holds the single most concentrated leverage point in semiconductor manufacturing: ASML's EUV lithography monopoly. ASML (Veldhoven) is the only company in the world that produces extreme ultraviolet lithography systems required for sub-7nm chip manufacturing — meaning every leading-edge fab on Earth (TSMC, Samsung, Intel, SK Hynix) depends on ASML. Dutch government export-control decisions on EUV (and increasingly DUV) shipments to China constitute the most consequential single-country technology policy in the world. Also home to NXP (automotive chips). Watch: ASML quarterly bookings, Dutch trade ministry export-license announcements, EU Chips Act milestones."},
     },
     'peru': {
         'silver':       {'role': 'producer',          'weight': 1.4, 'rank': 3,
@@ -761,6 +847,30 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'gold':         {'role': 'consumer',          'weight': 0.9,
                          'note': 'SAMA central bank reserves; significant retail demand; Vision 2030 mineral resources strategy'},
     },
+    'south_korea': {
+        'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 2,
+                         'note': 'World #2 semiconductor producer; Samsung Electronics (memory leadership: ~40% DRAM, ~35% NAND globally; foundry #2 chasing TSMC) + SK Hynix (HBM dominance ~50%, critical for AI accelerators). Pyeongtaek megafab + Hwaseong campus. Also operates fabs in Wuxi/Xi\'an China — caught between US export controls and Chinese market access. Chip4 alliance member.'},
+        'natural_gas':  {'role': 'consumer',          'weight': 1.0,
+                         'note': 'World #3 LNG importer; KOGAS imports primarily from Qatar/Australia/USA; near-total import dependency for energy; Hormuz/Suez chokepoint exposure'},
+        'oil':          {'role': 'consumer',          'weight': 1.2,
+                         'note': '~99% imported; Middle East dependency; SK Energy + GS Caltex refineries; major refined product exporter'},
+        'uranium':      {'role': 'consumer',          'weight': 0.9,
+                         'note': 'Major nuclear power user (~26 reactors, ~30% of electricity); KEPCO domestic build + UAE Barakah export contract; nuclear fuel imports'},
+    },
+    'taiwan': {
+        'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 1,
+                         'note': "World #1 semiconductor producer and the platform's most concentrated single-country chokepoint. TSMC alone manufactures ~60% of global foundry output and ~90% of leading-edge (sub-7nm) chips — including all advanced AI accelerators (Nvidia, AMD), Apple silicon, and high-end mobile SoCs. Fab 18 (Tainan) is the most strategically valuable industrial facility on Earth. UMC #4 globally for mature nodes. Taiwan's semiconductor dominance is THE structural reason for US/Japan/EU shared interest in cross-strait stability — and the central asymmetric risk in any PLA blockade scenario. Watch: TSMC capacity announcements, Arizona/Kumamoto/Dresden fab progress, US export-control updates, Taiwan defense budget."},
+        'oil':          {'role': 'consumer',          'weight': 1.4,
+                         'note': '~99% of oil imported; CPC Corporation + Formosa Petrochemical; Middle East dependency creates compound Hormuz exposure. Strategic petroleum reserve ~140 days. Blockade vulnerability is the asymmetric risk that PLA planners explicitly reference.'},
+        'natural_gas':  {'role': 'consumer',          'weight': 1.4,
+                         'note': '~99% LNG imports; Yongan + Taichung + Taoyuan terminals; ~10-14 days strategic reserve. Australia + Qatar primary suppliers. LNG terminal vulnerability + short reserve timeline = energy security single-point-of-failure during conflict scenarios.'},
+        'wheat':        {'role': 'consumer',          'weight': 1.0,
+                         'note': '~95% imported, primarily from US + Australia + Canada; food security exposure during blockade scenarios. Limited strategic grain reserve.'},
+        'corn':         {'role': 'consumer',          'weight': 0.9,
+                         'note': 'Animal feed import dependency; livestock sector cost driver; US + Brazil primary sources.'},
+        'rare_earths':  {'role': 'consumer',          'weight': 1.3,
+                         'note': 'Semiconductor manufacturing critical input — heavy rare earths for chip polishing, magnets, and specialty alloys. China holds export-control leverage; Taiwan diversification efforts via Lynas Australia + recycling. Compound risk: REE export ban + cross-strait pressure simultaneously.'},
+    },
     'turkmenistan': {
         'natural_gas':  {'role': 'producer',          'weight': 1.4, 'rank': 4,
                          'note': "World #4 natural gas reserves (~27.4 TCM); Galkynysh world's #2 onshore field; Phase 4 broke ground April 2026 with CNPC; ~80% exports flow to China via CAGP; TAPI pipeline progressing through Afghan war zone"},
@@ -782,6 +892,26 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Major corn exporter; Odesa port dependency'},
         'sunflower_oil': {'role': 'producer',         'weight': 1.0,
                          'note': '~50% of global sunflower oil; tracked under wheat/corn for Phase 1'},
+    },
+    'usa': {
+        'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 5,
+                         'note': "World's dominant semiconductor designer + emerging manufacturer + export-control authority. Design dominance: Nvidia (~80% AI accelerator market), AMD, Intel, Qualcomm, Broadcom, Apple silicon. Manufacturing reshoring: Intel (Ohio, Oregon, Arizona), TSMC Arizona, Samsung Austin/Taylor TX, Micron Idaho/NY — backed by ~$52B CHIPS and Science Act subsidies. Most consequential lever: US Foreign Direct Product Rule + Entity List authorities give Washington effective veto over global chip flows touching any US technology. Watch: CHIPS Act fab milestones, Commerce Department BIS rule updates, Nvidia China revenue (H20/B20 product lines), TSMC Arizona yield reports."},
+        'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': "World #1 oil producer post-shale revolution (~13M bpd); also major consumer + exporter. Permian basin dominant. Strategic Petroleum Reserve. Sanctions weapon (against Iran, Russia, Venezuela)."},
+        'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': "World #1 natural gas producer; world's #1 LNG exporter post-2023. Henry Hub benchmark. Cheniere + Sabine Pass + Freeport LNG. Energy security weapon for European allies."},
+        'wheat':        {'role': 'producer',          'weight': 1.2,
+                         'note': 'Major wheat exporter; USDA WASDE reports drive global price discovery; Mississippi River + Gulf export infrastructure.'},
+        'corn':         {'role': 'producer',          'weight': 1.4,
+                         'note': "World's largest corn producer; Iowa/Illinois/Nebraska; ethanol mandate intersects with food vs. fuel debates."},
+        'soybeans':     {'role': 'producer',          'weight': 1.4,
+                         'note': "Major soybean exporter; trade war pressure point with China; Mississippi + Gulf export."},
+        'gold':         {'role': 'consumer',          'weight': 1.0,
+                         'note': "Federal Reserve gold reserves (~8,133 tonnes — world's largest); COMEX dominance; sanctions enforcement infrastructure."},
+        'rare_earths':  {'role': 'producer',          'weight': 1.0,
+                         'note': "MP Materials Mountain Pass (the only operating US REE mine) + new processing investments; CHIPS-era industrial policy push for diversification from China dependency."},
+        'uranium':      {'role': 'consumer',          'weight': 1.1,
+                         'note': "World's largest civilian uranium consumer (~93 reactors); Russian HALEU dependency major concern; Centrus Energy + Urenco USA + DOE strategic uranium reserve."},
     },
 }
 # ========================================
