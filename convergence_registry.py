@@ -101,6 +101,141 @@ CONVERGENCE_REGISTRY = [
             'have NOT been rebuilt since 2020 explosion; this is structural fragility.'
         ),
     },
+
+    # ───────────────────────────────────────────────────────────────
+    # ASIA CONVERGENCES (May 2026)
+    # Cross-theater amplification narratives for the China-Taiwan-Japan
+    # triangle, plus the China-Iran-Hormuz oil dependency vector.
+    # Trigger region 'asia' or 'me' depending on origin signal.
+    # ───────────────────────────────────────────────────────────────
+    {
+        'id':                      'pla_pressure_japan_response',
+        'commodity':               None,                          # Not commodity-driven
+        'country':                 'japan',
+        'trigger_signal_category': 'japan_outbound_posture',
+        'trigger_region':          'asia',
+        'commodity_threshold':     None,                          # No commodity gate
+        'regions':                 ['asia'],
+        'priority':                14,
+        'icon':                    '\U0001f396\ufe0f',             # 🎖️
+        'color':                   '#ef4444',                       # red — security axis
+        'headline_template':       'Asia security architecture activation -- China escalation + Japan posture hardening converge',
+        'detail': (
+            'Convergence pattern: China outbound rhetoric at L3+ (Directive or higher) '
+            'AND Japan outbound posture at L3+ (PM/MoD/Diet committing to defense build-up '
+            'or Article 9 reinterpretation language). When both fire simultaneously, '
+            'this is the strongest available signal that East Asia security architecture '
+            'is shifting from a bilateral US-Japan alliance frame to an explicit '
+            'trilateral (US-Japan-Taiwan or US-Japan-Korea) posture. Watch for follow-on '
+            'INDOPACOM signaling, Reciprocal Access Agreement updates, AUKUS Pillar 2 '
+            'announcements, Japan-Philippines defense agreements. Compound risk: regional '
+            'arms-race dynamics + reduced diplomatic off-ramp space.'
+        ),
+        'facts': {
+            'china_threshold':    'outbound_max_level >= 3',
+            'japan_threshold':    'outbound_max_level >= 3 OR article9_active',
+            'historical_analog':  '2015 collective self-defense reinterpretation cycle',
+            'key_indicators':     'JSDF deployment orders, INDOPACOM signaling, Diet votes',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f ASIA SECURITY ARCHITECTURE ACTIVATION: China outbound at {alert} '
+            '({signals} signals) coincides with Japan posture hardening. This is the '
+            'strongest convergence signal that regional alliance architecture is shifting '
+            'toward explicit trilateral coordination. Watch INDOPACOM, RAA updates, AUKUS '
+            'Pillar 2 expansion.'
+        ),
+        'notes': (
+            'Asia-theatre founding convergence -- May 7 2026. Mirrors wheat-Lebanon '
+            'pattern but for security rather than commodity axis.'
+        ),
+    },
+    {
+        'id':                      'taiwan_alliance_convergence',
+        'commodity':               None,
+        'country':                 'taiwan',
+        'trigger_signal_category': 'taiwan_us_alliance',
+        'trigger_region':          'asia',
+        'commodity_threshold':     None,
+        'regions':                 ['asia'],
+        'priority':                14,
+        'icon':                    '\U0001f91d',                    # 🤝
+        'color':                   '#0ea5e9',                        # cyan — alliance axis
+        'headline_template':       'Trilateral Taiwan defense convergence -- Japan + US + Taiwan signaling alignment',
+        'detail': (
+            'Convergence pattern: Japan taiwan_defense_active fingerprint TRUE + Taiwan '
+            'us_alliance L3+ + (optionally) US INDOPACOM signaling at elevated levels. '
+            'This converts what has historically been a strategically ambiguous '
+            'US-Taiwan posture into an explicit trilateral defense commitment. '
+            'Significantly raises the threshold for any PRC kinetic action against Taiwan '
+            'and increases the probability of structured PLA escalation in response. '
+            'Watch PLA Eastern Theater Command activity spikes, MFA condemnation cadence, '
+            'TAO statements on "external interference."'
+        ),
+        'facts': {
+            'japan_threshold':    'taiwan_defense_active = TRUE',
+            'taiwan_threshold':   'us_alliance_level >= 3',
+            'compound_effect':    'shift from strategic ambiguity to explicit trilateral commitment',
+            'historical_analog':  '2021 Suga-Biden joint statement (Taiwan named for first time since 1969)',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f TRILATERAL TAIWAN DEFENSE CONVERGENCE: Japan committing to '
+            'Taiwan defense + Taiwan signaling US alliance at {alert} ({signals} signals). '
+            'Converts strategic ambiguity into explicit trilateral commitment. PLA '
+            'escalation probability rises in response.'
+        ),
+        'notes': (
+            'Captures the most consequential Asia convergence pattern -- '
+            'Japan publicly defending Taiwan is a threshold change vs. all prior '
+            'Japanese governments. Peter would have something to say about this.'
+        ),
+    },
+    {
+        'id':                      'hormuz_china_oil_dependency',
+        'commodity':               'oil',
+        'country':                 'china',
+        'trigger_signal_category': 'iran_hormuz_pressure',
+        'trigger_region':          'me',                            # Origin = Iran
+        'commodity_threshold':     'elevated',                      # Lower bar than wheat-LBN
+        'regions':                 ['me', 'asia'],                   # Cross-regional
+        'priority':                15,                               # Highest -- structural China dependency
+        'icon':                    '\U0001f6e2\ufe0f',                # 🛢️
+        'color':                   '#f59e0b',                          # amber — economic axis
+        'headline_template':       'China oil supply convergence -- Iran/Hormuz pressure compounded by China import dependency',
+        'detail': (
+            'China imports approximately 50% of its crude oil through the Strait of Hormuz. '
+            'When Iran posture (theatre_score) reaches operational levels (L3+) or IRGC '
+            'fingerprint shows Hormuz/Persian Gulf in named_targets, China faces direct '
+            'pressure on its energy security. This explains why China consistently pushes '
+            'de-escalation rhetoric in MFA briefings during Iran tensions, why China invests '
+            'heavily in alternative supply (CPEC pipeline, BRI infrastructure, Russia-China '
+            'oil pipelines, Central Asia gas), and why China has repeatedly mediated between '
+            'Iran and Saudi Arabia. Compound risk: Hormuz disruption simultaneously with '
+            'global oil pressure surge would force structural change to Chinese energy '
+            'sourcing -- with cascading effects on Belt and Road, yuan settlement deals, '
+            'and Sino-Iranian strategic partnership timelines.'
+        ),
+        'facts': {
+            'china_oil_dep':       '~50% crude imports through Hormuz',
+            'iran_threshold':      'theatre_score >= 60 OR irgc_level >= 3 OR hormuz in named_targets',
+            'oil_threshold':       'elevated, high, or surge',
+            'china_response':      'MFA de-escalation rhetoric, BRI/CPEC investment, RU/Central Asia substitution',
+            'historical_analog':   '2019-2020 tanker-war period, 2024 Israel-Iran direct exchange',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f HORMUZ-CHINA OIL CONVERGENCE: Global oil at {alert} '
+            '({signals} signals) AND Iran posture elevated. China imports ~50% of crude '
+            'through Hormuz; Iran pressure on Hormuz directly stresses Chinese energy '
+            'security. Watch China MFA "stability" framing, BRI/CPEC investment '
+            'announcements, RU/Central Asia substitution moves, yuan settlement deal news.'
+        ),
+        'notes': (
+            'First cross-regional Asia convergence (ME trigger -> Asia consumer). '
+            'Mirrors wheat-Lebanon pattern (ME-trigger -> Europe-consumer). '
+            'This is THE structural reason China cares so much about Iran. '
+            'May 7 2026 -- Rachel + Peter contribution.'
+        ),
+    },
+
     # ───────────────────────────────────────────────────────────────
     # FUTURE CONVERGENCES — uncomment / adapt as new ones get identified.
     # Examples sketched below show how broad the pattern can stretch.
