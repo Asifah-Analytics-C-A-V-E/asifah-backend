@@ -137,6 +137,16 @@ try:
 except ImportError:
     IRAQ_STABILITY_AVAILABLE = False
     print("[ME Backend] ⚠️ Iraq stability module not available")
+
+# Convergence Endpoints — exposes /api/convergence/* (consumed by Asia/Europe/WHA proxies)
+# Registry of cross-theater convergence stacks (wheat_lebanon, hormuz_china_oil_dependency, etc.)
+try:
+    from convergence_endpoints import register_convergence_endpoints
+    CONVERGENCE_ENDPOINTS_AVAILABLE = True
+    print("[ME Backend] ✅ Convergence endpoints module loaded")
+except Exception as e:
+    CONVERGENCE_ENDPOINTS_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ Convergence endpoints not available: {e}")
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -969,6 +979,11 @@ if IRAQ_HUMANITARIAN_AVAILABLE:
     register_iraq_humanitarian_endpoints(app)
 if IRAQ_STABILITY_AVAILABLE:
     register_iraq_stability_endpoints(app)
+
+# Convergence registry endpoints — consumed by Asia/Europe/WHA convergence proxies
+if CONVERGENCE_ENDPOINTS_AVAILABLE:
+    register_convergence_endpoints(app)
+    print("[ME Backend] ✅ Convergence endpoints registered: /api/convergence/all, /<id>, /by-country/<c>, /by-region/<r>")
 
 
 # ──────────────────────────────────────────────────────────────
