@@ -2424,18 +2424,11 @@ def run_iran_rhetoric_scan(days=3):
     max_level = max(max_irgc, max_nuclear, max_domestic, max_regional, proxy_activation_level)
     max_level = min(max_level, 5)
 
-    rhetoric_score = _calculate_rhetoric_score(
-        theatre_summary, proxy_activation_level, actor_results, otp_count,
-        regime_signals=regime_signals
-    )
-
-    # Theatre specificity
-    all_specs = theatre_summary.get('all_specificity_scores', [])
-    theatre_specificity = round(sum(all_specs) / len(all_specs), 1) if all_specs else 0
-
     # ── Regime Signals (May 7 2026) ──
-    # Six sub-detection ladders for structural shifts in the international system.
-    # Output feeds (a) cross-theater fingerprint, (b) score modifier (capped +5).
+    # Computed BEFORE _calculate_rhetoric_score so the score modifier
+    # can reference active_count. Six sub-detection ladders for structural
+    # shifts in the international system. Output feeds (a) score modifier,
+    # (b) cross-theater fingerprint, (c) result dict for frontend.
     regime_signals = _score_iran_regime_signals(articles)
     if regime_signals.get('active_count', 0) > 0:
         active_dims = [d for d in
@@ -2444,6 +2437,15 @@ def run_iran_rhetoric_scan(days=3):
                        if regime_signals.get(d, 0) >= 3]
         print(f"[Iran Rhetoric] 🌐 Regime signals: {regime_signals['active_count']} active "
               f"({', '.join(active_dims)}) — max L{regime_signals['max']}")
+
+    rhetoric_score = _calculate_rhetoric_score(
+        theatre_summary, proxy_activation_level, actor_results, otp_count,
+        regime_signals=regime_signals
+    )
+
+    # Theatre specificity
+    all_specs = theatre_summary.get('all_specificity_scores', [])
+    theatre_specificity = round(sum(all_specs) / len(all_specs), 1) if all_specs else 0
 
     scan_time = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
 
