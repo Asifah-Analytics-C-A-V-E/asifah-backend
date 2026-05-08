@@ -371,7 +371,10 @@ COMMODITY_TYPES = {
                 'MU',          # Micron — memory (US)
                 'INTC',        # Intel — IDM + foundry reshoring (US)
             ],
-            'futures':  None,  # no liquid semiconductor
+            'futures':  None,  # no liquid semiconductor futures market
+        },
+    },
+    'silver': {
         'name': 'Silver',
         'icon': '🪙',
         'tier': 2,
