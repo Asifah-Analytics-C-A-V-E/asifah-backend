@@ -753,6 +753,16 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'natural_gas':  {'role': 'consumer',          'weight': 1.0,
                          'note': '100% Russian gas dependency'},
     },
+    'chile': {
+        'copper':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': 'World #1 copper producer (~24% global supply, ~5.3M tonnes/yr); Codelco state-owned + BHP Escondida + Antofagasta + Anglo American Sur; Chuquicamata is the largest open-pit mine on Earth. Antofagasta region is the world\'s most concentrated copper-mining infrastructure. Strategic anchor for the global energy transition (EVs + grid + electrification all copper-hungry).'},
+        'lithium':      {'role': 'producer',          'weight': 1.4, 'rank': 2,
+                         'note': 'World #2 lithium producer (~23% global supply); Salar de Atacama is the highest-grade lithium brine deposit globally. SQM + Albemarle dominant. Lithium Triangle anchor (Chile/Argentina/Bolivia ~58% of global reserves). Boric administration\'s 2023 National Lithium Strategy moved sector toward state-private partnerships — domestic political volatility is structural commodity-pricing variable.'},
+        'silver':       {'role': 'producer',          'weight': 1.0, 'rank': 6,
+                         'note': '~50 Moz/yr (~5% global); by-product of copper mining at Escondida, Collahuasi, Pelambres; Chile silver flows track copper extraction tempo, not standalone silver-mine economics.'},
+        'gold':         {'role': 'producer',          'weight': 0.7,
+                         'note': 'Modest gold production (~40 tonnes/yr); often co-mined with copper at Maricunga/El Indio/Andacollo belts; not a pricing-mover but a stability-of-mining-sector signal.'},
+    },
     'china': {
         'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': '60%+ of global production, 85% of refining; export controls leverage'},
@@ -2213,9 +2223,26 @@ def _country_strategic_appendix(target, profile):
             "via Russian ports + China rail. Druzhba pipeline transit and Russian gas dependency "
             "lock Belarus into the Russian commodity ecosystem."
         ),
+        'chile': (
+            "Chile is the structural anchor of the global energy-transition supply chain — "
+            "#1 copper producer (~24% global) and #2 lithium producer (~23% global), with the "
+            "Salar de Atacama representing the highest-grade lithium brine deposit on Earth. "
+            "Domestic political volatility (Boric-era constitutional process, mining royalty "
+            "reform, 2023 National Lithium Strategy) translates directly into global EV and "
+            "grid-electrification pricing. Watch: SQM/Codelco production guidance, Antofagasta "
+            "labor disputes, lithium nationalization rhetoric."
+        ),
+        'peru': (
+            "Peru's commodity profile is concentrated mining vulnerability — #3 silver producer "
+            "with the world's largest silver reserves per USGS, plus major copper output from "
+            "Antamina and Toromocho. The structural risk is political: presidential instability "
+            "(multiple presidents since 2022), Las Bambas mining-region community blockades, "
+            "and VRAEM-zone insecurity all translate directly into supply disruption signals. "
+            "Mining accounts for ~60% of Peruvian export earnings — instability there is "
+            "instability in the global silver and copper price discovery."
+        ),
     }
     return appendices.get(target, '')
-
 
 def get_commodity_pressure(target):
     """
