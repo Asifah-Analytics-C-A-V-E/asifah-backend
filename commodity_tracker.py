@@ -1749,6 +1749,118 @@ def fetch_reddit_commodity(days=7):
 
 
 # ========================================
+# SCHEMA HELPERS — backward-compat for dict-of-roles migration (May 2026)
+# ========================================
+# COUNTRY_COMMODITY_EXPOSURE supports two entry shapes:
+#
+#   Old (single-role, original):
+#     'china': {
+#         'rare_earths': {'role': 'producer', 'weight': 1.5, 'rank': 1, 'note': '...'}
+#     }
+#
+#   New (multi-role, dict-of-roles — for countries that are BOTH producer
+#   and consumer of the same commodity, e.g. China wheat, India wheat,
+#   USA oil):
+#     'china': {
+#         'wheat': {
+#             'producer': {'weight': 1.5, 'rank': 1, 'note': '...'},
+#             'consumer': {'weight': 1.4, 'rank': 1, 'note': '...'}
+#         }
+#     }
+#
+# These helpers normalize both shapes so existing analytical code works
+# without modification. Always use these to read the registry — never index
+# COUNTRY_COMMODITY_EXPOSURE[country][commodity] directly downstream.
+
+def _is_multi_role_entry(entry):
+    """
+    Returns True if `entry` is a new-style dict-of-roles (no top-level 'role'
+    key, but has 'producer'/'consumer'/'transit'/'sanctions_target'/'mediator'
+    keys instead). Returns False for old-style single-role entries.
+    """
+    if not isinstance(entry, dict):
+        return False
+    if 'role' in entry:
+        return False  # old-style: has 'role' at top level
+    role_keys = {'producer', 'consumer', 'transit', 'sanctions_target', 'mediator'}
+    return any(k in entry for k in role_keys)
+
+
+def _iter_country_exposures(country_id):
+    """
+    Yield (commodity_id, role_name, role_data_dict) tuples for a country.
+    Handles both old-style single-role and new-style dict-of-roles entries.
+
+    role_data_dict always has the shape:
+      {'role': str, 'weight': float, 'rank': int|None, 'note': str}
+
+    For old-style entries this is the original dict (already has 'role').
+    For new-style entries this is constructed from the inner role dict
+    with 'role' injected.
+    """
+    profile = COUNTRY_COMMODITY_EXPOSURE.get(country_id, {})
+    for commodity_id, entry in profile.items():
+        if _is_multi_role_entry(entry):
+            # New-style: yield once per role
+            for role_name, role_data in entry.items():
+                if not isinstance(role_data, dict):
+                    continue
+                normalized = dict(role_data)
+                normalized['role'] = role_name
+                yield commodity_id, role_name, normalized
+        else:
+            # Old-style: single yield with whatever role is recorded
+            if isinstance(entry, dict) and 'role' in entry:
+                yield commodity_id, entry['role'], entry
+
+
+def _country_has_commodity(country_id, commodity_id):
+    """
+    Returns True if a country has ANY exposure (any role) to a commodity.
+    Used by article-attribution to decide which countries get a signal.
+    """
+    profile = COUNTRY_COMMODITY_EXPOSURE.get(country_id, {})
+    return commodity_id in profile
+
+
+def _country_commodity_exposures(country_id, commodity_id):
+    """
+    Returns a list of (role_name, role_data_dict) tuples for a single
+    (country, commodity) pair. Empty list if no exposure exists.
+    Old-style entries return a 1-element list; new-style return N-element list.
+    """
+    profile = COUNTRY_COMMODITY_EXPOSURE.get(country_id, {})
+    entry = profile.get(commodity_id)
+    if entry is None:
+        return []
+    if _is_multi_role_entry(entry):
+        result = []
+        for role_name, role_data in entry.items():
+            if not isinstance(role_data, dict):
+                continue
+            normalized = dict(role_data)
+            normalized['role'] = role_name
+            result.append((role_name, normalized))
+        return result
+    if isinstance(entry, dict) and 'role' in entry:
+        return [(entry['role'], entry)]
+    return []
+
+
+def _country_commodity_max_weight(country_id, commodity_id):
+    """
+    Returns the maximum weight across all roles for a (country, commodity)
+    pair. Used by signal-scoring to apply the strongest exposure weight.
+    Returns 1.0 if no exposure exists (defensive default).
+    """
+    exposures = _country_commodity_exposures(country_id, commodity_id)
+    if not exposures:
+        return 1.0
+    weights = [e[1].get('weight', 1.0) for e in exposures]
+    return max(weights) if weights else 1.0
+
+
+# ========================================
 # ARTICLE ANALYZER
 # ========================================
 
@@ -1789,10 +1901,12 @@ def analyze_article_commodity(article):
                 signal_score = tier_weight
 
                 # Country attribution: any country exposed to this commodity gets the signal.
+                # Uses _country_has_commodity() helper to handle both old-style
+                # (single role) and new-style (dict-of-roles) registry entries.
                 # Note: per-country score weighting happens in _run_full_scan(); we just
                 # record the country list here.
-                for country_id, exposures in COUNTRY_COMMODITY_EXPOSURE.items():
-                    if commodity_id in exposures:
+                for country_id in COUNTRY_COMMODITY_EXPOSURE.keys():
+                    if _country_has_commodity(country_id, commodity_id):
                         result['countries'].add(country_id)
 
                 # Build signal entry
@@ -1983,13 +2097,25 @@ def _run_full_scan(days=7):
                 per_commodity_score[cid] += sig['weight']
             for country_id in analysis['countries']:
                 if country_id in per_country_signals:
-                    # Country signal score weighted by its exposure to this commodity
-                    exposure = COUNTRY_COMMODITY_EXPOSURE[country_id].get(cid, {})
-                    country_weight = exposure.get('weight', 1.0)
+                    # Country signal score weighted by its strongest exposure to this commodity.
+                    # For multi-role entries (e.g. China wheat as both #1 producer + #1 consumer),
+                    # we use the maximum weight across all roles. Each role gets its own
+                    # weighted_sig entry attached to per_country_signals so the country's
+                    # commodity tile can show all roles separately.
+                    role_exposures = _country_commodity_exposures(country_id, cid)
+                    if not role_exposures:
+                        continue
+                    country_weight = max(e[1].get('weight', 1.0) for e in role_exposures)
+                    # Composite role label for display: "producer + consumer" if multi-role
+                    role_labels = [r[0] for r in role_exposures]
+                    composite_role = ' + '.join(role_labels) if len(role_labels) > 1 else role_labels[0]
+                    # Combine notes if multi-role (joined with newline for prose readability)
+                    notes = [r[1].get('note', '') for r in role_exposures if r[1].get('note')]
+                    composite_note = '\n'.join(notes)
                     weighted_sig = dict(sig)
                     weighted_sig['country_weight'] = country_weight
-                    weighted_sig['country_role']   = exposure.get('role', 'unknown')
-                    weighted_sig['country_note']   = exposure.get('note', '')
+                    weighted_sig['country_role']   = composite_role
+                    weighted_sig['country_note']   = composite_note
                     per_country_signals[country_id].append(weighted_sig)
                     per_country_score[country_id] += sig['weight'] * country_weight
 
@@ -2022,17 +2148,49 @@ def _run_full_scan(days=7):
         sigs = sorted(per_country_signals[cid], key=lambda s: s['weight'], reverse=True)
         score = round(per_country_score[cid], 2)
 
-        # Per-commodity breakdown for this country
+        # Per-commodity breakdown for this country.
+        # New schema: a country may have multiple roles for the same commodity
+        # (e.g., China wheat as both producer #1 and consumer #1). The breakdown
+        # dict surfaces a "primary" role for legacy frontend display (the
+        # exposure matrix renders one cell per commodity), AND a 'roles' list
+        # for stability pages that want to show all roles as separate tiles.
+        # Primary role selection: producer wins over consumer wins over transit
+        # wins over sanctions_target wins over mediator (descending strategic
+        # weight). Highest individual weight breaks ties.
         commodity_breakdown = {}
-        for commodity_id, exposure in COUNTRY_COMMODITY_EXPOSURE[cid].items():
+        ROLE_PRIORITY = {'producer': 5, 'consumer': 4, 'transit': 3,
+                         'sanctions_target': 2, 'mediator': 1}
+        for commodity_id in COUNTRY_COMMODITY_EXPOSURE[cid].keys():
             commodity_sigs = [s for s in sigs if s['commodity'] == commodity_id]
+            role_exposures = _country_commodity_exposures(cid, commodity_id)
+            if not role_exposures:
+                continue
+            # Sort roles by priority (then by weight) to identify the primary role
+            sorted_roles = sorted(
+                role_exposures,
+                key=lambda x: (ROLE_PRIORITY.get(x[0], 0), x[1].get('weight', 0)),
+                reverse=True
+            )
+            primary_role_name, primary_role_data = sorted_roles[0]
+            # Build the legacy-shape entry for backward compat with frontend
             commodity_breakdown[commodity_id] = {
-                'role':         exposure.get('role'),
-                'weight':       exposure.get('weight'),
-                'rank':         exposure.get('rank'),
-                'note':         exposure.get('note'),
+                'role':         primary_role_name,
+                'weight':       primary_role_data.get('weight'),
+                'rank':         primary_role_data.get('rank'),
+                'note':         primary_role_data.get('note'),
                 'signal_count': len(commodity_sigs),
                 'top_signals':  commodity_sigs[:3],
+                # New schema additions: list of all roles for this commodity
+                'roles':        [
+                    {
+                        'role':   role_name,
+                        'weight': role_data.get('weight'),
+                        'rank':   role_data.get('rank'),
+                        'note':   role_data.get('note'),
+                    }
+                    for role_name, role_data in sorted_roles
+                ],
+                'is_multi_role': len(sorted_roles) > 1,
             }
 
         country_summaries[cid] = {
@@ -2124,27 +2282,31 @@ def _build_country_prose(target):
 
     Returns a 2-4 sentence summary suitable for a stability page header.
     Falls back to a generic message if country not in registry.
+
+    Schema migration (May 2026): now uses _iter_country_exposures() so
+    multi-role entries (e.g. China wheat as both producer + consumer)
+    surface in BOTH role buckets in the resulting prose.
     """
     profile = COUNTRY_COMMODITY_EXPOSURE.get(target)
     if not profile:
         return f"{target.title()} commodity exposure profile is not yet registered in the tracker."
 
-    # Bucket commodities by role
+    # Bucket commodities by role. Uses _iter_country_exposures() so
+    # multi-role entries (e.g. China wheat as both producer + consumer)
+    # appear in both buckets.
     producer_items = []
     consumer_items = []
     transit_items  = []
-    for cid, cinfo in profile.items():
-        role = cinfo.get('role', '').lower()
-        rank = cinfo.get('rank')
-        # Build a label like "wheat (#1 producer)" or "oil (consumer)"
+    for cid, role_name, role_data in _iter_country_exposures(target):
+        rank = role_data.get('rank')
         label = cid.replace('_', ' ')
-        if rank and role == 'producer':
+        if rank and role_name == 'producer':
             label = f"{label} (#{rank} globally)"
-        if role == 'producer':
+        if role_name == 'producer':
             producer_items.append(label)
-        elif role == 'consumer':
+        elif role_name == 'consumer':
             consumer_items.append(label)
-        elif role == 'transit':
+        elif role_name == 'transit':
             transit_items.append(label)
 
     parts = []
@@ -2283,34 +2445,47 @@ def get_commodity_pressure(target):
         country = data.get('country_summaries', {}).get(target, {}) or {}
         country_signals = country.get('commodity_signals', {}) or {}
 
-        # ── Build commodity_summaries: ALWAYS one tile per registered commodity ──
-        # If live signal data exists for that commodity, merge it in. Otherwise use static.
+        # ── Build commodity_summaries: ONE TILE PER (commodity, role) pair ──
+        # If a country has multiple roles for the same commodity (e.g. China
+        # wheat producer + consumer), each role becomes its own tile. This is
+        # Option α from the schema migration design — full analytical fidelity
+        # on stability pages.
+        # If live signal data exists for that commodity, the tile inherits the
+        # commodity-level live data (signals are commodity-scoped, not
+        # role-scoped). Otherwise fall back to static.
         commodity_summaries = []
-        for commodity_id, profile_entry in profile.items():
+        for commodity_id in profile.keys():
             full_summary = data.get('commodity_summaries', {}).get(commodity_id, {}) or {}
             live_breakdown = country_signals.get(commodity_id, {}) or {}
+            role_exposures = _country_commodity_exposures(target, commodity_id)
 
-            # Static fields (always from registry)
-            tile = {
-                'commodity':            commodity_id,
-                'name':                 full_summary.get('name', commodity_id.replace('_', ' ').title()),
-                'icon':                 full_summary.get('icon', '📊'),
-                'tier':                 full_summary.get('tier'),
-                'category':             full_summary.get('category'),
-                'role':                 profile_entry.get('role'),
-                'rank':                 profile_entry.get('rank'),
-                'note':                 profile_entry.get('note'),
-                'has_spot_price':       full_summary.get('has_spot_price'),
-                'unit':                 full_summary.get('unit'),
-                'sparkline':            full_summary.get('sparkline'),
-                # Live signal fields (zero/normal when no signals)
-                'signal_count':         live_breakdown.get('signal_count', 0),
-                'top_signals':          live_breakdown.get('top_signals', []),
-                'global_alert_level':   full_summary.get('alert_level', 'normal'),
-                'global_signal_count':  full_summary.get('signal_count', 0),
-                'global_total_score':   full_summary.get('total_score', 0),
-            }
-            commodity_summaries.append(tile)
+            for role_name, role_data in role_exposures:
+                # Static fields (always from registry)
+                tile = {
+                    'commodity':            commodity_id,
+                    'name':                 full_summary.get('name', commodity_id.replace('_', ' ').title()),
+                    'icon':                 full_summary.get('icon', '📊'),
+                    'tier':                 full_summary.get('tier'),
+                    'category':             full_summary.get('category'),
+                    'role':                 role_name,
+                    'rank':                 role_data.get('rank'),
+                    'note':                 role_data.get('note'),
+                    'has_spot_price':       full_summary.get('has_spot_price'),
+                    'unit':                 full_summary.get('unit'),
+                    'sparkline':            full_summary.get('sparkline'),
+                    # Live signal fields (commodity-scoped, shared across roles)
+                    'signal_count':         live_breakdown.get('signal_count', 0),
+                    'top_signals':          live_breakdown.get('top_signals', []),
+                    'global_alert_level':   full_summary.get('alert_level', 'normal'),
+                    'global_signal_count':  full_summary.get('signal_count', 0),
+                    'global_total_score':   full_summary.get('total_score', 0),
+                    # Schema-migration metadata: True if this country has
+                    # multiple roles for this commodity (rendered as separate
+                    # tiles, but UI may want to group them visually)
+                    'is_multi_role_commodity': len(role_exposures) > 1,
+                    'role_count_for_commodity': len(role_exposures),
+                }
+                commodity_summaries.append(tile)
 
         # Sort: producers (with rank) first by rank, then transit, then consumers
         def _sort_key(t):
