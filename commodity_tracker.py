@@ -2040,6 +2040,238 @@ def _country_commodity_max_weight(country_id, commodity_id):
 
 
 # ========================================
+# CROSS-TRACKER FINGERPRINTS (May 2026)
+# ========================================
+# This module emits per-(country, commodity) supply-risk fingerprints to Redis
+# so that downstream consumers (rhetoric trackers, regional BLUFs, GPI) can
+# read country-specific commodity pressure without re-querying the full
+# /api/commodity-pressure endpoint.
+#
+# CONSUMER CONTRACT — for any downstream tracker:
+#
+#   from commodity_tracker import read_country_supply_risk, read_all_supply_risks_for_country
+#
+#   # Read a single country/commodity pair:
+#   risk = read_country_supply_risk('peru', 'copper')
+#   # Returns dict (see schema below) or None if no current pressure
+#
+#   # Read all commodity pressures for a single country:
+#   risks = read_all_supply_risks_for_country('peru')
+#   # Returns dict {commodity_id: risk_dict} or {} if no pressure
+#
+# REDIS KEY PATTERN:  commodity:{commodity_id}:{country_id}_supply_risk
+#   examples:  commodity:copper:peru_supply_risk
+#              commodity:lithium:chile_supply_risk
+#              commodity:cobalt:drc_supply_risk
+#
+# VALUE SCHEMA (JSON):
+#   {
+#     'country':                'peru',
+#     'commodity':              'copper',
+#     'role':                   'producer',           # primary role (or composite)
+#     'roles':                  ['producer'],         # list of all roles for this country/commodity
+#     'is_multi_role':          False,
+#     'rank':                   2,                    # global rank for primary role (or None)
+#     'max_weight':             1.3,                  # max weight across all roles
+#     'alert_level':            'elevated',           # normal | elevated | high | surge
+#     'signal_count':           7,
+#     'country_weighted_score': 12.3,                 # signals × country_weight
+#     'top_signal': {                                 # the single highest-weight signal
+#         'title':      'Las Bambas community blockade enters week 3',
+#         'url':        'https://...',
+#         'source':     'Reuters',
+#         'weight':     1.4,
+#         'language':   'es',
+#         'published':  '2026-05-08T14:00:00Z',
+#     },
+#     'top_signals_brief': [...],                     # top 3 signals (lighter shape)
+#     'fingerprint_written_at': '2026-05-09T15:30:00Z',
+#     'ttl_hours':              13,
+#   }
+#
+# WRITE BEHAVIOR:
+#   • Fingerprints are written ONLY for (country, commodity) pairs with
+#     signal_count > 0 — empty fingerprints are NOT written. This keeps Redis
+#     clean (we'd otherwise have 32 × 15 = 480 keys, most empty).
+#   • TTL is 13 hours = 12-hour standard refresh + 1-hour buffer. This ensures
+#     fingerprints never expire mid-cycle if a refresh is delayed.
+#   • Writes happen at the end of _run_full_scan(), inside the per-country
+#     breakdown loop, after country_summaries[cid] is populated.
+#   • If Upstash Redis is not configured (no env vars), writes silently no-op.
+#
+# READ BEHAVIOR:
+#   • read_country_supply_risk(country, commodity) returns the dict or None
+#   • read_all_supply_risks_for_country(country) iterates the country's
+#     registered commodities and returns a {commodity_id: dict} map
+#   • Both readers handle Redis-down gracefully (return None / empty dict)
+
+SUPPLY_RISK_FINGERPRINT_TTL_HOURS = 13   # 12h refresh + 1h buffer
+
+
+def _supply_risk_redis_key(country_id, commodity_id):
+    """Build the canonical Redis key for a (country, commodity) supply-risk fingerprint."""
+    return f"commodity:{commodity_id}:{country_id}_supply_risk"
+
+
+def _write_supply_risk_fingerprint(country_id, commodity_id, breakdown_entry):
+    """
+    Emit a per-(country, commodity) supply-risk fingerprint to Upstash Redis.
+
+    Called from _run_full_scan() after country_summaries are built. Skips
+    write entirely if signal_count == 0 (no current pressure to report).
+
+    Args:
+        country_id: e.g. 'peru'
+        commodity_id: e.g. 'copper'
+        breakdown_entry: the dict from country_summaries[country_id]['commodity_signals'][commodity_id]
+                        — contains role, weight, rank, signal_count, top_signals, roles[], etc.
+
+    Returns:
+        True if the fingerprint was written, False if skipped or failed.
+    """
+    if not breakdown_entry:
+        return False
+    signal_count = breakdown_entry.get('signal_count', 0)
+    if signal_count == 0:
+        return False  # nothing to report — skip write to keep Redis clean
+
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return False  # silently no-op if Redis isn't configured
+
+    # Compute country-weighted score (signal weight × country exposure weight)
+    role_exposures = _country_commodity_exposures(country_id, commodity_id)
+    if not role_exposures:
+        return False
+    max_weight = max(e[1].get('weight', 1.0) for e in role_exposures)
+    role_names = [e[0] for e in role_exposures]
+    is_multi_role = len(role_names) > 1
+
+    # Country-weighted score = sum of (signal weight × max country exposure weight)
+    top_signals = breakdown_entry.get('top_signals', []) or []
+    country_weighted_score = round(
+        sum(s.get('weight', 1.0) * max_weight for s in top_signals),
+        2
+    )
+
+    # Determine alert level for this country/commodity pair
+    alert_level = determine_alert_level(country_weighted_score)
+
+    # Build top_signal (the single highest-weight) and top_signals_brief (top 3, lighter)
+    top_signal = None
+    if top_signals:
+        s0 = top_signals[0]
+        top_signal = {
+            'title':      s0.get('article_title') or s0.get('title'),
+            'url':        s0.get('article_url') or s0.get('url'),
+            'source':     s0.get('source'),
+            'weight':     s0.get('weight'),
+            'language':   s0.get('language'),
+            'published':  s0.get('published'),
+        }
+    top_signals_brief = []
+    for s in top_signals[:3]:
+        top_signals_brief.append({
+            'title':  s.get('article_title') or s.get('title'),
+            'url':    s.get('article_url') or s.get('url'),
+            'source': s.get('source'),
+            'weight': s.get('weight'),
+        })
+
+    fingerprint = {
+        'country':                country_id,
+        'commodity':              commodity_id,
+        'role':                   breakdown_entry.get('role'),
+        'roles':                  role_names,
+        'is_multi_role':          is_multi_role,
+        'rank':                   breakdown_entry.get('rank'),
+        'max_weight':             max_weight,
+        'alert_level':            alert_level,
+        'signal_count':           signal_count,
+        'country_weighted_score': country_weighted_score,
+        'top_signal':             top_signal,
+        'top_signals_brief':      top_signals_brief,
+        'fingerprint_written_at': datetime.now(timezone.utc).isoformat(),
+        'ttl_hours':              SUPPLY_RISK_FINGERPRINT_TTL_HOURS,
+    }
+
+    key = _supply_risk_redis_key(country_id, commodity_id)
+    ttl_seconds = SUPPLY_RISK_FINGERPRINT_TTL_HOURS * 3600
+
+    try:
+        url = f"{UPSTASH_REDIS_URL}/setex/{key}/{ttl_seconds}"
+        resp = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            data=json.dumps(fingerprint, default=str),
+            timeout=5
+        )
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[Commodity Fingerprint] Write error ({key}): {str(e)[:120]}")
+        return False
+
+
+def read_country_supply_risk(country_id, commodity_id):
+    """
+    Read a single (country, commodity) supply-risk fingerprint from Redis.
+
+    Returns:
+        dict (see schema in module header) or None if no fingerprint exists,
+        Redis is unavailable, or a network error occurs.
+
+    Usage:
+        from commodity_tracker import read_country_supply_risk
+        risk = read_country_supply_risk('peru', 'copper')
+        if risk:
+            alert = risk['alert_level']
+            top_headline = risk['top_signal']['title'] if risk.get('top_signal') else None
+    """
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return None
+    key = _supply_risk_redis_key(country_id, commodity_id)
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5
+        )
+        if resp.status_code != 200:
+            return None
+        body = resp.json()
+        raw = body.get('result')
+        if not raw:
+            return None
+        return json.loads(raw)
+    except Exception as e:
+        print(f"[Commodity Fingerprint] Read error ({key}): {str(e)[:120]}")
+        return None
+
+
+def read_all_supply_risks_for_country(country_id):
+    """
+    Read all supply-risk fingerprints for a country across its registered commodities.
+
+    Returns:
+        dict {commodity_id: risk_dict} — only commodities with active fingerprints
+        included. Empty dict if no pressure or country not in registry.
+
+    Usage:
+        from commodity_tracker import read_all_supply_risks_for_country
+        risks = read_all_supply_risks_for_country('peru')
+        # {'copper': {...}, 'silver': {...}} — assuming both have active pressure
+    """
+    profile = COUNTRY_COMMODITY_EXPOSURE.get(country_id)
+    if not profile:
+        return {}
+    risks = {}
+    for commodity_id in profile.keys():
+        risk = read_country_supply_risk(country_id, commodity_id)
+        if risk:
+            risks[commodity_id] = risk
+    return risks
+
+
+# ========================================
 # ARTICLE ANALYZER
 # ========================================
 
@@ -2379,6 +2611,14 @@ def _run_full_scan(days=7):
             'commodity_signals':  commodity_breakdown,
             'top_signals':        sigs[:10],
         }
+
+        # ── Cross-tracker fingerprint writes ──
+        # For each (country, commodity) pair where signals exist, emit a Redis
+        # fingerprint that downstream consumers (rhetoric trackers, regional
+        # BLUFs, GPI) can read. Skips empty pairs to keep Redis clean.
+        # See module header above _write_supply_risk_fingerprint for full contract.
+        for commodity_id, breakdown_entry in commodity_breakdown.items():
+            _write_supply_risk_fingerprint(cid, commodity_id, breakdown_entry)
 
     scan_time = round(time.time() - scan_start, 1)
 
@@ -2845,11 +3085,50 @@ def register_commodity_endpoints(app, start_background=True):
             'sparkline_cache_ttl_hours': SPARKLINE_CACHE_TTL_HOURS,
         })
 
+    @app.route('/api/commodity-fingerprint/<country>/<commodity>', methods=['GET'])
+    def api_commodity_fingerprint_single(country, commodity):
+        """
+        Read a single (country, commodity) supply-risk fingerprint from Redis.
+        Returns null if no current pressure or no fingerprint exists.
+        Useful for debugging the cross-tracker fingerprint contract.
+        """
+        from flask import jsonify
+        country = country.lower().strip()
+        commodity = commodity.lower().strip()
+        risk = read_country_supply_risk(country, commodity)
+        return jsonify({
+            'country': country,
+            'commodity': commodity,
+            'fingerprint': risk,
+            'has_pressure': risk is not None,
+        })
+
+    @app.route('/api/commodity-fingerprint/<country>', methods=['GET'])
+    def api_commodity_fingerprint_country(country):
+        """
+        Read all supply-risk fingerprints for a country.
+        Returns an object with one entry per commodity that currently has
+        pressure (signal_count > 0). Empty if no pressure.
+        """
+        from flask import jsonify
+        country = country.lower().strip()
+        risks = read_all_supply_risks_for_country(country)
+        registry = COUNTRY_COMMODITY_EXPOSURE.get(country, {})
+        return jsonify({
+            'country': country,
+            'registered_commodities': list(registry.keys()),
+            'commodities_with_pressure': list(risks.keys()),
+            'fingerprints': risks,
+            'pressure_count': len(risks),
+        })
+
     print("[Commodity Tracker] ✅ Endpoints registered:")
     print("  GET  /api/commodity-pressure")
     print("  GET  /api/commodity-pressure/<target>")
     print("  GET  /api/commodity-prices")
     print("  GET  /api/commodity-debug")
+    print("  GET  /api/commodity-fingerprint/<country>")
+    print("  GET  /api/commodity-fingerprint/<country>/<commodity>")
 
     # PERIODIC BACKGROUND SCAN (every 12 hours)
     if not start_background:
