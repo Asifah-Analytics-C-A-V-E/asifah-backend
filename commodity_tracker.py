@@ -779,9 +779,16 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'potash':       {'role': 'consumer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 potash consumer (~13M tonnes, ~17% global); the demand-side anchor of all global agri-commodity flow. Brazil's soy/corn export economy depends entirely on potash imports — when Belarus got sanctioned in 2021, Brazil was the primary impact zone. ~85% imported (Russia + Belarus + Canada). Soybean farmers' input cost lever."},
     },
+   'canada': {
+        'potash':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': "World's #1 potash producer (~14M tonnes/yr, ~36% global); Saskatchewan basin (largest known reserves globally); Nutrien (TSE:NTR — formed from PotashCorp + Agrium 2018 merger); Mosaic Esterhazy K3 mine. Canpotex consortium handles offshore exports. Brazil + USA + China are largest customers. Ukraine war + Belarus sanctions made Canada the structural Western-aligned potash anchor."},
+        'uranium':      {'role': 'producer',          'weight': 1.3, 'rank': 2,
+                         'note': "World's #2 uranium producer (~13% global); Cameco (TSE:CCO) operates McArthur River + Cigar Lake — among the world's highest-grade uranium deposits. Saskatchewan basin. Canada also leads CANDU heavy-water reactor IP. Major supplier to USA + EU + Japan + Korea. Western strategic alternative to Russian + Kazakh + Chinese supply chains."},
+        'oil':          {'role': 'producer',          'weight': 1.0,
+                         'note': "World's #4-5 oil producer (~5.9M bpd); Alberta oil sands (Athabasca) dominant; Suncor + Cenovus + CNRL operate. Largest oil exporter to USA via pipelines (Enbridge Mainline + Trans Mountain TMX expansion 2024). Heavy crude discount to WTI (WCS spread) drives Alberta fiscal politics."},
+    },
     'chile': {
         'copper':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 copper producer (~24% global supply, ~5.3M tonnes/yr);
                          'note': 'World #1 copper producer (~24% global supply, ~5.3M tonnes/yr); Codelco state-owned + BHP Escondida + Antofagasta + Anglo American Sur; Chuquicamata is the largest open-pit mine on Earth. Antofagasta region is the world\'s most concentrated copper-mining infrastructure. Strategic anchor for the global energy transition (EVs + grid + electrification all copper-hungry).'},
         'lithium':      {'role': 'producer',          'weight': 1.4, 'rank': 2,
                          'note': 'World #2 lithium producer (~23% global supply); Salar de Atacama is the highest-grade lithium brine deposit globally. SQM + Albemarle dominant. Lithium Triangle anchor (Chile/Argentina/Bolivia ~58% of global reserves). Boric administration\'s 2023 National Lithium Strategy moved sector toward state-private partnerships — domestic political volatility is structural commodity-pricing variable.'},
@@ -789,14 +796,6 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': '~50 Moz/yr (~5% global); by-product of copper mining at Escondida, Collahuasi, Pelambres; Chile silver flows track copper extraction tempo, not standalone silver-mine economics.'},
         'gold':         {'role': 'producer',          'weight': 0.7,
                          'note': 'Modest gold production (~40 tonnes/yr); often co-mined with copper at Maricunga/El Indio/Andacollo belts; not a pricing-mover but a stability-of-mining-sector signal.'},
-    },
-    'canada': {
-        'potash':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': "World's #1 potash producer (~14M tonnes/yr, ~36% global); Saskatchewan basin (largest known reserves globally); Nutrien (TSE:NTR — formed from PotashCorp + Agrium 2018 merger); Mosaic Esterhazy K3 mine. Canpotex consortium handles offshore exports. Brazil + USA + China are largest customers. Ukraine war + Belarus sanctions made Canada the structural Western-aligned potash anchor."},
-        'uranium':      {'role': 'producer',          'weight': 1.3, 'rank': 2,
-                         'note': "World's #2 uranium producer (~13% global); Cameco (TSE:CCO) operates McArthur River + Cigar Lake — among the world's highest-grade uranium deposits. Saskatchewan basin. Canada also leads CANDU heavy-water reactor IP. Major supplier to USA + EU + Japan + Korea. Western strategic alternative to Russian + Kazakh + Chinese supply chains."},
-        'oil':          {'role': 'producer',          'weight': 1.0,
-                         'note': "World's #4-5 oil producer (~5.9M bpd); Alberta oil sands (Athabasca) dominant; Suncor + Cenovus + CNRL operate. Largest oil exporter to USA via pipelines (Enbridge Mainline + Trans Mountain TMX expansion 2024). Heavy crude discount to WTI (WCS spread) drives Alberta fiscal politics."},
     },
     'china': {
         'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
