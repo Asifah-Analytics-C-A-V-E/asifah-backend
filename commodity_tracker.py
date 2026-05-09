@@ -942,7 +942,7 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 6,
                          'note': 'World #6 oil producer pre-strike (~3.2M bpd OPEC); also primary control of Strait of Hormuz transit (~20% of global oil). Kharg Island terminal struck Feb 2026; export capacity severely degraded. Hormuz closure remains active leverage even when production stalled.'},
         'natural_gas':  {'role': 'producer',          'weight': 1.2, 'rank': 3,
-                         'note': 'World #3 natural gas reserves (~33.99 trillion cubic meters);
+                         'note': 'World #3 natural gas reserves (~33.99 trillion cubic meters); South Pars field shared with Qatar; sanctions-constrained export capacity; pipeline-only delivery to Türkiye + Iraq + Armenia; LNG export ambitions blocked by tech restrictions.'},
         'uranium':      {'role': 'producer',          'weight': 1.3,
                          'note': 'Domestic enrichment program (Natanz, Fordow); pre-strike enriched to 60%; not market commodity but strategic signaling vector. Tracker watches IAEA + nuclear language.'},
         # ── Consumer side ──
@@ -1022,7 +1022,7 @@ COUNTRY_COMMODITY_EXPOSURE = {
     },
     'peru': {
         'silver':       {'role': 'producer',          'weight': 1.2, 'rank': 3,
-                         'note': 'World #3 silver producer (~107 Moz/~13% global); largest silver reserves globally per USGS;
+                         'note': 'World #3 silver producer (~107 Moz/~13% global); largest silver reserves globally per USGS; Antamina, Cerro de Pasco, Yanacocha; Buenaventura + Hochschild dominant. Andean mining region — political stability of Peru directly affects global silver supply.'},
         'copper':       {'role': 'producer',          'weight': 1.3,
                          'note': 'Major copper producer; Antamina, Toromocho; high-altitude Andean mining'},
     },
@@ -1106,7 +1106,7 @@ COUNTRY_COMMODITY_EXPOSURE = {
     },
     'turkmenistan': {
         'natural_gas':  {'role': 'producer',          'weight': 1.0, 'rank': 4,
-                         'note': "World #4 natural gas reserves (~27.4 TCM); Galkynysh world's #2 onshore field;
+                         'note': "World #4 natural gas reserves (~27.4 TCM); Galkynysh world's #2 onshore field; primarily exports to China via Central Asia-China pipeline; Russia/Iran transit constrained; isolated state — gas is the entire economy."},
         'oil':          {'role': 'producer',          'weight': 0.6,
                          'note': 'Modest oil production; primarily domestic + Caspian shipping; Turkmenbashi port modernization 2018'},
     },
