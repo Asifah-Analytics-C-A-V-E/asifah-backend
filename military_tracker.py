@@ -3198,13 +3198,16 @@ CHOKEPOINT_LOCATION_MAP = {
     'south_china_sea':['south china sea', 'spratly', 'paracel', 'scarborough shoal',
                        'second thomas shoal', 'philippine sea'],
     'malacca':        ['malacca strait', 'strait of malacca', 'malacca'],
+    'sunda_strait':   ['sunda strait', 'lombok strait', 'indonesian archipelago transit'],
     'bosporus':       ['bosporus', 'bosphorus', 'turkish straits', 'dardanelles'],
     'gibraltar':      ['gibraltar', 'strait of gibraltar', 'rock of gibraltar'],
+    'sicily_strait':  ['strait of sicily', 'sicilian channel', 'pantelleria', 'lampedusa'],
     'panama_canal':   ['panama canal', 'miraflores', 'colon', 'gatun'],
     'magellan':       ['strait of magellan', 'magellan', 'punta arenas', 'tierra del fuego'],
     'baltic':         ['baltic sea', 'kaliningrad', 'gulf of finland', 'gotland'],
     'arctic':         ['arctic', 'svalbard', 'barents sea', 'beaufort sea',
                        'greenland sea', 'thule', 'pituffik'],
+    'bering_strait':  ['bering strait', 'bering sea', 'diomede islands', 'chukchi sea'],
     'black_sea':      ['black sea', 'sevastopol', 'crimea naval', 'odesa naval', 'odessa naval'],
     'mediterranean':  ['eastern mediterranean', 'levantine', 'cyprus naval', 'haifa naval',
                        'sicily', 'aegean'],
@@ -3217,6 +3220,160 @@ _LOCATION_TO_CHOKEPOINT = {}
 for _cp_id, _kws in CHOKEPOINT_LOCATION_MAP.items():
     for _kw in _kws:
         _LOCATION_TO_CHOKEPOINT[_kw.lower()] = _cp_id
+
+# ────────────────────────────────────────────────────────────────────
+# CHOKEPOINT-SPECIFIC ALERT THRESHOLDS (v3.1.1 — May 2026)
+# ────────────────────────────────────────────────────────────────────
+# Why separate from the country-level ALERT_THRESHOLDS (10/25/50):
+# A chokepoint is a different signal class than a country. Country
+# scoring accumulates 20+ asset categories over a 7-day window and
+# needs higher thresholds. Chokepoints have lower baseline noise but
+# step-change criticality — a single "Iran mining Hormuz" signal is
+# materially worse than 20 routine patrol reports.
+#
+# Bands match the bimodal real-world impact pattern:
+#   open       → routine traffic, minor patrol activity
+#   monitored  → elevated patrols, named-actor presence, normal exercises
+#   contested  → active confrontations, mining threats, anti-ship signals,
+#                  high transit risk
+#   disrupted  → kinetic events, blockade signals, traffic rerouting,
+#                  insurance war-risk listings
+#
+CHOKEPOINT_THRESHOLDS = {
+    'open':       {'min_score': 0,    'label': 'Open',       'icon': '🟢'},
+    'monitored':  {'min_score': 5,    'label': 'Monitored',  'icon': '🟡'},
+    'contested':  {'min_score': 12,   'label': 'Contested',  'icon': '🟠'},
+    'disrupted':  {'min_score': 25,   'label': 'Disrupted',  'icon': '🔴'},
+}
+
+# Critical-event multipliers — these signal types have outsized impact
+# at chokepoints relative to country-level scoring. A Houthi anti-ship
+# missile fired at a Bab el-Mandeb transit is materially worse than the
+# same signal type at country-level. Multipliers stack with the existing
+# weight (so a 4.0-weighted signal at 2.5x = 10.0 chokepoint contribution).
+CHOKEPOINT_CRITICAL_KEYWORDS = {
+    # Mining — THE signal that closes a strait. Extreme multiplier.
+    'mining':              3.0,    # 'mining', 'mine threat', 'naval mine'
+    'mine_threat':         3.0,
+    'naval_mine':          3.0,
+
+    # Direct kinetic events on commercial shipping
+    'anti-ship missile':   2.5,
+    'anti-ship attack':    2.5,
+    'vessel struck':       3.0,
+    'ship attacked':       2.5,
+    'tanker attacked':     2.8,
+    'tanker struck':       2.8,
+    'commercial vessel hit': 2.8,
+
+    # Blockade / closure signals
+    'blockade':            2.5,
+    'closed to traffic':   3.0,
+    'closed to commercial': 3.0,
+    'closed to shipping':  3.0,
+    'transit closed':      3.0,
+    'traffic suspended':   2.5,
+    'transit suspended':   2.5,
+    'shipping halt':       2.5,
+    'strait closed':       3.0,
+
+    # Rerouting tells (the "supply chain has already given up" signal)
+    'cape of good hope':   2.0,    # rerouting from BAM/Suez
+    'rerouting':           2.0,
+    'avoiding':            1.8,    # 'shippers avoiding red sea'
+
+    # Insurance war-risk premium (Lloyd's JWC signal)
+    'war risk':            2.2,
+    'jwc listed':          2.5,    # Lloyd's Joint War Committee
+    'joint war committee': 2.5,
+    'insurance premium':   1.8,
+
+    # Convoy escort (sustained-but-managed escalation)
+    'convoy escort':       1.8,
+    'escorted transit':    1.8,
+    'naval escort':        1.5,
+
+    # Specific high-criticality events
+    'seized vessel':       2.5,
+    'vessel boarded':      2.2,
+    'hijacked':            2.5,
+    'detained vessel':     2.0,
+}
+
+# Chokepoint convergence pairs — when two chokepoints hit 'contested+'
+# simultaneously, that's a coupled-disruption signal worth its own
+# fingerprint. Same pattern as cross-actor amplifiers but for chokepoints.
+#
+# Each entry: chokepoint_pair → coupling rationale
+CHOKEPOINT_CONVERGENCE_PAIRS = {
+    'hormuz_bam':          {
+        'chokepoints':  ['hormuz', 'bab_el_mandeb'],
+        'min_level':    'contested',
+        'rationale':    'Iran-coupled — IRGC at Hormuz + Houthi proxies at BAM. '
+                        'Simultaneous contestation = supply-chain black swan.',
+    },
+    'bam_suez':            {
+        'chokepoints':  ['bab_el_mandeb', 'suez'],
+        'min_level':    'contested',
+        'rationale':    'Mediterranean-Red Sea trade artery. Both contested = '
+                        'Cape of Good Hope rerouting at scale.',
+    },
+    'taiwan_scs':          {
+        'chokepoints':  ['taiwan_strait', 'south_china_sea'],
+        'min_level':    'contested',
+        'rationale':    'China-coupled maritime perimeter. Joint pressure = '
+                        'INDOPACOM regional escalation.',
+    },
+    'bosporus_black_sea':  {
+        'chokepoints':  ['bosporus', 'black_sea'],
+        'min_level':    'contested',
+        'rationale':    'Russia-Ukraine grain corridor + Turkish straits. '
+                        'Joint disruption = NATO Article-V watch.',
+    },
+    'panama_magellan':     {
+        'chokepoints':  ['panama_canal', 'magellan'],
+        'min_level':    'contested',
+        'rationale':    'Western Hemisphere maritime — only matters when '
+                        'Panama disrupted (Magellan is the failover).',
+    },
+    'malacca_sunda':       {
+        'chokepoints':  ['malacca', 'sunda_strait'],
+        'min_level':    'contested',
+        'rationale':    'Southeast Asian maritime — Indonesia archipelago '
+                        'failover when Malacca contested.',
+    },
+}
+
+
+def determine_chokepoint_alert(score):
+    """Convert raw chokepoint score to chokepoint-specific alert level.
+    Distinct from country-level determine_alert_level() — uses lower bands
+    appropriate to the chokepoint signal class."""
+    if score >= CHOKEPOINT_THRESHOLDS['disrupted']['min_score']:
+        return 'disrupted'
+    if score >= CHOKEPOINT_THRESHOLDS['contested']['min_score']:
+        return 'contested'
+    if score >= CHOKEPOINT_THRESHOLDS['monitored']['min_score']:
+        return 'monitored'
+    return 'open'
+
+
+# Numeric rank for chokepoint level comparison (used in convergence detection)
+CHOKEPOINT_LEVEL_RANK = {'open': 0, 'monitored': 1, 'contested': 2, 'disrupted': 3}
+
+
+def _apply_chokepoint_critical_multiplier(signal):
+    """Inspect a signal's article title/text for chokepoint critical-event keywords.
+    Returns the multiplier to apply (1.0 if none match, else max matching multiplier).
+    Multiple matches → uses highest single multiplier (not stacked) so we don't
+    double-count e.g. 'tanker attacked' + 'anti-ship attack' on the same article."""
+    text = ((signal.get('article_title') or '') + ' ' +
+            (signal.get('asset_label') or '')).lower()
+    max_mult = 1.0
+    for kw, mult in CHOKEPOINT_CRITICAL_KEYWORDS.items():
+        if kw in text and mult > max_mult:
+            max_mult = mult
+    return max_mult
 
 # Cross-actor amplifier definitions — when these actor-pair combinations are
 # both at elevated+ alert level, write a `military:cross:{label}` fingerprint
@@ -3307,7 +3464,10 @@ def _classify_signal_asset_class(signal):
 
 def _extract_chokepoint_signals(all_signals):
     """Aggregate signals by chokepoint based on each signal's matched location.
-    Returns dict {chokepoint_id: {signal_count, weighted_score, top_signals[]}}."""
+    Applies CHOKEPOINT_CRITICAL_KEYWORDS multipliers to weight signals appropriately
+    for chokepoint scoring (mining, anti-ship, blockade, rerouting, etc.).
+    Returns dict {chokepoint_id: {signal_count, weighted_score, top_signals[],
+    critical_signal_count}}."""
     chokepoint_data = {}
     for sig in all_signals or []:
         loc = (sig.get('matched_location') or '').lower()
@@ -3322,21 +3482,32 @@ def _extract_chokepoint_signals(all_signals):
                     break
         if not cp_id:
             continue
+
+        # Apply chokepoint-specific critical-event multiplier
+        base_weight = float(sig.get('weight', 0))
+        cp_multiplier = _apply_chokepoint_critical_multiplier(sig)
+        adjusted_weight = base_weight * cp_multiplier
+
         if cp_id not in chokepoint_data:
             chokepoint_data[cp_id] = {
-                'signal_count':   0,
-                'weighted_score': 0.0,
-                'top_signals':    [],
+                'signal_count':         0,
+                'weighted_score':       0.0,
+                'critical_signal_count': 0,    # signals that triggered a multiplier
+                'top_signals':          [],
             }
         chokepoint_data[cp_id]['signal_count'] += 1
-        chokepoint_data[cp_id]['weighted_score'] += float(sig.get('weight', 0))
+        chokepoint_data[cp_id]['weighted_score'] += adjusted_weight
+        if cp_multiplier > 1.0:
+            chokepoint_data[cp_id]['critical_signal_count'] += 1
         if len(chokepoint_data[cp_id]['top_signals']) < 5:
             chokepoint_data[cp_id]['top_signals'].append({
-                'title':  sig.get('article_title', '')[:200],
-                'url':    sig.get('article_url', ''),
-                'source': sig.get('source', ''),
-                'actor':  sig.get('actor_name', ''),
-                'weight': sig.get('weight', 0),
+                'title':       sig.get('article_title', '')[:200],
+                'url':         sig.get('article_url', ''),
+                'source':      sig.get('source', ''),
+                'actor':       sig.get('actor_name', ''),
+                'base_weight': base_weight,
+                'multiplier':  round(cp_multiplier, 2),
+                'final_weight': round(adjusted_weight, 2),
             })
     return chokepoint_data
 
@@ -3424,15 +3595,20 @@ def _write_military_fingerprints(scan_result, all_signals):
 
         # ── 4. Chokepoint fingerprints ──
         chokepoint_data = _extract_chokepoint_signals(all_signals)
+        chokepoint_levels = {}   # used for convergence detection in step 7
         for cp_id, cp_info in chokepoint_data.items():
             score = cp_info['weighted_score']
-            cp_alert = determine_alert_level(score)
+            cp_alert = determine_chokepoint_alert(score)    # chokepoint-specific bands
+            chokepoint_levels[cp_id] = cp_alert
             payload = {
-                'chokepoint':   cp_id,
-                'alert_level':  cp_alert,
-                'signal_count': cp_info['signal_count'],
-                'score':        round(score, 2),
-                'top_signals':  cp_info['top_signals'],
+                'chokepoint':            cp_id,
+                'alert_level':           cp_alert,
+                'alert_label':           CHOKEPOINT_THRESHOLDS[cp_alert]['label'],
+                'alert_icon':            CHOKEPOINT_THRESHOLDS[cp_alert]['icon'],
+                'signal_count':          cp_info['signal_count'],
+                'critical_signal_count': cp_info.get('critical_signal_count', 0),
+                'score':                 round(score, 2),
+                'top_signals':           cp_info['top_signals'],
             }
             if _redis_fp_set(f"military:chokepoint:{cp_id}", payload):
                 written['chokepoint'] += 1
@@ -3504,11 +3680,47 @@ def _write_military_fingerprints(scan_result, all_signals):
             if _redis_fp_set(f"military:cross:{label}", payload):
                 written['cross'] += 1
 
+        # ── 7. Chokepoint convergence fingerprints ──
+        # When two chokepoints in a defined pair both hit 'contested+' simultaneously,
+        # write a convergence fingerprint. This is the "supply-chain black swan" signal.
+        written['chokepoint_convergence'] = 0
+        for label, criteria in CHOKEPOINT_CONVERGENCE_PAIRS.items():
+            required_cps = criteria.get('chokepoints', [])
+            min_level = criteria.get('min_level', 'contested')
+            min_rank = CHOKEPOINT_LEVEL_RANK.get(min_level, 2)
+
+            # Both chokepoints must be at min_level or higher
+            all_active = True
+            cp_levels_in_pair = {}
+            for cp_id in required_cps:
+                lvl = chokepoint_levels.get(cp_id, 'open')
+                cp_levels_in_pair[cp_id] = lvl
+                if CHOKEPOINT_LEVEL_RANK.get(lvl, 0) < min_rank:
+                    all_active = False
+                    break
+
+            if not all_active:
+                continue
+
+            # Lowest of the two levels = the convergence level
+            convergence_level = min(cp_levels_in_pair.values(),
+                                     key=lambda l: CHOKEPOINT_LEVEL_RANK.get(l, 0))
+            payload = {
+                'label':              label,
+                'active':             True,
+                'level':              convergence_level,
+                'chokepoint_levels':  cp_levels_in_pair,
+                'rationale':          criteria.get('rationale', ''),
+            }
+            if _redis_fp_set(f"military:chokepoint_convergence:{label}", payload):
+                written['chokepoint_convergence'] += 1
+
         total = sum(written.values())
         print(f"[Military Fingerprints] ✅ Wrote {total} fingerprints — "
               f"posture:{written['posture']} asset:{written['asset_distribution']} "
               f"theatre:{written['theatre']} chokepoint:{written['chokepoint']} "
-              f"evac:{written['evacuation']} cross:{written['cross']}")
+              f"evac:{written['evacuation']} cross:{written['cross']} "
+              f"convergence:{written['chokepoint_convergence']}")
         return written
 
     except Exception as e:
@@ -5491,6 +5703,27 @@ def register_military_endpoints(app, start_background=True):
         except Exception as e:
             return jsonify({'label': label, 'error': str(e)[:200]}), 500
 
+    @app.route('/api/military-fingerprint/chokepoint-convergence/<label>',
+               methods=['GET', 'OPTIONS'])
+    def api_military_fingerprint_cp_convergence(label):
+        """Chokepoint convergence fingerprint (hormuz_bam, bam_suez, taiwan_scs, etc.).
+        Active when both chokepoints in the pair are simultaneously at 'contested+'."""
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            label = (label or '').lower().strip()
+            data = _redis_fp_get(f"military:chokepoint_convergence:{label}")
+            return jsonify({
+                'label':    label,
+                'data':     data,
+                'has_data': bool(data),
+            })
+        except Exception as e:
+            return jsonify({'label': label, 'error': str(e)[:200]}), 500
+
     @app.route('/api/military-fingerprint-debug', methods=['GET'])
     def api_military_fingerprint_debug():
         """Diagnostic — list which fingerprint keys are currently in Redis."""
@@ -5501,26 +5734,30 @@ def register_military_endpoints(app, start_background=True):
         theatres_to_check = list(REGIONAL_THEATRES.keys())
         chokepoints_to_check = list(CHOKEPOINT_LOCATION_MAP.keys())
         cross_to_check = list(CROSS_AMPLIFIER_PAIRS.keys())
+        convergence_to_check = list(CHOKEPOINT_CONVERGENCE_PAIRS.keys())
 
         debug = {
-            'version':              '3.1.0',
+            'version':              '3.1.1',
             'fingerprint_ttl_hours': FINGERPRINT_TTL_SECONDS / 3600,
             'redis_configured':     bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
+            'chokepoint_thresholds': CHOKEPOINT_THRESHOLDS,
             'fingerprints_present': {
-                'posture':            [],
-                'asset_distribution': [],
-                'theatre':            [],
-                'chokepoint':         [],
-                'evacuation':         [],
-                'cross':              [],
+                'posture':                [],
+                'asset_distribution':     [],
+                'theatre':                [],
+                'chokepoint':             [],
+                'evacuation':             [],
+                'cross':                  [],
+                'chokepoint_convergence': [],
             },
             'fingerprints_missing': {
-                'posture':            [],
-                'asset_distribution': [],
-                'theatre':            [],
-                'chokepoint':         [],
-                'evacuation':         [],
-                'cross':              [],
+                'posture':                [],
+                'asset_distribution':     [],
+                'theatre':                [],
+                'chokepoint':             [],
+                'evacuation':             [],
+                'cross':                  [],
+                'chokepoint_convergence': [],
             },
         }
 
@@ -5550,6 +5787,12 @@ def register_military_endpoints(app, start_background=True):
                 debug['fingerprints_present']['cross'].append(label)
             else:
                 debug['fingerprints_missing']['cross'].append(label)
+
+        for label in convergence_to_check:
+            if _redis_fp_get(f"military:chokepoint_convergence:{label}"):
+                debug['fingerprints_present']['chokepoint_convergence'].append(label)
+            else:
+                debug['fingerprints_missing']['chokepoint_convergence'].append(label)
 
         # Summary counts
         debug['summary'] = {
