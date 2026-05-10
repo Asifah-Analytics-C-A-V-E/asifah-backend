@@ -162,6 +162,16 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
     print("[Military Tracker] ⚠️ Telegram signals not available")
 
+# Military signal interpreter — analytical prose layer (v1.0.0)
+# Optional: tracker still functions if interpreter not yet deployed.
+try:
+    from military_signal_interpreter import build_full_interpretation
+    MIL_INTERPRETER_AVAILABLE = True
+    print("[Military Tracker] ✅ Signal interpreter loaded")
+except ImportError:
+    MIL_INTERPRETER_AVAILABLE = False
+    print("[Military Tracker] ⚠️ Signal interpreter not yet deployed (analytical prose disabled)")
+
 # ========================================
 # CONFIGURATION
 # ========================================
@@ -5441,8 +5451,71 @@ def _run_full_scan(days=7):
         },
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
-        'version': '3.1.0'
+        'version': '3.2.0'
     }
+
+    # ── Compute chokepoint postures + convergences for scan_result + interpreter ──
+    # (These mirror what _write_military_fingerprints derives, but exposed in
+    # the scan_result so frontend + interpreter can read without Redis hops.)
+    chokepoint_data = _extract_chokepoint_signals(all_signals)
+    chokepoint_postures = {}
+    chokepoint_levels = {}
+    for cp_id, cp_info in chokepoint_data.items():
+        cp_alert = determine_chokepoint_alert(cp_info['weighted_score'])
+        chokepoint_levels[cp_id] = cp_alert
+        chokepoint_postures[cp_id] = {
+            'chokepoint':            cp_id,
+            'alert_level':           cp_alert,
+            'alert_label':           CHOKEPOINT_THRESHOLDS[cp_alert]['label'],
+            'alert_icon':            CHOKEPOINT_THRESHOLDS[cp_alert]['icon'],
+            'signal_count':          cp_info['signal_count'],
+            'critical_signal_count': cp_info.get('critical_signal_count', 0),
+            'score':                 round(cp_info['weighted_score'], 2),
+            'top_signals':           cp_info['top_signals'],
+        }
+
+    # Compute chokepoint convergences (mirror writer logic)
+    chokepoint_convergences = {}
+    for label, criteria in CHOKEPOINT_CONVERGENCE_PAIRS.items():
+        required_cps = criteria.get('chokepoints', [])
+        min_level = criteria.get('min_level', 'contested')
+        min_rank = CHOKEPOINT_LEVEL_RANK.get(min_level, 2)
+        all_active = True
+        cp_levels_in_pair = {}
+        for cp_id in required_cps:
+            lvl = chokepoint_levels.get(cp_id, 'open')
+            cp_levels_in_pair[cp_id] = lvl
+            if CHOKEPOINT_LEVEL_RANK.get(lvl, 0) < min_rank:
+                all_active = False
+                break
+        if all_active:
+            convergence_level = min(cp_levels_in_pair.values(),
+                                     key=lambda l: CHOKEPOINT_LEVEL_RANK.get(l, 0))
+            chokepoint_convergences[label] = {
+                'label':              label,
+                'active':             True,
+                'level':              convergence_level,
+                'chokepoint_levels':  cp_levels_in_pair,
+                'rationale':          criteria.get('rationale', ''),
+            }
+
+    result['chokepoint_postures']       = chokepoint_postures
+    result['chokepoint_convergences']   = chokepoint_convergences
+
+    # ── Run analytical interpreter (v3.2.0 — adds prose layer) ──
+    if MIL_INTERPRETER_AVAILABLE:
+        try:
+            interpretation = build_full_interpretation(result)
+            result['interpretation'] = interpretation
+            print(f"[Military Tracker] ✅ Interpreter generated "
+                  f"{len(interpretation.get('theater_prose', {}))} theater "
+                  f"+ {len(interpretation.get('chokepoint_prose', {}))} chokepoint "
+                  f"+ {len(interpretation.get('convergence_prose', {}))} convergence prose blocks")
+        except Exception as interp_err:
+            print(f"[Military Tracker] Interpreter error (non-critical): {str(interp_err)[:200]}")
+            result['interpretation'] = None
+    else:
+        result['interpretation'] = None
 
     save_military_cache(result)
 
@@ -5724,6 +5797,41 @@ def register_military_endpoints(app, start_background=True):
         except Exception as e:
             return jsonify({'label': label, 'error': str(e)[:200]}), 500
 
+    @app.route('/api/military-interpretation', methods=['GET', 'OPTIONS'])
+    def api_military_interpretation():
+        """Analytical prose layer (v3.2.0+). Returns:
+            executive_summary, theater_prose (5 regions),
+            chokepoint_prose (contested+ only), convergence_prose (active only),
+            evacuation_prose (single block), top_signals (canonical schema).
+
+        Reads from the cached scan_result['interpretation'] — no live re-derivation.
+        Frontend (military.html) + GPI consume this for FSO-grade prose."""
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            cache = load_military_cache() or {}
+            interp = cache.get('interpretation')
+            if not interp:
+                return jsonify({
+                    'available':            False,
+                    'reason':               ('Interpreter prose not available — either '
+                                              'interpreter module not deployed or scan '
+                                              'predates v3.2.0. Force-refresh to populate.'),
+                    'last_scan_version':    cache.get('version', 'unknown'),
+                    'last_updated':         cache.get('last_updated'),
+                })
+            return jsonify({
+                'available':              True,
+                'interpretation':         interp,
+                'last_updated':           cache.get('last_updated'),
+                'tracker_version':        cache.get('version', 'unknown'),
+            })
+        except Exception as e:
+            return jsonify({'available': False, 'error': str(e)[:200]}), 500
+
     @app.route('/api/military-fingerprint-debug', methods=['GET'])
     def api_military_fingerprint_debug():
         """Diagnostic — list which fingerprint keys are currently in Redis."""
@@ -5737,10 +5845,11 @@ def register_military_endpoints(app, start_background=True):
         convergence_to_check = list(CHOKEPOINT_CONVERGENCE_PAIRS.keys())
 
         debug = {
-            'version':              '3.1.1',
+            'version':              '3.2.0',
             'fingerprint_ttl_hours': FINGERPRINT_TTL_SECONDS / 3600,
             'redis_configured':     bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
             'chokepoint_thresholds': CHOKEPOINT_THRESHOLDS,
+            'interpreter_available': MIL_INTERPRETER_AVAILABLE,
             'fingerprints_present': {
                 'posture':                [],
                 'asset_distribution':     [],
@@ -5810,8 +5919,11 @@ def register_military_endpoints(app, start_background=True):
           "/api/military-fingerprint/<country>, "
           "/api/military-fingerprint/theatre/<id>, "
           "/api/military-fingerprint/chokepoint/<id>, "
+          "/api/military-fingerprint/chokepoint-convergence/<label>, "
           "/api/military-fingerprint/cross/<label>, "
           "/api/military-fingerprint-debug")
+    print("[Military Tracker] ✅ Interpretation endpoint registered: "
+          "/api/military-interpretation")
 
     # PERIODIC BACKGROUND SCAN (every 12 hours)
     # start_background=False → skip the scan thread entirely
