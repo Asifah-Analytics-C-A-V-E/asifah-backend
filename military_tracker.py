@@ -3156,6 +3156,372 @@ REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 # Same pattern as Iran and Lebanon modules
 # ========================================
 
+# ========================================
+# CROSS-TRACKER FINGERPRINT CONTRACT (v3.1.0 — May 2026)
+# ========================================
+# Writes per-country, per-theatre, per-chokepoint, and cross-actor
+# military fingerprints to Upstash Redis so other systems (rhetoric
+# trackers, GPI, country stability pages) can read live military
+# context without re-scanning.
+#
+# Fingerprint key namespace:
+#   military:{country}:posture            13h TTL
+#   military:{country}:asset_distribution 13h TTL
+#   military:theatre:{theatre_id}         13h TTL
+#   military:chokepoint:{name}            13h TTL
+#   military:evacuation:{country}         13h TTL  (only when active)
+#   military:cross:{label}                13h TTL  (only when active)
+#
+# All fingerprints carry a 'scanned_at' timestamp + 'source': 'military_tracker_v3.1'
+# so consumers can age-out stale data.
+#
+# This is an ADDITIVE upgrade — does not change existing /api/military-posture
+# response shape, scoring engine, or signal aggregation logic.
+
+FINGERPRINT_TTL_SECONDS = 13 * 3600   # 13h — outlasts 12h scan refresh + 1h buffer
+
+# Chokepoint mapping — translates LOCATION_MULTIPLIERS hits into chokepoint
+# fingerprints. Each chokepoint accumulates signal_count + score from any
+# article where the matched_location resolves to one of its keywords.
+#
+# Reused values: 'hormuz', 'bab_el_mandeb', 'taiwan_strait', 'panama_canal',
+# 'malacca', 'bosporus', 'gibraltar', 'suez', 'baltic', 'arctic', 'magellan'.
+CHOKEPOINT_LOCATION_MAP = {
+    'hormuz':         ['strait of hormuz', 'hormuz', 'persian gulf', 'bandar abbas',
+                       'hormuz mining', 'mining strait of hormuz', 'hormuz mine threat',
+                       'hormuz blockade', 'hormuz closed'],
+    'bab_el_mandeb':  ['bab el-mandeb', 'bab al-mandab', 'bab al-mandeb', 'mandeb',
+                       'red sea', 'gulf of aden', 'aden gulf'],
+    'suez':           ['suez canal', 'suez', 'egyptian canal'],
+    'taiwan_strait':  ['taiwan strait', 'taiwan straits', 'kinmen', 'matsu',
+                       'taipei', 'penghu'],
+    'south_china_sea':['south china sea', 'spratly', 'paracel', 'scarborough shoal',
+                       'second thomas shoal', 'philippine sea'],
+    'malacca':        ['malacca strait', 'strait of malacca', 'malacca'],
+    'bosporus':       ['bosporus', 'bosphorus', 'turkish straits', 'dardanelles'],
+    'gibraltar':      ['gibraltar', 'strait of gibraltar', 'rock of gibraltar'],
+    'panama_canal':   ['panama canal', 'miraflores', 'colon', 'gatun'],
+    'magellan':       ['strait of magellan', 'magellan', 'punta arenas', 'tierra del fuego'],
+    'baltic':         ['baltic sea', 'kaliningrad', 'gulf of finland', 'gotland'],
+    'arctic':         ['arctic', 'svalbard', 'barents sea', 'beaufort sea',
+                       'greenland sea', 'thule', 'pituffik'],
+    'black_sea':      ['black sea', 'sevastopol', 'crimea naval', 'odesa naval', 'odessa naval'],
+    'mediterranean':  ['eastern mediterranean', 'levantine', 'cyprus naval', 'haifa naval',
+                       'sicily', 'aegean'],
+    'caribbean':      ['caribbean sea', 'gulf of mexico', 'gtmo', 'guantanamo', 'cuba naval',
+                       'florida straits', 'bahamas naval'],
+}
+
+# Reverse-lookup: location-keyword → chokepoint_id (built once at import time)
+_LOCATION_TO_CHOKEPOINT = {}
+for _cp_id, _kws in CHOKEPOINT_LOCATION_MAP.items():
+    for _kw in _kws:
+        _LOCATION_TO_CHOKEPOINT[_kw.lower()] = _cp_id
+
+# Cross-actor amplifier definitions — when these actor-pair combinations are
+# both at elevated+ alert level, write a `military:cross:{label}` fingerprint
+# so downstream consumers (rhetoric trackers, GPI) can detect correlated
+# escalation across actors.
+CROSS_AMPLIFIER_PAIRS = {
+    'nato_us_active':       {'actors': ['us', 'nato'],            'min_level': 'elevated'},
+    'china_taiwan_active':  {'actors': ['china', 'taiwan'],       'min_level': 'elevated'},
+    'russia_ukraine_active':{'actors': ['russia', 'ukraine'],     'min_level': 'elevated'},
+    'iran_proxy_active':    {'actors': ['iran'],                  'min_level': 'high',
+                             'requires_evac_anywhere': True},
+    'us_venezuela_active':  {'actors': ['us', 'venezuela'],       'min_level': 'elevated'},
+    'us_cuba_active':       {'actors': ['us', 'cuba'],            'min_level': 'elevated'},
+    'us_panama_active':     {'actors': ['us', 'panama'],          'min_level': 'elevated'},
+    'us_greenland_active':  {'actors': ['us', 'greenland'],       'min_level': 'elevated'},
+}
+
+LEVEL_RANK = {'normal': 0, 'elevated': 1, 'high': 2, 'surge': 3}
+
+
+def _redis_fp_set(key, payload, ttl_seconds=FINGERPRINT_TTL_SECONDS):
+    """Write a fingerprint to Upstash Redis with TTL. Adds scanned_at + source.
+    Returns True on success, False on any error (silent — never crashes scan)."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return False
+    try:
+        if isinstance(payload, dict):
+            payload = dict(payload)
+            payload.setdefault('scanned_at', datetime.now(timezone.utc).isoformat())
+            payload.setdefault('source', 'military_tracker_v3.1')
+        resp = requests.post(
+            f"{UPSTASH_REDIS_URL}/setex/{key}/{int(ttl_seconds)}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            data=json.dumps(payload, default=str),
+            timeout=8,
+        )
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[Military Fingerprint] Redis write error ({key}): {str(e)[:120]}")
+        return False
+
+
+def _redis_fp_get(key):
+    """Read a fingerprint. Returns dict on success, None on miss/error."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return None
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5,
+        )
+        body = resp.json()
+        if body.get('result'):
+            return json.loads(body['result'])
+    except Exception:
+        pass
+    return None
+
+
+def _classify_signal_asset_class(signal):
+    """Map a signal's asset_type to broad asset classes for fingerprint distribution.
+    Returns one of: 'naval', 'air', 'missile', 'ground', 'cyber', 'evacuation', 'other'.
+    """
+    asset_type = (signal.get('asset_type') or '').lower()
+    asset_label = (signal.get('asset_label') or '').lower()
+    combined = asset_type + ' ' + asset_label
+
+    # Order matters — most specific first
+    if 'evac' in combined or 'neo' in combined or 'drawdown' in combined:
+        return 'evacuation'
+    if any(t in combined for t in ['carrier', 'naval', 'destroyer', 'frigate', 'submarine',
+                                    'amphib', 'minesweep', 'lcs', 'flagship']):
+        return 'naval'
+    if any(t in combined for t in ['missile', 'ballistic', 'cruise', 'hypersonic',
+                                    'thaad', 'patriot', 'iron dome', 'aegis', 'sm-6', 'sm-3']):
+        return 'missile'
+    if any(t in combined for t in ['air', 'aircraft', 'b-52', 'b-2', 'b-21', 'f-22', 'f-35',
+                                    'f-16', 'aegis ashore', 'fighter', 'bomber', 'tanker']):
+        return 'air'
+    if any(t in combined for t in ['cyber', 'cybersec', 'malware', 'apt']):
+        return 'cyber'
+    if any(t in combined for t in ['ground', 'troop', 'brigade', 'division', 'battalion',
+                                    'tank', 'armor', 'infantry', 'special forces', 'sof']):
+        return 'ground'
+    return 'other'
+
+
+def _extract_chokepoint_signals(all_signals):
+    """Aggregate signals by chokepoint based on each signal's matched location.
+    Returns dict {chokepoint_id: {signal_count, weighted_score, top_signals[]}}."""
+    chokepoint_data = {}
+    for sig in all_signals or []:
+        loc = (sig.get('matched_location') or '').lower()
+        if not loc:
+            continue
+        cp_id = _LOCATION_TO_CHOKEPOINT.get(loc)
+        if not cp_id:
+            # Try substring match (multi-word locations sometimes don't exact-match)
+            for kw, cp in _LOCATION_TO_CHOKEPOINT.items():
+                if kw in loc:
+                    cp_id = cp
+                    break
+        if not cp_id:
+            continue
+        if cp_id not in chokepoint_data:
+            chokepoint_data[cp_id] = {
+                'signal_count':   0,
+                'weighted_score': 0.0,
+                'top_signals':    [],
+            }
+        chokepoint_data[cp_id]['signal_count'] += 1
+        chokepoint_data[cp_id]['weighted_score'] += float(sig.get('weight', 0))
+        if len(chokepoint_data[cp_id]['top_signals']) < 5:
+            chokepoint_data[cp_id]['top_signals'].append({
+                'title':  sig.get('article_title', '')[:200],
+                'url':    sig.get('article_url', ''),
+                'source': sig.get('source', ''),
+                'actor':  sig.get('actor_name', ''),
+                'weight': sig.get('weight', 0),
+            })
+    return chokepoint_data
+
+
+def _compute_asset_distribution_for_actor(actor_id, all_signals):
+    """Per-actor asset class distribution based on its scored signals."""
+    counts = {'naval': 0, 'air': 0, 'missile': 0, 'ground': 0,
+              'cyber': 0, 'evacuation': 0, 'other': 0}
+    weighted = {k: 0.0 for k in counts}
+    for sig in all_signals or []:
+        if sig.get('actor') != actor_id:
+            continue
+        cls = _classify_signal_asset_class(sig)
+        counts[cls] += 1
+        weighted[cls] += float(sig.get('weight', 0))
+    return {'counts': counts, 'weighted': {k: round(v, 2) for k, v in weighted.items()}}
+
+
+def _write_military_fingerprints(scan_result, all_signals):
+    """Write all fingerprint types to Redis based on the scan result.
+    This is called once per successful _run_full_scan().
+
+    Failure of any individual write does NOT abort the scan — fingerprints
+    are best-effort metadata; the scan result itself is the source of truth.
+    """
+    written = {'posture': 0, 'asset_distribution': 0, 'theatre': 0,
+               'chokepoint': 0, 'evacuation': 0, 'cross': 0}
+    try:
+        target_postures   = scan_result.get('target_postures', {}) or {}
+        actor_summaries   = scan_result.get('actor_summaries', {}) or {}
+        theatre_groupings = scan_result.get('theatre_groupings', {}) or {}
+        evac_alerts       = scan_result.get('evacuation_alerts', []) or []
+
+        # ── 1. Per-country posture fingerprints ──
+        # Write for each target that has a posture entry, keyed by lowercase country id.
+        for target_id, posture in target_postures.items():
+            if not isinstance(posture, dict):
+                continue
+            payload = {
+                'country':       target_id,
+                'alert_level':   posture.get('alert_level', 'normal'),
+                'alert_label':   posture.get('alert_label', 'Normal'),
+                'score':         round(float(posture.get('score', 0)), 2),
+                'show_banner':   posture.get('show_banner', False),
+                'top_signals':   posture.get('top_signals', [])[:3],
+                'tension_multi': posture.get('tension_multiplier', 1.0),
+                'evac_active':   any(e.get('actor', '').lower() == target_id.lower() or
+                                     target_id.lower() in (e.get('title', '') or '').lower()
+                                     for e in evac_alerts),
+            }
+            if _redis_fp_set(f"military:{target_id}:posture", payload):
+                written['posture'] += 1
+
+        # ── 2. Per-actor asset-distribution fingerprints ──
+        for actor_id in actor_summaries.keys():
+            distribution = _compute_asset_distribution_for_actor(actor_id, all_signals)
+            payload = {
+                'country':      actor_id,
+                'alert_level':  actor_summaries[actor_id].get('alert_level', 'normal'),
+                'distribution': distribution,
+                'signal_count': actor_summaries[actor_id].get('signal_count', 0),
+            }
+            if _redis_fp_set(f"military:{actor_id}:asset_distribution", payload):
+                written['asset_distribution'] += 1
+
+        # ── 3. Per-theatre fingerprints ──
+        for theatre_id, theatre in theatre_groupings.items():
+            if not isinstance(theatre, dict):
+                continue
+            actors_in_theatre = list(theatre.get('actors', {}).keys())
+            active_actors = [a for a in actors_in_theatre
+                             if (theatre.get('actors', {}).get(a, {}) or {})
+                                .get('alert_level', 'normal') in ('elevated', 'high', 'surge')]
+            payload = {
+                'theatre':         theatre_id,
+                'label':           theatre.get('label', ''),
+                'alert_level':     theatre.get('alert_level', 'normal'),
+                'total_score':     round(float(theatre.get('total_score', 0)), 2),
+                'all_actors':      actors_in_theatre,
+                'active_actors':   active_actors,
+                'active_count':    len(active_actors),
+            }
+            if _redis_fp_set(f"military:theatre:{theatre_id}", payload):
+                written['theatre'] += 1
+
+        # ── 4. Chokepoint fingerprints ──
+        chokepoint_data = _extract_chokepoint_signals(all_signals)
+        for cp_id, cp_info in chokepoint_data.items():
+            score = cp_info['weighted_score']
+            cp_alert = determine_alert_level(score)
+            payload = {
+                'chokepoint':   cp_id,
+                'alert_level':  cp_alert,
+                'signal_count': cp_info['signal_count'],
+                'score':        round(score, 2),
+                'top_signals':  cp_info['top_signals'],
+            }
+            if _redis_fp_set(f"military:chokepoint:{cp_id}", payload):
+                written['chokepoint'] += 1
+
+        # ── 5. Evacuation fingerprints (only when evac signal exists) ──
+        # Group evac alerts by country/actor so a single country surface
+        # gets one fingerprint listing all its evac signals.
+        evac_by_country = {}
+        for evac in evac_alerts:
+            actor_name = (evac.get('actor') or '').lower().strip()
+            if not actor_name:
+                continue
+            # Try to map actor_name → country_id (the actor field is a
+            # display name like 'United States' — map it to actor_id like 'us')
+            country_id = None
+            for aid, asum in actor_summaries.items():
+                if asum.get('name', '').lower() == actor_name or aid == actor_name:
+                    country_id = aid
+                    break
+            if not country_id:
+                # fallback — use the lowercase actor name itself
+                country_id = actor_name.replace(' ', '_')
+            evac_by_country.setdefault(country_id, []).append(evac)
+
+        for country_id, country_evacs in evac_by_country.items():
+            payload = {
+                'country':       country_id,
+                'active':        True,
+                'evac_count':    len(country_evacs),
+                'top_evac':      country_evacs[0] if country_evacs else None,
+                'all_evacs':     country_evacs[:5],
+                'subtypes':      list({e.get('subtype', 'unspecified') for e in country_evacs}),
+            }
+            if _redis_fp_set(f"military:evacuation:{country_id}", payload):
+                written['evacuation'] += 1
+
+        # ── 6. Cross-actor amplifier fingerprints ──
+        for label, criteria in CROSS_AMPLIFIER_PAIRS.items():
+            required_actors = criteria.get('actors', [])
+            min_level = criteria.get('min_level', 'elevated')
+            min_rank = LEVEL_RANK.get(min_level, 1)
+            requires_evac = criteria.get('requires_evac_anywhere', False)
+
+            # All required actors must be at min_level or higher
+            all_active = True
+            actor_levels = {}
+            for required_id in required_actors:
+                a = actor_summaries.get(required_id, {})
+                lvl = a.get('alert_level', 'normal')
+                actor_levels[required_id] = lvl
+                if LEVEL_RANK.get(lvl, 0) < min_rank:
+                    all_active = False
+                    break
+
+            if not all_active:
+                continue
+
+            if requires_evac and not evac_alerts:
+                continue
+
+            payload = {
+                'label':         label,
+                'active':        True,
+                'level':         min(actor_levels.values(),
+                                     key=lambda l: LEVEL_RANK.get(l, 0)),
+                'actor_levels':  actor_levels,
+                'evac_present':  bool(evac_alerts),
+            }
+            if _redis_fp_set(f"military:cross:{label}", payload):
+                written['cross'] += 1
+
+        total = sum(written.values())
+        print(f"[Military Fingerprints] ✅ Wrote {total} fingerprints — "
+              f"posture:{written['posture']} asset:{written['asset_distribution']} "
+              f"theatre:{written['theatre']} chokepoint:{written['chokepoint']} "
+              f"evac:{written['evacuation']} cross:{written['cross']}")
+        return written
+
+    except Exception as e:
+        print(f"[Military Fingerprints] Error during fingerprint write: {str(e)[:200]}")
+        import traceback
+        traceback.print_exc()
+        return written
+
+
+# ========================================
+# REDIS PERSISTENT CACHE (existing)
+# ========================================
+
 MILITARY_REDIS_KEY = 'military_tracker_cache'
 
 
@@ -4863,10 +5229,18 @@ def _run_full_scan(days=7):
         },
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
-        'version': '3.0.0'
+        'version': '3.1.0'
     }
 
     save_military_cache(result)
+
+    # Write cross-tracker fingerprints (v3.1.0 — for downstream consumers:
+    # rhetoric trackers, GPI, country stability pages reading via Redis)
+    try:
+        _write_military_fingerprints(result, all_signals)
+    except Exception as fp_err:
+        # Fingerprint writes are non-critical — don't fail the scan
+        print(f"[Military Tracker] Fingerprint write error (non-critical): {str(fp_err)[:200]}")
 
     print(f"[Military Tracker] ✅ Scan complete in {scan_time}s")
     print(f"[Military Tracker]    Signals: {len(all_signals)}, Actors: {len(active_actors)}, Targets: {len(target_postures)}")
@@ -5030,7 +5404,171 @@ def register_military_endpoints(app, start_background=True):
                 mimetype='application/json'
             )
 
+    # ============================================================
+    # FINGERPRINT ENDPOINTS (v3.1.0 — cross-tracker contract)
+    # Read live military fingerprints written to Upstash Redis
+    # by _write_military_fingerprints() during the most recent scan.
+    # ============================================================
+
+    @app.route('/api/military-fingerprint/<country>', methods=['GET', 'OPTIONS'])
+    def api_military_fingerprint_country(country):
+        """Per-country military posture fingerprint (incl. asset distribution)."""
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            country = (country or '').lower().strip()
+            posture = _redis_fp_get(f"military:{country}:posture")
+            assets  = _redis_fp_get(f"military:{country}:asset_distribution")
+            evac    = _redis_fp_get(f"military:evacuation:{country}")
+            return jsonify({
+                'country':            country,
+                'posture':            posture,
+                'asset_distribution': assets,
+                'evacuation':         evac,
+                'has_data':           bool(posture or assets or evac),
+            })
+        except Exception as e:
+            return jsonify({'country': country, 'error': str(e)[:200]}), 500
+
+    @app.route('/api/military-fingerprint/theatre/<theatre_id>', methods=['GET', 'OPTIONS'])
+    def api_military_fingerprint_theatre(theatre_id):
+        """Per-theatre fingerprint (theatre = global_northcom, asia_pacific,
+        europe, middle_east, western_hemisphere)."""
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            theatre_id = (theatre_id or '').lower().strip()
+            data = _redis_fp_get(f"military:theatre:{theatre_id}")
+            return jsonify({
+                'theatre':  theatre_id,
+                'data':     data,
+                'has_data': bool(data),
+            })
+        except Exception as e:
+            return jsonify({'theatre': theatre_id, 'error': str(e)[:200]}), 500
+
+    @app.route('/api/military-fingerprint/chokepoint/<chokepoint_id>', methods=['GET', 'OPTIONS'])
+    def api_military_fingerprint_chokepoint(chokepoint_id):
+        """Per-chokepoint fingerprint (hormuz, bab_el_mandeb, taiwan_strait, etc.)."""
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            chokepoint_id = (chokepoint_id or '').lower().strip()
+            data = _redis_fp_get(f"military:chokepoint:{chokepoint_id}")
+            return jsonify({
+                'chokepoint': chokepoint_id,
+                'data':       data,
+                'has_data':   bool(data),
+            })
+        except Exception as e:
+            return jsonify({'chokepoint': chokepoint_id, 'error': str(e)[:200]}), 500
+
+    @app.route('/api/military-fingerprint/cross/<label>', methods=['GET', 'OPTIONS'])
+    def api_military_fingerprint_cross(label):
+        """Cross-actor amplifier fingerprint (nato_us_active, china_taiwan_active, etc.)."""
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            label = (label or '').lower().strip()
+            data = _redis_fp_get(f"military:cross:{label}")
+            return jsonify({
+                'label':    label,
+                'data':     data,
+                'has_data': bool(data),
+            })
+        except Exception as e:
+            return jsonify({'label': label, 'error': str(e)[:200]}), 500
+
+    @app.route('/api/military-fingerprint-debug', methods=['GET'])
+    def api_military_fingerprint_debug():
+        """Diagnostic — list which fingerprint keys are currently in Redis."""
+        from flask import jsonify
+
+        # Probe well-known fingerprint keys
+        countries_to_check = list(MILITARY_ACTORS.keys())
+        theatres_to_check = list(REGIONAL_THEATRES.keys())
+        chokepoints_to_check = list(CHOKEPOINT_LOCATION_MAP.keys())
+        cross_to_check = list(CROSS_AMPLIFIER_PAIRS.keys())
+
+        debug = {
+            'version':              '3.1.0',
+            'fingerprint_ttl_hours': FINGERPRINT_TTL_SECONDS / 3600,
+            'redis_configured':     bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
+            'fingerprints_present': {
+                'posture':            [],
+                'asset_distribution': [],
+                'theatre':            [],
+                'chokepoint':         [],
+                'evacuation':         [],
+                'cross':              [],
+            },
+            'fingerprints_missing': {
+                'posture':            [],
+                'asset_distribution': [],
+                'theatre':            [],
+                'chokepoint':         [],
+                'evacuation':         [],
+                'cross':              [],
+            },
+        }
+
+        for cid in countries_to_check:
+            for ftype, prefix in [('posture', 'military:{}:posture'),
+                                   ('asset_distribution', 'military:{}:asset_distribution'),
+                                   ('evacuation', 'military:evacuation:{}')]:
+                if _redis_fp_get(prefix.format(cid)):
+                    debug['fingerprints_present'][ftype].append(cid)
+                else:
+                    debug['fingerprints_missing'][ftype].append(cid)
+
+        for tid in theatres_to_check:
+            if _redis_fp_get(f"military:theatre:{tid}"):
+                debug['fingerprints_present']['theatre'].append(tid)
+            else:
+                debug['fingerprints_missing']['theatre'].append(tid)
+
+        for cpid in chokepoints_to_check:
+            if _redis_fp_get(f"military:chokepoint:{cpid}"):
+                debug['fingerprints_present']['chokepoint'].append(cpid)
+            else:
+                debug['fingerprints_missing']['chokepoint'].append(cpid)
+
+        for label in cross_to_check:
+            if _redis_fp_get(f"military:cross:{label}"):
+                debug['fingerprints_present']['cross'].append(label)
+            else:
+                debug['fingerprints_missing']['cross'].append(label)
+
+        # Summary counts
+        debug['summary'] = {
+            ftype: {
+                'present_count': len(debug['fingerprints_present'][ftype]),
+                'missing_count': len(debug['fingerprints_missing'][ftype]),
+            }
+            for ftype in debug['fingerprints_present']
+        }
+
+        return jsonify(debug)
+
     print("[Military Tracker] ✅ Endpoints registered: /api/military-posture, /api/military-posture/<target>")
+    print("[Military Tracker] ✅ Fingerprint endpoints registered: "
+          "/api/military-fingerprint/<country>, "
+          "/api/military-fingerprint/theatre/<id>, "
+          "/api/military-fingerprint/chokepoint/<id>, "
+          "/api/military-fingerprint/cross/<label>, "
+          "/api/military-fingerprint-debug")
 
     # PERIODIC BACKGROUND SCAN (every 12 hours)
     # start_background=False → skip the scan thread entirely
