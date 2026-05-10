@@ -3477,10 +3477,16 @@ def _extract_chokepoint_signals(all_signals):
     Applies CHOKEPOINT_CRITICAL_KEYWORDS multipliers to weight signals appropriately
     for chokepoint scoring (mining, anti-ship, blockade, rerouting, etc.).
     Returns dict {chokepoint_id: {signal_count, weighted_score, top_signals[],
-    critical_signal_count}}."""
+    critical_signal_count}}.
+
+    NOTE: Signals carry the location metadata under 'hotspot_location' (the
+    convention established by analyze_article_military()). Earlier versions
+    of this function read 'matched_location' which silently produced zero
+    matches — fixed in v3.2.1.
+    """
     chokepoint_data = {}
     for sig in all_signals or []:
-        loc = (sig.get('matched_location') or '').lower()
+        loc = (sig.get('hotspot_location') or sig.get('matched_location') or '').lower()
         if not loc:
             continue
         cp_id = _LOCATION_TO_CHOKEPOINT.get(loc)
@@ -5451,7 +5457,7 @@ def _run_full_scan(days=7):
         },
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
-        'version': '3.2.0'
+        'version': '3.2.1'
     }
 
     # ── Compute chokepoint postures + convergences for scan_result + interpreter ──
@@ -5845,7 +5851,7 @@ def register_military_endpoints(app, start_background=True):
         convergence_to_check = list(CHOKEPOINT_CONVERGENCE_PAIRS.keys())
 
         debug = {
-            'version':              '3.2.0',
+            'version':              '3.2.1',
             'fingerprint_ttl_hours': FINGERPRINT_TTL_SECONDS / 3600,
             'redis_configured':     bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
             'chokepoint_thresholds': CHOKEPOINT_THRESHOLDS,
