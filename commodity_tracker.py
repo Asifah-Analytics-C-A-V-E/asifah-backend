@@ -1159,8 +1159,207 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "MP Materials Mountain Pass (the only operating US REE mine) + new processing investments; CHIPS-era industrial policy push for diversification from China dependency."},
         'uranium':      {'role': 'consumer',          'weight': 1.1,
                          'note': "World's largest civilian uranium consumer (~93 reactors); Russian HALEU dependency major concern; Centrus Energy + Urenco USA + DOE strategic uranium reserve."},
-    },
+   },
 }
+# ============================================================================
+# LEADER COMMODITY INTERVENTIONS — v1.0
+# ============================================================================
+# Detects verbal interventions ("jawboning") by senior officials about
+# commodities — a price-moving signal class invisible to fundamentals trackers.
+#
+# Example: PM Modi's May 2026 call for Indians to stop buying gold for a year
+# is not a gold supply/demand event — it's a defensive FX-pressure absorption
+# signal. Bloomberg sees the price tick. We see the causal taxonomy.
+#
+# Architecture:
+#   - KNOWN_SPEAKERS:                 name → {role, country, weight} lookup
+#   - LEADER_INTERVENTION_KEYWORDS:   per-commodity trigger phrases (en/hi/ur)
+#   - INTERVENTION_DIRECTION_LEXICON: phrase → direction enum
+#   - INTERVENTION_RATIONALE_LEXICON: phrase → rationale enum
+#
+# Downstream consumers:
+#   - get_commodity_pressure(target) injects 'leader_interventions' field
+#   - india-stability.html / commodities.html render the panel
+#   - Future: rhetoric trackers read 'leader_intervention' fingerprints to
+#     classify offensive vs defensive statecraft (Feature B, backlog)
+#
+# Schema reserves 'classification_hint' + 'upstream_stressor_hint' fields for
+# the future rhetoric-tracker interpretation layer (defensive statecraft
+# attribution, butterfly-effect mapping to upstream theater stressors).
+# ============================================================================
+
+# ── KNOWN_SPEAKERS ───────────────────────────────────────────────────────────
+# Senior officials whose statements move commodity markets. Add aliases freely.
+# weight: 1.0 = standard; 1.3 = high-impact speaker (head of state of major
+# economy, Fed/ECB/PBOC governor, OPEC SecGen-tier).
+KNOWN_SPEAKERS = {
+    # India
+    'narendra modi':        {'role': 'head_of_state',         'country': 'india',     'weight': 1.3, 'aliases': ['pm modi', 'prime minister modi', 'modi ji']},
+    'nirmala sitharaman':   {'role': 'finance_minister',      'country': 'india',     'weight': 1.2, 'aliases': ['sitharaman', 'finance minister sitharaman']},
+    'shaktikanta das':      {'role': 'central_bank_governor', 'country': 'india',     'weight': 1.2, 'aliases': ['rbi governor', 'governor das']},
+    'piyush goyal':         {'role': 'trade_minister',        'country': 'india',     'weight': 1.0, 'aliases': ['goyal']},
+    'hardeep puri':         {'role': 'energy_minister',       'country': 'india',     'weight': 1.0, 'aliases': ['puri']},
+    # USA
+    'donald trump':         {'role': 'head_of_state',         'country': 'usa',       'weight': 1.3, 'aliases': ['president trump', 'trump']},
+    'jerome powell':        {'role': 'central_bank_governor', 'country': 'usa',       'weight': 1.3, 'aliases': ['fed chair powell', 'powell']},
+    'scott bessent':        {'role': 'finance_minister',      'country': 'usa',       'weight': 1.2, 'aliases': ['treasury secretary bessent', 'bessent']},
+    'chris wright':         {'role': 'energy_minister',       'country': 'usa',       'weight': 1.1, 'aliases': ['energy secretary wright']},
+    # China
+    'xi jinping':           {'role': 'head_of_state',         'country': 'china',     'weight': 1.3, 'aliases': ['president xi', 'xi']},
+    'li qiang':             {'role': 'head_of_state',         'country': 'china',     'weight': 1.1, 'aliases': ['premier li']},
+    'pan gongsheng':        {'role': 'central_bank_governor', 'country': 'china',     'weight': 1.2, 'aliases': ['pboc governor', 'pan']},
+    # Russia
+    'vladimir putin':       {'role': 'head_of_state',         'country': 'russia',    'weight': 1.3, 'aliases': ['president putin', 'putin']},
+    'elvira nabiullina':    {'role': 'central_bank_governor', 'country': 'russia',    'weight': 1.2, 'aliases': ['nabiullina', 'cbr governor']},
+    'alexander novak':      {'role': 'energy_minister',       'country': 'russia',    'weight': 1.1, 'aliases': ['novak']},
+    # Iran
+    'masoud pezeshkian':    {'role': 'head_of_state',         'country': 'iran',      'weight': 1.2, 'aliases': ['president pezeshkian', 'pezeshkian']},
+    'ali khamenei':         {'role': 'head_of_state',         'country': 'iran',      'weight': 1.3, 'aliases': ['supreme leader khamenei', 'khamenei', 'ayatollah khamenei']},
+    # Saudi Arabia / OPEC
+    'mohammed bin salman':  {'role': 'head_of_state',         'country': 'saudi_arabia', 'weight': 1.3, 'aliases': ['mbs', 'crown prince', 'mohammed bin salman']},
+    'abdulaziz bin salman': {'role': 'energy_minister',       'country': 'saudi_arabia', 'weight': 1.2, 'aliases': ['prince abdulaziz']},
+    # Mexico
+    'claudia sheinbaum':    {'role': 'head_of_state',         'country': 'mexico',    'weight': 1.2, 'aliases': ['president sheinbaum', 'sheinbaum']},
+    # Brazil
+    'lula da silva':        {'role': 'head_of_state',         'country': 'brazil',    'weight': 1.2, 'aliases': ['president lula', 'lula']},
+    # Turkey
+    'recep tayyip erdogan': {'role': 'head_of_state',         'country': 'turkey',    'weight': 1.2, 'aliases': ['president erdogan', 'erdogan', 'erdoğan']},
+    # Eurozone
+    'christine lagarde':    {'role': 'central_bank_governor', 'country': 'eu',        'weight': 1.3, 'aliases': ['ecb president lagarde', 'lagarde']},
+    # UK
+    'andrew bailey':        {'role': 'central_bank_governor', 'country': 'uk',        'weight': 1.2, 'aliases': ['boe governor bailey']},
+    # Japan
+    'kazuo ueda':           {'role': 'central_bank_governor', 'country': 'japan',     'weight': 1.2, 'aliases': ['boj governor ueda']},
+}
+
+# ── LEADER_INTERVENTION_KEYWORDS ─────────────────────────────────────────────
+# Phrases that, when paired with a known speaker AND a commodity reference,
+# elevate an article to an "intervention" signal. en/hi/ur coverage for India;
+# en-only for other countries in v1.
+LEADER_INTERVENTION_KEYWORDS = {
+    'en': [
+        # Demand-side calls
+        'urged', 'urges', 'urge citizens', 'urge consumers', 'appeal', 'appealed',
+        'called on', 'calls on', 'asked citizens', 'asked indians', 'ask the public',
+        'avoid buying', 'stop buying', 'cut consumption', 'reduce consumption',
+        'curb demand', 'restrain demand', 'pause buying',
+        # Supply-side calls
+        'release reserves', 'tap reserves', 'release from spr', 'draw down reserves',
+        'export ban', 'export restriction', 'export curb', 'export tax',
+        'import duty', 'raise duty', 'cut duty', 'tariff', 'levy',
+        # Reserve / sovereign accumulation
+        'build reserves', 'accumulate reserves', 'diversify reserves',
+        'central bank gold', 'sovereign stockpile', 'strategic stockpile',
+        # Threats / signals
+        'will retaliate', 'will respond', 'weaponize', 'leverage',
+        # Defensive statecraft markers (Feature B foothold)
+        'protect forex', 'defend the rupee', 'defend currency', 'forex reserves',
+        'balance of payments', 'current account', 'import bill',
+    ],
+    'hi': [
+        # Hindi — common policy / exhortation language
+        'अपील', 'आह्वान', 'आग्रह', 'अनुरोध',                      # appeal/call/urge
+        'न खरीदें', 'मत खरीदें', 'खरीदारी रोकें', 'खरीद बंद',        # don't buy / stop buying
+        'सोना न खरीदें', 'सोने की खरीद',                              # gold-specific
+        'विदेशी मुद्रा भंडार', 'फॉरेक्स',                              # forex reserves
+        'आयात शुल्क', 'निर्यात प्रतिबंध',                            # import duty / export ban
+        'भंडार जारी',                                                # release reserves
+    ],
+    'ur': [
+        # Urdu — used for Pakistan + cross-border India coverage
+        'اپیل', 'مطالبہ', 'درخواست',                                # appeal/call/request
+        'خریداری بند', 'نہ خریدیں', 'خریدنے سے گریز',                # don't buy / avoid buying
+        'زر مبادلہ ذخائر', 'فاریکس',                                 # forex reserves
+        'درآمدی ڈیوٹی', 'برآمدی پابندی',                             # import duty / export ban
+        'ذخائر جاری',                                                # release reserves
+    ],
+}
+
+# ── INTERVENTION_DIRECTION_LEXICON ───────────────────────────────────────────
+# Trigger phrases mapped to the direction enum.
+INTERVENTION_DIRECTION_LEXICON = {
+    'suppress_demand':  [
+        'avoid buying', 'stop buying', 'do not buy', "don't buy", 'pause buying',
+        'cut consumption', 'reduce consumption', 'curb demand', 'restrain demand',
+        'न खरीदें', 'मत खरीदें', 'खरीदारी रोकें',
+        'نہ خریدیں', 'خریداری بند',
+    ],
+    'boost_demand':     [
+        'encourage buying', 'incentivize purchase', 'buy local', 'buy domestic',
+        'support purchases', 'buy indian', 'buy american', 'buy chinese',
+    ],
+    'restrict_supply':  [
+        'export ban', 'export restriction', 'export curb', 'export tax',
+        'production cut', 'output cut', 'cap exports', 'halt exports',
+        'निर्यात प्रतिबंध', 'برآمدی پابندی',
+    ],
+    'boost_supply':     [
+        'release reserves', 'tap reserves', 'release from spr', 'draw down reserves',
+        'increase production', 'lift export ban', 'lift restriction',
+        'भंडार जारी', 'ذخائر جاری',
+    ],
+    'build_reserves':   [
+        'build reserves', 'accumulate reserves', 'diversify reserves',
+        'central bank purchases', 'central bank buying', 'sovereign stockpile',
+        'strategic stockpile', 'build strategic',
+    ],
+    'draw_reserves':    [
+        'sell reserves', 'reserve sale', 'liquidate reserves', 'reserves drawdown',
+    ],
+    'threaten_ban':     [
+        'may ban', 'considering ban', 'could ban', 'threaten to ban', 'may impose ban',
+    ],
+    'threaten_sanctions': [
+        'will sanction', 'sanctions if', 'consider sanctions', 'threaten sanctions',
+        'secondary sanctions',
+    ],
+}
+
+# ── INTERVENTION_RATIONALE_LEXICON ───────────────────────────────────────────
+# Stated reasoning maps to rationale enum. Order matters — first match wins,
+# so list more specific rationales before more generic ones.
+INTERVENTION_RATIONALE_LEXICON = {
+    'fx_defense':         [
+        'forex reserves', 'foreign exchange reserves', 'protect forex', 'defend the rupee',
+        'defend currency', 'balance of payments', 'current account', 'import bill',
+        'विदेशी मुद्रा भंडार', 'فاریکس', 'زر مبادلہ ذخائر',
+    ],
+    'inflation':          [
+        'inflation', 'cpi', 'cost of living', 'price stability', 'price rise',
+        'महंगाई', 'مہنگائی',
+    ],
+    'food_security':      [
+        'food security', 'food prices', 'food inflation', 'grain stocks', 'wheat shortage',
+        'खाद्य सुरक्षा',
+    ],
+    'energy_security':    [
+        'energy security', 'fuel prices', 'gasoline prices', 'pump prices', 'oil security',
+        'crude prices',
+    ],
+    'sanctions_response': [
+        'sanctions', 'sanctioned', 'in response to sanctions', 'retaliation', 'countersanctions',
+    ],
+    'strategic_stockpile': [
+        'strategic reserve', 'strategic petroleum reserve', 'spr', 'national stockpile',
+    ],
+    'election_politics':  [
+        'election', 'voters', 'electorate', 'campaign',
+    ],
+    'climate_policy':     [
+        'climate', 'emissions', 'net zero', 'decarbonization', 'green transition',
+    ],
+    'industrial_policy':  [
+        'industrial policy', 'made in china', 'make in india', 'reshoring',
+        'self-reliance', 'atmanirbhar',
+    ],
+}
+
+# Backlog (Feature B — Rhetoric tracker interpretation layer):
+#   - ECONOMIC_ABSORPTION_SIGNATURES: classify defensive vs offensive statecraft
+#   - upstream_stressor attribution (link to cross-theater fingerprints)
+#   - Historical analog database (UK '67, India '91, Turkey '21, Egypt 2010s)
+#   - Escalation ladder progression detection (jawboning → duty → controls → IMF)
+
 # ========================================
 # RSS FEEDS — Commodity-specific sources
 # ========================================
