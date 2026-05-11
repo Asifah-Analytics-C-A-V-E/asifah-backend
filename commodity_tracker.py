@@ -2682,19 +2682,29 @@ def detect_leader_intervention(article):
         'intensity':               intensity,
         'verbal_only':             True,             # v1.0 default; future patches may detect formal-action backing
 
-        # Source provenance
+        # Source provenance — normalize the {'name': '...'} dict shape used
+        # throughout this codebase (NewsAPI native shape; mirrored by RSS/GDELT/
+        # Brave/Reddit ingesters at lines 915/985/1194/1264). See pattern at
+        # line ~1333 in analyze_article_commodity().
         'source_url':              article.get('url'),
-        'source_title':            article.get('source'),
+        'source_title':            (
+            article.get('source', {}).get('name', 'Unknown')
+            if isinstance(article.get('source'), dict)
+            else (article.get('source') or 'Unknown')
+        ),
         'language':                article.get('language', 'en'),
         'quote_short':             title[:180],
 
         # Market reaction (best-effort)
         'price_reaction_pct_24h':  price_reaction,
 
-        # Stable identity for downstream deduplication / fingerprint refs
+        # Stable identity for downstream deduplication / fingerprint refs.
+        # Falls back to detected_at if published is missing/empty so we never
+        # produce a fingerprint_id with a trailing underscore (would cause
+        # same-day same-direction collisions on subsequent calls).
         'fingerprint_id':          (
             f"{speaker_info.get('country')}_{commodity_id}_{direction}_"
-            f"{(article.get('published') or '')[:10].replace('-', '_')}"
+            f"{((article.get('published') or datetime.now(timezone.utc).isoformat())[:10].replace('-', '_'))}"
         ),
 
         # Feature B reservations (populated by future rhetoric-tracker layer)
