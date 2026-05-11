@@ -101,6 +101,23 @@ except Exception as e:
     print(f"[ME Backend] ⚠️ GPI module not available: {e}")
     _gpi_tb.print_exc()
 
+# ────────────────────────────────────────────────────────────
+# ECONOMIC ABSORPTION SIGNATURES — "So What" layer for leader
+# commodity interventions (Butterfly Build Phase 1). Static catalog
+# today; Phase 2 rhetoric trackers will populate dynamically.
+# Endpoints: /api/absorption-signature/<intervention_id>,
+#            /api/absorption-signatures
+# ────────────────────────────────────────────────────────────
+try:
+    from absorption_signatures import register_absorption_endpoints
+    ABSORPTION_AVAILABLE = True
+    print("[ME Backend] ✅ Absorption signatures module loaded")
+except Exception as e:
+    ABSORPTION_AVAILABLE = False
+    import traceback as _absorp_tb
+    print(f"[ME Backend] ⚠️ Absorption signatures module not available: {e}")
+    _absorp_tb.print_exc()
+
 try:
     from rhetoric_tracker_iran import register_iran_rhetoric_routes
     print("[ME Backend] ✅ Iran rhetoric (command node) module loaded")
@@ -966,6 +983,13 @@ if ME_BLUF_AVAILABLE:
 if GPI_AVAILABLE:
     register_gpi_routes(app)
     print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+
+# Economic Absorption Signatures — register after commodity tracker so leader
+# interventions can be cross-referenced. Phase 2 rhetoric trackers will read
+# leader intervention fingerprints and write dynamic signatures back to Redis.
+if ABSORPTION_AVAILABLE:
+    register_absorption_endpoints(app)
+    print("[ME Backend] ✅ Absorption signatures registered: /api/absorption-signature/<id>, /api/absorption-signatures")
 
 if register_iran_rhetoric_routes:
     register_iran_rhetoric_routes(app)
