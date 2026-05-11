@@ -3623,7 +3623,7 @@ def register_commodity_endpoints(app, start_background=True):
         """Diagnostic — config snapshot + cache freshness."""
         from flask import jsonify
         return jsonify({
-            'version':                '1.0.0',
+            'version':                '1.1.0',
             'commodity_count':        len(COMMODITY_TYPES),
             'commodities':            list(COMMODITY_TYPES.keys()),
             'country_exposure_count': len(COUNTRY_COMMODITY_EXPOSURE),
@@ -3638,6 +3638,14 @@ def register_commodity_endpoints(app, start_background=True):
             'sparkline_cache_fresh':  is_sparkline_cache_fresh(),
             'main_cache_ttl_hours':   COMMODITY_CACHE_TTL_HOURS,
             'sparkline_cache_ttl_hours': SPARKLINE_CACHE_TTL_HOURS,
+            # Leader Interventions module (v1.0)
+            'leader_interventions_enabled':        True,
+            'known_speakers_count':                len(KNOWN_SPEAKERS),
+            'known_speakers_countries':            sorted(list({s.get('country') for s in KNOWN_SPEAKERS.values()})),
+            'intervention_keyword_languages':      list(LEADER_INTERVENTION_KEYWORDS.keys()),
+            'intervention_direction_enum_count':   len(INTERVENTION_DIRECTION_LEXICON),
+            'intervention_rationale_enum_count':   len(INTERVENTION_RATIONALE_LEXICON),
+            'intervention_fingerprint_ttl_hours':  LEADER_INTERVENTION_TTL_HOURS,
         })
 
     @app.route('/api/commodity-fingerprint/<country>/<commodity>', methods=['GET'])
@@ -3677,6 +3685,132 @@ def register_commodity_endpoints(app, start_background=True):
             'pressure_count': len(risks),
         })
 
+    # ========================================================================
+    # LEADER COMMODITY INTERVENTIONS — Endpoints
+    # ========================================================================
+    # /api/leader-interventions/<country>       → all interventions for 1 country
+    # /api/leader-interventions/commodity/<id>  → cross-country, 1 commodity
+    # /api/leader-interventions                 → global feed, all interventions
+
+    @app.route('/api/leader-interventions/<country>', methods=['GET', 'OPTIONS'])
+    def api_leader_interventions_country(country):
+        """
+        Return all current leader interventions for a single country.
+        Reads the per-country fingerprint from Redis (12h TTL).
+        """
+        from flask import request as flask_request, jsonify
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+        country = (country or '').lower().strip()
+        payload = read_leader_interventions(country) or {}
+        interventions = payload.get('interventions', [])
+        return jsonify({
+            'success':            True,
+            'country':            country,
+            'intervention_count': len(interventions),
+            'interventions':      interventions,
+            'fingerprint_meta':   {
+                'written_at':  payload.get('fingerprint_written_at'),
+                'ttl_hours':   payload.get('ttl_hours'),
+            },
+            'last_updated':       datetime.now(timezone.utc).isoformat(),
+        })
+
+    @app.route('/api/leader-interventions/commodity/<commodity>', methods=['GET', 'OPTIONS'])
+    def api_leader_interventions_commodity(commodity):
+        """
+        Cross-country view: all current leader interventions affecting one
+        commodity. Iterates known speakers' countries, reads each fingerprint,
+        filters to records where intervention['commodity'] matches.
+        """
+        from flask import request as flask_request, jsonify
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+        commodity = (commodity or '').lower().strip()
+        if commodity not in COMMODITY_TYPES:
+            return jsonify({
+                'success': False,
+                'error':   f"Unknown commodity '{commodity}'. Known: {list(COMMODITY_TYPES.keys())}",
+            }), 400
+
+        # Collect candidate countries — every country that has a known speaker
+        # OR a registered commodity exposure. Union is intentional so we don't
+        # miss speakers from countries without a full exposure map yet.
+        candidate_countries = set(COUNTRY_COMMODITY_EXPOSURE.keys())
+        for spk in KNOWN_SPEAKERS.values():
+            c = spk.get('country')
+            if c:
+                candidate_countries.add(c)
+
+        matching = []
+        for c in candidate_countries:
+            payload = read_leader_interventions(c) or {}
+            for iv in payload.get('interventions', []):
+                if iv.get('commodity') == commodity:
+                    matching.append(iv)
+
+        # Sort newest first
+        matching.sort(key=lambda i: i.get('date') or '', reverse=True)
+
+        return jsonify({
+            'success':            True,
+            'commodity':          commodity,
+            'commodity_name':     COMMODITY_TYPES.get(commodity, {}).get('name', commodity),
+            'commodity_icon':     COMMODITY_TYPES.get(commodity, {}).get('icon', '📊'),
+            'intervention_count': len(matching),
+            'interventions':      matching,
+            'countries_with_intervention': sorted(list({i.get('country') for i in matching if i.get('country')})),
+            'last_updated':       datetime.now(timezone.utc).isoformat(),
+        })
+
+    @app.route('/api/leader-interventions', methods=['GET', 'OPTIONS'])
+    def api_leader_interventions_global():
+        """
+        Global feed: every current intervention across every country, newest
+        first. Convenience endpoint for commodities.html's global panel and
+        future GPI consumption.
+        """
+        from flask import request as flask_request, jsonify
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        candidate_countries = set(COUNTRY_COMMODITY_EXPOSURE.keys())
+        for spk in KNOWN_SPEAKERS.values():
+            c = spk.get('country')
+            if c:
+                candidate_countries.add(c)
+
+        all_interventions = []
+        countries_with_data = []
+        for c in candidate_countries:
+            payload = read_leader_interventions(c) or {}
+            ivs = payload.get('interventions', [])
+            if ivs:
+                countries_with_data.append(c)
+                all_interventions.extend(ivs)
+
+        all_interventions.sort(key=lambda i: i.get('date') or '', reverse=True)
+
+        # Aggregate stats
+        by_commodity = {}
+        by_country   = {}
+        by_direction = {}
+        for iv in all_interventions:
+            by_commodity[iv.get('commodity')] = by_commodity.get(iv.get('commodity'), 0) + 1
+            by_country[iv.get('country')]     = by_country.get(iv.get('country'), 0) + 1
+            by_direction[iv.get('direction')] = by_direction.get(iv.get('direction'), 0) + 1
+
+        return jsonify({
+            'success':                  True,
+            'intervention_count':       len(all_interventions),
+            'interventions':            all_interventions,
+            'countries_with_intervention': sorted(countries_with_data),
+            'breakdown_by_commodity':   by_commodity,
+            'breakdown_by_country':     by_country,
+            'breakdown_by_direction':   by_direction,
+            'last_updated':             datetime.now(timezone.utc).isoformat(),
+        })
+
     print("[Commodity Tracker] ✅ Endpoints registered:")
     print("  GET  /api/commodity-pressure")
     print("  GET  /api/commodity-pressure/<target>")
@@ -3684,6 +3818,9 @@ def register_commodity_endpoints(app, start_background=True):
     print("  GET  /api/commodity-debug")
     print("  GET  /api/commodity-fingerprint/<country>")
     print("  GET  /api/commodity-fingerprint/<country>/<commodity>")
+    print("  GET  /api/leader-interventions")
+    print("  GET  /api/leader-interventions/<country>")
+    print("  GET  /api/leader-interventions/commodity/<commodity>")
 
     # PERIODIC BACKGROUND SCAN (every 12 hours)
     if not start_background:
