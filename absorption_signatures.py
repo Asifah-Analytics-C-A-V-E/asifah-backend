@@ -56,7 +56,7 @@ v1.0.0 — May 11 2026 · Butterfly Build Phase 1
 import os
 import json
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 # ============================================================================
@@ -238,19 +238,122 @@ ABSORPTION_SIGNATURES_STATIC = {
         ),
 
         # ── Provenance ────────────────────────────────────────────────────
-        'source':       'manual_v1',
-        'authored_by':  'Asifah Analyst Desk',
-        'authored_at':  '2026-05-11T18:30:00Z',
-        'ttl_hours':    ABSORPTION_TTL_HOURS,
+        'source':                  'manual_v1',
+        'authored_by':             'Asifah Analyst Desk',
+        'authored_at':             '2026-05-11T18:30:00Z',
+        'ttl_hours':               ABSORPTION_TTL_HOURS,
+
+        # ── Analytical decay ──────────────────────────────────────────────
+        # Static signatures grow stale as conditions evolve. Setting an
+        # explicit validity window forces the analyst desk to re-author
+        # before the analysis lags behind events. Computed staleness fields
+        # are appended in read_absorption_signature() at read time.
+        'analytical_validity_days': 30,
     },
 
     # ── (Add more static signatures here as analyst desk hand-curates them) ──
+    #
+    # ════════════════════════════════════════════════════════════════════
+    # 🚨 PHASE 2 BACKLOG REMINDER 🚨
+    # ════════════════════════════════════════════════════════════════════
+    # The static catalog is intentionally manual for Phase 1. When new
+    # leader interventions are detected (e.g. "Modi on copper", "Putin on
+    # gold", "Xi on rare earths"), they will NOT have a So What analysis
+    # until either (a) an analyst hand-writes a static entry here, or
+    # (b) Phase 2 India/Russia/China Rhetoric Trackers generate dynamic
+    # signatures by reading cross-theater fingerprints.
+    #
+    # Phase 2 goal: rhetoric trackers write to Redis at
+    #     absorption_signature:{intervention_id}
+    # with the same schema, classifying each new intervention as offensive
+    # vs defensive statecraft and identifying upstream stressors from the
+    # shared cross-theater fingerprint dict. Then THIS catalog becomes a
+    # fallback only — for historically significant / hand-curated cases.
+    #
+    # Until Phase 2 ships, expect "no So What block" on:
+    #   - New commodities (Modi on copper, etc.)
+    #   - New speakers (Putin, Xi, Erdogan, etc.)
+    #   - Variants on existing themes (Modi on gold *boost_demand* during
+    #     a future RBI reserve accumulation push, etc.)
+    # ════════════════════════════════════════════════════════════════════
 }
 
 
 # ============================================================================
 # READ PATH — Redis-first with static fallback
 # ============================================================================
+
+def _compute_staleness(signature):
+    """
+    Compute staleness metadata for a signature based on authored_at +
+    analytical_validity_days. Mutates and returns the signature dict.
+
+    Adds fields:
+      analytical_validity_until: ISO timestamp when analysis expires
+      days_since_authored:       int (negative if authored_at is in future)
+      days_until_expiry:         int (negative if expired)
+      staleness_status:          'fresh' | 'aging' | 'stale' | 'expired'
+      staleness_pct:             float 0.0-1.0+ (>1.0 = expired)
+      should_render:             False if expired, True otherwise
+
+    Thresholds (relative to analytical_validity_days):
+       0–50% → fresh    (no clutter — render BLUF normally)
+      50–80% → aging    (subtle "analysis aging" cue)
+      80–100% → stale   (visible "may have changed" warning)
+      >100% → expired   (analysis hidden by component; signal still rendered)
+    """
+    if not signature:
+        return signature
+
+    validity_days = signature.get('analytical_validity_days', 30)
+    authored_at_str = signature.get('authored_at', '')
+
+    try:
+        # Tolerant ISO parsing — handles 'Z' suffix and bare datetimes
+        s = authored_at_str.replace('Z', '+00:00') if authored_at_str else ''
+        authored_dt = datetime.fromisoformat(s) if s else None
+        if authored_dt and authored_dt.tzinfo is None:
+            authored_dt = authored_dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        authored_dt = None
+
+    if not authored_dt:
+        # No valid authored_at — treat as fresh by default (defensive)
+        signature['analytical_validity_until'] = None
+        signature['days_since_authored']       = None
+        signature['days_until_expiry']         = None
+        signature['staleness_status']          = 'fresh'
+        signature['staleness_pct']             = 0.0
+        signature['should_render']             = True
+        return signature
+
+    now = datetime.now(timezone.utc)
+    expires_at = authored_dt + timedelta(days=validity_days)
+    days_since = (now - authored_dt).total_seconds() / 86400.0
+    days_until = (expires_at - now).total_seconds() / 86400.0
+    pct = days_since / validity_days if validity_days > 0 else 1.0
+
+    if pct >= 1.0:
+        status = 'expired'
+        should_render = False
+    elif pct >= 0.80:
+        status = 'stale'
+        should_render = True
+    elif pct >= 0.50:
+        status = 'aging'
+        should_render = True
+    else:
+        status = 'fresh'
+        should_render = True
+
+    signature['analytical_validity_until'] = expires_at.isoformat()
+    signature['days_since_authored']       = round(days_since, 1)
+    signature['days_until_expiry']         = round(days_until, 1)
+    signature['staleness_status']          = status
+    signature['staleness_pct']             = round(pct, 3)
+    signature['should_render']             = should_render
+    return signature
+
 
 def read_absorption_signature(intervention_id):
     """
@@ -261,7 +364,10 @@ def read_absorption_signature(intervention_id):
         2. Static catalog at normalized key                  (Phase 1 source)
         3. None
 
-    Returns the signature dict, or None if not found.
+    Returns the signature dict with staleness metadata appended, or None if
+    not found. The signature is returned even when expired — the consumer
+    (Web Component) honors `should_render: False` and hides the analysis
+    UI without dropping the intervention itself.
     """
     if not intervention_id:
         return None
@@ -278,7 +384,8 @@ def read_absorption_signature(intervention_id):
             if resp.status_code == 200:
                 result = resp.json().get('result')
                 if result:
-                    return json.loads(result)
+                    sig = json.loads(result)
+                    return _compute_staleness(sig)
         except Exception as e:
             print(f"[Absorption Signatures] Redis read error ({intervention_id}): {str(e)[:120]}")
 
@@ -286,13 +393,13 @@ def read_absorption_signature(intervention_id):
     normalized = _normalize_intervention_id(intervention_id)
     static_match = ABSORPTION_SIGNATURES_STATIC.get(normalized)
     if static_match:
-        # Return a shallow copy with the original intervention_id attached so
-        # the consumer knows which intervention it matched against.
-        return {
+        # Shallow copy so we don't mutate the static catalog on read
+        sig_copy = {
             **static_match,
             'matched_intervention_id': intervention_id,
             'source_type':             'static_catalog',
         }
+        return _compute_staleness(sig_copy)
 
     return None
 
