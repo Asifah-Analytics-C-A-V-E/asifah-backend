@@ -2470,6 +2470,321 @@ def read_all_supply_risks_for_country(country_id):
     return risks
 
 
+# ============================================================================
+# LEADER COMMODITY INTERVENTIONS — Detection + Fingerprint I/O
+# ============================================================================
+# Implementation of the v1.0 detection layer described in the
+# LEADER_COMMODITY_INTERVENTIONS module block above.
+#
+# Pipeline:
+#   article → _match_speaker → _match_commodity_in_text → _classify_direction
+#           → _classify_rationale → _score_intensity → intervention record
+#
+# Each detected intervention is buffered per-country during the main scan, then
+# the top-N most recent are written to a single per-country Redis fingerprint
+# at key 'commodity:leader_interventions:{country_id}' with 12h TTL.
+# ============================================================================
+
+LEADER_INTERVENTION_TTL_HOURS = 12   # match supply-risk fingerprint cadence
+LEADER_INTERVENTION_MAX_PER_COUNTRY = 10   # cap fingerprint size
+
+
+def _leader_intervention_redis_key(country_id):
+    """Canonical Redis key for the per-country leader intervention fingerprint."""
+    return f"commodity:leader_interventions:{country_id}"
+
+
+def _match_speaker(text):
+    """
+    Scan article text for a known speaker (canonical name OR alias).
+    Case-insensitive. First match wins. Returns (canonical_name, speaker_dict)
+    or (None, None) if no match.
+    """
+    if not text:
+        return (None, None)
+    text_lower = text.lower()
+    for canonical, info in KNOWN_SPEAKERS.items():
+        if canonical in text_lower:
+            return (canonical, info)
+        for alias in info.get('aliases', []):
+            if alias.lower() in text_lower:
+                return (canonical, info)
+    return (None, None)
+
+
+def _match_commodity_in_text(text):
+    """
+    Identify which commodity an article is about by scanning COMMODITY_KEYWORDS.
+    First match wins. Returns commodity_id or None.
+
+    Note: we deliberately reuse the existing keyword set so interventions stay
+    consistent with the broader commodity tracker's understanding of what
+    counts as "about gold" / "about oil" / etc.
+    """
+    if not text:
+        return None
+    text_lower = text.lower()
+    for commodity_id, keyword_set in COMMODITY_KEYWORDS.items():
+        # COMMODITY_KEYWORDS is a flat list per commodity (mixed languages)
+        for kw in keyword_set:
+            if kw.lower() in text_lower:
+                return commodity_id
+    return None
+
+
+def _classify_intervention_direction(text):
+    """
+    Map article text to a direction enum by scanning INTERVENTION_DIRECTION_LEXICON.
+    First match wins. Returns direction string or None.
+    """
+    if not text:
+        return None
+    text_lower = text.lower()
+    for direction, phrases in INTERVENTION_DIRECTION_LEXICON.items():
+        for phrase in phrases:
+            if phrase.lower() in text_lower:
+                return direction
+    return None
+
+
+def _classify_intervention_rationale(text):
+    """
+    Map article text to a rationale enum by scanning INTERVENTION_RATIONALE_LEXICON.
+    First match wins. Returns rationale string or None.
+    """
+    if not text:
+        return None
+    text_lower = text.lower()
+    for rationale, phrases in INTERVENTION_RATIONALE_LEXICON.items():
+        for phrase in phrases:
+            if phrase.lower() in text_lower:
+                return rationale
+    return None
+
+
+def _score_intervention_intensity(text, direction, rationale):
+    """
+    Heuristic intensity scoring:
+      - 'strong'   = formal exhortation, repeated language, or explicit ask
+      - 'moderate' = clear request, single mention
+      - 'mild'     = mused / hinted / softer language
+
+    Signals used:
+      - 'strong' verbs: "urged", "called on", "demanded", "announced"
+      - softeners: "considering", "may", "could", "weighing"
+      - presence of a clear rationale = +1 intensity rung
+    """
+    if not text:
+        return 'mild'
+    text_lower = text.lower()
+
+    strong_markers = [
+        'urged', 'urges', 'called on', 'calls on', 'demanded', 'demands',
+        'announced', 'directed', 'ordered', 'declared', 'asked citizens',
+        'asked indians', 'appeal to citizens',
+    ]
+    softener_markers = [
+        'considering', 'weighing', 'may ', 'could ', 'might ', 'mused',
+        'hinted', 'suggested',
+    ]
+
+    has_strong = any(m in text_lower for m in strong_markers)
+    has_softener = any(m in text_lower for m in softener_markers)
+
+    if has_strong and not has_softener:
+        return 'strong'
+    if has_softener and not has_strong:
+        return 'mild'
+    # Promote intensity by one rung if rationale is explicitly stated
+    if rationale and not has_softener:
+        return 'strong' if has_strong else 'moderate'
+    return 'moderate'
+
+
+def _get_24h_price_reaction(commodity_id):
+    """
+    Read the cached 24h price change for a commodity from the sparkline bundle.
+    Returns float (pct) or None if not available.
+
+    Leverages the existing sparkline cache — no new yfinance call required.
+    """
+    try:
+        bundle = load_sparkline_cache()
+        if not bundle:
+            return None
+        entry = bundle.get(commodity_id) or {}
+        return entry.get('change_pct_1d')
+    except Exception:
+        return None
+
+
+def detect_leader_intervention(article):
+    """
+    Main entrypoint: analyze a single article for a leader commodity intervention.
+
+    Args:
+        article: dict with at minimum 'title' and optionally 'description',
+                 'url', 'source', 'published', 'language'.
+
+    Returns:
+        A structured intervention record (dict) if detected, else None.
+
+    The record includes two reserved fields for Feature B (rhetoric-tracker
+    interpretation layer): 'classification_hint' and 'upstream_stressor_hint'.
+    Both are None at v1.0 — the rhetoric tracker will populate them later.
+    """
+    if not article:
+        return None
+
+    # Combine title + description for richer matching (description may be empty)
+    title = (article.get('title') or '').strip()
+    description = (article.get('description') or '').strip()
+    if not title:
+        return None
+    text = f"{title} {description}"
+
+    # Speaker check is the hard gate — if no known speaker is named, it's not
+    # an intervention by our definition (we're tracking attributed statements,
+    # not anonymous policy moves).
+    speaker_name, speaker_info = _match_speaker(text)
+    if not speaker_info:
+        return None
+
+    # Commodity check — must reference at least one tracked commodity
+    commodity_id = _match_commodity_in_text(text)
+    if not commodity_id:
+        return None
+
+    # Direction check — must have at least one directional phrase
+    direction = _classify_intervention_direction(text)
+    if not direction:
+        return None
+
+    # Rationale is optional but adds analytical value
+    rationale = _classify_intervention_rationale(text)
+    intensity = _score_intervention_intensity(text, direction, rationale)
+    price_reaction = _get_24h_price_reaction(commodity_id)
+
+    # Build the intervention record
+    intervention = {
+        # Core identification
+        'date':                    article.get('published') or datetime.now(timezone.utc).isoformat(),
+        'country':                 speaker_info.get('country'),
+        'speaker':                 speaker_name.title(),
+        'speaker_canonical':       speaker_name,
+        'role':                    speaker_info.get('role'),
+        'speaker_weight':          speaker_info.get('weight', 1.0),
+
+        # Commodity + classification
+        'commodity':               commodity_id,
+        'direction':               direction,
+        'rationale':               rationale,        # may be None
+        'intensity':               intensity,
+        'verbal_only':             True,             # v1.0 default; future patches may detect formal-action backing
+
+        # Source provenance
+        'source_url':              article.get('url'),
+        'source_title':            article.get('source'),
+        'language':                article.get('language', 'en'),
+        'quote_short':             title[:180],
+
+        # Market reaction (best-effort)
+        'price_reaction_pct_24h':  price_reaction,
+
+        # Stable identity for downstream deduplication / fingerprint refs
+        'fingerprint_id':          (
+            f"{speaker_info.get('country')}_{commodity_id}_{direction}_"
+            f"{(article.get('published') or '')[:10].replace('-', '_')}"
+        ),
+
+        # Feature B reservations (populated by future rhetoric-tracker layer)
+        'classification_hint':     None,   # 'offensive' | 'defensive' | None
+        'upstream_stressor_hint':  None,   # cross-theater fingerprint reference
+
+        # Audit
+        'detected_at':             datetime.now(timezone.utc).isoformat(),
+    }
+    return intervention
+
+
+def _write_leader_intervention_fingerprint(country_id, interventions):
+    """
+    Write the per-country leader intervention fingerprint to Upstash Redis.
+
+    Stores up to LEADER_INTERVENTION_MAX_PER_COUNTRY most-recent interventions
+    for the country, with a 12h TTL. Skips entirely if Redis isn't configured
+    or if there are zero interventions to report.
+    """
+    if not interventions:
+        return False
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return False
+
+    # Sort by date desc, cap at MAX_PER_COUNTRY
+    sorted_interventions = sorted(
+        interventions,
+        key=lambda i: i.get('date') or '',
+        reverse=True
+    )[:LEADER_INTERVENTION_MAX_PER_COUNTRY]
+
+    payload = {
+        'country':                  country_id,
+        'intervention_count':       len(sorted_interventions),
+        'interventions':            sorted_interventions,
+        'fingerprint_written_at':   datetime.now(timezone.utc).isoformat(),
+        'ttl_hours':                LEADER_INTERVENTION_TTL_HOURS,
+    }
+
+    key = _leader_intervention_redis_key(country_id)
+    ttl_seconds = LEADER_INTERVENTION_TTL_HOURS * 3600
+
+    try:
+        url = f"{UPSTASH_REDIS_URL}/setex/{key}/{ttl_seconds}"
+        resp = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            data=json.dumps(payload, default=str),
+            timeout=5
+        )
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[Leader Interventions] Write error ({key}): {str(e)[:120]}")
+        return False
+
+
+def read_leader_interventions(country_id):
+    """
+    Read the per-country leader intervention fingerprint from Upstash Redis.
+
+    Returns the payload dict (with 'interventions' list) or None if not present
+    or if Redis isn't configured. Mirrors read_country_supply_risk() pattern.
+
+    This is the read-side function that downstream consumers (India rhetoric
+    tracker, regional BLUFs, get_commodity_pressure(), etc.) will call.
+    """
+    if not country_id:
+        return None
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return None
+
+    key = _leader_intervention_redis_key(country_id)
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5
+        )
+        if resp.status_code != 200:
+            return None
+        result = resp.json().get('result')
+        if not result:
+            return None
+        return json.loads(result)
+    except Exception as e:
+        print(f"[Leader Interventions] Read error ({key}): {str(e)[:120]}")
+        return None
+
+
 # ========================================
 # ARTICLE ANALYZER
 # ========================================
