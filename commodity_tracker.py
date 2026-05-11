@@ -3009,8 +3009,20 @@ def _run_full_scan(days=7):
     per_country_signals   = {cid: [] for cid in COUNTRY_COMMODITY_EXPOSURE.keys()}
     per_commodity_score   = {cid: 0  for cid in COMMODITY_TYPES.keys()}
     per_country_score     = {cid: 0  for cid in COUNTRY_COMMODITY_EXPOSURE.keys()}
+    # Leader intervention buckets — one list per country; populated alongside
+    # the main signal analysis. See LEADER_COMMODITY_INTERVENTIONS module.
+    intervention_buckets  = {}   # country_id → list of intervention records
 
     for article in all_articles:
+        # Leader intervention check — runs on every article regardless of
+        # whether the commodity-signal analyzer matched. An intervention can
+        # be valid even when the article isn't otherwise pressure-scored.
+        intervention = detect_leader_intervention(article)
+        if intervention:
+            ic = intervention.get('country')
+            if ic:
+                intervention_buckets.setdefault(ic, []).append(intervention)
+
         analysis = analyze_article_commodity(article)
         if not analysis['signals']:
             continue
@@ -3133,6 +3145,27 @@ def _run_full_scan(days=7):
         # See module header above _write_supply_risk_fingerprint for full contract.
         for commodity_id, breakdown_entry in commodity_breakdown.items():
             _write_supply_risk_fingerprint(cid, commodity_id, breakdown_entry)
+
+        # ── Leader intervention fingerprint write ──
+        # Writes the per-country jawboning fingerprint (top-N most-recent
+        # interventions, 12h TTL). Skips entirely if zero interventions detected
+        # for this country during the scan.
+        country_interventions = intervention_buckets.get(cid, [])
+        if country_interventions:
+            _write_leader_intervention_fingerprint(cid, country_interventions)
+
+    # Also write interventions for ANY country with detections, even if that
+    # country isn't in COUNTRY_COMMODITY_EXPOSURE (e.g. Saudi Arabia, Turkey —
+    # speakers are listed in KNOWN_SPEAKERS but full exposure maps may not
+    # exist yet). This ensures we never silently drop jawboning signal.
+    for unmapped_country, interventions in intervention_buckets.items():
+        if unmapped_country not in COUNTRY_COMMODITY_EXPOSURE and interventions:
+            _write_leader_intervention_fingerprint(unmapped_country, interventions)
+
+    total_interventions = sum(len(v) for v in intervention_buckets.values())
+    if total_interventions:
+        print(f"[Commodity Tracker] Leader interventions detected: {total_interventions} "
+              f"across {len(intervention_buckets)} countries")
 
     scan_time = round(time.time() - scan_start, 1)
 
@@ -3427,6 +3460,12 @@ def get_commodity_pressure(target):
             return (role_priority, rank)
         commodity_summaries.sort(key=_sort_key)
 
+        # ── Leader interventions (jawboning) — read from Redis fingerprint ──
+        # Best-effort: if read fails or fingerprint is absent, we return an
+        # empty list rather than failing the whole response.
+        leader_interventions_payload = read_leader_interventions(target) or {}
+        leader_interventions_list = leader_interventions_payload.get('interventions', [])
+
         return {
             'success':              True,
             'country':              target,
@@ -3434,6 +3473,8 @@ def get_commodity_pressure(target):
             'alert_level':          country.get('alert_level', 'normal'),
             'commodity_summaries':  commodity_summaries,
             'top_signals':          country.get('top_signals', [])[:8],
+            'leader_interventions': leader_interventions_list,
+            'leader_intervention_count': len(leader_interventions_list),
             'detail_url':           '/commodities.html',
             'last_updated':         data.get('last_updated'),
             'prose':                _build_country_prose(target),
