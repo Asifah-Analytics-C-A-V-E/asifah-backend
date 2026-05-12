@@ -517,6 +517,102 @@ def register_absorption_endpoints(app):
             'last_updated':  datetime.now(timezone.utc).isoformat(),
         })
 
+    @app.route('/api/absorption/detect', methods=['POST', 'OPTIONS'])
+    def api_absorption_detect():
+        """
+        Run the absorption detector against caller-supplied upstream fingerprints
+        and own_signals. Returns the list of fired signatures (with confidence,
+        upstream evidence, and optional persistence).
+
+        This endpoint is consumed by rhetoric trackers on other backends via
+        their absorption_proxy_<theater>.py modules — e.g., Asia backend's
+        absorption_proxy_asia.py calls this for the India rhetoric tracker.
+
+        Expected JSON body:
+            {
+                "country":             "india",
+                "upstream_fingerprints": {"iran": {...}, "china": {...}, ...},
+                "own_signals":         {"modi_gold_jawboning": true, ...},
+                "persist":             true        // optional, default false
+            }
+
+        Returns:
+            {
+                "success": true,
+                "country": "india",
+                "results": [
+                    {
+                        "signature_id":    "india_gold_suppress_demand",
+                        "rule_id":         "india_gold_modi_2026_05",
+                        "confidence":      0.85,
+                        "upstream_stressors": [...],
+                        "cohesion_stress_level": 1,
+                        "upstream_evidence": [...],
+                        "persisted":       true
+                    }
+                ],
+                "result_count": 1,
+                "last_updated": "..."
+            }
+        """
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        # Lazy import — detector lives in absorption_detector.py alongside this
+        # file on the ME backend. If it's not importable, we surface a clear
+        # error rather than crashing the request.
+        try:
+            from absorption_detector import detect_absorption, detect_and_persist
+        except ImportError as e:
+            return jsonify({
+                'success': False,
+                'error':   f'Absorption detector not available on this backend: {e}',
+                'results': [],
+            }), 503
+
+        body = flask_request.get_json(silent=True) or {}
+        country = (body.get('country') or '').lower().strip()
+        if not country:
+            return jsonify({
+                'success': False,
+                'error':   "Missing required field 'country' in request body.",
+                'results': [],
+            }), 400
+
+        upstream_fingerprints = body.get('upstream_fingerprints') or {}
+        own_signals           = body.get('own_signals') or {}
+        persist               = bool(body.get('persist', False))
+
+        try:
+            if persist:
+                results = detect_and_persist(
+                    country=country,
+                    upstream_fingerprints=upstream_fingerprints,
+                    own_signals=own_signals,
+                )
+            else:
+                results = detect_absorption(
+                    country=country,
+                    upstream_fingerprints=upstream_fingerprints,
+                    own_signals=own_signals,
+                )
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error':   f'Detector error: {type(e).__name__}: {str(e)[:200]}',
+                'results': [],
+            }), 500
+
+        return jsonify({
+            'success':      True,
+            'country':      country,
+            'results':      results,
+            'result_count': len(results),
+            'persisted':    persist,
+            'last_updated': datetime.now(timezone.utc).isoformat(),
+        })
+
     print("[Absorption Signatures] ✅ Endpoints registered:")
     print("  GET  /api/absorption-signature/<intervention_id>")
     print("  GET  /api/absorption-signatures")
+    print("  POST /api/absorption/detect")
