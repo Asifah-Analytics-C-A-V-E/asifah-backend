@@ -240,6 +240,39 @@ ABSORPTION_RULES = [
         'cohesion_stress_level': 2,
     },
 
+    # ── INDIA · Modi austerity jawboning (May 2026, multi-axis pressure)
+    {
+        'rule_id':         'india_modi_austerity_v1',
+        'country':         'india',
+        'description':     (
+            "Modi public-rhetoric campaign for broad consumption restraint "
+            "(foreign-travel suspension, SPG-convoy cuts, government "
+            "austerity measures, non-essential-spending appeals). "
+            "Classified as defensive aggregate-demand statecraft when ANY "
+            "upstream pressure axis is active. The mechanism: rhetoric "
+            "moves consumer behavior + discretionary stocks BEFORE policy "
+            "levers engage — validated by Reuters reporting on consumer-"
+            "staples + premium-discretionary stock declines following "
+            "Modi's austerity call (May 13, 2026)."
+        ),
+        'when_upstream':   lambda fps: (
+            # Any non-trivial upstream pressure qualifies — austerity is a
+            # general-purpose absorption response, not commodity-specific
+            (fps.get('iran', {}).get('theatre_score', 0) >= 30)
+            or (fps.get('china', {}).get('level', 0) >= 3)
+            or (fps.get('us', {}).get('us_executive_volatility', 0) >= 1.0)
+            or any(
+                (isinstance(t, dict) and t.get('country') == 'india')
+                or (isinstance(t, str) and t.lower() == 'india')
+                for t in (fps.get('us', {}).get('us_outbound_targets') or [])
+            )
+        ),
+        'when_own':        lambda own: bool(own.get('modi_austerity_active')),
+        'signature_id':    'india_modi_austerity_jawboning',
+        'upstream_stressors':    ['multi_axis_pressure', 'fed_dollar_strength'],
+        'cohesion_stress_level': 2,
+    },
+
     # NOTE: Add rules for other absorber-class trackers (Mexico, Egypt, Turkey)
     # here as those trackers come online. Each rule needs a matching static
     # catalog entry in absorption_signatures.py ABSORPTION_SIGNATURES_STATIC.
