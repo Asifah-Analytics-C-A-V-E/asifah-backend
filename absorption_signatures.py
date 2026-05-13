@@ -62,9 +62,40 @@ from datetime import datetime, timezone, timedelta
 # ============================================================================
 # REDIS CONFIG (mirrors commodity_tracker.py pattern)
 # ============================================================================
+# A3 FIX (May 13, 2026): Accept BOTH env var naming conventions.
+#
+# Background: The ME backend was originally configured with
+# UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN. Newer trackers (Asia
+# rhetoric_tracker_india.py and the absorption_detector module) use the
+# shorter UPSTASH_REDIS_URL / UPSTASH_REDIS_TOKEN. If ME only has the shorter
+# names set, this file's Redis path silently no-ops — every
+# write_absorption_signature() returns False and downstream callers see
+# persisted: false. The fallback below resolves either configuration.
+#
+# The platform invariant: ME and Asia share ONE Upstash instance. Whatever
+# names are set on a given backend, they should point at the same URL/token.
+UPSTASH_REDIS_URL = (
+    os.environ.get('UPSTASH_REDIS_REST_URL')
+    or os.environ.get('UPSTASH_REDIS_URL')
+    or ''
+)
+UPSTASH_REDIS_TOKEN = (
+    os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+    or os.environ.get('UPSTASH_REDIS_TOKEN')
+    or ''
+)
 
-UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_REST_URL', '')
-UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN', '')
+# Startup diagnostic — surfaces immediately in Render deploy logs so we
+# know whether the env var fallback worked on first boot without having
+# to wait for a real signature write attempt.
+if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+    print(f"[Absorption Signatures] ✅ Redis configured "
+          f"(URL ends '...{UPSTASH_REDIS_URL[-24:]}', token present)")
+else:
+    print("[Absorption Signatures] ⚠️ Redis NOT configured — "
+          "write/read paths will silently no-op. Set either "
+          "UPSTASH_REDIS_URL+UPSTASH_REDIS_TOKEN or "
+          "UPSTASH_REDIS_REST_URL+UPSTASH_REDIS_REST_TOKEN in Render.")
 
 ABSORPTION_TTL_HOURS = 168   # 7 days — static signatures don't go stale fast
 
@@ -79,7 +110,6 @@ def _normalize_intervention_id(intervention_id):
     Tolerant lookup helper. The cached fingerprint from the pre-Patch5.5 scan
     has format `india_gold_suppress_demand_` (trailing underscore from missing
     date). The post-fix format is `india_gold_suppress_demand_2026_05_11`.
-
     For static-catalog matching we normalize both to the trimmed base form so
     the same signature matches regardless of which version of the fingerprint
     is in Redis.
@@ -95,7 +125,6 @@ def _normalize_intervention_id(intervention_id):
     if len(parts) >= 3 and parts[-3].isdigit() and parts[-2].isdigit() and parts[-1].isdigit():
         s = '_'.join(parts[:-3])
     return s
-
 
 # ============================================================================
 # STATIC CATALOG — Hand-curated absorption signatures
@@ -434,10 +463,18 @@ def write_absorption_signature(intervention_id, signature):
     trackers to call when they generate dynamic signatures.
 
     Returns True on success, False otherwise.
+
+    A3 FIX (May 13, 2026): Added diagnostic logging on the success/failure
+    paths so the persisted: false symptom is debuggable from deploy logs
+    without re-running the trace by hand.
     """
     if not intervention_id or not signature:
+        print(f"[Absorption Signatures] Write skipped: missing intervention_id "
+              f"or empty signature")
         return False
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        print(f"[Absorption Signatures] Write skipped for '{intervention_id}': "
+              f"Redis env vars not configured on this backend")
         return False
 
     # Always stamp provenance + audit fields
@@ -457,7 +494,14 @@ def write_absorption_signature(intervention_id, signature):
             data=json.dumps(signature_to_write, default=str),
             timeout=5
         )
-        return resp.status_code == 200
+        if resp.status_code == 200:
+            print(f"[Absorption Signatures] ✅ Wrote '{intervention_id}' "
+                  f"(TTL {ttl_seconds//3600}h)")
+            return True
+        else:
+            print(f"[Absorption Signatures] ❌ Write failed for '{intervention_id}': "
+                  f"HTTP {resp.status_code} — {resp.text[:160]}")
+            return False
     except Exception as e:
         print(f"[Absorption Signatures] Write error ({intervention_id}): {str(e)[:120]}")
         return False
