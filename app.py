@@ -989,6 +989,13 @@ if GPI_AVAILABLE:
 # leader intervention fingerprints and write dynamic signatures back to Redis.
 if ABSORPTION_AVAILABLE:
     register_absorption_endpoints(app)
+
+# Jawboning Signatures — Path B architectural primitive (May 14)
+try:
+    from jawboning_signatures import register_jawboning_signatures_endpoints
+    register_jawboning_signatures_endpoints(app)
+except Exception as e:
+    print(f"[App] ⚠️ Jawboning Signatures module failed to load: {e}")
     print("[ME Backend] ✅ Absorption signatures registered: /api/absorption-signature/<id>, /api/absorption-signatures")
 
 if register_iran_rhetoric_routes:
