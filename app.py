@@ -118,6 +118,28 @@ except Exception as e:
     print(f"[ME Backend] ⚠️ Absorption signatures module not available: {e}")
     _absorp_tb.print_exc()
 
+# ────────────────────────────────────────────────────────────
+# JAWBONING PRIMITIVE — Path B architectural primitive (May 14-15, 2026)
+# Catalog of leader rhetorical jawboning signatures (13 entries at launch:
+# 11 Trump command + 2 Modi absorber). Detector applies catalog logic to
+# tracker actor_results and writes cross-theater Redis fingerprints with
+# 24h TTL. Cross-theater consumers (Iran, China, Cuba, Russia, Greenland
+# trackers + future CAVE) read fingerprints directly.
+# Endpoints: /api/jawboning/signatures, /api/jawboning/detect,
+#            /api/jawboning/active
+# Auth retrofit: deferred (see SECURITY TODO in jawboning_detector.py)
+# ────────────────────────────────────────────────────────────
+try:
+    from jawboning_signatures import register_jawboning_signatures_endpoints
+    from jawboning_detector import register_jawboning_detector_endpoints
+    JAWBONING_AVAILABLE = True
+    print("[ME Backend] ✅ Jawboning primitive (signatures + detector) modules loaded")
+except Exception as e:
+    JAWBONING_AVAILABLE = False
+    import traceback as _jawb_tb
+    print(f"[ME Backend] ⚠️ Jawboning primitive modules not available: {e}")
+    _jawb_tb.print_exc()
+
 try:
     from rhetoric_tracker_iran import register_iran_rhetoric_routes
     print("[ME Backend] ✅ Iran rhetoric (command node) module loaded")
@@ -989,14 +1011,16 @@ if GPI_AVAILABLE:
 # leader intervention fingerprints and write dynamic signatures back to Redis.
 if ABSORPTION_AVAILABLE:
     register_absorption_endpoints(app)
-
-# Jawboning Signatures — Path B architectural primitive (May 14)
-try:
-    from jawboning_signatures import register_jawboning_signatures_endpoints
-    register_jawboning_signatures_endpoints(app)
-except Exception as e:
-    print(f"[App] ⚠️ Jawboning Signatures module failed to load: {e}")
     print("[ME Backend] ✅ Absorption signatures registered: /api/absorption-signature/<id>, /api/absorption-signatures")
+
+# Jawboning primitive — register catalog + detector endpoints together.
+# Theater proxies (Asia, WHA, future Europe/CAVE) will POST to /api/jawboning/detect.
+# Cross-theater consumers (Iran/China/Cuba/Russia trackers) read fingerprints via
+# /api/jawboning/active or directly from Redis jawboning:{direction}:{country}:{target}.
+if JAWBONING_AVAILABLE:
+    register_jawboning_signatures_endpoints(app)
+    register_jawboning_detector_endpoints(app)
+    print("[ME Backend] ✅ Jawboning primitive registered: /api/jawboning/signatures, /detect, /active")
 
 if register_iran_rhetoric_routes:
     register_iran_rhetoric_routes(app)
