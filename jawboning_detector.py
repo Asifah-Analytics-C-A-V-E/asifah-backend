@@ -86,6 +86,80 @@ v1.0.0 — May 15 2026 · Path B Architectural Primitive
 ================================================================================
 """
 
+# ============================================================================
+# 🚧 SECURITY TODO — INTERNAL-AUTH RETROFIT (deferred from Phase 2C)
+# ============================================================================
+#
+# STATUS:    Open. Defer until Phase 3 (Asia proxy build) at the latest.
+# RAISED:    May 15, 2026 — Phase 2C build session
+# OWNER:     Rachel (architectural decision) + Claude (implementation)
+#
+# WHAT'S MISSING:
+#   /api/jawboning/detect (POST and GET) currently has NO authentication.
+#   Any internet caller who knows the URL can trigger Redis fingerprint
+#   writes that cross-theater trackers will react to. Same gap exists on
+#   absorption_detector.py's /api/absorption/detect endpoint.
+#
+# WHY DEFERRED:
+#   1. Phase 2E smoke testing is easier from a browser without auth.
+#   2. No non-browser callers exist yet — Asia/WHA proxies don't exist.
+#   3. Current threat surface is low — platform is not publicly known.
+#
+# WHAT THE RETROFIT MUST INCLUDE (do BOTH together, not piecemeal):
+#
+#   A. THIS FILE (jawboning_detector.py)
+#      - Add @require_internal_auth decorator helper (top-of-file)
+#      - Apply to: POST /api/jawboning/detect
+#      - Apply to: GET  /api/jawboning/detect
+#      - LEAVE PUBLIC: /api/jawboning/active, /api/jawboning/active/<country>
+#        (read-only diagnostics, no side effects)
+#      - LEAVE PUBLIC: all /api/jawboning/signatures/* endpoints (already
+#        public in jawboning_signatures.py, no change there)
+#
+#   B. absorption_detector.py — SAME RETROFIT
+#      - Add @require_internal_auth decorator (identical implementation)
+#      - Apply to: /api/absorption/detect
+#      - LEAVE PUBLIC: any read-only diagnostic endpoints
+#
+#   C. ENVIRONMENT VARIABLES (set on EVERY backend that talks to ME)
+#      - Env var name:  ASIFAH_INTERNAL_TOKEN
+#      - Generate:      `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+#                       or use a password manager. ~32+ random chars.
+#      - Set in Render dashboards for:
+#          * asifah-backend          (ME — validates incoming)
+#          * asifah-asia-backend     (Asia — calls ME via proxy)
+#          * asifah-wha-backend      (WHA — calls ME via proxy)
+#          * asifa-europe-backend    (Europe — future caller)
+#          * asifah-cave-backend     (CAVE — future caller, when Peter builds)
+#      - SAME VALUE in every backend (it's a shared secret, not per-service).
+#
+#   D. PROXY FILES (Phase 3+) — must include header
+#      - jawboning_proxy_asia.py, jawboning_proxy_wha.py, future CAVE caller
+#      - HTTP requests must include:
+#          headers={'Authorization': f'Bearer {os.environ["ASIFAH_INTERNAL_TOKEN"]}'}
+#
+#   E. DECORATOR BEHAVIOR (when implemented)
+#      - Read `Authorization: Bearer <token>` from request headers
+#      - Compare against ASIFAH_INTERNAL_TOKEN env var (constant-time compare
+#        via `hmac.compare_digest` to avoid timing attacks)
+#      - 401 Unauthorized if missing/wrong token
+#      - 503 Service Unavailable if env var not set on server (fail-secure)
+#      - Log auth failures (with caller IP) but NEVER log the attempted token
+#
+#   F. SMOKE TEST PROCEDURE (post-retrofit)
+#      - From browser: GET /api/jawboning/detect should return 401
+#      - From curl with valid Bearer token: should return 200 + payload
+#      - From curl with WRONG Bearer token: should return 401
+#      - From Asia proxy (Phase 3+): should work transparently via env var
+#
+# ESTIMATED RETROFIT EFFORT:
+#   ~60 lines of code across two files (decorator + applications + tests).
+#   ~5 minutes of env-var setup across 3-4 Render backends.
+#   Single session, lowest-risk if done as the FIRST task of Phase 3 before
+#   any proxy code is written.
+#
+# ============================================================================
+
 import os
 import json
 import requests
@@ -542,15 +616,204 @@ def detect_jawboning(leader_id,
 
 
 # ============================================================================
-# NEXT: endpoint registration — Chunk 2C
+# ENDPOINT REGISTRATION
 # ============================================================================
 #
-# Chunk 2C will add the Flask endpoint that Asia + WHA proxies call via HTTP:
-#   POST /api/jawboning/detect
-#       body: {leader_id, country_id, actor_results, scan_id?}
-#       returns: {success, results, count, fingerprints_written}
+# Called from app.py at startup:
+#     from jawboning_detector import register_jawboning_detector_endpoints
+#     register_jawboning_detector_endpoints(app)
 #
-# Plus diagnostic GETs:
-#   GET /api/jawboning/active           — list_active_fingerprints (all)
-#   GET /api/jawboning/active/<country> — filtered by country
+# Endpoints registered:
+#   POST /api/jawboning/detect            — primary write-path (theater proxies)
+#   GET  /api/jawboning/detect            — same logic, query-string params (smoke testing)
+#   GET  /api/jawboning/active            — list all active fingerprints
+#   GET  /api/jawboning/active/<country>  — filter active fingerprints by country
+#
+# SECURITY: see SECURITY TODO at top of file. None of these currently require
+# authentication; the /detect endpoints will be gated by @require_internal_auth
+# during Phase 3 retrofit.
 # ============================================================================
+
+def register_jawboning_detector_endpoints(app):
+    """
+    Register the jawboning detector endpoints on the Flask app.
+
+    Idempotent in spirit but Flask will raise if called twice with the same
+    routes on the same app instance — caller's responsibility to register
+    exactly once per process.
+    """
+    from flask import request as flask_request, jsonify
+
+    # ------------------------------------------------------------------------
+    # /api/jawboning/detect — primary write-path
+    # ------------------------------------------------------------------------
+    @app.route('/api/jawboning/detect', methods=['POST', 'GET', 'OPTIONS'])
+    def api_jawboning_detect():
+        """
+        Run the jawboning detector for a given leader + country + actor_results
+        snapshot. Returns the per-signature fired/not-fired dict and (on
+        positive detections, when write_fingerprints is true) writes Redis
+        fingerprints with 24h TTL.
+
+        POST body (JSON):
+            {
+                "leader_id":          "modi" | "trump" | ...,
+                "country_id":         "india" | "us" | ...,
+                "actor_results":      { "<cluster_id>": {level, matched_triggers, top_articles}, ... },
+                "articles":           [...]            # optional, reserved for future
+                "write_fingerprints": true,            # optional, default true
+                "scan_id":            "..."            # optional diagnostic
+            }
+
+        GET query string (smoke testing — limited; no actor_results passed,
+        so signature evaluation will be vacuous and nothing fires. Useful
+        for "is this endpoint alive?" checks and as a stub for Phase 3
+        when proxies start posting actual payloads):
+            ?leader_id=modi&country_id=india&dry_run=true
+
+        Returns (200 on success):
+            {
+                "success":              true,
+                "leader_id":            "modi",
+                "country_id":           "india",
+                "results":              {"modi_on_gold": true, "modi_on_austerity": false},
+                "fired_count":          1,
+                "evaluated_count":      2,
+                "wrote_fingerprints":   true | false,
+                "served_at":            "<iso8601>"
+            }
+
+        Returns 400 on missing required fields, 500 on internal error.
+        """
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            # ---- Parse payload (POST body OR GET query string) ----
+            if flask_request.method == 'POST':
+                payload = flask_request.get_json(silent=True) or {}
+                leader_id     = payload.get('leader_id')
+                country_id    = payload.get('country_id')
+                actor_results = payload.get('actor_results')
+                articles      = payload.get('articles')
+                scan_id       = payload.get('scan_id')
+                # POST default: write fingerprints UNLESS caller opts out
+                write_fingerprints = payload.get('write_fingerprints', True)
+            else:  # GET
+                leader_id     = flask_request.args.get('leader_id')
+                country_id    = flask_request.args.get('country_id')
+                actor_results = None  # GET doesn't pass complex actor_results
+                articles      = None
+                scan_id       = flask_request.args.get('scan_id')
+                # GET default: NEVER write (browser smoke testing)
+                # Override only if explicit ?dry_run=false AND ?force_write=true
+                dry_run = flask_request.args.get('dry_run', 'true').lower() in ('true', '1', 'yes')
+                force_write = flask_request.args.get('force_write', '').lower() in ('true', '1', 'yes')
+                write_fingerprints = (not dry_run) and force_write
+
+            # ---- Validate required fields ----
+            if not leader_id or not country_id:
+                return jsonify({
+                    'success': False,
+                    'error':   'leader_id and country_id are required',
+                }), 400
+
+            # ---- Run detection ----
+            results = detect_jawboning(
+                leader_id          = leader_id,
+                country_id         = country_id,
+                actor_results      = actor_results,
+                articles           = articles,
+                write_fingerprints = write_fingerprints,
+                scan_id            = scan_id,
+            )
+
+            fired_count = sum(1 for v in results.values() if v)
+
+            return jsonify({
+                'success':            True,
+                'leader_id':          leader_id,
+                'country_id':         country_id,
+                'results':            results,
+                'fired_count':        fired_count,
+                'evaluated_count':    len(results),
+                'wrote_fingerprints': write_fingerprints,
+                'served_at':          datetime.now(timezone.utc).isoformat(),
+                'method':             flask_request.method,
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error':   f'{type(e).__name__}: {str(e)[:200]}',
+            }), 500
+
+    # ------------------------------------------------------------------------
+    # /api/jawboning/active — list all currently-active fingerprints
+    # ------------------------------------------------------------------------
+    @app.route('/api/jawboning/active', methods=['GET', 'OPTIONS'])
+    def api_jawboning_active_all():
+        """
+        Return all jawboning fingerprints currently active in Redis (within
+        their 24h TTL window). Read-only diagnostic; safe to expose.
+
+        Optional query params:
+            ?direction=command|absorber  — filter by direction
+        """
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+        try:
+            direction = flask_request.args.get('direction')
+            if direction and direction not in ('command', 'absorber'):
+                return jsonify({
+                    'success': False,
+                    'error':   "direction must be 'command' or 'absorber'",
+                }), 400
+            active = list_active_fingerprints(direction=direction)
+            return jsonify({
+                'success':   True,
+                'count':     len(active),
+                'active':    active,
+                'served_at': datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error':   f'{type(e).__name__}: {str(e)[:200]}',
+            }), 500
+
+    # ------------------------------------------------------------------------
+    # /api/jawboning/active/<country_id> — filtered by country
+    # ------------------------------------------------------------------------
+    @app.route('/api/jawboning/active/<country_id>', methods=['GET', 'OPTIONS'])
+    def api_jawboning_active_country(country_id):
+        """
+        Return active jawboning fingerprints originating in a given country.
+        Useful for cross-theater readers asking "what is the US currently
+        jawboning?" — they call /api/jawboning/active/us and get the list.
+        """
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+        try:
+            active = list_active_fingerprints(country_id=country_id)
+            return jsonify({
+                'success':    True,
+                'country_id': country_id,
+                'count':      len(active),
+                'active':     active,
+                'served_at':  datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error':   f'{type(e).__name__}: {str(e)[:200]}',
+            }), 500
+
+    # ------------------------------------------------------------------------
+    # Logging on registration (mirrors signatures module style)
+    # ------------------------------------------------------------------------
+    print("[Jawboning Detector] ✅ Endpoints registered:")
+    print("[Jawboning Detector]   POST /api/jawboning/detect")
+    print("[Jawboning Detector]   GET  /api/jawboning/detect           (smoke-test, dry-run by default)")
+    print("[Jawboning Detector]   GET  /api/jawboning/active")
+    print("[Jawboning Detector]   GET  /api/jawboning/active/<country_id>")
+    print("[Jawboning Detector]   ⚠️  Auth retrofit pending — see SECURITY TODO at top of file")
