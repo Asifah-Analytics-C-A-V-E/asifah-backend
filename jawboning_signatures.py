@@ -806,6 +806,126 @@ JAWBONING_SIGNATURES_STATIC = {
             ],
         },
 
+        # ════════════════════════════════════════════════════════════════════
+        # XI JINPING COMMAND JAWBONING (1) — first non-Trump command signature
+        # ════════════════════════════════════════════════════════════════════
+        #
+        # Xi-on-rare-earths is the first command-direction signature where the
+        # leader is NOT the US President. China weaponizes rare-earth + critical-
+        # mineral export controls as economic leverage against the US (and allies)
+        # in response to tariffs, chip export controls, and tech sanctions.
+        #
+        # Critical minerals (not just "rare earths") because the actual weapons
+        # being deployed include gallium, germanium, antimony, lithium, and
+        # graphite — broader than the lanthanide series. Aligns to commodity
+        # tracker convention.
+        #
+        # See SECURITY TODO at top: actor_gate cluster key is a placeholder.
+        # Confirm 'xi_jinping_signaling' against China tracker's ACTORS dict
+        # during Phase 6 wire-in.
+
+        'xi_on_rare_earths': {
+            'leader_id':       'xi',
+            'country_id':      'china',
+            'direction':       'command',
+            'target_sector':   'critical_minerals_export_controls',
+            'target_key':      'on_rare_earths_and_critical_minerals',
+            'target_actors':   ['us_government', 'eu_government', 'japan_government',
+                                'semiconductor_industry', 'defense_industrial_base'],
+            'trigger_keywords': [
+                # English — broad rare-earth + critical-mineral terms
+                'rare earth', 'rare earths', 'rare-earth', 'rare-earths',
+                'critical minerals', 'critical mineral',
+                'gallium', 'germanium', 'antimony', 'lithium', 'graphite',
+                'tungsten', 'cobalt', 'lanthanide', 'lanthanides',
+                # Direct policy actions Xi/MOFCOM use
+                'export control', 'export controls', 'export license',
+                'export licensing', 'export restriction', 'export restrictions',
+                'mineral export', 'mineral export ban',
+                # Xi-specific rhetoric markers
+                'xi jinping rare earth', 'xi on rare earth',
+                'xi minerals', 'xi critical minerals',
+                # Strategic framing language China deploys
+                'national security minerals', 'strategic minerals',
+                'mineral sovereignty', 'mineral leverage',
+                'resource nationalism',
+                # MOFCOM (Ministry of Commerce) — primary policy vehicle
+                'mofcom rare earth', 'mofcom export',
+                'commerce ministry rare earth', 'commerce ministry export',
+                # Specific 2024-2026 escalation phrases
+                'gallium germanium ban', 'antimony export ban',
+                'graphite export restriction', 'lithium export',
+                'tungsten export control', 'rare earth weaponization',
+                # Retaliation / response framing (Xi's domestic narrative)
+                'reciprocal measures', 'countermeasures', 'response to us tariffs',
+                'response to chip ban', 'response to sanctions',
+            ],
+            'trigger_keywords_native': [
+                # Simplified Chinese — China rhetoric tracker surfaces these
+                '稀土',          # rare earths
+                '稀土出口',       # rare-earth exports
+                '关键矿产',       # critical minerals
+                '镓',            # gallium
+                '锗',            # germanium
+                '锑',            # antimony
+                '出口管制',       # export controls
+                '出口禁令',       # export ban
+                '反制措施',       # countermeasures
+                '商务部',         # MOFCOM (Ministry of Commerce)
+                '矿产资源',       # mineral resources
+                '战略资源',       # strategic resources
+            ],
+            'mechanism': 'resource_weaponization_pressure',
+            'upstream_stressors': [
+                # When these are present, Xi's rare-earth jawboning becomes MORE likely
+                'us_chip_export_controls',
+                'us_tariffs_on_china',
+                'us_taiwan_arms_sales',
+                'eu_anti_subsidy_investigation',
+            ],
+            'cross_theater_writes': [
+                # Primary key — China's outbound command signature
+                'jawboning:command:china:on_rare_earths_and_critical_minerals',
+                # Bidirectional: also signals critical mineral pressure globally
+                # so commodity tracker can correlate
+                'jawboning:command:china:on_critical_minerals',
+            ],
+            # PLACEHOLDER — verify against rhetoric_tracker_china.py ACTORS dict
+            # during Phase 6 wire-in. Most likely 'xi_jinping_signaling' or 'mofa'
+            # given that's where China tracker surfaces leader rhetoric. Could
+            # also be 'commerce_ministry' if that cluster exists.
+            'actor_gate':      {'xi_jinping_signaling': 2},
+            'pattern_basis':   'analyst_curated',
+            'confidence':      'high',
+            'historical_anchors': [
+                'September 2010 Senkaku rare-earth embargo against Japan',
+                'July 2023 gallium and germanium export restrictions announced',
+                'August 2024 antimony export license requirement',
+                'December 2024 ban on dual-use rare-earth exports to US',
+                'May 2026 export licensing tightening following Trump tariffs',
+            ],
+            'analyst_summary_template': (
+                "Xi is signaling Chinese willingness to weaponize critical-mineral "
+                "export controls — a tool that disproportionately affects US "
+                "defense manufacturing, semiconductor production, and renewable "
+                "energy supply chains. Unlike financial-tariff retaliation, mineral "
+                "controls have months-long supply-chain inertia: announcements drive "
+                "immediate price/sourcing reactions in commodity markets. Western "
+                "trackers should expect amplified rhetoric from MOFCOM and Xi-direct "
+                "channels; commodity tracker should see RARE_EARTHS and adjacent "
+                "tags fire within 24-72h. Watch for: {forward_indicators_joined}."
+            ),
+            'forward_indicators': [
+                'MOFCOM export-license announcement (specific minerals)',
+                'Customs General Administration directive to export-license inspectors',
+                'Global Times editorial framing minerals as "strategic resources"',
+                'Chinese mining-state-owned enterprises (e.g., China Northern Rare Earth) commentary',
+                'Spot price moves on Shanghai Metal Exchange for gallium/germanium/antimony',
+                'US Defense Logistics Agency reciprocal sourcing announcements',
+                'Australia/Vietnam/Canada rare-earth mining capacity announcements',
+            ],
+        },
+
     },
     'absorber': {
 
