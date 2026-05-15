@@ -263,15 +263,294 @@ def list_active_fingerprints(country_id=None, direction=None):
 
 
 # ============================================================================
-# NEXT: detect_jawboning() — Chunk 2B
+# DETECTION HELPERS — byte-for-byte mirror of rhetoric_tracker_india.py
 # ============================================================================
 #
-# Chunk 2B will add the core detect_jawboning() function plus its two private
-# helpers (_has_phrase, _articles_mention) and the actor_gate evaluator. That
-# function is the byte-for-byte mirror of the inline logic currently in
-# rhetoric_tracker_india.py — and the same function, called with leader_id=
-# 'trump', will detect Trump signatures using the same catalog-driven logic.
+# CRITICAL: These two helpers must produce IDENTICAL output to the inline
+# versions currently in rhetoric_tracker_india.py lines 1238-1250. Phase 3's
+# strangler-fig migration depends on byte-for-byte output parity. Any
+# divergence here causes [Jawboning Compare] ❌ lines in Render logs and
+# blocks the Modi cutover.
 #
-# Chunk 2C will add the /api/jawboning/detect endpoint that Asia + WHA
-# proxies will call.
+# If you ever need to "improve" these helpers, you must:
+#   1. Update BOTH the inline version in rhetoric_tracker_india.py AND here
+#   2. Run a full dual-track scan cycle to verify outputs still match
+#   3. Only THEN deploy the change
+# Or: cut over Modi to primitive-only first, THEN make the change in one
+# place. After the Phase 3 cutover, the inline version goes away entirely.
+# ============================================================================
+
+def _has_phrase(actor_result, phrases):
+    """
+    Did this actor's matched_triggers list mention any of these phrases?
+
+    Mirror of rhetoric_tracker_india.py inline helper. Case-insensitive
+    substring match against the joined triggers string.
+
+    Args:
+        actor_result: dict — single actor's scan output. Expected to contain
+                      'matched_triggers' (list of strings). Defensive against
+                      None and missing keys.
+        phrases: list of strings — phrases to search for. Lowercased per phrase.
+
+    Returns:
+        bool — True if ANY phrase appears as substring in joined triggers.
+    """
+    triggers = actor_result.get('matched_triggers', []) or []
+    joined   = ' '.join(triggers).lower()
+    return any(p.lower() in joined for p in phrases)
+
+
+def _articles_mention(actor_result, phrases):
+    """
+    Did this actor's top_articles list mention any of these phrases?
+
+    Mirror of rhetoric_tracker_india.py inline helper. Checks title + trigger
+    fields of each article, case-insensitive substring match.
+
+    Args:
+        actor_result: dict — single actor's scan output. Expected to contain
+                      'top_articles' (list of article dicts with 'title' +
+                      'trigger' keys). Defensive against None / missing keys.
+        phrases: list of strings — phrases to search for.
+
+    Returns:
+        bool — True if ANY phrase appears as substring in ANY article's
+        title or trigger fields. Returns on first match.
+    """
+    for art in actor_result.get('top_articles', []) or []:
+        t = (art.get('title') or '').lower() + ' ' + (art.get('trigger') or '').lower()
+        for p in phrases:
+            if p.lower() in t:
+                return True
+    return False
+
+
+# ============================================================================
+# ACTOR GATE EVALUATOR
+# ============================================================================
+#
+# Each catalog signature declares an 'actor_gate' dict mapping actor_cluster_id
+# to minimum_level (e.g., {'pmo': 2} or {'executive_branch': 2}). For the
+# signature to be eligible to fire, EVERY listed cluster must meet its level
+# threshold in the caller's actor_results.
+#
+# If actor_results is missing a gated cluster entirely, the gate fails
+# (returns False). Treating "missing cluster" as "level 0" is the canonical
+# behavior — never speculate about what a tracker didn't measure.
+# ============================================================================
+
+def _evaluate_actor_gate(actor_gate, actor_results):
+    """
+    Check whether all required actor clusters meet their level thresholds.
+
+    Args:
+        actor_gate:     dict — {actor_cluster_id: minimum_level, ...}
+                        Empty dict ({}) means no gating — signature always
+                        eligible. None is treated as empty dict.
+        actor_results:  dict — {actor_cluster_id: {'level': int, ...}, ...}
+                        The per-actor output from the tracker's scan.
+
+    Returns:
+        bool — True if ALL gates pass. False if any cluster is below
+        threshold or missing entirely.
+    """
+    if not actor_gate:
+        return True  # No gate = always eligible
+    if not isinstance(actor_results, dict):
+        return False  # Defensive: no actor data → no signature fires
+
+    for cluster_id, min_level in actor_gate.items():
+        cluster = actor_results.get(cluster_id) or {}
+        actual_level = cluster.get('level', 0)
+        if actual_level < min_level:
+            return False
+    return True
+
+
+# ============================================================================
+# THE PUBLIC API — detect_jawboning()
+# ============================================================================
+#
+# Called once per scan cycle, per leader, by every theater tracker. Returns
+# a dict of signature_id → bool indicating which signatures fired this scan.
+#
+# For each signature in the catalog matching the given leader_id:
+#   1. Apply actor_gate — does the tracker have the required clusters active?
+#   2. If gate passes, check trigger_keywords + trigger_keywords_native via
+#      _has_phrase against the matched_triggers of any gated cluster
+#   3. ALSO check via _articles_mention against the top_articles of any
+#      gated cluster
+#   4. If EITHER check fires → signature is True
+#   5. On True, write the Redis fingerprint with envelope metadata
+#
+# The (_has_phrase OR _articles_mention) two-check pattern is canonical from
+# rhetoric_tracker_india.py — both checks operate against the gated cluster
+# specifically, NOT against arbitrary actor data. This is what makes Modi
+# signatures specifically check PMO and Trump signatures specifically check
+# executive_branch.
+# ============================================================================
+
+def detect_jawboning(leader_id,
+                     country_id,
+                     actor_results,
+                     articles=None,
+                     write_fingerprints=True,
+                     scan_id=None):
+    """
+    Detect all jawboning signatures for a given leader against current
+    actor_results. Returns a flat dict mapping signature_id → bool.
+
+    Args:
+        leader_id: str — 'trump', 'modi', etc. Used to filter the catalog
+                   so a single tracker scan only evaluates relevant signatures.
+        country_id: str — the originating country code ('us', 'india'). Used
+                    for Redis fingerprint key construction and as a sanity
+                    check against the catalog entry's country_id.
+        actor_results: dict — per-actor scan output from the tracker. Each
+                       cluster value should have 'level', 'matched_triggers',
+                       and 'top_articles' keys (graceful degradation if any
+                       are missing).
+        articles: list — OPTIONAL. Currently unused; reserved for future
+                  enrichment where signature triggers might scan all articles
+                  rather than only top_articles per gated cluster. Pass it
+                  through; the detector ignores it for v1.
+        write_fingerprints: bool — if True (default), positive detections
+                            write Redis fingerprints with 24h TTL. Set to
+                            False for dry-run / comparison-mode (used in
+                            Phase 3 strangler-fig logging).
+        scan_id: str — OPTIONAL diagnostic identifier (e.g., scan timestamp)
+                 written into fingerprint metadata. Useful for debugging
+                 which scan cycle generated a given fingerprint.
+
+    Returns:
+        dict — {signature_id: bool, ...} for every signature in the catalog
+        matching this leader_id. Signatures that don't match the leader are
+        NOT included in the return dict (not "False" — absent).
+
+    Examples:
+        >>> detect_jawboning('modi', 'india', actor_results)
+        {'modi_on_gold': True, 'modi_on_austerity': False}
+
+        >>> detect_jawboning('trump', 'us', actor_results, write_fingerprints=False)
+        {'trump_on_oil': True, 'trump_on_iran': True, 'trump_on_fed': False, ...}
+    """
+    results = {}
+    fingerprints_written = []
+
+    # Defensive: empty/None actor_results → nothing can fire, return empty
+    if not isinstance(actor_results, dict):
+        print(f"[Jawboning Detector] {leader_id} scan called with invalid actor_results "
+              f"(type={type(actor_results).__name__}) — returning empty dict")
+        return results
+
+    # Pull the catalog via the Redis-first reader (caching contract honored)
+    try:
+        catalog = list_jawboning_signatures()
+    except Exception as e:
+        print(f"[Jawboning Detector] Failed to load catalog: {e} — returning empty dict")
+        return results
+
+    # Walk both directional buckets — a leader could in principle have BOTH
+    # command-mode and absorber-mode signatures (no current leader does, but
+    # the architecture supports it cleanly).
+    for direction in ('command', 'absorber'):
+        signatures = catalog.get(direction, {}) or {}
+        for sig_id, sig in signatures.items():
+            # Filter by leader_id — only evaluate signatures for this leader
+            if sig.get('leader_id') != leader_id:
+                continue
+
+            # Sanity check: country_id should match (drop with a warning if not)
+            if sig.get('country_id') != country_id:
+                print(f"[Jawboning Detector] ⚠️ Signature {sig_id} has country_id="
+                      f"{sig.get('country_id')!r} but called with country_id={country_id!r}"
+                      f" — skipping")
+                continue
+
+            # Step 1: Apply the actor gate
+            actor_gate = sig.get('actor_gate') or {}
+            if not _evaluate_actor_gate(actor_gate, actor_results):
+                results[sig_id] = False
+                continue  # Gate failed — signature cannot fire
+
+            # Step 2 + 3: Evaluate trigger phrases against EACH gated cluster's
+            # matched_triggers AND top_articles. The signature fires if ANY
+            # gated cluster matches via EITHER check.
+            #
+            # Catalog has trigger_keywords (English) + trigger_keywords_native
+            # (other languages). Merge both for evaluation — _has_phrase and
+            # _articles_mention both lowercase-substring-match, which works
+            # across scripts (Devanagari, Arabic, Chinese, etc.) without
+            # special casing.
+            all_phrases = (sig.get('trigger_keywords') or []) + \
+                          (sig.get('trigger_keywords_native') or [])
+
+            if not all_phrases:
+                # No triggers defined → signature is dormant. Catalog
+                # consistency issue worth flagging in logs but not crashing.
+                print(f"[Jawboning Detector] ⚠️ Signature {sig_id} has empty "
+                      f"trigger_keywords — treating as dormant (always False)")
+                results[sig_id] = False
+                continue
+
+            fired = False
+            for cluster_id in actor_gate.keys():
+                cluster = actor_results.get(cluster_id) or {}
+                if _has_phrase(cluster, all_phrases) or \
+                   _articles_mention(cluster, all_phrases):
+                    fired = True
+                    break  # One gated cluster matching is sufficient
+
+            results[sig_id] = fired
+
+            # Step 4: Write fingerprint on positive detection
+            if fired and write_fingerprints:
+                metadata = {
+                    'leader_id':      leader_id,
+                    'confidence':     sig.get('confidence'),
+                    'target_sector':  sig.get('target_sector'),
+                    'pattern_basis':  sig.get('pattern_basis'),
+                }
+                if scan_id:
+                    metadata['scan_id'] = scan_id
+
+                success = write_fingerprint(
+                    direction    = direction,
+                    country_id   = country_id,
+                    target_key   = sig.get('target_key'),
+                    signature_id = sig_id,
+                    metadata     = metadata,
+                )
+                if success:
+                    fingerprints_written.append(
+                        _fingerprint_redis_key(direction, country_id, sig.get('target_key'))
+                    )
+
+    # Diagnostic summary log
+    fired_ids = [k for k, v in results.items() if v]
+    if fired_ids:
+        print(f"[Jawboning Detector] {leader_id}/{country_id} scan: "
+              f"{len(fired_ids)}/{len(results)} signatures fired → {fired_ids}")
+        if fingerprints_written:
+            print(f"[Jawboning Detector]   Fingerprints written: {fingerprints_written}")
+    else:
+        print(f"[Jawboning Detector] {leader_id}/{country_id} scan: "
+              f"0/{len(results)} signatures fired")
+
+    return results
+
+
+# ============================================================================
+# NEXT: endpoint registration — Chunk 2C
+# ============================================================================
+#
+# Chunk 2C will add the Flask endpoint that Asia + WHA proxies call via HTTP:
+#   POST /api/jawboning/detect
+#       body: {leader_id, country_id, actor_results, scan_id?}
+#       returns: {success, results, count, fingerprints_written}
+#
+# Plus diagnostic GETs:
+#   GET /api/jawboning/active           — list_active_fingerprints (all)
+#   GET /api/jawboning/active/<country> — filtered by country
 # ============================================================================
