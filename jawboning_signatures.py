@@ -247,7 +247,7 @@ def _redis_set(key, value, ttl_seconds=None):
 #                                  multi-cluster (AND-logic) supported by
 #                                  jawboning_detector.py.
 #                                  Modi entries gate on {'pmo': 2}; Trump
-#                                  entries gate on {'executive_branch': 2}
+#                                  entries gate on {'us_executive': 2}
 #                                  (placeholder — adjust during Phase 5 wire-in
 #                                  to match rhetoric_tracker_us.py actual
 #                                  cluster id).
@@ -282,7 +282,7 @@ JAWBONING_SIGNATURES_STATIC = {
                 'jawboning:command:us:on_oil',
                 'jawboning:command:us:on_saudi',  # often paired
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -328,7 +328,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_fed',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -374,7 +374,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_tariffs',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -420,7 +420,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_companies',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'medium',
             'historical_anchors': [
@@ -473,7 +473,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_china',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -523,7 +523,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_iran',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -574,7 +574,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_russia_ukraine',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -626,7 +626,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_mexico',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -674,7 +674,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_cuba',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -724,7 +724,7 @@ JAWBONING_SIGNATURES_STATIC = {
             'cross_theater_writes': [
                 'jawboning:command:us:on_greenland',
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
@@ -780,7 +780,7 @@ JAWBONING_SIGNATURES_STATIC = {
                 'jawboning:command:us:on_saudi',
                 'jawboning:command:us:on_oil',  # bidirectional with oil
             ],
-            'actor_gate':      {'executive_branch': 2},
+            'actor_gate':      {'us_executive': 2},
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
