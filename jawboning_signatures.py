@@ -894,7 +894,7 @@ JAWBONING_SIGNATURES_STATIC = {
             # during Phase 6 wire-in. Most likely 'xi_jinping_signaling' or 'mofa'
             # given that's where China tracker surfaces leader rhetoric. Could
             # also be 'commerce_ministry' if that cluster exists.
-            'actor_gate':      {'xi_jinping_signaling': 2},
+            'actor_gate':      {'xi_cmc': 2},   # canonical China tracker cluster key (verified May 16, 2026 — was xi_jinping_signaling which doesn't exist in rhetoric_tracker_china.py ACTORS dict; would silently fail every gate evaluation like Phase 5b)
             'pattern_basis':   'analyst_curated',
             'confidence':      'high',
             'historical_anchors': [
