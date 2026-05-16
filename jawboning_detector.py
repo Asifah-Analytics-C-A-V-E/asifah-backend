@@ -436,11 +436,20 @@ def _evaluate_actor_gate(actor_gate, actor_results):
 
     for cluster_id, min_level in actor_gate.items():
         cluster = actor_results.get(cluster_id) or {}
-        actual_level = cluster.get('level', 0)
+        # ── FIELD NAME COMPATIBILITY (May 16, 2026) ───────────────────────
+        # Different trackers use different field names for the 0-4 band:
+        #   - ME family (Iran, Lebanon, Israel, etc.) uses 'level'
+        #   - WHA US tracker uses 'tier'
+        #   - Asia trackers may use either depending on age
+        # The detector accepts whichever is present, with 'level' winning
+        # if both are set (canonical). Falls back to 0 if neither exists.
+        actual_level = cluster.get('level',
+                       cluster.get('tier', 0))
         if actual_level < min_level:
+            print(f"[Jawboning Detector] gate FAIL for cluster '{cluster_id}': "
+                  f"actual_level={actual_level} < required={min_level}")
             return False
     return True
-
 
 # ============================================================================
 # THE PUBLIC API — detect_jawboning()
