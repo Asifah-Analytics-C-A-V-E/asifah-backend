@@ -664,6 +664,145 @@ def _us_predicate_mexico_border(upstream, acc):
 
 
 # ============================================================================
+# PREDICATE FUNCTIONS — CUBA CONSUMER
+# Cuba uses 'escalation_level' field (NOT 'level' or 'tier' — third platform
+# convention). Cuba already has _apply_crosstheater_reads() doing Pattern A
+# shared-dict boosts; these butterfly predicates ADD signals that function
+# can't see: US fingerprint, jawboning fingerprints, atomic signals.
+# Non-overlapping by design (different keyspaces, different signal types).
+# ============================================================================
+
+def _cuba_predicate_us_executive_pressure(upstream, acc):
+    """US fingerprint shows Trump targeting Cuba → boost us_government."""
+    us = upstream.get('us', {})
+    if not us:
+        return
+    us_outbound = us.get('us_outbound_targets', []) or []
+    cuba_targeted = any(
+        (t.get('country') == 'cuba')
+        for t in us_outbound
+        if isinstance(t, dict)
+    )
+    us_exec_score = float(us.get('us_executive_score', 0) or 0)
+    if cuba_targeted or us_exec_score >= 30:
+        acc['upstream_stressors'].append('us_trump_pressure')
+        mention_count = next(
+            (t.get('mention_count', 0) for t in us_outbound
+             if isinstance(t, dict) and t.get('country') == 'cuba'),
+            0
+        )
+        acc['context_notes'].append(
+            f"Trump rhetoric targeting Cuba (mentions={mention_count}, "
+            f"us_executive_score={us_exec_score:.1f}) — DHS/Treasury sanctions "
+            "cycle likely; us_government amplified."
+        )
+        acc['amplifier_actor_deltas']['us_government'] = (
+            acc['amplifier_actor_deltas'].get('us_government', 0) + 1
+        )
+
+
+def _cuba_predicate_us_dhs_migration(upstream, acc):
+    """US DHS enforcement elevated → boost us_government + us_sanctions_regulatory."""
+    us = upstream.get('us', {})
+    if not us:
+        return
+    dhs_score = float(us.get('us_dhs_enforcement_score', 0) or 0)
+    if dhs_score >= 40 or us.get('us_dhs_enforcement_active'):
+        acc['upstream_stressors'].append('us_migration_crackdown')
+        acc['context_notes'].append(
+            f"US DHS enforcement elevated (score={dhs_score:.1f}) — Cuban "
+            "migration policy stress; outbound migration pressure on Havana "
+            "rises; us_government + us_sanctions_regulatory amplified."
+        )
+        acc['amplifier_actor_deltas']['us_government'] = (
+            acc['amplifier_actor_deltas'].get('us_government', 0) + 1
+        )
+        acc['amplifier_actor_deltas']['us_sanctions_regulatory'] = (
+            acc['amplifier_actor_deltas'].get('us_sanctions_regulatory', 0) + 1
+        )
+
+
+def _cuba_predicate_us_jawboning_inbound(upstream, acc):
+    """Trump actively jawboning Cuba via catalog signature → boost us_government."""
+    us_jaw = _read_jawboning_fingerprints('us')
+    # Check for any signature targeting Cuba
+    targets_cuba = any(
+        (env.get('target_country') == 'cuba') or
+        ('cuba' in (env.get('target_actors', []) or [])) or
+        'on_cuba' in sig_id
+        for sig_id, env in us_jaw.items()
+        if isinstance(env, dict)
+    )
+    if targets_cuba:
+        acc['upstream_stressors'].append('us_active_jawboning_cuba')
+        acc['context_notes'].append(
+            "Trump actively jawboning Cuba in public rhetoric (jawboning "
+            "fingerprint fired) — high-confidence direct pressure signal; "
+            "us_government amplified."
+        )
+        acc['amplifier_actor_deltas']['us_government'] = (
+            acc['amplifier_actor_deltas'].get('us_government', 0) + 1
+        )
+
+
+def _cuba_predicate_iran_hormuz_oil(upstream, acc):
+    """
+    Iran-Hormuz oil shock → boost iran_cuba_axis.
+    Cuba depends on Venezuelan oil-for-services trade. Hormuz disruption
+    raises global oil prices, threatens Venezuela's export revenue, which
+    cascades to Cuba's subsidy lifeline.
+    """
+    iran = upstream.get('iran', {})
+    if not iran:
+        return
+    iran_score = int(iran.get('theatre_score', 0) or 0)
+    iran_irgc = int(iran.get('irgc_level', iran.get('irgc_direct_level', 0)) or 0)
+    iran_targets = iran.get('named_targets', []) or []
+    hormuz_named = any(t in iran_targets for t in
+                       ['hormuz', 'strait of hormuz', 'persian gulf'])
+    hormuz_pressure = (
+        bool(iran.get('iran_hormuz_pressure'))
+        or hormuz_named
+        or (iran_score >= 50 and iran_irgc >= 2)
+    )
+    if hormuz_pressure:
+        acc['upstream_stressors'].append('oil_shock_cuba_subsidy_stress')
+        acc['context_notes'].append(
+            f"Iran-Hormuz oil shock (theatre_score={iran_score}, "
+            f"IRGC L{iran_irgc}) — global oil price spike threatens "
+            "Venezuelan oil-for-services trade Cuba depends on; "
+            "iran_cuba_axis amplified."
+        )
+        acc['amplifier_actor_deltas']['iran_cuba_axis'] = (
+            acc['amplifier_actor_deltas'].get('iran_cuba_axis', 0) + 1
+        )
+
+
+def _cuba_predicate_china_rare_earths_supply(upstream, acc):
+    """
+    Xi rare-earth jawboning fingerprint → boost china_cuba_axis.
+    When China weaponizes supply chains globally, the strategic value of
+    Cuba's Mariel port + geographic positioning RISES (not falls). Beijing
+    leans harder into Caribbean leverage.
+    """
+    china_jaw = _read_jawboning_fingerprints('china')
+    rare_earth_active = (
+        'xi_on_rare_earths' in china_jaw
+        or any('rare_earth' in k or 'critical_mineral' in k for k in china_jaw)
+    )
+    if rare_earth_active:
+        acc['upstream_stressors'].append('china_supply_leverage_global')
+        acc['context_notes'].append(
+            "Xi rare-earth jawboning active — China weaponizing supply "
+            "chains globally raises strategic value of Cuba's Mariel port "
+            "+ Caribbean geography; china_cuba_axis amplified."
+        )
+        acc['amplifier_actor_deltas']['china_cuba_axis'] = (
+            acc['amplifier_actor_deltas'].get('china_cuba_axis', 0) + 1
+        )
+
+
+# ============================================================================
 # PREDICATE LIBRARY — dispatch by consumer theater
 # Adding a new consumer? Add an entry here + define the predicate functions above.
 # ============================================================================
@@ -689,7 +828,15 @@ PREDICATE_LIBRARY = {
         _us_predicate_russia_ukraine,
         _us_predicate_mexico_border,
     ],
-    # Future consumers: 'cuba', 'russia', 'iran', 'china', etc.
+    'cuba': [
+        _cuba_predicate_us_executive_pressure,
+        _cuba_predicate_us_dhs_migration,
+        _cuba_predicate_us_jawboning_inbound,
+        _cuba_predicate_iran_hormuz_oil,
+        _cuba_predicate_china_rare_earths_supply,
+        # Future: _cuba_predicate_venezuela_collapse (when venezuela tracker fully wired)
+    ],
+    # Future consumers: 'russia', 'iran', 'china', etc.
 }
 
 
