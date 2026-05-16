@@ -8,6 +8,7 @@ All endpoints working:
 - /api/iran-strike-probability (with caching)
 - /api/hezbollah-activity (with caching)
 - /api/houthis-threat (with caching)
+
 - /api/syria-conflict (with caching)
 """
 # ========================================
@@ -139,6 +140,25 @@ except Exception as e:
     import traceback as _jawb_tb
     print(f"[ME Backend] ⚠️ Jawboning primitive modules not available: {e}")
     _jawb_tb.print_exc()
+
+# ────────────────────────────────────────────────────────────
+# BUTTERFLY READER — Cross-theater signal reader (May 16, 2026)
+# Layer 2 in the butterfly architecture. Reads ALL fingerprint patterns
+# (shared-dict / direct-key / atomic / snapshot) and applies per-consumer
+# predicates. Asia/Europe/WHA backends call /api/butterfly/read/<consumer>
+# via their respective butterfly_proxy_*.py modules. India's tracker can
+# also call read_butterfly_signals() directly (in-process on ME).
+# Endpoints: /api/butterfly/read/<consumer>, /health, /consumers
+# ────────────────────────────────────────────────────────────
+try:
+    from butterfly_reader import register_butterfly_endpoints
+    BUTTERFLY_READER_AVAILABLE = True
+    print("[ME Backend] ✅ Butterfly reader module loaded")
+except Exception as e:
+    BUTTERFLY_READER_AVAILABLE = False
+    import traceback as _butterfly_tb
+    print(f"[ME Backend] ⚠️ Butterfly reader module not available: {e}")
+    _butterfly_tb.print_exc()
 
 try:
     from rhetoric_tracker_iran import register_iran_rhetoric_routes
@@ -1021,6 +1041,14 @@ if JAWBONING_AVAILABLE:
     register_jawboning_signatures_endpoints(app)
     register_jawboning_detector_endpoints(app)
     print("[ME Backend] ✅ Jawboning primitive registered: /api/jawboning/signatures, /detect, /active")
+
+# Butterfly Reader — register the cross-theater read endpoints.
+# Theater proxies (Asia, Europe, WHA) call /api/butterfly/read/<consumer>
+# to fetch their consumer-specific bundle. India can also call the function
+# directly in-process.
+if BUTTERFLY_READER_AVAILABLE:
+    register_butterfly_endpoints(app)
+    print("[ME Backend] ✅ Butterfly reader registered: /api/butterfly/read/<consumer>, /health, /consumers")
 
 if register_iran_rhetoric_routes:
     register_iran_rhetoric_routes(app)
