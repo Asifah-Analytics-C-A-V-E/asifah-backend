@@ -54,6 +54,11 @@ REGIONAL_BLUF_ENDPOINTS = {
     'asia':   os.environ.get('ASIA_BACKEND_URL',   'https://asifah-asia-backend.onrender.com')   + '/api/rhetoric/asia/bluf',
     'europe': os.environ.get('EUROPE_BACKEND_URL', 'https://asifa-europe-backend.onrender.com') + '/api/rhetoric/europe/bluf',
     'wha':    os.environ.get('WHA_BACKEND_URL',    'https://asifah-wha-backend.onrender.com')    + '/api/rhetoric/wha/bluf',
+    # v2.3 (May 17, 2026) — Humanitarian Convergence Detector
+    # Pseudo-region: distributed weak-signal aggregation across countries
+    # WITHOUT dedicated Asifah trackers. Lives on ME backend; consumed by
+    # GPI exactly like a 5th regional BLUF.
+    'global_humanitarian': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/humanitarian-convergence/bluf',
 }
 
 # Display config
@@ -62,6 +67,8 @@ REGION_DISPLAY = {
     'asia':   {'flag': '\U0001f30f', 'name': 'Asia & Pacific',    'hub': 'rhetoric-asia.html'},    # 🌏
     'europe': {'flag': '\U0001f30d', 'name': 'Europe',            'hub': 'rhetoric-europe.html'},  # 🌍
     'wha':    {'flag': '\U0001f30e', 'name': 'Western Hemisphere','hub': 'rhetoric-wha.html'},     # 🌎
+    # v2.3 — Humanitarian Convergence Detector pseudo-region
+    'global_humanitarian': {'flag': '\U0001f198', 'name': 'Global Humanitarian', 'hub': 'gpi.html'},  # 🆘
 }
 
 # Alphabetical card order (matches Rachel's "presumably alphabetical" spec)
