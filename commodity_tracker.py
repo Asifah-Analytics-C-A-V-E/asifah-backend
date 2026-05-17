@@ -1063,6 +1063,31 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'wheat':        {'role': 'producer',          'weight': 1.0,
                          'note': "Largest individual EU wheat producer (~35-37 Mt/yr, ~26% of EU total). Major Egypt + Algeria + sub-Saharan Africa supplier. CAP-driven; Brittany + Beauce + Picardy regions. Listed separately from EU bloc only because French wheat exports have a distinct national identity in MENA markets (vs. generic 'EU' supply)."},
     },
+    # ============================================================
+    # HUNGARY (added May 17, 2026)
+    # Russia-axis-DEPENDENT country undergoing AXIS REVERSAL after
+    # April 2026 Tisza landslide defeated Orban/Fidesz. Druzhba oil
+    # pipeline transit + Russian gas dependency are the structural
+    # leverage points. The May 2026 $82M cash + 9kg gold return to
+    # Ukraine + EU loan veto lift mark concrete reversal symptoms.
+    # Source: AP/Spike May 6 2026; Bloomberg April 2026 election cov.
+    # ============================================================
+    'hungary': {
+        'oil':          {'role': 'transit',           'weight': 1.0,
+                         'regime_flags': ['axis_reversal_in_progress', 'druzhba_pipeline_critical'],
+                         'note': "Druzhba pipeline transit -- Russian crude flows Russia -> Ukraine -> Hungary -> Slovakia -> Czechia. MOL Group (Hungarian state-anchored) operates Szazhalombatta + Tisza refineries (Russian Urals crude optimized). Pre-Tisza election: Orban government blocked the 90B EUR EU loan to Ukraine specifically over Druzhba interruption (Russian drone strike damage). Post-Tisza election (April 2026 landslide): Druzhba flows resumed + Hungary lifted EU loan veto. Watch: MOL refinery loadout, Druzhba flow telemetry, EU sanctions exemption status."},
+        'natural_gas':  {'role': 'consumer',          'weight': 1.0,
+                         'regime_flags': ['axis_reversal_in_progress'],
+                         'note': "Heavily dependent on Russian gas (Gazprom via TurkStream + Hungarian state long-term contract signed under Orban 2021). Hungary was one of the few EU members to maintain direct Gazprom contracts through Ukraine war + post-2022 sanctions cycles. Tisza government policy on Russian gas TBD; expected gradual diversification toward LNG (Krk Croatia + Polish Baltic Pipe). Watch: MVM Hungary statements on gas contracts, TurkStream flow data, Hungarian energy minister appointments."},
+        'gold':         {'role': 'transit',           'weight': 0.4,
+                         'regime_flags': ['historic_reversal_event'],
+                         'note': "Not a structural gold actor, but the canonical AXIS REVERSAL event: March 5 2026 Hungarian counter-terrorism authorities (under Orban) seized 80M USD + 9kg gold shipment between Ukrainian state banks (Oschadbank) transiting Hungary by armored car. Orban claimed money-laundering investigation. Ukraine called it political blackmail re: Druzhba pipeline + Tisza party funding accusations. May 6 2026: Tisza government RETURNED full shipment. Tiny in commodity terms but ANALYTICALLY foundational -- the first documented Asifah-trackable axis-reversal event in Europe."},
+        'wheat':        {'role': 'producer',          'weight': 0.6,
+                         'note': "Modest EU wheat producer (~5 Mt/yr); Great Hungarian Plain agriculture. Part of CAP system. Net exporter regionally. Not a global pricing-mover but a stability-of-agriculture signal for Central Europe."},
+        'uranium':      {'role': 'consumer',          'weight': 0.7,
+                         'regime_flags': ['axis_reversal_in_progress'],
+                         'note': "Paks Nuclear Power Plant (Russian VVER reactors) supplies ~45% of Hungarian electricity. Rosatom contracted to build Paks II expansion (2014 deal under Orban). Post-Tisza election, Paks II Rosatom contract status under review. Watch: Paks II construction milestones, Rosatom financing arrangements, EU nuclear-sector sanctions exposure."},
+    },
     'india': {
         'wheat': {
             'producer': {'weight': 1.3, 'rank': 2,
