@@ -755,7 +755,6 @@ COMMODITY_KEYWORDS = {
         '糖', '白糖', '蔗糖',
     ],
     'uranium': [
-    'uranium': [
         'uranium', 'uranium prices', 'yellowcake',
         'kazatomprom', 'cameco', 'orano', 'rosatom uranium',
         'sprott physical uranium', 'uranium etf',
