@@ -79,12 +79,12 @@ except ImportError:
     IRAQ_RHETORIC_AVAILABLE = False
     print("[ME Backend] ⚠️ Iraq rhetoric module not available")
 try:
-    from me_regional_bluf import register_me_bluf_routes
-    ME_BLUF_AVAILABLE = True
-    print("[ME Backend] ✅ ME Regional BLUF engine loaded")
+from me_regional_bluf import register_me_bluf_routes
+ME_BLUF_AVAILABLE = True
+print("[ME Backend] ✅ ME Regional BLUF engine loaded")
 except ImportError:
-    ME_BLUF_AVAILABLE = False
-    print("[ME Backend] ⚠️ ME Regional BLUF engine not available")
+ME_BLUF_AVAILABLE = False
+print("[ME Backend] ⚠️ ME Regional BLUF engine not available")
 
 # ────────────────────────────────────────────────────────────
 # GLOBAL PRESSURE INDEX — top of the analytical pyramid
@@ -1019,12 +1019,17 @@ if YEMEN_AVAILABLE:
 if IRAQ_RHETORIC_AVAILABLE:
     register_iraq_rhetoric_routes(app)
 if ME_BLUF_AVAILABLE:
-    register_me_bluf_routes(app)
-
-# Global Pressure Index — register after all regional BLUFs/rhetoric so it can read them
+register_me_bluf_routes(app)
+Humanitarian Convergence Detector — register BEFORE GPI so GPI sees
+/api/humanitarian-convergence/bluf when it iterates REGIONAL_BLUF_ENDPOINTS.
+Pass redis_client so the detector can read rhetoric:<country>:latest caches.
+if HUMANITARIAN_CONVERGENCE_AVAILABLE:
+register_humanitarian_convergence_routes(app, redis_client=redis_client)
+print("[ME Backend] ✅ Humanitarian Convergence routes registered: /api/humanitarian-convergence/bluf, /details, /health")
+Global Pressure Index — register after all regional BLUFs/rhetoric so it can read them
 if GPI_AVAILABLE:
-    register_gpi_routes(app)
-    print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+register_gpi_routes(app)
+print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
 
 # Economic Absorption Signatures — register after commodity tracker so leader
 # interventions can be cross-referenced. Phase 2 rhetoric trackers will read
