@@ -59,6 +59,12 @@ REGIONAL_BLUF_ENDPOINTS = {
     # WITHOUT dedicated Asifah trackers. Lives on ME backend; consumed by
     # GPI exactly like a 5th regional BLUF.
     'global_humanitarian': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/humanitarian-convergence/bluf',
+    # v2.4 (May 17, 2026) -- Cascade Commodity Detector
+    # Pseudo-region: detects chokepoint -> intermediate -> downstream commodity
+    # cascades (sulfur cascade is first chain). Signals tagged pressure_type=
+    # 'economic' so they flow into the GPI economic axis. Same architectural
+    # pattern as humanitarian convergence.
+    'global_cascade': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/cascade-convergence/bluf',
 }
 
 # Display config
@@ -69,6 +75,7 @@ REGION_DISPLAY = {
     'wha':    {'flag': '\U0001f30e', 'name': 'Western Hemisphere','hub': 'rhetoric-wha.html'},     # 🌎
     # v2.3 — Humanitarian Convergence Detector pseudo-region
     'global_humanitarian': {'flag': '\U0001f198', 'name': 'Global Humanitarian', 'hub': 'gpi.html'},  # 🆘
+    'global_cascade': {'flag': '\u2697\ufe0f', 'name': 'Global Cascade', 'hub': 'gpi.html'},  # alembic emoji
 }
 
 # Alphabetical card order (matches Rachel's "presumably alphabetical" spec)
