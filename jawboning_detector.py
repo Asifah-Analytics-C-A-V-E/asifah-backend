@@ -578,12 +578,19 @@ def detect_jawboning(leader_id,
                 continue
 
             fired = False
-            for cluster_id in actor_gate.keys():
+            # When actor_gate is empty (e.g., all Trump signatures by convention),
+            # check ALL clusters in actor_results — "no gate" means "any US cluster
+            # mentioning these phrases counts." Without this fallback, gateless
+            # signatures could never fire because actor_gate.keys() iterates zero
+            # times. (Fix discovered May 17, 2026 — silent failure on all 11 Trump
+            # signatures since deployment.)
+            clusters_to_check = list(actor_gate.keys()) if actor_gate else list(actor_results.keys())
+            for cluster_id in clusters_to_check:
                 cluster = actor_results.get(cluster_id) or {}
                 if _has_phrase(cluster, all_phrases) or \
                    _articles_mention(cluster, all_phrases):
                     fired = True
-                    break  # One gated cluster matching is sufficient
+                    break  # One matching cluster is sufficient
 
             results[sig_id] = fired
 
