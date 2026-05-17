@@ -739,11 +739,17 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
         dedicated Asifah trackers (Egypt, Ethiopia, Myanmar, Sri Lanka,
         Jamaica, etc.) into a single convergence assessment that flows
         into GPI's humanitarian axis.
+
+        Query param: ?force=true bypasses 30-min cache and forces fresh
+        scan (canonical Asifah tracker convention).
         """
+        from flask import request
+        force = request.args.get('force', '').lower() in ('true', '1', 'yes')
+
         try:
             r = _get_redis()
-            # Try cached BLUF first (30-min TTL)
-            if r:
+            # Try cached BLUF first (30-min TTL) — unless force=true
+            if r and not force:
                 try:
                     cached = r.get('humanitarian_convergence:bluf:latest')
                     if cached:
