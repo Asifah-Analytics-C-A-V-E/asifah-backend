@@ -101,6 +101,22 @@ except ImportError:
     HUMANITARIAN_CONVERGENCE_AVAILABLE = False
     print("[ME Backend] ⚠️ Humanitarian Convergence Detector not available")
 
+# ------------------------------------------------------------
+# CASCADE COMMODITY DETECTOR (v2.4 -- May 17, 2026)
+# Detects chokepoint -> intermediate -> downstream commodity cascades.
+# First chain: Hormuz -> Sulfur -> copper, nickel, potash, lithium, cobalt,
+# semiconductors. Signals tagged pressure_type='economic' so they flow into
+# the GPI economic axis. Zero new API calls -- reads existing rhetoric
+# tracker article caches. Source: Andy Home Reuters Apr 17, 2026.
+# ------------------------------------------------------------
+try:
+    from cascade_detector import register_cascade_detector_routes
+    CASCADE_DETECTOR_AVAILABLE = True
+    print("[ME Backend] ✅ Cascade Commodity Detector loaded")
+except ImportError:
+    CASCADE_DETECTOR_AVAILABLE = False
+    print("[ME Backend] ⚠️ Cascade Commodity Detector not available")
+
 # ────────────────────────────────────────────────────────────
 # GLOBAL PRESSURE INDEX — top of the analytical pyramid
 # Synthesizes ME + Asia + Europe + WHA regional BLUFs into a
@@ -1042,6 +1058,13 @@ if ME_BLUF_AVAILABLE:
 if HUMANITARIAN_CONVERGENCE_AVAILABLE:
     register_humanitarian_convergence_routes(app, redis_client=redis_client)
     print("[ME Backend] ✅ Humanitarian Convergence routes registered: /api/humanitarian-convergence/bluf, /details, /health")
+
+# Cascade Commodity Detector -- register BEFORE GPI so GPI sees the new
+# /api/cascade-convergence/bluf endpoint when it iterates REGIONAL_BLUF_ENDPOINTS.
+# Same redis_client + same architectural pattern as humanitarian convergence.
+if CASCADE_DETECTOR_AVAILABLE:
+    register_cascade_detector_routes(app, redis_client=redis_client)
+    print("[ME Backend] ✅ Cascade Detector routes registered: /api/cascade-convergence/bluf, /details, /health")
 
 # Global Pressure Index -- register after all regional BLUFs/rhetoric so it can read them
 if GPI_AVAILABLE:
