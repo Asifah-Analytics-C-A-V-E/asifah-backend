@@ -409,6 +409,25 @@ COMMODITY_TYPES = {
         'top_producers':  ['brazil', 'usa', 'argentina', 'china', 'india'],
         'top_consumers':  ['china', 'eu', 'mexico', 'japan'],
     },
+    'sugar': {
+        'name': 'Sugar',
+        'icon': '🌾',
+        'tier': 2,
+        'category': 'agricultural',
+        'has_spot_price': True,
+        'yahoo_ticker': 'SB=F',         # NY #11 raw sugar futures (global benchmark)
+        'yahoo_proxies': ['CANE'],       # Teucrium Sugar ETF
+        'unit': 'USD/lb',
+        'description': 'NY #11 raw sugar futures. Brazil dominates exports (~36 MMT/yr, ~50% global trade); India is the world\'s #1 consumer + policy price-setter via export quota toggles; Thailand is ASEAN supply anchor; Cuba is the canonical historic-reversal case (former #1 producer ~150 years, now net importer post-2024 collapse).',
+        'chokepoints': [
+            'brazil port santos', 'paranaguá', 'recife',
+            'kandla port', 'mumbai port',
+            'bangkok port', 'laem chabang',
+            'mariel port',
+        ],
+        'top_producers':  ['brazil', 'india', 'thailand', 'china', 'eu', 'usa', 'mexico', 'australia'],
+        'top_consumers':  ['india', 'china', 'eu', 'usa', 'brazil', 'indonesia'],
+    },
     'uranium': {
         'name': 'Uranium',
         'icon': '☢️',
@@ -703,6 +722,39 @@ COMMODITY_KEYWORDS = {
         # Chinese
         '大豆', '中美大豆',
     ],
+    'sugar': [
+        # Core market terms
+        'sugar', 'sugar prices', 'sugar futures', 'raw sugar', 'refined sugar',
+        'ny11', 'ny no. 11', 'ice sugar', 'london white sugar',
+        'sugar exports', 'sugar imports', 'sugar harvest', 'sugar mill',
+        'sugar surplus', 'sugar deficit', 'global sugar stocks',
+        # Producer-specific
+        'brazil sugar', 'brazilian sugar', 'centre-south brazil',
+        'india sugar', 'indian sugar', 'uttar pradesh sugar', 'maharashtra sugar',
+        'thailand sugar', 'thai sugar',
+        'china sugar', 'china sugar imports', 'sugar syrup imports china',
+        'eu sugar', 'european sugar', 'sugar beet eu',
+        'mexico sugar', 'mexican sugar', 'usmca sugar',
+        'cuba sugar', 'cuban sugar', 'cuban sugar harvest',
+        'australia sugar', 'australian sugar',
+        'guatemala sugar', 'philippines sugar',
+        # Policy + trade
+        'india sugar export quota', 'india sugar export ban',
+        'usda sugar', 'usda sugar report',
+        'sugar tariff rate quota', 'us sugar trq',
+        'sugar ethanol mix', 'sugar ethanol parity',
+        'safra cana', 'cana de açúcar',
+        # Companies
+        'cosan', 'raízen', 'são martinho', 'tereos', 'südzucker',
+        'wilmar sugar', 'mitr phol',
+        # Spanish + Portuguese + Hindi keywords
+        'azúcar', 'caña de azúcar', 'açúcar',           # ES + PT
+        'zafra cubana',                                  # ES (Cuban harvest)
+        'गन्ना', 'चीनी',                                 # Hindi (sugarcane, sugar)
+        # Chinese
+        '糖', '白糖', '蔗糖',
+    ],
+    'uranium': [
     'uranium': [
         'uranium', 'uranium prices', 'yellowcake',
         'kazatomprom', 'cameco', 'orano', 'rosatom uranium',
@@ -778,6 +830,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "~12% global production; safrinha (Mato Grosso second harvest, ~75% of total Brazilian corn) creates a structural global supply variable distinct from US harvest cycles. Paranaguá + Santos export terminals. Major destination shift toward China + MENA in last decade."},
         'potash':       {'role': 'consumer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 potash consumer (~13M tonnes, ~17% global); the demand-side anchor of all global agri-commodity flow. Brazil's soy/corn export economy depends entirely on potash imports — when Belarus got sanctioned in 2021, Brazil was the primary impact zone. ~85% imported (Russia + Belarus + Canada). Soybean farmers' input cost lever."},
+        'sugar':        {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': "🌾 World #1 sugar producer (~44.7 MMT 2025/26 record forecast) AND #1 exporter (~36 MMT/yr, ~50% of global sugar trade). Centre-south region (São Paulo + Minas Gerais + Mato Grosso) dominant; Santos + Paranaguá primary export ports. Cosan/Raízen + São Martinho top mills. STRUCTURAL FLEXIBILITY: ~50% of cane allocated to sugar vs ethanol depending on price economics (the sugar/ethanol mix toggles seasonally — when ethanol prices are high relative to sugar, mills divert toward fuel and global sugar prices spike). Brazil is the de facto global sugar price floor + the variable-supply marginal producer. Watch: Conab cane forecasts, UNICA biweekly reports, sugar/ethanol parity ratio (ANP), Santos port loadout volumes."},
     },
     'canada': {
         'potash':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -842,26 +896,26 @@ COUNTRY_COMMODITY_EXPOSURE = {
         },
         'semiconductors': {'role': 'consumer',        'weight': 1.5, 'rank': 1,
                          'note': "World's largest semiconductor consumer (~50% of global imports for assembly + domestic use); aspirant producer pushed to legacy nodes by US export controls. SMIC, YMTC, CXMT struggle to advance beyond ~7nm without ASML EUV access. China responds with self-reliance push, REE export controls (retaliatory), and Taiwan unification rhetoric — semiconductors are THE structural reason cross-strait stakes are global. Watch SMIC node announcements, US entity list updates, ASML China revenue reports."},
+        'sugar':        {'role': 'producer_consumer', 'weight': 1.3, 'rank': 2,
+                         'note': "🌾 World's #2 sugar consumer (~15.5 MMT/yr) AND #4 producer (~11.5 MMT 2025/26, beet + cane mix). Guangxi (cane) + Yunnan + Heilongjiang (beet) dominant. Net importer (~4-5 MMT/yr imports). POLICY LEVER: TRQ + state reserves + sugar-syrup-import controls (Beijing tightened in 2024 to plug a TRQ-bypass loophole). COFCO state-owned trader dominant. Consumption pattern: industrial food + beverage (Coca-Cola/Pepsi China bottlers) + traditional cooking. Watch: Beijing TRQ allocation announcements, COFCO reserve buys, sugar syrup import data, Yunnan harvest reports."},
     },
     'cuba': {
         'oil':          {'role': 'consumer',          'weight': 1.5, 'rank': 1,
-                         'note': "Cuba imports ~50% of crude oil consumption (~80-130k bpd). Venezuela (PDVSA) historic primary supplier under the 2000 ALBA oil-for-services agreement (~50-80k bpd peak; deteriorating since 2019 as Venezuela's own production collapsed). Russia stepped in with episodic Rosneft cargoes 2023-2024 (4-5 tankers in 2024 confirmed via tanker tracking). Mexican Pemex shipments also recurring under prior AMLO-era arrangements. Oil supply is THE upstream variable for Cuban regime stability — every supply shock cascades to power grid (70% diesel-dependent) which cascades to street protests. [VERIFY: current Rosneft cargo cadence post-2025 sanctions]."},
-        'natural_gas':  {'role': 'consumer',          'weight': 0.4,
-                         'note': "Minor consumer (~1 bcm/yr); not infrastructure-dependent — Cuba relies on imported LPG cylinders for cooking + crude-fired power generation rather than piped gas. Less strategically exposed than oil. Included for completeness."},
+                         'note': "🚨 CRITICAL: Cuba imports ~50% of crude oil consumption (~80-130k bpd) AND ~70% of grid power runs on imported heavy fuel oil (HFO/Mazut, distinct from crude — Cuba's eight thermoelectric plants depend on imported fuel oil that the global commodity market tracks under residual fuel/bunker categories, not separate from oil). Two-track oil dependency. Venezuela (PDVSA) historic primary crude supplier under the 2000 ALBA oil-for-services agreement (~50-80k bpd peak; deteriorating since 2019). Russia stepped in with episodic Rosneft cargoes 2023-2024 (4-5 tankers confirmed via Sovcomflot tracking); Russia now primary HFO supplier as Venezuela's PDVSA refineries went offline. Mexican Pemex recurring under prior AMLO-era arrangements. EVERY supply shock cascades to power grid → rolling blackouts → protest cycle (precedent: July 11 2021, Oct 2022, March 2024). Each tanker arrival is a stability event — Cuban state media tracks publicly. Watch: Sovcomflot post-OFAC SDN cadence, Venezuelan PDVSA export volume, Mexican Pemex Cuba-specific shipments, 30-day gaps in fuel arrivals. [VERIFY: current Rosneft cargo cadence post-2025 sanctions; Russian shadow fleet workarounds may distort tanker visibility]."},
         'wheat':        {'role': 'consumer',          'weight': 1.4, 'rank': 5,
-                         'note': "Cuba imports ~70-80% of food calories. Wheat is the single largest grain import (~700k tonnes/yr) — bread + crackers are PDS/ration-book staples (libreta de abastecimiento). Russia became the dominant supplier post-2022 (~50-60% of imports), backfilling for declining US (Trump-era OFAC tightening) and intermittent Vietnam/EU. The libreta ration is THE political-stability lever in Cuba — when ration deliveries fail, protests follow (July 11, 2021 was preceded by ration-book gaps). [VERIFY: 2025-2026 import share split Russia/US]."},
+                         'note': "Cuba imports ~70-80% of food calories. Wheat is the single largest grain import (~700k tonnes/yr) — bread + crackers are PDS/ration-book staples (libreta de abastecimiento). Russia became the dominant supplier post-2022 (~50-60% of imports), backfilling for declining US (Trump-era OFAC tightening) and intermittent Vietnam/EU. The libreta ration is THE political-stability lever in Cuba — when ration deliveries fail, protests follow. [VERIFY: 2025-2026 import share split Russia/US; have US wheat sales recovered under post-election policy shifts?]."},
         'corn':         {'role': 'consumer',          'weight': 1.0,
-                         'note': "Cuba imports ~600-800k tonnes/yr; primary use is poultry feed + ethanol-free livestock cycle. Brazil + Argentina dominant suppliers (closer geography + cheaper logistics than US even under OFAC general license). Corn supply chain is the upstream variable on Cuban egg/chicken availability — another political-stability variable when supply tightens."},
+                         'note': "Cuba imports ~600-800k tonnes/yr; primary use is poultry feed + livestock cycle. Brazil + Argentina dominant suppliers (closer geography + cheaper logistics than US even under OFAC general license). Corn supply chain is upstream variable on Cuban egg/chicken availability — another political-stability variable when supply tightens."},
         'soybeans':     {'role': 'consumer',          'weight': 0.9,
-                         'note': "~200-300k tonnes/yr soybean meal imports (poultry + swine feed). Brazil + Argentina sourced. Soy + corn together drive animal protein supply on the island; either one tightening collapses poultry production within weeks."},
+                         'note': "~200-300k tonnes/yr soybean meal imports (poultry + swine feed). Brazil + Argentina sourced. Soy + corn together drive animal protein supply; either one tightening collapses poultry production within weeks. [VERIFY volume estimate from USDA FAS Cuba post reports]."},
         'potash':       {'role': 'consumer',          'weight': 1.1, 'rank': 4,
-                         'note': "Cuba imports ~100% of potash for agricultural fertilizer. Historic Belarus + Russia supply chain; post-2021 Belarus sanctions forced harder Russia dependence. Cuba's domestic agricultural collapse (sugar cane + tobacco + tubers all in decline) is the canonical case study of compound fertilizer-input failure — when fertilizer doesn't arrive, the next harvest fails, then the next. Slow-moving stability variable (12-18 month feedback loop) but structurally severe."},
+                         'note': "Cuba imports ~100% of potash for agricultural fertilizer. Historic Belarus + Russia supply chain; post-2021 Belarus sanctions forced harder Russia dependence. Slow-moving stability variable (12-18 month feedback loop) but structurally severe — when fertilizer doesn't arrive, the next harvest fails, then the next."},
+        'sugar':        {'role': 'historic_reversal', 'weight': 1.5,
+                         'note': "🚨 ANALYTICAL HEADLINE: Cuba was the world's #1 sugar producer for ~150 years (peak ~8.5 MMT/yr in 1989). 2024-25 harvest collapsed to ~150-200k tonnes — a 95-98% peak-to-trough collapse. CUBA IS NOW A NET SUGAR IMPORTER. This is a historic reversal that signals the depth of regime-level structural economic collapse, not commodity-cycle volatility. The sugar industry was the structural anchor of the Cuban economy from the Spanish colonial period through the Soviet era; its collapse is to Cuba what the 1989 USSR oil-export collapse was to the late Soviet economy — a foundational input failure with no obvious recovery path. CAUSES: aging mills + spare parts shortages + fuel/electricity disruption (2024 grid collapse cycle directly disrupted harvest + transport) + labor shortage from emigration + chronic underinvestment. Cuba's once-privileged China sugar export quotas now go UNMET. Brazil + intermediaries supply Cuba's domestic sugar deficit. **Sugar is no longer a Cuban export lever — it is a domestic vulnerability.** Treat as standalone regime-stress signal, not as a tradable commodity exposure. Watch: AZCUBA harvest announcements (Cuban state sugar enterprise), Cuban state media on mill operations, sugar import announcements (Brazil → Cuba flows)."},
+        'natural_gas':  {'role': 'consumer',          'weight': 0.4,
+                         'note': "Minor consumer (~1 bcm/yr); not pipeline-exposed — Cuba relies on imported LPG cylinders for cooking rather than piped gas. Less strategically exposed than oil. Included for tracking completeness."},
         'gold':         {'role': 'consumer',          'weight': 0.7,
-                         'note': "Cuban Central Bank (BCC) gold reserves are opaque and unreported; estimated <5 tonnes. Marginal consumer. Track as currency-defense signal — any spike in BCC gold buying or selling would signal acute peso pressure (CUP/USD on the parallel market is the more meaningful FX-stress indicator). Low priority but worth tracking for hard-currency crisis signaling."},
-        'sugar':        {'role': 'historic_reversal', 'weight': 1.5, 'rank': 'former_#1',
-                         'note': "🚨 ANALYTICAL SIGNAL: Cuba was the world's #1 sugar producer for ~150 years (peak ~8.5 Mt/yr in 1989). In the 2024-25 harvest Cuba produced ~150k tonnes — a 98% collapse from peak. Cuba is now a NET SUGAR IMPORTER, a historic reversal that signals the depth of regime-level economic collapse, not just commodity-cycle volatility. The sugar industry was the structural anchor of the Cuban economy from the Spanish colonial period through the Soviet era. Its collapse is to Cuba what the 1989 USSR oil-export collapse was to the late Soviet economy — a foundational input failure with no obvious recovery path. Treat as standalone regime-stress signal, not as a tradable commodity exposure."},
-        'fuel_oil':     {'role': 'consumer',          'weight': 1.5, 'rank': 1,
-                         'note': "🚨 CRITICAL: Cuban electrical grid runs ~70% on imported heavy fuel oil (HFO/Mazut) — distinct from crude oil tracked separately above. This is THE blackout-cascade variable. Eight thermoelectric plants (Antonio Guiteras, Máximo Gómez, etc.) all run on imported HFO. Russia (Rosneft, Sovcomflot tankers) became the dominant fuel-oil supplier post-2022 as Venezuela's PDVSA refineries went offline. Each tanker arrival is a stability event — Cuban state media tracks these publicly. Any 30-day gap in fuel-oil arrivals → rolling blackouts → protest cycle (precedent: July 11 2021, Oct 2022, March 2024). [VERIFY: Sovcomflot post-OFAC SDN designation cargo cadence — Russian shadow fleet workarounds may distort visibility]."},
+                         'note': "Cuban Central Bank (BCC) gold reserves are opaque and unreported; estimated <5 tonnes. Marginal consumer. Track as currency-defense signal — any spike in BCC gold buying/selling signals acute peso pressure (CUP/USD parallel-market rate is the more reliable FX-stress indicator). Low priority but worth tracking for hard-currency crisis signaling."},
     },
     'drc': {
         'cobalt':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -903,6 +957,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "EU Critical Raw Materials Act (2023) explicitly targets reducing China REE dependency. EU consumes ~25% of global REEs for automotive (EV magnets) + wind turbines + electronics. Lynas + MP Materials + Solvay (France) are diversification anchors. Watch: CRMA strategic project announcements, EU-Greenland REE agreements."},
         'semiconductors': {'role': 'consumer',        'weight': 1.0,
                          'note': "EU-27 collective semiconductor consumer ($45B+ market); automotive (~37% of EU chip demand) + industrial sectors. EU Chips Act (€43B, 2023) targets 20% global market share by 2030 via TSMC Dresden + Intel Magdeburg + GlobalFoundries Dresden expansion. Watch: ASML export-license decisions, EU Chips Act milestone announcements."},
+        'sugar':        {'role': 'producer_consumer', 'weight': 1.0, 'rank': 3,
+                         'note': "🌾 EU-27 collective sugar producer (~15.5 MMT/yr, 2025/26 forecast ~5% drop on lower beet area). Sugar BEET dominant (vs. cane elsewhere) — fundamentally different agronomy + processing. France + Germany top producers; Poland + Netherlands significant. Südzucker (Germany) + Tereos (France) + Cosun (Netherlands) dominate processing. EU sugar reform 2017 ended production quotas + reference pricing — bloc shifted toward more market-aligned production. Consumption + production roughly balanced; bloc is net-balanced trader (~1-2 MMT imports + similar exports). Lower-leverage than Brazil/India but the agronomic alternative-supply pole. Watch: CAP sugar beet policy, French/German harvest reports, post-Brexit UK sugar dynamics."},
     },
     'france': {
         'uranium':      {'role': 'consumer',          'weight': 1.3, 'rank': 2,
@@ -929,6 +985,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #3 potash consumer (~6 Mt/yr); 100% imported — IPL (Indian Potash Limited) state-aligned buyer; Canada (Canpotex) + Russia + Belarus primary suppliers. Subsidized fertilizer pricing → fiscal exposure to global MOP price moves. 2021 Belarus sanctions tested supply diversification."},
         'corn':         {'role': 'consumer',          'weight': 0.9,
                          'note': "Growing corn consumer (~30 Mt/yr); rapid expansion of poultry + ethanol blending (E20 mandate by 2025). Domestic production primary; minor net importer. Watch: ethanol blending policy, MSP announcements."},
+        'sugar':        {'role': 'producer_consumer', 'weight': 1.5, 'rank': 2,
+                         'note': "🌾 World's #1 sugar consumer (~31 MMT/yr, ~17% global) AND #2 producer (~25.8 MMT 2024/25, El Niño-driven 19% drop; ~35.3 MMT 2025/26 rebound forecast). UTTAR PRADESH + MAHARASHTRA + KARNATAKA cane belts; ~50M sugarcane farmers (politically critical demographic). India's export quota policy is THE primary global sugar price-setter: 2022-23 export ban after El Niño tightened global supply; 2024/25 fell BELOW consumption for first time in 8 years, sharply reducing exports. Modi government FRP (Fair and Remunerative Price) + state SAP (State Advised Price) for cane are election-cycle policy levers. ISMA (Indian Sugar Mills Association) production data + DFPD export-quota announcements are the canonical news triggers. Watch: monsoon performance, cane FRP/SAP announcements, sugar export quota toggles, ethanol blending diversion (E20 mandate competes with sugar production)."},
     },
     'indonesia': {
         'nickel':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1023,6 +1081,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #5 corn consumer (~45 Mt/yr); largest individual-country corn importer (~17 Mt/yr from USA via USMCA); white-corn for tortillas politically sensitive (AMLO/Sheinbaum GMO restriction → US trade dispute). Animal feed + tortilla industry dual demand. Watch: USMCA agriculture dispute outcomes, peso USD exchange rate."},
         'copper':       {'role': 'consumer',          'weight': 0.7,
                          'note': "Major Latin American manufacturing hub (Northern Mexico maquiladoras + automotive + electronics); USMCA supply chain integration with USA. Net copper importer despite minor domestic production at Buenavista (Grupo México). Tesla Monterrey + new EV manufacturing builds out copper demand."},
+        'sugar':        {'role': 'producer',          'weight': 1.1,
+                         'note': "🌾 Mexico sugar producer ~5.1 MMT/yr (2025/26 forecast, ~50% of which exports to USA via USMCA-privileged quota). Veracruz + Jalisco + San Luis Potosí dominant cane regions. Sheinbaum administration energy/water policy intersects with sugar — drought + cane water allocation politics. The US-Mexico sugar dispute (recurring AD/CVD investigations + suspension agreements since 2014) is the canonical case study in managed trade. Mexico is the SINGLE LARGEST source of US sugar imports under USMCA. Watch: CONADESUCA harvest reports, USMCA sugar dispute filings, peso USD exchange rate (affects competitiveness vs Brazil)."},
     },
     'netherlands': {
         'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 4,
@@ -1114,6 +1174,17 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'rare_earths':  {'role': 'consumer',          'weight': 1.3,
                          'note': 'Semiconductor manufacturing critical input — heavy rare earths for chip polishing, magnets, and specialty alloys. China holds export-control leverage; Taiwan diversification efforts via Lynas Australia + recycling. Compound risk: REE export ban + cross-strait pressure simultaneously.'},
     },
+    'thailand': {
+        # New profile — added May 17, 2026 as part of Sugar Full Retrofit.
+        # Thailand commodity profile is anchored on sugar (world #3 producer, #2 exporter)
+        # plus rice (separate commodity not yet in master COMMODITIES dict — future work).
+        'sugar':        {'role': 'producer',          'weight': 1.4, 'rank': 3,
+                         'note': "🌾 World's #3 sugar producer (~10.3 MMT 2025/26 forecast, +2% YoY) AND #2 exporter (~7 MMT/yr — primary ASEAN supply anchor). Mitr Phol + Thai Roong Ruang + Khon Kaen dominant millers; Lamphun + Kanchanaburi + Udon Thani cane belts. EL NIÑO + LA NIÑA SENSITIVITY: Thai sugar production swings with Southeast Asian monsoon — 2023/24 drought collapsed exports; 2025/26 recovery rebuilds stocks. Thailand's stock-building toggles ASEAN sugar prices independent of Brazil. Competitive production cost (~$458/MT raw, lower than India ~$470/MT) makes Thailand the marginal supplier to China + Indonesia + Malaysia + Korea. Watch: TSMC (Thai Sugar Millers Corporation) production estimates, OCSB (Office of the Cane and Sugar Board) reports, Thai monsoon forecasts, baht USD exchange rate (affects export competitiveness)."},
+        'natural_gas':  {'role': 'consumer',          'weight': 0.9,
+                         'note': "Thailand natural gas consumer (~50 bcm/yr); ~30% imported as LNG (rest from Gulf of Thailand domestic + Myanmar pipeline). PTT state-owned dominant. Myanmar gas pipeline (Yadana + Yetagun fields) supplies ~15-20% of Thai power generation — coup-disrupted but still flowing. Watch: PTT LNG tender results, Myanmar pipeline status, Map Ta Phut industrial complex demand."},
+        'rare_earths':  {'role': 'consumer',          'weight': 0.6,
+                         'note': "Emerging consumer driven by EV manufacturing build-out (Thailand auto cluster + BYD/Great Wall/MG plants). Net importer; no significant domestic production. Lower leverage but growing variable."},
+    },
     'turkey': {
         'wheat':        {'role': 'transit',           'weight': 1.0,
                          'note': "Bosphorus + Dardanelles + Black Sea grain corridor mediator. Türkiye's straits are the chokepoint through which all Russian + Ukrainian + Romanian + Bulgarian wheat exports must pass — Türkiye's UN-brokered July 2022 grain corridor agreement (with UN + Russia + Ukraine) was foundational. Türkiye is also a major wheat-flour re-exporter (~5-6 Mt/yr to MENA + sub-Saharan Africa, including Egypt + Iraq + Sudan + Yemen). Domestic wheat production ~20 Mt + imports ~10 Mt; Turkish Grain Board (TMO) state procurement. Watch: Montreux Convention enforcement, Turkish Straits transit, TMO tender results."},
@@ -1179,6 +1250,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "MP Materials Mountain Pass (the only operating US REE mine) + new processing investments; CHIPS-era industrial policy push for diversification from China dependency."},
         'uranium':      {'role': 'consumer',          'weight': 1.1,
                          'note': "World's largest civilian uranium consumer (~93 reactors); Russian HALEU dependency major concern; Centrus Energy + Urenco USA + DOE strategic uranium reserve."},
+        'sugar':        {'role': 'producer_consumer', 'weight': 1.0,
+                         'note': "🌾 US sugar production ~8.4 MMT/yr (cane: Louisiana + Florida + Texas; beet: Minnesota + North Dakota + Idaho + Michigan). Net importer — consumption ~12 MMT/yr. STRUCTURAL POLICY: US sugar program runs on TRQ (Tariff Rate Quota) system with country allocations + price-support loans + marketing allotments — keeps domestic prices significantly ABOVE world prices, protected for ~40 sugar-state congressional districts. USMCA: Mexico is the privileged supplier (~1 MMT/yr) with separate dispute resolution. American Crystal Sugar + ASR Group dominate. The 'sugar lobby' is the canonical case study in trade-policy capture. Watch: USDA WASDE sugar tables, Mexican sugar dispute filings, TRQ shortfall reallocations, HFCS-vs-cane-sugar substitution by Coca-Cola/Pepsi."},
    },
 }
 # ============================================================================
