@@ -664,6 +664,79 @@ def _us_predicate_mexico_border(upstream, acc):
 
 
 # ============================================================================
+# COMMODITY PRESSURE READER (HTTP primary + WHA proxy fallback)
+# ============================================================================
+# Commodity data lives in a single Redis blob on the ME backend (not per-country
+# keys), so the canonical "both" pattern here is two HTTP paths:
+#   PRIMARY:  ME backend  /api/commodity-pressure/<country>     (source of truth)
+#   FALLBACK: WHA proxy   /api/wha/commodity/<country>          (12hr cached copy)
+# Different Render services, different network paths — if ME has a cold start
+# or transient failure, WHA proxy likely has a warm cached copy.
+# ============================================================================
+
+ME_BACKEND_URL  = os.environ.get('ME_BACKEND_URL',  'https://asifah-backend.onrender.com')
+WHA_BACKEND_URL = os.environ.get('WHA_BACKEND_URL', 'https://asifah-wha-backend.onrender.com')
+
+
+def _read_commodity_pressure(country):
+    """
+    Fetch commodity-pressure envelope for a country.
+
+    Returns the full JSON envelope (alert_level, commodity_pressure score,
+    commodity_summaries list with regime_flags, prose, top_signals, etc.)
+    or {} on total failure.
+
+    Try ME backend first; on any failure, fall back to WHA proxy.
+    Both endpoints emit the same envelope shape.
+    """
+    country = (country or '').lower()
+    if not country:
+        return {}
+
+    # PRIMARY: ME backend
+    try:
+        url = f"{ME_BACKEND_URL}/api/commodity-pressure/{country}"
+        resp = requests.get(url, timeout=8)
+        if resp.ok:
+            data = resp.json()
+            if isinstance(data, dict) and data.get('success'):
+                return data
+    except Exception:
+        pass  # fall through to WHA proxy
+
+    # FALLBACK: WHA proxy (12hr cached)
+    try:
+        url = f"{WHA_BACKEND_URL}/api/wha/commodity/{country}"
+        resp = requests.get(url, timeout=8)
+        if resp.ok:
+            data = resp.json()
+            if isinstance(data, dict) and data.get('success'):
+                return data
+    except Exception:
+        pass
+
+    return {}
+
+
+def _commodity_get(commodity_envelope, commodity_name):
+    """
+    Helper: extract a single commodity entry from a commodity-pressure envelope.
+    Returns the dict for that commodity, or {} if not present.
+    """
+    summaries = commodity_envelope.get('commodity_summaries', []) or []
+    for c in summaries:
+        if isinstance(c, dict) and (c.get('commodity') == commodity_name or c.get('name', '').lower() == commodity_name):
+            return c
+    return {}
+
+
+def _commodity_has_regime_flag(commodity_entry, flag):
+    """Helper: check if a commodity entry carries a specific regime_flag."""
+    flags = commodity_entry.get('regime_flags', []) or []
+    return flag in flags
+
+
+# ============================================================================
 # PREDICATE FUNCTIONS — CUBA CONSUMER
 # Cuba uses 'escalation_level' field (NOT 'level' or 'tier' — third platform
 # convention). Cuba already has _apply_crosstheater_reads() doing Pattern A
@@ -802,6 +875,166 @@ def _cuba_predicate_china_rare_earths_supply(upstream, acc):
         )
 
 
+def _cuba_predicate_commodity_pressure(upstream, acc):
+    """
+    Cuba commodity pressure → amplify regime + axis actors.
+
+    Three convergence patterns Cuba is structurally exposed to:
+      1. OIL×GRID — oil pressure cascades to blackouts (#1 stability lever).
+         Amplifies: cuban_government, russia_cuba_axis, iran_cuba_axis
+      2. WHEAT/LIBRETA — wheat pressure stresses the ration card system,
+         which is the single biggest political-stability lever in Cuba.
+         Amplifies: cuban_government, cuban_dissidents
+      3. SUGAR HISTORIC REVERSAL — sub_consumer_floor flag on sugar signals
+         regime-level structural collapse (Cuba went from world's #1 sugar
+         producer for ~150 years to net importer).
+         Amplifies: cuban_dissidents
+
+    Reads via _read_commodity_pressure('cuba') which uses ME primary + WHA fallback.
+    """
+    env = _read_commodity_pressure('cuba')
+    if not env:
+        return
+
+    alert_level = (env.get('alert_level') or 'normal').lower()
+    pressure_score = float(env.get('commodity_pressure', 0) or 0)
+
+    # ── Pattern 1: Oil × Grid blackout cascade ────────────────────────────
+    oil = _commodity_get(env, 'oil')
+    oil_alert = (oil.get('global_alert_level') or 'normal').lower()
+    if oil and oil_alert in ('elevated', 'high', 'surge'):
+        acc['upstream_stressors'].append('commodity_oil_pressure_cuba_blackout_risk')
+        acc['context_notes'].append(
+            f"Cuba oil pressure {oil_alert} (composite={pressure_score:.0f}) — "
+            "imported HFO/Mazut powers ~70% of Cuban grid; supply shock cascades "
+            "directly to rolling blackouts (Jul 2021, Oct 2022, Mar 2024 precedent); "
+            "cuban_government + russia_cuba_axis + iran_cuba_axis amplified."
+        )
+        for actor in ('cuban_government', 'russia_cuba_axis', 'iran_cuba_axis'):
+            acc['amplifier_actor_deltas'][actor] = (
+                acc['amplifier_actor_deltas'].get(actor, 0) + 1
+            )
+
+    # ── Pattern 2: Wheat / libreta stress ─────────────────────────────────
+    wheat = _commodity_get(env, 'wheat')
+    wheat_alert = (wheat.get('global_alert_level') or 'normal').lower()
+    if wheat and wheat_alert in ('elevated', 'high', 'surge'):
+        acc['upstream_stressors'].append('commodity_wheat_pressure_cuba_libreta_stress')
+        acc['context_notes'].append(
+            f"Cuba wheat pressure {wheat_alert} — Cuba imports 50-60% of wheat "
+            "from Russia; libreta ration card stress is THE political-stability "
+            "lever; cuban_government + cuban_dissidents amplified."
+        )
+        for actor in ('cuban_government', 'cuban_dissidents'):
+            acc['amplifier_actor_deltas'][actor] = (
+                acc['amplifier_actor_deltas'].get(actor, 0) + 1
+            )
+
+    # ── Pattern 3: Sugar historic reversal (sub_consumer_floor) ───────────
+    sugar = _commodity_get(env, 'sugar')
+    if sugar and _commodity_has_regime_flag(sugar, 'sub_consumer_floor'):
+        acc['upstream_stressors'].append('commodity_sugar_historic_reversal_cuba')
+        acc['context_notes'].append(
+            "Cuba sugar SUB-CONSUMER FLOOR — world's #1 sugar producer for ~150 years "
+            "now NET IMPORTER (95-98% peak-to-trough collapse). Standalone "
+            "regime-stress signal; cuban_dissidents amplified."
+        )
+        acc['amplifier_actor_deltas']['cuban_dissidents'] = (
+            acc['amplifier_actor_deltas'].get('cuban_dissidents', 0) + 1
+        )
+
+
+# ============================================================================
+# PREDICATE FUNCTIONS — INDIA COMMODITY CONSUMER
+# ============================================================================
+
+def _india_predicate_commodity_pressure(upstream, acc):
+    """
+    India commodity pressure → amplify constraint-regime-building signals.
+
+    Three signals that together form the "constraint regime building" stack
+    (per CAVE strategic framing):
+      1. SUGAR SUB-CONSUMER FLOOR — India was world's #2 sugar producer, now
+         crossed below domestic consumption floor (~31MMT consumer vs falling
+         production). Structural import dependency emerging.
+         Amplifies: modi_government, indian_economic_policy
+      2. GOLD AUSTERITY signal — high gold pressure + Modi-on-gold rhetoric
+         indicates FX defense + balance-of-payments protection.
+         Amplifies: modi_government, rbi_monetary_policy
+      3. OIL/HORMUZ CONVERGENCE — high oil pressure (India imports ~85%
+         of crude) amplifies risk of energy-driven inflation spike.
+         Amplifies: modi_government, indian_energy_policy
+
+    When 2+ of these fire simultaneously, the constraint_regime_building
+    upstream_stressor is added (this is the CAVE-relevant aggregate signal).
+    """
+    env = _read_commodity_pressure('india')
+    if not env:
+        return
+
+    alert_level = (env.get('alert_level') or 'normal').lower()
+    pressure_score = float(env.get('commodity_pressure', 0) or 0)
+    signals_firing = 0  # count how many constraint signals fire
+
+    # ── Pattern 1: Sugar sub-consumer-floor (the canonical India signal) ──
+    sugar = _commodity_get(env, 'sugar')
+    if sugar and _commodity_has_regime_flag(sugar, 'sub_consumer_floor'):
+        signals_firing += 1
+        acc['upstream_stressors'].append('commodity_sugar_sub_consumer_floor_india')
+        acc['context_notes'].append(
+            "India sugar SUB-CONSUMER FLOOR — production has crossed below "
+            "domestic consumption (~31MMT/yr) for first time, signaling "
+            "structural import dependency; modi_government + "
+            "indian_economic_policy amplified."
+        )
+        for actor in ('modi_government', 'indian_economic_policy'):
+            acc['amplifier_actor_deltas'][actor] = (
+                acc['amplifier_actor_deltas'].get(actor, 0) + 1
+            )
+
+    # ── Pattern 2: Gold austerity signal ──────────────────────────────────
+    gold = _commodity_get(env, 'gold')
+    gold_alert = (gold.get('global_alert_level') or 'normal').lower()
+    if gold and gold_alert in ('elevated', 'high', 'surge'):
+        signals_firing += 1
+        acc['upstream_stressors'].append('commodity_gold_austerity_india')
+        acc['context_notes'].append(
+            f"India gold pressure {gold_alert} — high gold demand + Modi-on-gold "
+            "rhetoric signals FX defense + balance-of-payments protection; "
+            "modi_government + rbi_monetary_policy amplified."
+        )
+        for actor in ('modi_government', 'rbi_monetary_policy'):
+            acc['amplifier_actor_deltas'][actor] = (
+                acc['amplifier_actor_deltas'].get(actor, 0) + 1
+            )
+
+    # ── Pattern 3: Oil/Hormuz convergence (India imports ~85% of crude) ───
+    oil = _commodity_get(env, 'oil')
+    oil_alert = (oil.get('global_alert_level') or 'normal').lower()
+    if oil and oil_alert in ('elevated', 'high', 'surge'):
+        signals_firing += 1
+        acc['upstream_stressors'].append('commodity_oil_pressure_india_energy_inflation')
+        acc['context_notes'].append(
+            f"India oil pressure {oil_alert} — India imports ~85% of crude; "
+            "supply shock drives energy-led inflation; modi_government + "
+            "indian_energy_policy amplified."
+        )
+        for actor in ('modi_government', 'indian_energy_policy'):
+            acc['amplifier_actor_deltas'][actor] = (
+                acc['amplifier_actor_deltas'].get(actor, 0) + 1
+            )
+
+    # ── CAVE aggregate: 2+ constraint signals = constraint_regime_building ──
+    if signals_firing >= 2:
+        acc['upstream_stressors'].append('constraint_regime_building_india')
+        acc['context_notes'].append(
+            f"India multi-signal constraint stack ({signals_firing} signals firing) — "
+            "suggests deliberate FX defense / balance-of-payments / supply-shock "
+            "constraint regime building (per CAVE framework). "
+            "Watch for FX intervention, gold import curbs, sugar export controls."
+        )
+
+
 # ============================================================================
 # PREDICATE LIBRARY — dispatch by consumer theater
 # Adding a new consumer? Add an entry here + define the predicate functions above.
@@ -819,6 +1052,7 @@ PREDICATE_LIBRARY = {
         _india_predicate_us_tariffs,
         _india_predicate_us_executive_volatility,
         _india_predicate_us_h1b,
+        _india_predicate_commodity_pressure,  # v1.1 — sugar floor, gold austerity, oil convergence
     ],
     'us': [
         _us_predicate_iran_hormuz,
@@ -834,6 +1068,7 @@ PREDICATE_LIBRARY = {
         _cuba_predicate_us_jawboning_inbound,
         _cuba_predicate_iran_hormuz_oil,
         _cuba_predicate_china_rare_earths_supply,
+        _cuba_predicate_commodity_pressure,  # v1.1 — oil×grid, wheat, sugar historic reversal
         # Future: _cuba_predicate_venezuela_collapse (when venezuela tracker fully wired)
     ],
     # Future consumers: 'russia', 'iran', 'china', etc.
