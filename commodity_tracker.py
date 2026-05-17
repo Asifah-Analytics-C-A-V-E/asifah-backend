@@ -792,8 +792,39 @@ COMMODITY_KEYWORDS = {
 # COUNTRY EXPOSURE MATRIX (Phase 1)
 # ========================================
 # Which commodities does each country touch, and in what role?
-# role: 'producer' | 'consumer' | 'transit' | 'sanctions_target' | 'mediator'
+# role: 'producer' | 'consumer' | 'producer_consumer' | 'transit' |
+#       'sanctions_target' | 'mediator' | 'historic_reversal'
 # weight: 0.5 (minor) → 1.5 (dominant role)
+#
+# REGIME_FLAGS (optional list, added May 17 2026 — sub-consumer-floor framework):
+# Each entry may include an optional 'regime_flags' list to flag structural
+# market-regime transitions distinct from cyclical movement. These are discrete
+# event flags consumed by future regime-aware logic (CAVE phase 2, butterfly
+# Phase 7+). NOT continuous variables — set when the country crosses a structural
+# threshold; cleared only when conditions sustainably reverse.
+#
+# Recognized flags (extensible — add new ones as they emerge):
+#   'sub_consumer_floor'   — Country production fell BELOW its own consumption
+#                            for first time in N years (default N=5). Implies
+#                            country becomes inelastic importer + export-policy
+#                            risk. CANONICAL: India sugar 2024/25 (first time
+#                            below ~31 MMT consumption in 8 years).
+#   'export_ban_active'    — Government has imposed export restrictions on the
+#                            commodity. Implies global supply tightening + price
+#                            volatility expansion.
+#   'stocks_critical'      — Stock-to-use ratio below historical floor.
+#   'price_floor_breached' — Government intervention triggered (subsidy spike,
+#                            buffer-stock release, MSP adjustment).
+#
+# Example usage:
+#   'sugar': {'role': 'producer_consumer', 'weight': 1.5, 'rank': 2,
+#             'regime_flags': ['sub_consumer_floor'],  # ← new optional field
+#             'note': "..."}
+#
+# Consumers of regime_flags (planned):
+#   - CAVE phase 2 — constraint-regime portfolio biases
+#   - Butterfly reader — cross-theater regime amplification
+#   - Stability page UI — regime-shift badges on commodity tiles
 
 COUNTRY_COMMODITY_EXPOSURE = {
     'argentina': {
@@ -910,7 +941,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'potash':       {'role': 'consumer',          'weight': 1.1, 'rank': 4,
                          'note': "Cuba imports ~100% of potash for agricultural fertilizer. Historic Belarus + Russia supply chain; post-2021 Belarus sanctions forced harder Russia dependence. Slow-moving stability variable (12-18 month feedback loop) but structurally severe — when fertilizer doesn't arrive, the next harvest fails, then the next."},
         'sugar':        {'role': 'historic_reversal', 'weight': 1.5,
-                         'note': "🚨 ANALYTICAL HEADLINE: Cuba was the world's #1 sugar producer for ~150 years (peak ~8.5 MMT/yr in 1989). 2024-25 harvest collapsed to ~150-200k tonnes — a 95-98% peak-to-trough collapse. CUBA IS NOW A NET SUGAR IMPORTER. This is a historic reversal that signals the depth of regime-level structural economic collapse, not commodity-cycle volatility. The sugar industry was the structural anchor of the Cuban economy from the Spanish colonial period through the Soviet era; its collapse is to Cuba what the 1989 USSR oil-export collapse was to the late Soviet economy — a foundational input failure with no obvious recovery path. CAUSES: aging mills + spare parts shortages + fuel/electricity disruption (2024 grid collapse cycle directly disrupted harvest + transport) + labor shortage from emigration + chronic underinvestment. Cuba's once-privileged China sugar export quotas now go UNMET. Brazil + intermediaries supply Cuba's domestic sugar deficit. **Sugar is no longer a Cuban export lever — it is a domestic vulnerability.** Treat as standalone regime-stress signal, not as a tradable commodity exposure. Watch: AZCUBA harvest announcements (Cuban state sugar enterprise), Cuban state media on mill operations, sugar import announcements (Brazil → Cuba flows)."},
+                         'regime_flags': ['sub_consumer_floor'],
+                         'note': "🚨 ANALYTICAL HEADLINE: Cuba was the world's #1 sugar producer for ~150 years (peak ~8.5 MMT/yr in 1989). 2024-25 harvest collapsed to ~150-200k tonnes — a 95-98% peak-to-trough collapse. CUBA IS NOW A NET SUGAR IMPORTER. This is a historic reversal that signals the depth of regime-level structural economic collapse, not commodity-cycle volatility. The sugar industry was the structural anchor of the Cuban economy from the Spanish colonial period through the Soviet era; its collapse is to Cuba what the 1989 USSR oil-export collapse was to the late Soviet economy — a foundational input failure with no obvious recovery path. CAUSES: aging mills + spare parts shortages + fuel/electricity disruption (2024 grid collapse cycle directly disrupted harvest + transport) + labor shortage from emigration + chronic underinvestment. Cuba's once-privileged China sugar export quotas now go UNMET. Brazil + intermediaries supply Cuba's domestic sugar deficit. **Sugar is no longer a Cuban export lever — it is a domestic vulnerability.** Treat as standalone regime-stress signal, not as a tradable commodity exposure. Watch: AZCUBA harvest announcements (Cuban state sugar enterprise), Cuban state media on mill operations, sugar import announcements (Brazil → Cuba flows). NOTE: India sugar (2024/25) is the canonical 'just-crossed-the-floor' case; Cuba is the long-term post-floor case (~30 years below). Same flag, different temporal positions."},
         'natural_gas':  {'role': 'consumer',          'weight': 0.4,
                          'note': "Minor consumer (~1 bcm/yr); not pipeline-exposed — Cuba relies on imported LPG cylinders for cooking rather than piped gas. Less strategically exposed than oil. Included for tracking completeness."},
         'gold':         {'role': 'consumer',          'weight': 0.7,
@@ -985,7 +1017,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'corn':         {'role': 'consumer',          'weight': 0.9,
                          'note': "Growing corn consumer (~30 Mt/yr); rapid expansion of poultry + ethanol blending (E20 mandate by 2025). Domestic production primary; minor net importer. Watch: ethanol blending policy, MSP announcements."},
         'sugar':        {'role': 'producer_consumer', 'weight': 1.5, 'rank': 2,
-                         'note': "🌾 World's #1 sugar consumer (~31 MMT/yr, ~17% global) AND #2 producer (~25.8 MMT 2024/25, El Niño-driven 19% drop; ~35.3 MMT 2025/26 rebound forecast). UTTAR PRADESH + MAHARASHTRA + KARNATAKA cane belts; ~50M sugarcane farmers (politically critical demographic). India's export quota policy is THE primary global sugar price-setter: 2022-23 export ban after El Niño tightened global supply; 2024/25 fell BELOW consumption for first time in 8 years, sharply reducing exports. Modi government FRP (Fair and Remunerative Price) + state SAP (State Advised Price) for cane are election-cycle policy levers. ISMA (Indian Sugar Mills Association) production data + DFPD export-quota announcements are the canonical news triggers. Watch: monsoon performance, cane FRP/SAP announcements, sugar export quota toggles, ethanol blending diversion (E20 mandate competes with sugar production)."},
+                         'regime_flags': ['sub_consumer_floor'],
+                         'note': "🌾 World's #1 sugar consumer (~31 MMT/yr, ~17% global) AND #2 producer (~25.8 MMT 2024/25, El Niño-driven 19% drop; ~35.3 MMT 2025/26 rebound forecast). 🚨 SUB-CONSUMER-FLOOR FLAG: 2024/25 was the first year in 8 that production fell BELOW domestic consumption — discrete regime transition, not cyclical noise. Implies India shifts from swing-exporter to inelastic-importer; export-ban policy risk spikes; global supply buffer shrinks. UTTAR PRADESH + MAHARASHTRA + KARNATAKA cane belts; ~50M sugarcane farmers (politically critical demographic). India's export quota policy is THE primary global sugar price-setter: 2022-23 export ban after El Niño tightened global supply. Modi government FRP (Fair and Remunerative Price) + state SAP (State Advised Price) for cane are election-cycle policy levers. ISMA (Indian Sugar Mills Association) production data + DFPD export-quota announcements are the canonical news triggers. The 2024/25 floor breach STACKS with India's gold austerity rhetoric + Hormuz oil exposure + travel restraint signaling — together suggest constraint-regime building (FX defense + balance-of-payments protection), not isolated commodity stress. Watch: monsoon performance, cane FRP/SAP announcements, sugar export quota toggles, ethanol blending diversion (E20 mandate competes with sugar production), interaction with gold/FX defense complex."},
     },
     'indonesia': {
         'nickel':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
