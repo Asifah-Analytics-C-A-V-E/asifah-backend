@@ -627,6 +627,205 @@ def detect_and_build_bluf(articles):
 
 
 # ============================================================
+# FLASK ROUTE REGISTRATION
+# ============================================================
+# Canonical Asifah pattern: each module exposes `register_X_routes(app)` so
+# the app.py registration zone stays uncluttered. Reads articles from
+# existing ME rhetoric tracker Redis caches — zero new API calls.
+
+def register_humanitarian_convergence_routes(app, redis_client=None, json_module=None):
+    """
+    Register humanitarian convergence endpoints on the Flask app.
+
+    Args:
+      app:           Flask app instance.
+      redis_client:  Optional shared Redis client. If None, the function
+                     attempts to import the module's `redis_client` from
+                     app.py at request time (fallback for backwards compat).
+      json_module:   Optional json module reference (defaults to standard library).
+
+    Endpoints registered:
+      GET /api/humanitarian-convergence/bluf
+          BLUF-shaped payload consumed by GPI as a 5th regional BLUF.
+      GET /api/humanitarian-convergence/details
+          Full aggregation including by_country and by_category breakdowns
+          (for frontend drill-down cards).
+      GET /api/humanitarian-convergence/health
+          Health check; returns detector version + signal-category count.
+    """
+    from flask import jsonify
+
+    # Use standard json if not provided
+    _json = json_module
+    if _json is None:
+        import json as _json
+
+    def _get_redis():
+        """Get a Redis client — use passed one, or import from app globals."""
+        if redis_client is not None:
+            return redis_client
+        # Fallback: try to find it on the app
+        try:
+            return app.config.get('REDIS_CLIENT') or getattr(app, 'redis_client', None)
+        except Exception:
+            return None
+
+    def _gather_articles():
+        """
+        Pull article pools from cached ME rhetoric trackers.
+
+        Strategy: each rhetoric tracker stores its latest scan at
+        rhetoric:<country>:latest in Redis. Each scan has actors[X].top_articles.
+        We dedupe by URL to avoid counting the same article multiple times
+        across actors.
+        """
+        articles = []
+        seen_urls = set()
+        r = _get_redis()
+        if not r:
+            return articles
+
+        # ME rhetoric tracker cache keys (canonical naming)
+        rhetoric_keys = [
+            'rhetoric:iran:latest',
+            'rhetoric:israel:latest',
+            'rhetoric:lebanon:latest',
+            'rhetoric:syria:latest',
+            'rhetoric:yemen:latest',
+            'rhetoric:iraq:latest',
+            'rhetoric:oman:latest',
+        ]
+
+        for key in rhetoric_keys:
+            try:
+                raw = r.get(key)
+                if not raw:
+                    continue
+                cached = _json.loads(raw) if isinstance(raw, str) else raw
+                if not isinstance(cached, dict):
+                    continue
+
+                actors = (cached or {}).get('actors', {})
+                if not isinstance(actors, dict):
+                    continue
+
+                for actor_data in actors.values():
+                    if not isinstance(actor_data, dict):
+                        continue
+                    for art in (actor_data.get('top_articles', []) or []):
+                        if not isinstance(art, dict):
+                            continue
+                        url = art.get('url') or art.get('link') or ''
+                        if url and url in seen_urls:
+                            continue
+                        if url:
+                            seen_urls.add(url)
+                        articles.append(art)
+            except Exception as e:
+                print(f'[humanitarian_convergence] Skipping {key}: {str(e)[:80]}')
+                continue
+
+        return articles
+
+    # ────────────────────────────────────────────────────────────
+    # GET /api/humanitarian-convergence/bluf
+    # ────────────────────────────────────────────────────────────
+    @app.route('/api/humanitarian-convergence/bluf', methods=['GET'])
+    def humanitarian_convergence_bluf():
+        """
+        BLUF-shaped payload consumed by GPI.
+
+        v2.3 — Aggregates humanitarian signals from countries WITHOUT
+        dedicated Asifah trackers (Egypt, Ethiopia, Myanmar, Sri Lanka,
+        Jamaica, etc.) into a single convergence assessment that flows
+        into GPI's humanitarian axis.
+        """
+        try:
+            r = _get_redis()
+            # Try cached BLUF first (30-min TTL)
+            if r:
+                try:
+                    cached = r.get('humanitarian_convergence:bluf:latest')
+                    if cached:
+                        return jsonify(_json.loads(cached) if isinstance(cached, str) else cached), 200
+                except Exception as e:
+                    print(f'[humanitarian_convergence] cache miss: {str(e)[:80]}')
+
+            # Build fresh
+            articles = _gather_articles()
+            bluf = detect_and_build_bluf(articles)
+
+            # Cache for 30 min
+            if r:
+                try:
+                    r.setex(
+                        'humanitarian_convergence:bluf:latest',
+                        1800,  # 30 min
+                        _json.dumps(bluf),
+                    )
+                except Exception as e:
+                    print(f'[humanitarian_convergence] cache write skip: {str(e)[:80]}')
+
+            return jsonify(bluf), 200
+
+        except Exception as e:
+            print(f'[humanitarian_convergence] error: {e}')
+            # Return empty BLUF (HTTP 200) so GPI treats it as baseline
+            return jsonify({
+                'region':         'global_humanitarian',
+                'max_level':      0,
+                'peak_level':     0,
+                'posture_label':  'OFFLINE -- detector error',
+                'posture_color':  '#6b7280',
+                'top_signals':    [],
+                'signals':        [],
+                'updated_at':     datetime.now(timezone.utc).isoformat(),
+                'meta': {'tier': 'baseline', 'error': str(e)[:120]},
+            }), 200
+
+    # ────────────────────────────────────────────────────────────
+    # GET /api/humanitarian-convergence/details
+    # ────────────────────────────────────────────────────────────
+    @app.route('/api/humanitarian-convergence/details', methods=['GET'])
+    def humanitarian_convergence_details():
+        """
+        Full aggregation details (by_country, by_category, novel countries).
+        Useful for frontend drill-down cards.
+        """
+        try:
+            articles = _gather_articles()
+            signals = detect_humanitarian_signals(articles)
+            agg = aggregate_convergence(signals)
+            bluf = build_humanitarian_bluf(signals, agg)
+            return jsonify({
+                'bluf':           bluf,
+                'aggregation':    agg,
+                'signal_count':   len(signals),
+                'article_count':  len(articles),
+                'detector_version': __version__,
+                'updated_at':     datetime.now(timezone.utc).isoformat(),
+            }), 200
+        except Exception as e:
+            return jsonify({'error': str(e)[:200]}), 500
+
+    # ────────────────────────────────────────────────────────────
+    # GET /api/humanitarian-convergence/health
+    # ────────────────────────────────────────────────────────────
+    @app.route('/api/humanitarian-convergence/health', methods=['GET'])
+    def humanitarian_convergence_health():
+        return jsonify({
+            'module':           __module_id__,
+            'version':          __version__,
+            'signal_categories': list(SIGNAL_CATEGORIES.keys()),
+            'category_count':   len(SIGNAL_CATEGORIES),
+            'countries_tracked': len(COUNTRY_PATTERNS),
+            'status':           'operational',
+        }), 200
+
+    print('[Humanitarian Convergence] Routes registered: /api/humanitarian-convergence/bluf, /details, /health')
+
+
+# ============================================================
 # MODULE METADATA
 # ============================================================
 __version__ = '1.0.0'
