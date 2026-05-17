@@ -134,6 +134,12 @@ COMMODITY_TYPES = {
     'copper': {
         'name': 'Copper',
         'icon': '🟫',
+        # v1.4.1 (May 17, 2026): cascade_via metadata -- copper oxide processing
+        # (solvent extraction) requires sulfuric acid; Chile imports ~20% of its
+        # processing acid; Africa imports 90% of sulfur. Hormuz closure -> sulfur
+        # scarcity -> copper processing risk. Source: Reuters/Andy Home Apr 17 2026.
+        'cascade_via': ['sulfur'],
+        'cascade_upstream_chokepoints': ['strait_of_hormuz'],
         'tier': 3,
         'category': 'industrial',
         'has_spot_price': True,
@@ -220,6 +226,12 @@ COMMODITY_TYPES = {
     'nickel': {
         'name': 'Nickel',
         'icon': '⚙️',
+        # v1.4.1: cascade_via -- nickel HPAL (high-pressure acid leach) for
+        # battery-grade nickel sulfate requires substantial sulfuric acid.
+        # Indonesia (world's #1 nickel producer) imports >5M MT sulfur/yr from
+        # Gulf; sulfur prices +80% there since Iran war. S&P Global Mar 17 2026.
+        'cascade_via': ['sulfur'],
+        'cascade_upstream_chokepoints': ['strait_of_hormuz'],
         'tier': 2,
         'category': 'industrial',
         'has_spot_price': True,
@@ -259,6 +271,12 @@ COMMODITY_TYPES = {
     'potash': {
         'name': 'Potash',
         'icon': '🌱',
+        # v1.4.1: cascade_via -- potash is one fertilizer input; phosphate
+        # fertilizers (the other major class) require sulfuric acid to dissolve
+        # phosphate rock. Sulfur scarcity -> phosphate fertilizer crunch ->
+        # global food security pressure (Egypt, Ethiopia at risk per WFP).
+        'cascade_via': ['sulfur'],
+        'cascade_upstream_chokepoints': ['strait_of_hormuz'],
         'tier': 1,
         'category': 'agricultural',
         'has_spot_price': False,    # NO PUBLIC SPOT PRICE
@@ -427,6 +445,50 @@ COMMODITY_TYPES = {
         ],
         'top_producers':  ['brazil', 'india', 'thailand', 'china', 'eu', 'usa', 'mexico', 'australia'],
         'top_consumers':  ['india', 'china', 'eu', 'usa', 'brazil', 'indonesia'],
+    },
+    # ============================================================
+    # SULFUR (commodity #17 -- May 17, 2026)
+    # The "king of chemicals" -- byproduct of Gulf oil+gas refining
+    # that powers copper processing, nickel HPAL, fertilizer
+    # (phosphate + ammonium sulfate), batteries, semiconductors.
+    # CASCADE COMMODITY: not consumed directly by humans, but its
+    # scarcity propagates upstream through 5 downstream sectors
+    # simultaneously. Iran war 2026 + Strait of Hormuz closure
+    # (Feb 28) trapped ~45% of global sulfur trade. China announced
+    # sulfur export ban; Turkey announced ban; India considering.
+    # Sulfuric acid prices: +30% globally, +80% Indonesia.
+    # Source: Reuters/Andy Home Apr 17 2026; S&P Global Mar 17 2026;
+    # FP Apr 17 2026; UPI May 10 2026.
+    # ============================================================
+    'sulfur': {
+        'name': 'Sulfur / Sulfuric Acid',
+        'icon': '⚗️',
+        'tier': 2,
+        'category': 'industrial_chemical',
+        'has_spot_price': False,         # No clean public spot price; trade through opaque B2B contracts
+        'yahoo_ticker': None,
+        'yahoo_proxies': ['MOS'],         # The Mosaic Company (sulfur-intensive fertilizer producer)
+        'unit': 'USD/MT (CFR Asia spot, indicative)',
+        'description': 'King of chemicals. Sulfur is a byproduct of oil + natural gas refining (Gulf states produce ~45% of global trade). Converted to sulfuric acid for: (1) fertilizers (66% of demand -- phosphate + ammonium sulfate), (2) copper oxide processing (solvent extraction), (3) nickel HPAL battery-grade processing, (4) lithium refining, (5) cobalt refining, (6) semiconductor wafer cleaning. CASCADE COMMODITY: its scarcity propagates upstream from Hormuz closure into 5 seemingly unrelated downstream sectors. Iran war 2026 + Hormuz closure trapped Gulf supply; China announced export ban (largest sulfuric acid producer protecting domestic); Turkey banned exports; India considering. Sulfuric acid prices up 30% globally, 80% Indonesia. Ivanhoe Mines founder: "if disruption >3 weeks, copper oxide operations will close."',
+        'chokepoints': [
+            'strait of hormuz', 'persian gulf shipping',
+            'ras laffan qatar', 'jubail saudi arabia',
+            'ruwais uae', 'bandar abbas iran',
+            'nantong port china', 'shanghai port china',
+        ],
+        'top_producers':  ['iran', 'qatar', 'saudi_arabia', 'uae', 'china', 'usa', 'canada', 'russia', 'kazakhstan'],
+        'top_consumers':  ['china', 'morocco', 'indonesia', 'chile', 'usa', 'india', 'brazil'],
+        # Cascade metadata: which downstream commodities are affected when sulfur is constrained
+        'cascade_downstream': [
+            'potash',          # phosphate fertilizer production requires sulfuric acid
+            'copper',          # copper oxide solvent extraction needs sulfuric acid
+            'nickel',          # nickel HPAL for EV battery chemicals
+            'lithium',         # lithium refining (cathode active materials)
+            'cobalt',          # cobalt refining
+            'semiconductors',  # wafer cleaning
+        ],
+        # Upstream chokepoint: when this is constrained, sulfur is constrained
+        'cascade_upstream': ['oil', 'natural_gas'],  # because sulfur is byproduct of refining
     },
     'uranium': {
         'name': 'Uranium',
@@ -873,13 +935,17 @@ COUNTRY_COMMODITY_EXPOSURE = {
     },
     'chile': {
         'copper':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
-                         'note': 'World #1 copper producer (~24% global supply, ~5.3M tonnes/yr); Codelco state-owned + BHP Escondida + Antofagasta + Anglo American Sur; Chuquicamata is the largest open-pit mine on Earth. Antofagasta region is the world\'s most concentrated copper-mining infrastructure. Strategic anchor for the global energy transition (EVs + grid + electrification all copper-hungry).'},
+                         'regime_flags': ['sulfur_dependency'],
+                         'note': 'World #1 copper producer (~24% global supply, ~5.3M tonnes/yr); Codelco state-owned + BHP Escondida + Antofagasta + Anglo American Sur; Chuquicamata is the largest open-pit mine on Earth. Antofagasta region is the world\'s most concentrated copper-mining infrastructure. Strategic anchor for the global energy transition (EVs + grid + electrification all copper-hungry). SULFUR DEPENDENCY (May 17 2026): ~20% of Chilean copper processing uses imported sulfuric acid; Hormuz closure + China sulfur export ban (May 2026) creates structural risk to copper oxide solvent-extraction operations. Ivanhoe Mines founder warned >3 week disruption = mine closures. Cascade exposure: chile copper risk is amplified by sulfur upstream signal, not visible in copper-only telemetry.'},
         'lithium':      {'role': 'producer',          'weight': 1.4, 'rank': 2,
                          'note': 'World #2 lithium producer (~23% global supply); Salar de Atacama is the highest-grade lithium brine deposit globally. SQM + Albemarle dominant. Lithium Triangle anchor (Chile/Argentina/Bolivia ~58% of global reserves). Boric administration\'s 2023 National Lithium Strategy moved sector toward state-private partnerships — domestic political volatility is structural commodity-pricing variable.'},
         'silver':       {'role': 'producer',          'weight': 1.0, 'rank': 6,
                          'note': '~50 Moz/yr (~5% global); by-product of copper mining at Escondida, Collahuasi, Pelambres; Chile silver flows track copper extraction tempo, not standalone silver-mine economics.'},
         'gold':         {'role': 'producer',          'weight': 0.7,
                          'note': 'Modest gold production (~40 tonnes/yr); often co-mined with copper at Maricunga/El Indio/Andacollo belts; not a pricing-mover but a stability-of-mining-sector signal.'},
+        'sulfur':       {'role': 'consumer',          'weight': 1.3, 'rank': 4,
+                         'regime_flags': ['cascade_exposure_active'],
+                         'note': 'Chile is a major SULFUR CONSUMER via imported sulfuric acid for copper oxide processing (~20% of national copper output). Top supplier: China (now imposing export ban). Cascade risk: Hormuz closure (Feb 2026) reduced global sulfur trade, China export ban (May 2026) cuts Chile\'s primary substitute supply. Watch: Chilean Ministry of Mining communications, Codelco operational notices, SQM/Antofagasta acid-supply commentary in quarterly reports. Cascade analytical layer (not standalone commodity exposure).'},
     },
     'china': {
         'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1048,6 +1114,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Net importer; Eilat-Ashkelon pipeline + Mediterranean tankers; Hormuz/Suez vulnerable'},
     },
     'iran': {
+        'sulfur':       {'role': 'producer',          'weight': 1.4, 'rank': 4,
+                         'regime_flags': ['export_ban_active', 'cascade_chokepoint_active'],
+                         'note': 'Iran is a top-5 global sulfur producer (byproduct of South Pars natural gas + crude oil refining; Bandar Abbas + Asaluyeh + Bandar Imam Khomeini export terminals). Combined with Qatar + Saudi Arabia + UAE, Gulf region accounts for ~45% of global sulfur trade. Hormuz closure (Feb 28 2026) effectively trapped this supply -- the Andy Home Reuters Apr 17 thesis: Iran war is rippling through copper + nickel + fertilizer via sulfur cascade. STRATEGIC NOTE: this is one of Iran\'s few non-oil commodities with global cascade leverage. Iran sulfur production declines (due to gas field damage or refining disruption) would amplify cascade pressure on Chile copper / Indonesia nickel / global fertilizer.'},
         # ── Producer side (war-degraded but structural) ──
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 6,
                          'note': 'World #6 oil producer pre-strike (~3.2M bpd OPEC); also primary control of Strait of Hormuz transit (~20% of global oil). Kharg Island terminal struck Feb 2026; export capacity severely degraded. Hormuz closure remains active leverage even when production stalled.'},
@@ -1165,6 +1234,13 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'World #3 nickel producer (~270K tons/yr); Norilsk Nickel/Nornickel dominant; Arctic Norilsk + Kun-Manie + Krasnoyarsk Krai operations'},
         'silver':       {'role': 'producer',          'weight': 1.0, 'rank': 4,
                          'note': '~39.8 Moz (~5% global); Polymetal International + Norilsk Nickel by-product; sanctions complicate Western supply'},
+    },
+    'qatar': {
+        'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 2,
+                         'note': 'QatarEnergy operator; world\'s #2 LNG exporter; North Field expansion underway (largest gas field globally, shared with Iran South Pars).'},
+        'sulfur':       {'role': 'producer',          'weight': 1.4, 'rank': 2,
+                         'regime_flags': ['cascade_chokepoint_active'],
+                         'note': 'Qatar is a top-3 global sulfur producer (Ras Laffan natural gas processing byproduct). Combined with Iran + Saudi + UAE, Gulf produces ~45% of global sulfur trade. Hormuz closure (Feb 28 2026) trapped Qatar exports -- direct contributor to global sulfuric acid price surge (+30% global, +80% Indonesia). Cascade affects Chile copper, Indonesia nickel, global phosphate fertilizer.'},
     },
     'saudi_arabia': {
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 1,
