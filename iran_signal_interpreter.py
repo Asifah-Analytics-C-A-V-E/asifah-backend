@@ -1,24 +1,40 @@
 """
 iran_signal_interpreter.py
 Asifah Analytics -- ME Backend Module
-v1.0.0
+v1.1.0 -- May 17, 2026
 
 Signal interpretation engine for the Iran Rhetoric Tracker.
 Iran is the COMMAND NODE -- the analytical frame is fundamentally
 different from the Israel interpreter.
 
-Key question: Is Iran orchestrating a coordinated multi-theater
-axis activation, and how close is it to triggering direct
-US/Israeli military response?
+v1.1 ADDS: WESTERN HEMISPHERE PROJECTION RECOGNITION
+
+Iran has crossed a strategic threshold by directly projecting military
+advisers + drone technology + asymmetric warfare doctrine into the
+Western Hemisphere (Cuba, Venezuela). Historically Iran projected via
+proxy (Hezbollah, Houthis); direct state-to-state military adviser
+deployment in WH is qualitatively new — and structurally symmetric to
+the US presence in the Gulf. This is a 30-year strategic shift that
+became visible in the May 17, 2026 Axios disclosure (Cuba 300 drones,
+Iranian advisers in Havana).
+
+Key questions (v1.1 adds 4th):
+  1. Is Iran orchestrating a coordinated multi-theater axis activation?
+  2. How close to triggering direct US/Israeli military response?
+  3. What's the proxy/IRGC posture across ME theaters?
+  4. [v1.1] Is Iran projecting strategic capability into the Western
+     Hemisphere (advisers, drones, doctrine — the global-projection shift)?
 
 Three analytical outputs:
   1. So What Summary  -- plain-language command node assessment
   2. Red Line Status  -- Iran's red lines AND adversary red lines re: Iran
   3. Historical Match -- documented pre-escalation patterns
 
-Iran-specific red lines fall into TWO categories:
+Iran-specific red lines fall into THREE categories (v1.1):
   A. Iran's own red lines (what would trigger Iranian direct action)
   B. Adversary red lines re: Iran (what triggers US/Israeli response)
+  C. [v1.1] Western Hemisphere projection (Iran's strategic shift from
+     regional to global projection actor)
 
 Author: RCGG / Asifah Analytics
 """
@@ -132,6 +148,61 @@ RED_LINES = [
         'category': 'adversary_trigger',
         'source':   'CENTCOM posture -- carrier deployment historically signals US strike readiness',
     },
+
+    # ── Category C [v1.1]: WESTERN HEMISPHERE PROJECTION ──────
+    # Iran's strategic shift from regional power to global projection actor.
+    # Direct state-to-state military adviser deployment in the Western
+    # Hemisphere is qualitatively distinct from historical proxy projection.
+    {
+        'id':       'iran_western_hemisphere_advisers',
+        'label':    'Iran Deploying Military Advisers in Western Hemisphere',
+        'detail':   'IRGC, Quds Force, or Iranian military trainers detected in Cuba or '
+                    'Venezuela. State-to-state military doctrine transfer (not Hezbollah/'
+                    'Houthi proxy improvisation) -- qualitatively new strategic pattern.',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '🎓',
+        'category': 'wh_projection',
+        'source':   'Iran has historically projected globally via proxy (Hezbollah Latin '
+                    'America cells, Houthi missile aid, PMF training). Direct IRGC/Quds '
+                    'adviser deployment in WH is strategically different: state-to-state, '
+                    'denial-resistant, doctrine-transfer-grade. Structural mirror of US '
+                    'presence in the Gulf.',
+    },
+    {
+        'id':       'iran_drone_transfer_wh',
+        'label':    'Iran Drone Technology Transfer to Western Hemisphere',
+        'detail':   'Iranian-manufactured drones (Shahed-136, Mohajer-6, Geran-2 variant) '
+                    'transferred to Cuba or Venezuela. Forward-staging of Iranian asymmetric '
+                    'strike capability 90 miles from US territory.',
+        'severity': 3,
+        'color':    '#dc2626',
+        'icon':     '🛩️',
+        'category': 'wh_projection',
+        'source':   'Iranian drones in Latin America extend Tehran\'s reach from ME to '
+                    'directly adjacent to US homeland. Combined with the Mohajer-6 line '
+                    'in Venezuela (active until Jan 2026 US raid), demonstrates Iran '
+                    'building a hemispheric drone-warfare ecosystem. Structural analog '
+                    'to Soviet Cuba MRBM deployment (1962) but with cheaper, denial-capable '
+                    'platforms.',
+    },
+    {
+        'id':       'iran_axis_cuba_venezuela_coalition',
+        'label':    'Iran-Russia Coalition Forward-Staging in Western Hemisphere',
+        'detail':   'Coordinated Iran + Russia weapons or military transfers to Cuba (and/or '
+                    'Venezuela) within a 30-day window. Multilateralized 1962 Caribbean '
+                    'foothold pattern — the highest-tier WH projection signal.',
+        'severity': 3,
+        'color':    '#7c0a02',
+        'icon':     '🤝',
+        'category': 'wh_projection',
+        'source':   'When Iran AND Russia coordinate forward-staging in Cuba simultaneously, '
+                    'the doctrinal frame becomes the October 1962 Cuban Missile Crisis '
+                    'multilateralized. Differs from 1962 in being denial-capable (tactical '
+                    'drones vs strategic MRBMs) but structurally identical: hostile-state '
+                    'coalition kinetic-capability 90 miles from US territory at a moment '
+                    'of regime brittleness.',
+    },
 ]
 
 
@@ -215,6 +286,34 @@ HISTORICAL_PRECEDENTS = [
         'outcome':      'Sustained multi-theater campaign with numbered wave operations. Israeli/US response ongoing.',
         'window_hours': 48,
         'confidence':   'Medium',
+    },
+
+    # ─── v1.1: WESTERN HEMISPHERE PROJECTION ANALOG ───
+    {
+        'id':          'iran_wh_projection_emergence_2026',
+        'label':       'Iran Western Hemisphere Projection Emergence (May 2026)',
+        'description': 'First documented direct Iranian state-to-state military adviser '
+                       'deployment in Western Hemisphere (Cuba) combined with drone technology '
+                       'transfer. Marks strategic shift from regional power to global '
+                       'projection actor.',
+        'source':      'Axios disclosure May 17, 2026; DroneXL Iran-Russia-Venezuela-Cuba '
+                       'pipeline reporting; Foreign Policy on Ratcliffe Havana visit. '
+                       'Pattern unprecedented since 1962 Soviet Cuban Missile Crisis '
+                       'as a hostile-state forward-deployment in the WH.',
+        'signals': {
+            'iran_wh_advisers':   True,    # iran_western_hemisphere_advisers breached
+            'iran_drone_wh':      True,    # iran_drone_transfer_wh breached
+            'irgc_level_min':     3,
+        },
+        'outcome':      'Strategic threshold crossed: Iran moves from REGIONAL (ME-only) '
+                        'to GLOBAL projection actor. Historically Iran projected via proxy '
+                        '(Hezbollah, Houthis); direct state-to-state adviser deployment in '
+                        'WH is qualitatively different — denial-resistant, doctrine-grade, '
+                        'structurally symmetric to US presence in the Gulf. Combined with '
+                        'Russia coordination, becomes multilateralized 1962 Caribbean '
+                        'foothold pattern.',
+        'window_hours': 720,  # 30-day pattern window
+        'confidence':   'High',
     },
 ]
 
@@ -379,6 +478,78 @@ def _score_red_lines(scan_data):
                 })
                 break
 
+    # ─── v1.1: WESTERN HEMISPHERE PROJECTION SCORING ────────────
+    # Iran's strategic shift from regional to global projection actor.
+    # Detected via IRGC + russia_iran_axis actor article scanning.
+    irgc_articles = actors.get('irgc', {}).get('top_articles', []) or []
+    ru_ir_articles = actors.get('russia_iran_axis', {}).get('top_articles', []) or []
+
+    def _wh_scan(needles, actors_to_scan):
+        """Scan multiple actors' top_articles for any of the needles."""
+        for art_list_actor in actors_to_scan:
+            for art in (actors.get(art_list_actor, {}).get('top_articles', []) or []):
+                title = (art.get('title') or '').lower()
+                desc  = (art.get('description') or '').lower()
+                text = title + ' ' + desc
+                if any(n in text for n in needles):
+                    return True
+        return False
+
+    # Indicator 1: Iranian military advisers in WH (Cuba/Venezuela)
+    iran_advisers_wh = _wh_scan(
+        ['iranian military advisers cuba', 'iranian advisers havana',
+         'iranian advisers cuba', 'irgc advisers cuba', 'irgc cuba',
+         'irgc havana', 'iranian advisers venezuela', 'iranian engineers venezuela',
+         'iranian engineers cuba', 'iran drone trainers cuba',
+         'iran drone trainers venezuela', 'cuba learning iran tactics',
+         'cuba iran resistance tactics', 'quds force cuba',
+         'quds force latin america', 'irgc latin america',
+         'irgc western hemisphere'],
+        ['irgc', 'iran_gov', 'russia_iran_axis', 'us_iran']
+    )
+    if iran_advisers_wh:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'iran_western_hemisphere_advisers'),
+            'status':  'BREACHED',
+            'trigger': 'Iranian military adviser / IRGC presence in Western Hemisphere detected',
+        })
+
+    # Indicator 2: Iran drone transfer to WH
+    iran_drone_wh = _wh_scan(
+        ['shahed cuba', 'shahed-136 cuba', 'iran shahed cuba',
+         'mohajer cuba', 'mohajer-6 cuba', 'iran mohajer cuba',
+         'iran drone transfer cuba', 'iran drones to cuba',
+         'iran exports drones cuba', 'iran cuba drone shipment',
+         'iran cuba drone pipeline', 'iran cuba drone agreement',
+         'mohajer venezuela', 'mohajer-6 venezuela',
+         'iran venezuela drone assembly', 'venezuela mohajer line',
+         'iran venezuela cuba pipeline', 'cuba 300 drones',
+         'cuba drones russia iran'],
+        ['irgc', 'iran_gov', 'russia_iran_axis']
+    )
+    if iran_drone_wh:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'iran_drone_transfer_wh'),
+            'status':  'BREACHED',
+            'trigger': 'Iranian drone technology transfer to Western Hemisphere detected',
+        })
+
+    # Indicator 3: Iran + Russia coalition (highest tier WH signal)
+    russia_wh_signal = _wh_scan(
+        ['russia cuba drone', 'russia exports drones cuba',
+         'russia drone transfer cuba', 'russia drone shipment cuba',
+         'russia drone supply cuba', 'geran cuba', 'russian shahed cuba',
+         'russia drone pipeline cuba', 'russia weapons cuba',
+         'russia cuba weapons transfer'],
+        ['russia_iran_axis', 'iran_gov', 'irgc']
+    )
+    if iran_drone_wh and russia_wh_signal:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'iran_axis_cuba_venezuela_coalition'),
+            'status':  'BREACHED',
+            'trigger': 'Iran AND Russia coordinated WH staging detected -- multilateralized 1962 pattern',
+        })
+
     # Sort: BREACHED first, then severity
     triggered.sort(key=lambda x: (0 if x['status'] == 'BREACHED' else 1, -x['severity']))
     return triggered
@@ -445,6 +616,18 @@ def _match_historical(scan_data):
         if 'hormuz_threat' in sigs:
             check(hormuz == sigs['hormuz_threat'],
                   'Hormuz closure threat language', weight=2)
+
+        # v1.1: WH projection signal checks
+        triggered_ids = fp.get('_triggered_red_line_ids', [])
+        if 'iran_wh_advisers' in sigs:
+            check('iran_western_hemisphere_advisers' in triggered_ids,
+                  'Iranian military advisers in Western Hemisphere', weight=4)
+        if 'iran_drone_wh' in sigs:
+            check('iran_drone_transfer_wh' in triggered_ids,
+                  'Iran drone technology transfer to Western Hemisphere', weight=4)
+        if 'iran_russia_wh_coalition' in sigs:
+            check('iran_axis_cuba_venezuela_coalition' in triggered_ids,
+                  'Iran-Russia coordinated WH staging (1962 multilateralized)', weight=5)
 
         if max_score == 0:
             continue
@@ -551,6 +734,48 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
             f'-- accelerating trajectory, not steady-state.'
         )
 
+    # ─── v1.1: WESTERN HEMISPHERE PROJECTION (4th frame question) ───
+    # Recognize when Iran has crossed the strategic threshold from regional
+    # power to global projection actor via direct WH adviser deployment.
+    rl_ids = [r.get('id') for r in red_lines_triggered if r.get('status') == 'BREACHED']
+    wh_advisers_breached = 'iran_western_hemisphere_advisers' in rl_ids
+    wh_drone_breached    = 'iran_drone_transfer_wh' in rl_ids
+    wh_coalition_breached = 'iran_axis_cuba_venezuela_coalition' in rl_ids
+
+    if wh_coalition_breached:
+        situation_parts.append(
+            'WESTERN HEMISPHERE PROJECTION -- COALITION TIER: Iran is coordinating with '
+            'Russia to forward-stage weapons in Cuba (and historically Venezuela via the '
+            'Mohajer-6 assembly line). This is structurally the multilateralized 1962 '
+            'Caribbean foothold pattern. Iran has crossed from REGIONAL power (ME) to '
+            'COALITION GLOBAL projection actor. Differs from 1962 in denial-capability '
+            '(drones vs MRBMs) but structurally identical: hostile-state coalition '
+            'kinetic-capability 90 miles from US territory at a moment of regime '
+            'brittleness in the host country.'
+        )
+    elif wh_advisers_breached and wh_drone_breached:
+        situation_parts.append(
+            'WESTERN HEMISPHERE PROJECTION -- ACTIVE: Iran is simultaneously deploying '
+            'military advisers AND transferring drone technology to the Western Hemisphere. '
+            'This is a 30-year strategic shift made visible: from PROXY projection '
+            '(Hezbollah/Houthi) to DIRECT state-to-state military adviser deployment. '
+            'Iran has effectively claimed strategic-actor status in the canonical US sphere.'
+        )
+    elif wh_advisers_breached:
+        situation_parts.append(
+            'WESTERN HEMISPHERE PROJECTION -- ADVISER TIER: Iranian military advisers '
+            'detected in Cuba/Venezuela. Direct state-to-state doctrine transfer (distinct '
+            'from historical proxy projection). Watch for parallel drone-technology '
+            'transfer signals, which would escalate to ACTIVE tier.'
+        )
+    elif wh_drone_breached:
+        situation_parts.append(
+            'WESTERN HEMISPHERE PROJECTION -- DRONE TRANSFER: Iranian drone technology '
+            'transferred to Cuba/Venezuela. Forward-staging of asymmetric strike capability '
+            'in the canonical US sphere. Watch for Iranian adviser deployment to escalate '
+            'to ACTIVE projection tier.'
+        )
+
     # ── Key indicators ──
     indicators = []
 
@@ -570,6 +795,26 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         indicators.append(
             f'Both US (L{us_iran_lv}) and Israel (L{israel_iran_lv}) adversary postures elevated '
             f'simultaneously -- Iran facing dual-front pressure with limited diplomatic off-ramp.'
+        )
+
+    # v1.1: WH projection indicator
+    if wh_coalition_breached:
+        indicators.append(
+            '🚨 WH COALITION PROJECTION: Iran + Russia coordinated forward-staging in '
+            'Cuba detected. Multilateralized 1962 Caribbean foothold pattern. Iran '
+            'has crossed to coalition global-projection actor. Highest-confidence '
+            'WH projection signal — watch for US executive cadence response (Venezuela '
+            'January 2026 precedent: 21-day sequencing to kinetic action).'
+        )
+    elif wh_advisers_breached or wh_drone_breached:
+        indicators.append(
+            'WESTERN HEMISPHERE PROJECTION WATCH: Iran '
+            + ('adviser deployment ' if wh_advisers_breached else '')
+            + ('+ ' if wh_advisers_breached and wh_drone_breached else '')
+            + ('drone-transfer ' if wh_drone_breached else '')
+            + 'signals active. Strategic shift from regional to global projection. '
+            'Watch for Russia parallel transfers (which would escalate to coalition tier) '
+            'and US executive sequencing response.'
         )
 
     if breached_count >= 2:
@@ -839,6 +1084,17 @@ def _extract_commodity_signals(scan_data):
 # PUBLIC ENTRY POINT
 # ============================================================
 
+def _inject_triggered_ids_iran(scan_data, red_lines_triggered):
+    """v1.1 helper: inject triggered red-line IDs into scan_data so
+    _match_historical can check WH projection signal keys."""
+    if isinstance(scan_data, dict):
+        scan_data['_triggered_red_line_ids'] = [
+            r.get('id') for r in (red_lines_triggered or [])
+            if r.get('status') == 'BREACHED'
+        ]
+    return scan_data
+
+
 def interpret_signals(scan_data):
     """
     Main entry point. Takes full scan_data dict from rhetoric_tracker_iran.
@@ -847,6 +1103,8 @@ def interpret_signals(scan_data):
     """
     try:
         red_lines  = _score_red_lines(scan_data)
+        # v1.1: inject triggered IDs so _match_historical can detect WH projection
+        scan_data  = _inject_triggered_ids_iran(scan_data, red_lines)
         historical = _match_historical(scan_data)
         so_what    = _build_so_what(scan_data, red_lines, historical)
 
