@@ -182,6 +182,13 @@ ACTORS = {
             'عملیات وعده صادق', 'موشک سپاه', 'پهپاد سپاه',
             'حرس الثوري', 'فيلق القدس', 'عملية الوعد الصادق',
             'صواريخ الحرس الثوري',
+            # IRGC Latin America footprint (v1.1 — May 17 — Axios Cuba drone disclosure)
+            'irgc cuba', 'irgc havana', 'irgc venezuela',
+            'iranian military advisers cuba', 'iranian advisers havana',
+            'iranian engineers venezuela', 'iranian engineers cuba',
+            'irgc latin america', 'quds force latin america',
+            'iran drone trainers cuba', 'iran drone trainers venezuela',
+            'iran western hemisphere', 'irgc western hemisphere',
         ],
         'baseline_statements_per_week': 12,
     },
