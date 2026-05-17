@@ -20,7 +20,7 @@ ARCHITECTURE:
   Emits a BLUF-shaped payload at /api/humanitarian-convergence/bluf
   that GPI consumes as a 5th regional BLUF. GPI's existing
   pressure_type classifier picks up the humanitarian tags
-  automatically — no GPI logic changes needed.
+  automatically — no GPI logic changes needed. Today.
 
 SIGNAL CATEGORIES (6):
   1. FOOD_PRICE_CRISIS    -- bread/vegetable/rice price surges, food shortages
