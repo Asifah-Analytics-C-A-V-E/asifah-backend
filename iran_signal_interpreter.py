@@ -203,6 +203,36 @@ RED_LINES = [
                     'coalition kinetic-capability 90 miles from US territory at a moment '
                     'of regime brittleness.',
     },
+
+    # ── Category D [v1.1.1]: CHINA AXIS SIGNAL ──────────────
+    # China is structurally Iran's biggest patron (buys ~all Iran oil exports;
+    # publicly defying US sanctions on refiners; brokered ceasefire per Iran
+    # claim, validated by Trump). When China-mediation signals stack within
+    # a narrow window BEFORE major US-China diplomatic events, it's
+    # pre-positioning -- Iran briefing its backer before its backer meets
+    # its adversary.
+    {
+        'id':       'china_premediation_active',
+        'label':    'China Pre-Mediation Shuttle Active',
+        'detail':   'Iran-China high-level diplomatic shuttle (FM-level or higher) '
+                    'concurrent with China sanctions defiance + mediator positioning, '
+                    'within a 14-day window of a US-China summit or major bilateral. '
+                    'Pattern indicates Iran is pre-positioning China before China '
+                    'negotiates with US.',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🪜',
+        'category': 'china_axis_signal',
+        'source':   'Bloomberg May 5 2026 reporting: Araghchi (Iran FM) traveled to '
+                    'Beijing one week before Trump-Xi summit. China publicly ordered '
+                    'companies to defy US sanctions on Iran-linked refiners. Iran '
+                    'claimed China brokered ceasefire (Trump validated, China state '
+                    'media disputed). Three-way mediation credit dispute is itself a '
+                    'signal. Pattern: high-level shuttle + sanctions defiance + '
+                    'mediator positioning within narrow window of US-China '
+                    'engagement = pre-positioning, not pre-coordination. China '
+                    'enters summit with both sides briefed.',
+    },
 ]
 
 
@@ -477,6 +507,75 @@ def _score_red_lines(scan_data):
                     'trigger': 'US carrier/strategic bomber deployment language detected',
                 })
                 break
+
+    # ─── v1.1.1: CHINA PRE-MEDIATION SHUTTLE SCORING ────────────
+    # Fires when 2+ of the following co-occur in china_iran_axis articles:
+    #   (a) High-level shuttle language (Araghchi Beijing, Wang Yi Iran, FM travel)
+    #   (b) Mediator positioning (China brokered, Beijing mediator, last-minute push)
+    #   (c) Sanctions defiance (China refiner protection, ignores sanctions)
+    #   (d) Pre-summit context (pre-Trump summit, before Xi-Trump, shuttle context)
+    china_axis_articles = actors.get('china_iran_axis', {}).get('top_articles', []) or []
+
+    def _china_scan(needles):
+        for art in china_axis_articles:
+            title = (art.get('title') or '').lower()
+            desc  = (art.get('description') or '').lower()
+            text = title + ' ' + desc
+            if any(n in text for n in needles):
+                return True
+        return False
+
+    china_shuttle_signal = _china_scan([
+        'araghchi beijing', 'araghchi china', 'araghchi wang yi',
+        'iran fm beijing', 'iran fm china', 'iran foreign minister beijing',
+        'wang yi araghchi', 'wang yi iran', 'china foreign minister iran',
+        'beijing meeting iran', 'tehran beijing diplomacy',
+    ])
+
+    china_mediator_signal = _china_scan([
+        'china mediator iran', 'beijing mediator iran',
+        'china brokered iran', 'beijing brokered iran',
+        'china brokered ceasefire iran', 'china secured iran acceptance',
+        'china pushed iran ceasefire', 'last minute china iran',
+        'china diplomatic push iran', 'beijing diplomatic push iran',
+    ])
+
+    china_defiance_signal = _china_scan([
+        'china defies sanctions iran', 'china unprecedented defiance',
+        'china ignores us sanctions iran', 'china refiner sanctions',
+        'china protects refiners', 'teapot refiners china iran',
+        'china orders companies ignore sanctions', 'china refiners iranian oil',
+        'sanctions defiance china iran',
+    ])
+
+    china_presummit_signal = _china_scan([
+        'pre-summit china iran', 'pre trump summit iran',
+        'before trump xi summit', 'before xi trump summit',
+        'china shuttle iran', 'iran briefs china', 'iran briefs beijing',
+        'china between iran trump', 'china straddle iran trump',
+        'xi trump summit iran',
+    ])
+
+    # Count co-occurring signals
+    china_signal_count = sum([
+        china_shuttle_signal, china_mediator_signal,
+        china_defiance_signal, china_presummit_signal,
+    ])
+
+    if china_signal_count >= 2:
+        status = 'BREACHED' if china_signal_count >= 3 else 'APPROACHING'
+        active_components = []
+        if china_shuttle_signal:   active_components.append('shuttle')
+        if china_mediator_signal:  active_components.append('mediator')
+        if china_defiance_signal:  active_components.append('defiance')
+        if china_presummit_signal: active_components.append('pre-summit')
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'china_premediation_active'),
+            'status':  status,
+            'trigger': f'{china_signal_count}/4 China pre-mediation components active: '
+                       f'{", ".join(active_components)}. Iran pre-positioning China '
+                       f'before US-China engagement.',
+        })
 
     # ─── v1.1: WESTERN HEMISPHERE PROJECTION SCORING ────────────
     # Iran's strategic shift from regional to global projection actor.
