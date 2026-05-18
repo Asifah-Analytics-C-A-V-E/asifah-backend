@@ -1080,11 +1080,50 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             parts.append(baseline['headline'] + '.')
             parts.append(baseline['detail'])
 
-    # Secondary narratives (briefly) — also use tier-sorted order
+    # ────────────────────────────────────────────────────────────
+    # DYNAMIC BLUF ENRICHMENT (v2.5 -- May 18, 2026)
+    # Inject the SPECIFIC signals firing this scan so the BLUF text
+    # is not just template-based. Pulls top-priority signals from all
+    # axes/regions and surfaces them inline so analysts can see what
+    # is driving the current synthesis without going to top_signals.
+    # ────────────────────────────────────────────────────────────
+    live_signal_lines = []
+    seen_short_texts = set()
+
+    # Pull top signals across all regional BLUFs (regional contributions)
+    for region_key, bluf in (blufs or {}).items():
+        if not isinstance(bluf, dict):
+            continue
+        sigs = bluf.get('top_signals') or bluf.get('signals') or []
+        if not isinstance(sigs, list):
+            continue
+        for sig in sigs[:3]:
+            if not isinstance(sig, dict):
+                continue
+            stext = sig.get('short_text') or sig.get('text') or ''
+            stext = str(stext)[:140]
+            if not stext or stext in seen_short_texts:
+                continue
+            level = sig.get('level', 0) or 0
+            if level < 2:
+                continue
+            seen_short_texts.add(stext)
+            icon = sig.get('icon') or ''
+            live_signal_lines.append(f"{icon} {stext}".strip())
+            if len(live_signal_lines) >= 5:
+                break
+        if len(live_signal_lines) >= 5:
+            break
+
+    # Add the live-signals sentence if any surfaced
+    if live_signal_lines:
+        parts.append('Driving signals this scan: ' + '; '.join(live_signal_lines) + '.')
+
+    # Secondary narratives (briefly) -- also use tier-sorted order
     secondary = real_narratives[1:3]
     if secondary:
         sec_lines = [f"{n['icon']} {n['headline']}" for n in secondary]
-        parts.append('Concurrent signals: ' + '; '.join(sec_lines) + '.')
+        parts.append('Concurrent narratives: ' + '; '.join(sec_lines) + '.')
 
     # Regional summary line
     region_levels = []
@@ -1094,6 +1133,23 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             region_levels.append(f"{REGION_DISPLAY[r]['name']} L{_level_of(bluf)}")
     if region_levels:
         parts.append('Regional posture: ' + ', '.join(region_levels) + '.')
+
+    # Pressure axes summary line (v2.5) -- shows axis breakdown inline
+    # so the BLUF reflects multi-axis pressure even when the leading
+    # narrative is single-axis.
+    try:
+        axes_payload = _build_pressure_axes_payload(blufs, narratives)
+        axes_inner = (axes_payload or {}).get('axes', {})
+        axis_summary_parts = []
+        for ax_name in ('kinetic', 'economic', 'diplomatic', 'humanitarian'):
+            ax = axes_inner.get(ax_name, {}) or {}
+            ax_level = ax.get('level', 0) or 0
+            if ax_level > 0:
+                axis_summary_parts.append(f"{ax_name.capitalize()} L{ax_level}")
+        if axis_summary_parts:
+            parts.append('Pressure axes: ' + ', '.join(axis_summary_parts) + '.')
+    except Exception as _e:
+        pass  # axes summary is enrichment; never blocks the BLUF
 
     parts.append(f"Global level: L{global_level} -- {GLOBAL_LEVEL_LABELS.get(global_level, '')}.")
 
