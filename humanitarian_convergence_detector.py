@@ -710,18 +710,57 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 
     def _gather_articles():
         """
-        Pull article pools from cached ME rhetoric trackers via Upstash REST.
+        Pull article pool for humanitarian detection.
 
-        Strategy: each rhetoric tracker stores its latest scan at
-        rhetoric:<country>:latest in Redis. Each scan has actors[X].top_articles.
-        We dedupe by URL to avoid counting the same article multiple times
-        across actors.
+        v1.2.0 (May 19 2026) -- DUAL-SOURCE STRATEGY
+        Reads from TWO sources and combines:
+
+          1. PRIMARY: humanitarian:articles:latest (written by humanitarian_article_gatherer.py
+             every 12h). This is the dedicated humanitarian article pool with ReliefWeb,
+             UN agencies, NGOs, GDELT humanitarian queries, and Brave sub-region results.
+
+          2. SECONDARY: ME rhetoric tracker caches (rhetoric:iran:latest etc.). These
+             provide context for tracked countries (Lebanon, Yemen, Syria, etc.) where
+             humanitarian language may appear in conflict-context articles.
+
+        Both sources are deduplicated by URL. Falls back gracefully if either is missing.
         """
         articles = []
         seen_urls = set()
 
-        # ME rhetoric tracker cache keys (canonical naming — confirmed against
-        # rhetoric_tracker_iran.py line 103: RHETORIC_CACHE_KEY='rhetoric:iran:latest')
+        def _add_article(art):
+            """Add article if not duplicate. Returns True if added."""
+            if not isinstance(art, dict):
+                return False
+            url = art.get('url') or art.get('link') or ''
+            if url and url in seen_urls:
+                return False
+            if url:
+                seen_urls.add(url)
+            articles.append(art)
+            return True
+
+        # ── SOURCE 1: Dedicated humanitarian gatherer pool (primary) ──
+        gatherer_count = 0
+        try:
+            pool = _upstash_get('humanitarian:articles:latest')
+            if isinstance(pool, dict):
+                pool_articles = pool.get('articles', []) or []
+                if isinstance(pool_articles, list):
+                    for art in pool_articles:
+                        if _add_article(art):
+                            gatherer_count += 1
+                    print(f'[humanitarian_convergence] Gathered {gatherer_count} articles '
+                          f'from humanitarian:articles:latest (gatherer pool)')
+                else:
+                    print('[humanitarian_convergence] Gatherer pool malformed (articles not a list)')
+            else:
+                print('[humanitarian_convergence] humanitarian:articles:latest not yet populated '
+                      '(gatherer may not have run yet) -- falling back to ME tracker pools only')
+        except Exception as e:
+            print(f'[humanitarian_convergence] Gatherer read error: {str(e)[:80]}')
+
+        # ── SOURCE 2: ME rhetoric tracker caches (secondary, for tracked-country context) ──
         rhetoric_keys = [
             'rhetoric:iran:latest',
             'rhetoric:israel:latest',
@@ -731,34 +770,29 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
             'rhetoric:iraq:latest',
             'rhetoric:oman:latest',
         ]
-
+        me_tracker_count = 0
         for key in rhetoric_keys:
             try:
                 cached = _upstash_get(key)
                 if not isinstance(cached, dict):
                     continue
-
                 actors = cached.get('actors', {}) or {}
                 if not isinstance(actors, dict):
                     continue
-
                 for actor_data in actors.values():
                     if not isinstance(actor_data, dict):
                         continue
                     for art in (actor_data.get('top_articles', []) or []):
-                        if not isinstance(art, dict):
-                            continue
-                        url = art.get('url') or art.get('link') or ''
-                        if url and url in seen_urls:
-                            continue
-                        if url:
-                            seen_urls.add(url)
-                        articles.append(art)
+                        if _add_article(art):
+                            me_tracker_count += 1
             except Exception as e:
                 print(f'[humanitarian_convergence] Skipping {key}: {str(e)[:80]}')
                 continue
+        print(f'[humanitarian_convergence] Added {me_tracker_count} articles from {len(rhetoric_keys)} '
+              f'ME tracker caches (secondary source)')
 
-        print(f'[humanitarian_convergence] Gathered {len(articles)} articles from {len(rhetoric_keys)} tracker caches')
+        print(f'[humanitarian_convergence] TOTAL: {len(articles)} articles '
+              f'(gatherer={gatherer_count}, me_trackers={me_tracker_count})')
         return articles
 
     # ────────────────────────────────────────────────────────────
