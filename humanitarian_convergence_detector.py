@@ -637,21 +637,15 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
     """
     Register humanitarian convergence endpoints on the Flask app.
 
-    Args:
-      app:           Flask app instance.
-      redis_client:  Optional shared Redis client. If None, the function
-                     attempts to import the module's `redis_client` from
-                     app.py at request time (fallback for backwards compat).
-      json_module:   Optional json module reference (defaults to standard library).
-
-    Endpoints registered:
-      GET /api/humanitarian-convergence/bluf
-          BLUF-shaped payload consumed by GPI as a 5th regional BLUF.
-      GET /api/humanitarian-convergence/details
-          Full aggregation including by_country and by_category breakdowns
-          (for frontend drill-down cards).
-      GET /api/humanitarian-convergence/health
-          Health check; returns detector version + signal-category count.
+    v1.1.0 (May 19 2026) — REDIS PATTERN FIX
+    Previous version expected redis-py client object (r.get/r.setex method
+    interface). Asifah platform uses Upstash REST API directly across all
+    rhetoric trackers + GPI + butterfly_reader. This created an architectural
+    mismatch where the detector silently returned zero articles regardless
+    of whether trackers had cached data.
+    
+    Fix: use the same Upstash REST pattern as rhetoric_tracker_iran.py and
+    siblings. No app.py changes required.
     """
     from flask import jsonify
 
@@ -660,19 +654,63 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
     if _json is None:
         import json as _json
 
-    def _get_redis():
-        """Get a Redis client — use passed one, or import from app globals."""
-        if redis_client is not None:
-            return redis_client
-        # Fallback: try to find it on the app
-        try:
-            return app.config.get('REDIS_CLIENT') or getattr(app, 'redis_client', None)
-        except Exception:
+    # Pull Upstash credentials from environment (canonical Asifah pattern)
+    UPSTASH_URL   = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
+    UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+
+    def _upstash_get(key):
+        """
+        Direct Upstash REST GET — mirrors the pattern used by every other
+        Asifah module. Returns parsed JSON, raw string, or None on failure.
+        """
+        if not UPSTASH_URL or not UPSTASH_TOKEN:
             return None
+        import requests as _requests
+        try:
+            resp = _requests.get(
+                f"{UPSTASH_URL}/get/{key}",
+                headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+                timeout=5,
+            )
+            if not resp.ok:
+                return None
+            data = resp.json()
+            raw = data.get('result')
+            if raw is None:
+                return None
+            try:
+                return _json.loads(raw) if isinstance(raw, str) else raw
+            except (ValueError, TypeError):
+                return raw
+        except Exception as e:
+            print(f'[humanitarian_convergence] Upstash GET error ({key}): {str(e)[:80]}')
+            return None
+
+    def _upstash_setex(key, ttl, value):
+        """Direct Upstash REST SET with EX param — mirrors canonical pattern."""
+        if not UPSTASH_URL or not UPSTASH_TOKEN:
+            return False
+        import requests as _requests
+        try:
+            payload = _json.dumps(value, default=str) if not isinstance(value, str) else value
+            resp = _requests.post(
+                f"{UPSTASH_URL}/set/{key}",
+                headers={
+                    "Authorization": f"Bearer {UPSTASH_TOKEN}",
+                    "Content-Type":  "application/json",
+                },
+                data=payload,
+                params={"EX": ttl} if ttl else {},
+                timeout=5,
+            )
+            return resp.json().get('result') == 'OK'
+        except Exception as e:
+            print(f'[humanitarian_convergence] Upstash SET error ({key}): {str(e)[:80]}')
+            return False
 
     def _gather_articles():
         """
-        Pull article pools from cached ME rhetoric trackers.
+        Pull article pools from cached ME rhetoric trackers via Upstash REST.
 
         Strategy: each rhetoric tracker stores its latest scan at
         rhetoric:<country>:latest in Redis. Each scan has actors[X].top_articles.
@@ -681,11 +719,9 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
         """
         articles = []
         seen_urls = set()
-        r = _get_redis()
-        if not r:
-            return articles
 
-        # ME rhetoric tracker cache keys (canonical naming)
+        # ME rhetoric tracker cache keys (canonical naming — confirmed against
+        # rhetoric_tracker_iran.py line 103: RHETORIC_CACHE_KEY='rhetoric:iran:latest')
         rhetoric_keys = [
             'rhetoric:iran:latest',
             'rhetoric:israel:latest',
@@ -698,14 +734,11 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 
         for key in rhetoric_keys:
             try:
-                raw = r.get(key)
-                if not raw:
-                    continue
-                cached = _json.loads(raw) if isinstance(raw, str) else raw
+                cached = _upstash_get(key)
                 if not isinstance(cached, dict):
                     continue
 
-                actors = (cached or {}).get('actors', {})
+                actors = cached.get('actors', {}) or {}
                 if not isinstance(actors, dict):
                     continue
 
@@ -725,6 +758,7 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
                 print(f'[humanitarian_convergence] Skipping {key}: {str(e)[:80]}')
                 continue
 
+        print(f'[humanitarian_convergence] Gathered {len(articles)} articles from {len(rhetoric_keys)} tracker caches')
         return articles
 
     # ────────────────────────────────────────────────────────────
@@ -747,30 +781,18 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
         force = request.args.get('force', '').lower() in ('true', '1', 'yes')
 
         try:
-            r = _get_redis()
             # Try cached BLUF first (30-min TTL) — unless force=true
-            if r and not force:
-                try:
-                    cached = r.get('humanitarian_convergence:bluf:latest')
-                    if cached:
-                        return jsonify(_json.loads(cached) if isinstance(cached, str) else cached), 200
-                except Exception as e:
-                    print(f'[humanitarian_convergence] cache miss: {str(e)[:80]}')
+            if not force:
+                cached = _upstash_get('humanitarian_convergence:bluf:latest')
+                if cached and isinstance(cached, dict):
+                    return jsonify(cached), 200
 
             # Build fresh
             articles = _gather_articles()
             bluf = detect_and_build_bluf(articles)
 
             # Cache for 30 min
-            if r:
-                try:
-                    r.setex(
-                        'humanitarian_convergence:bluf:latest',
-                        1800,  # 30 min
-                        _json.dumps(bluf),
-                    )
-                except Exception as e:
-                    print(f'[humanitarian_convergence] cache write skip: {str(e)[:80]}')
+            _upstash_setex('humanitarian_convergence:bluf:latest', 1800, bluf)
 
             return jsonify(bluf), 200
 
