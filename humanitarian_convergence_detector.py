@@ -186,76 +186,149 @@ SIGNAL_CATEGORIES = {
 
 
 # ============================================================
-# COUNTRY EXTRACTION
+# COUNTRY + SUB-REGION EXTRACTION
 # ============================================================
-# Maps article-mentioned country names to canonical country codes.
-# We intentionally focus on countries WITHOUT existing Asifah trackers
-# (to avoid double-counting Lebanon, Iran, etc.) — though when they
-# DO appear in headlines we still tag them for completeness.
+# v1.3.0 (May 19 2026) -- Expanded with sub-region patterns.
+#
+# Humanitarian journalism often uses specific place names rather than
+# parent country names ("El Fasher siege" rather than "Sudan crisis";
+# "Rakhine displacement" rather than "Myanmar crisis"). Without these
+# sub-region patterns, we'd miss the most editorially-elevated coverage.
+#
+# Sub-regions are treated as separate "country codes" to preserve
+# analytical granularity. Convergence math counts them as distinct
+# signals — which is correct, since "Sudan AND Darfur AND El Fasher
+# all firing" is meaningfully different signal than "Sudan firing".
+#
+# Word-boundary matching prevents collisions (e.g. 'niger' won't match
+# 'nigerian' or 'nigeria' due to regex \b on both sides).
 
 COUNTRY_PATTERNS = {
-    # Africa (heavy concentration of humanitarian risk)
-    'egypt':      ['egypt', 'egyptian'],
-    'ethiopia':   ['ethiopia', 'ethiopian'],
-    'sudan':      ['sudan', 'sudanese'],
-    'south_sudan':['south sudan'],
-    'somalia':    ['somalia', 'somali'],
-    'kenya':      ['kenya', 'kenyan'],
-    'nigeria':    ['nigeria', 'nigerian'],
-    'chad':       ['chad'],
-    'niger':      ['niger', 'nigerien'],
-    'mali':       ['mali'],
-    'burkina_faso':['burkina faso'],
-    'drc':        ['drc', 'democratic republic of the congo', 'eastern congo'],
-    'mozambique': ['mozambique'],
-    'madagascar': ['madagascar', 'malagasy'],
-    'malawi':     ['malawi'],
-    'zambia':     ['zambia'],
-    'zimbabwe':   ['zimbabwe', 'zimbabwean'],
-    'south_africa':['south africa', 'south african'],
-    'morocco':    ['morocco', 'moroccan'],
-    'tunisia':    ['tunisia', 'tunisian'],
-    'algeria':    ['algeria', 'algerian'],
-    'libya':      ['libya', 'libyan'],
-    # Asia (humanitarian gaps without Asifah trackers)
-    'myanmar':    ['myanmar', 'burma', 'burmese'],
-    'bangladesh': ['bangladesh', 'bangladeshi'],
-    'sri_lanka':  ['sri lanka', 'sri lankan'],
-    'afghanistan':['afghanistan', 'afghan'],
-    'nepal':      ['nepal', 'nepalese', 'nepali'],
-    'vietnam':    ['vietnam', 'vietnamese'],
-    'philippines':['philippines', 'filipino'],
-    'indonesia':  ['indonesia', 'indonesian'],
-    'thailand':   ['thailand', 'thai'],
-    'laos':       ['laos', 'lao'],
-    'cambodia':   ['cambodia', 'cambodian'],
-    # Americas (humanitarian gaps without Asifah trackers)
-    'jamaica':    ['jamaica', 'jamaican'],
-    'haiti':      ['haiti', 'haitian'],
-    'el_salvador':['el salvador', 'salvadoran'],
-    'honduras':   ['honduras', 'honduran'],
-    'guatemala':  ['guatemala', 'guatemalan'],
-    'nicaragua':  ['nicaragua', 'nicaraguan'],
-    'argentina':  ['argentina', 'argentinian', 'argentine'],
-    # Tracked countries (still listed so we can dedupe vs regional BLUFs)
-    'gaza':       ['gaza', 'gaza strip'],
-    'lebanon':    ['lebanon', 'lebanese'],
-    'syria':      ['syria', 'syrian'],
-    'yemen':      ['yemen', 'yemeni'],
-    'iran':       ['iran', 'iranian'],
-    'cuba':       ['cuba', 'cuban'],
+    # ─── AFRICA: heavy concentration of humanitarian risk ───
+    # Egypt
+    'egypt':            ['egypt', 'egyptian'],
+    # Ethiopia + sub-regions (Tigray, Amhara, Afar -- active conflict zones)
+    'ethiopia':         ['ethiopia', 'ethiopian'],
+    'tigray':           ['tigray', 'tigrayan'],
+    'amhara':           ['amhara'],
+    'afar_region':      ['afar region', 'afar conflict'],
+    # Sudan + sub-regions (Darfur is its own humanitarian universe)
+    'sudan':            ['sudan', 'sudanese'],
+    'darfur':           ['darfur', 'darfuri'],
+    'el_fasher':        ['el fasher', 'el-fasher', 'al fashir', 'el fasher siege'],
+    'khartoum':         ['khartoum'],
+    'south_sudan':      ['south sudan'],
+    # DRC + sub-regions (eastern conflict zones)
+    'drc':              ['drc', 'democratic republic of the congo', 'eastern congo'],
+    'north_kivu':       ['north kivu', 'goma', 'kivu province'],
+    'south_kivu':       ['south kivu', 'bukavu'],
+    'ituri':            ['ituri province', 'ituri district'],
+    # Somalia + Horn of Africa specifics
+    'somalia':          ['somalia', 'somali'],
+    'somaliland':       ['somaliland'],
+    'mogadishu':        ['mogadishu'],
+    # Sahel + West Africa
+    'kenya':            ['kenya', 'kenyan'],
+    'nigeria':          ['nigeria', 'nigerian'],
+    'borno_state':      ['borno state', 'maiduguri', 'lake chad basin'],
+    'chad':             ['chad'],
+    'niger':            ['niger', 'nigerien'],
+    'mali':             ['mali', 'malian'],
+    'burkina_faso':     ['burkina faso', 'burkinabe'],
+    # Mozambique + Cabo Delgado (active insurgency)
+    'mozambique':       ['mozambique', 'mozambican'],
+    'cabo_delgado':     ['cabo delgado', 'palma mozambique'],
+    # Southern Africa
+    'madagascar':       ['madagascar', 'malagasy'],
+    'malawi':           ['malawi'],
+    'zambia':           ['zambia'],
+    'zimbabwe':         ['zimbabwe', 'zimbabwean'],
+    'south_africa':     ['south africa', 'south african'],
+    # North Africa
+    'morocco':          ['morocco', 'moroccan'],
+    'tunisia':          ['tunisia', 'tunisian'],
+    'algeria':          ['algeria', 'algerian'],
+    'libya':            ['libya', 'libyan'],
+
+    # ─── ASIA: humanitarian gaps without Asifah trackers ───
+    # Myanmar + sub-regions (Rakhine = Rohingya story; Karen + Shan = ethnic conflict)
+    'myanmar':          ['myanmar', 'burma', 'burmese'],
+    'rakhine':          ['rakhine state', 'rakhine', 'rohingya'],
+    'karen_state':      ['karen state', 'karenni', 'kayah'],
+    'shan_state':       ['shan state'],
+    'kachin_state':     ['kachin state', 'kachin'],
+    'sagaing':          ['sagaing region', 'sagaing'],
+    # Bangladesh + Cox's Bazar (Rohingya refugee camps)
+    'bangladesh':       ['bangladesh', 'bangladeshi'],
+    'coxs_bazar':       ["cox's bazar", 'kutupalong'],
+    # Sri Lanka, Afghanistan, Nepal, SE Asia
+    'sri_lanka':        ['sri lanka', 'sri lankan'],
+    'afghanistan':      ['afghanistan', 'afghan'],
+    'kabul':            ['kabul'],
+    'kandahar':         ['kandahar'],
+    'nepal':            ['nepal', 'nepalese', 'nepali'],
+    'vietnam':          ['vietnam', 'vietnamese'],
+    'philippines':      ['philippines', 'filipino'],
+    'indonesia':        ['indonesia', 'indonesian'],
+    'thailand':         ['thailand', 'thai'],
+    'laos':             ['laos', 'lao'],
+    'cambodia':         ['cambodia', 'cambodian'],
+
+    # ─── AMERICAS: humanitarian gaps without Asifah trackers ───
+    'jamaica':          ['jamaica', 'jamaican'],
+    # Haiti + sub-regions (capital + northern gang corridor)
+    'haiti':            ['haiti', 'haitian'],
+    'port_au_prince':   ['port-au-prince', 'port au prince'],
+    'cap_haitien':      ['cap-haitien', 'cap haitien'],
+    'el_salvador':      ['el salvador', 'salvadoran'],
+    'honduras':         ['honduras', 'honduran'],
+    'guatemala':        ['guatemala', 'guatemalan'],
+    'nicaragua':        ['nicaragua', 'nicaraguan'],
+    'argentina':        ['argentina', 'argentinian', 'argentine'],
+
+    # ─── TRACKED COUNTRIES: listed so we can dedupe vs regional BLUFs ───
+    # Note: These ARE captured in their own Asifah trackers — humanitarian
+    # signals from these still fire here but are flagged is_tracked_country=True
+    # for the convergence aggregator's downstream handling.
+    # Gaza + sub-regions (each Gaza zone is a distinct humanitarian story)
+    'gaza':             ['gaza', 'gaza strip'],
+    'gaza_north':       ['northern gaza', 'gaza city', 'beit hanoun', 'jabaliya'],
+    'khan_younis':      ['khan younis', 'khan yunis'],
+    'rafah':            ['rafah'],
+    # Lebanon + Bekaa (humanitarian zones outside the south)
+    'lebanon':          ['lebanon', 'lebanese'],
+    'bekaa_valley':     ['bekaa valley', 'bekaa'],
+    # Syria
+    'syria':            ['syria', 'syrian'],
+    'aleppo':           ['aleppo'],
+    'idlib':            ['idlib'],
+    # Yemen + sub-regions (Hodeidah = port crisis; Sanaa = political; Aden = displacement)
+    'yemen':            ['yemen', 'yemeni'],
+    'hodeidah':         ['hodeidah', 'hudaydah', 'al hudaydah'],
+    'sanaa':            ['sanaa', "sana'a", 'sana a'],
+    'aden':             ['aden'],
+    'saada':            ['saada', 'sa\'dah', 'sa dah'],
+    # Iran, Cuba (already Asifah-tracked)
+    'iran':             ['iran', 'iranian'],
+    'cuba':             ['cuba', 'cuban'],
 }
 
-# Countries that already have full Asifah trackers (humanitarian signals
-# from these should be detected but lower-weighted in convergence scoring
-# to avoid double-counting with their dedicated BLUFs)
+# Countries with full Asifah rhetoric/stability trackers (their humanitarian
+# signals are flagged is_tracked_country=True downstream — they still count
+# toward convergence aggregation but are also visible in their own BLUFs).
+# Includes sub-regions of tracked countries (Khan Younis = tracked under Gaza).
 TRACKED_COUNTRIES = {
-    'lebanon', 'syria', 'yemen', 'iran', 'cuba', 'gaza',
-    # Add: pakistan, russia, ukraine, china, taiwan, north_korea, etc. — but
-    # those are unlikely humanitarian-distress mentions in this detector's scope
+    'lebanon', 'bekaa_valley',
+    'syria', 'aleppo', 'idlib',
+    'yemen', 'hodeidah', 'sanaa', 'aden', 'saada',
+    'iran',
+    'cuba',
+    'gaza', 'gaza_north', 'khan_younis', 'rafah',
 }
 
-# Country-name length sort: match longest first to avoid 'south sudan' colliding with 'sudan'
+# Country-name length sort: match longest first to avoid sub-string collisions.
+# Examples: 'south sudan' must match before 'sudan'; 'khan younis' before 'gaza';
+# 'el fasher' before 'darfur'; 'cabo delgado' before 'mozambique'.
 _COUNTRY_TOKENS_SORTED = []
 for country_code, patterns in COUNTRY_PATTERNS.items():
     for pattern in patterns:
@@ -270,7 +343,35 @@ SEVERITY_BASELINE = 1   # signal exists, low confidence
 SEVERITY_MEDIUM   = 2   # signal + intensity language
 SEVERITY_HIGH     = 3   # signal + high-intensity marker
 
-# Convergence thresholds — number of countries with active signals
+# ─── Convergence thresholds ───
+#
+# v1.0 thresholds (April 2026): calibrated when detector read ONLY from ME
+# tracker article pools (~80 articles per scan, mostly conflict-themed).
+# At that scale, 6+ countries firing simultaneously was a genuinely rare
+# signal worth elevating to L4 ACTIVE.
+#
+# v1.3 (May 2026): humanitarian_article_gatherer.py now feeds a much larger
+# article pool (~300-800 articles per scan, drawn from ReliefWeb + UN agencies
+# + GDELT humanitarian queries + Brave sub-region results). Plus 77 country/
+# sub-region codes vs the old 46.
+#
+# EXPECTED POST-DEPLOY BEHAVIOR:
+#   - countries_active will jump significantly (likely 8-15 per scan)
+#   - categories_active will routinely hit 4+ (food + displacement + aid alone
+#     fire daily across multiple countries)
+#   - L4-L5 may become the default state rather than the exceptional one
+#
+# IF L5 GLOBAL fires on every scan after deploy, tune one of three ways:
+#   (a) Raise CONVERGENCE_GLOBAL_MIN to 14-15 countries
+#   (b) Change CONVERGENCE_CATEGORIES_FOR_GLOBAL from OR (4+ alone) to AND
+#       (require BOTH 10+ countries AND 5+ categories simultaneously)
+#   (c) Filter tracked-country signals out of convergence count so only
+#       NOVEL countries (countries without their own Asifah tracker) drive
+#       elevation — Sudan/Yemen/Gaza/Lebanon already have other surfaces
+#
+# Recommend observing 1-2 weeks of real data before tuning. The first
+# scans will show what's actually firing vs theoretical expectations.
+
 CONVERGENCE_FORMING_MIN  = 3   # 3-5 countries -> L3
 CONVERGENCE_ACTIVE_MIN   = 6   # 6-9 countries -> L4
 CONVERGENCE_GLOBAL_MIN   = 10  # 10+ countries -> L5
