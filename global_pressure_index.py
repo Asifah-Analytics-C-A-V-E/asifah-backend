@@ -1080,40 +1080,79 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             parts.append(baseline['headline'] + '.')
             parts.append(baseline['detail'])
 
+   # ────────────────────────────────────────────────────────────
+    # DYNAMIC BLUF ENRICHMENT (v3.0 -- May 19, 2026)
+    #
+    # v3.0 FIX: Pool signals from ALL regional BLUFs FIRST, then sort
+    # globally by level + priority + axis-diversity, THEN take top 5.
+    #
+    # Previous v2.5 bug: nested loops with outer `break` exited after
+    # the FIRST region produced 5 signals, starving humanitarian +
+    # cascade detector signals (which iterate later in dict order).
+    # Symptom: BLUF felt static; humanitarian convergence never popped.
+    #
+    # Behavior change: BLUF now reflects the highest-impact signals
+    # globally regardless of which region emitted them. Humanitarian
+    # (L4-5 convergence) + cascade (L4-5 economic) now surface inline.
     # ────────────────────────────────────────────────────────────
-    # DYNAMIC BLUF ENRICHMENT (v2.5 -- May 18, 2026)
-    # Inject the SPECIFIC signals firing this scan so the BLUF text
-    # is not just template-based. Pulls top-priority signals from all
-    # axes/regions and surfaces them inline so analysts can see what
-    # is driving the current synthesis without going to top_signals.
-    # ────────────────────────────────────────────────────────────
-    live_signal_lines = []
+    pooled_signals = []
     seen_short_texts = set()
 
-    # Pull top signals across all regional BLUFs (regional contributions)
+    # Step 1: Pool ALL signals from ALL regional BLUFs (incl. pseudo-regions)
     for region_key, bluf in (blufs or {}).items():
         if not isinstance(bluf, dict):
             continue
         sigs = bluf.get('top_signals') or bluf.get('signals') or []
         if not isinstance(sigs, list):
             continue
-        for sig in sigs[:3]:
+        for sig in sigs:
             if not isinstance(sig, dict):
                 continue
             stext = sig.get('short_text') or sig.get('text') or ''
             stext = str(stext)[:140]
             if not stext or stext in seen_short_texts:
                 continue
-            level = sig.get('level', 0) or 0
+            level = _safe_level(sig.get('level', 0))
             if level < 2:
                 continue
             seen_short_texts.add(stext)
-            icon = sig.get('icon') or ''
-            live_signal_lines.append(f"{icon} {stext}".strip())
-            if len(live_signal_lines) >= 5:
-                break
+            pooled_signals.append({
+                'region':        region_key,
+                'level':         level,
+                'priority':      int(sig.get('priority', 0) or 0),
+                'pressure_type': sig.get('pressure_type') or _infer_pressure_type(sig),
+                'icon':          sig.get('icon') or '',
+                'short_text':    stext,
+            })
+
+    # Step 2: Sort globally by level DESC, priority DESC (highest-impact first)
+    pooled_signals.sort(
+        key=lambda s: (s['level'], s['priority']),
+        reverse=True,
+    )
+
+    # Step 3: Take top 5 with axis-diversity preference — ensure we surface
+    # at least one signal per active pressure axis when available, so the
+    # BLUF reflects the multi-axis pressure landscape rather than just
+    # the loudest single axis.
+    live_signal_lines = []
+    axes_represented = set()
+    deferred = []
+    for sig in pooled_signals:
+        axis = sig.get('pressure_type', 'kinetic')
+        # First pass: prefer one signal per axis (up to 4 unique axes)
+        if axis not in axes_represented and len(live_signal_lines) < 4:
+            axes_represented.add(axis)
+            live_signal_lines.append(f"{sig['icon']} {sig['short_text']}".strip())
+        else:
+            deferred.append(sig)
         if len(live_signal_lines) >= 5:
             break
+    # Second pass: fill remaining slots from deferred pool by global rank
+    for sig in deferred:
+        if len(live_signal_lines) >= 5:
+            break
+        live_signal_lines.append(f"{sig['icon']} {sig['short_text']}".strip())
 
     # Add the live-signals sentence if any surfaced
     if live_signal_lines:
