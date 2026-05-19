@@ -101,6 +101,23 @@ except ImportError:
     HUMANITARIAN_CONVERGENCE_AVAILABLE = False
     print("[ME Backend] ⚠️ Humanitarian Convergence Detector not available")
 
+# ────────────────────────────────────────────────────────────
+# HUMANITARIAN ARTICLE GATHERER (v1.0 -- May 19, 2026)
+# Writer module: fetches RSS (ReliefWeb, UN agencies, NGOs) + GDELT
+# humanitarian queries + Brave sub-region queries every 12 hours.
+# Writes deduplicated article pool to Redis (humanitarian:articles:latest).
+# The humanitarian_convergence_detector READS from this pool.
+# Writer/reader separation keeps detector fast (one Redis read) while
+# gatherer absorbs all HTTP fragility on its own 12h schedule.
+# ────────────────────────────────────────────────────────────
+try:
+    from humanitarian_article_gatherer import register_humanitarian_gatherer_routes
+    HUMANITARIAN_GATHERER_AVAILABLE = True
+    print("[ME Backend] ✅ Humanitarian Article Gatherer loaded")
+except ImportError:
+    HUMANITARIAN_GATHERER_AVAILABLE = False
+    print("[ME Backend] ⚠️ Humanitarian Article Gatherer not available")
+
 # ------------------------------------------------------------
 # CASCADE COMMODITY DETECTOR (v2.4 -- May 17, 2026)
 # Detects chokepoint -> intermediate -> downstream commodity cascades.
@@ -1065,6 +1082,14 @@ if HUMANITARIAN_CONVERGENCE_AVAILABLE:
 if CASCADE_DETECTOR_AVAILABLE:
     register_cascade_detector_routes(app, redis_client=redis_client)
     print("[ME Backend] ✅ Cascade Detector routes registered: /api/cascade-convergence/bluf, /details, /health")
+
+# Humanitarian Article Gatherer -- register the gatherer endpoints +
+# start the 12h background scheduler. Writes to humanitarian:articles:latest
+# which humanitarian_convergence_detector reads on each scan.
+# start_scheduler=True kicks off the daemon thread immediately.
+if HUMANITARIAN_GATHERER_AVAILABLE:
+    register_humanitarian_gatherer_routes(app, start_scheduler=True)
+    print("[ME Backend] ✅ Humanitarian Gatherer routes registered: /api/humanitarian-gatherer/scan, /health, /articles")
 
 # Global Pressure Index -- register after all regional BLUFs/rhetoric so it can read them
 if GPI_AVAILABLE:
