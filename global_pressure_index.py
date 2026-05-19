@@ -1196,6 +1196,140 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
 
 
 # ============================================================
+# PER-AXIS BLUF GENERATORS (v3.0 -- May 19 2026)
+# ============================================================
+# Each axis gets its own focused prose synthesis using ONLY signals tagged
+# with that pressure_type. Produces 4 BLUF variants the frontend can swap
+# between when user clicks pressure vector cards.
+#
+# Architecture: pulls from the same axis payload that _build_pressure_axes_payload
+# already constructs. Zero duplication of analytical logic.
+# ============================================================
+
+_AXIS_PROSE_PREAMBLES = {
+    'kinetic': {
+        'label':    'Kinetic',
+        'icon':     '⚔️',
+        'lens':     'strikes, mobilization, ultimatums, casualties',
+        'open':     'Kinetic pressure view',
+        'no_sig':   'No active kinetic signals — strikes / mobilization / ultimatums at baseline.',
+    },
+    'economic': {
+        'label':    'Economic',
+        'icon':     '📈',
+        'lens':     'commodity surges, currency stress, sanctions, supply chain',
+        'open':     'Economic pressure view',
+        'no_sig':   'No active economic signals — commodity / currency / sanctions pressures at baseline.',
+    },
+    'diplomatic': {
+        'label':    'Diplomatic',
+        'icon':     '🕊️',
+        'lens':     'ceasefire arithmetic, mediation tempo, alliance shifts',
+        'open':     'Diplomatic pressure view',
+        'no_sig':   'No active diplomatic signals — mediation tracks / ceasefire posture at baseline.',
+    },
+    'humanitarian': {
+        'label':    'Humanitarian',
+        'icon':     '🆘',
+        'lens':     'displacement flows, civilian harm, famine, refugee surges',
+        'open':     'Humanitarian pressure view',
+        'no_sig':   'No active humanitarian signals — civilian-harm / displacement / famine indicators at baseline.',
+    },
+}
+
+
+def _synthesize_axis_bluf(axis_name, axes_payload, blufs, global_level):
+    """
+    Generate a focused prose BLUF for a single pressure axis.
+
+    Pulls signals from axes_payload (already segmented by pressure_type),
+    names which regions are firing on this axis, and produces 3-5 sentences
+    of analyst-prose specifically about that axis.
+
+    Args:
+        axis_name:     'kinetic' | 'economic' | 'diplomatic' | 'humanitarian'
+        axes_payload:  output of _build_pressure_axes_payload()
+        blufs:         regional BLUFs dict (for context)
+        global_level:  overall GPI level
+
+    Returns:
+        str: focused multi-sentence BLUF for this axis
+    """
+    if axis_name not in _AXIS_PROSE_PREAMBLES:
+        return ''
+    meta = _AXIS_PROSE_PREAMBLES[axis_name]
+    date_str = datetime.now(timezone.utc).strftime('%b %d, %Y %H:%MZ')
+
+    # Pull this axis's data
+    axis_data = (axes_payload or {}).get('axes', {}).get(axis_name, {}) or {}
+    axis_level = axis_data.get('level', 0)
+    axis_signals = axis_data.get('top_signals', []) or []
+    region_levels = axis_data.get('region_levels', {}) or {}
+    signal_count = axis_data.get('signal_count', 0)
+
+    parts = []
+    # Header
+    parts.append(f"{meta['icon']} {meta['open']} ({date_str}):")
+
+    # No-signal short-circuit
+    if axis_level == 0 or not axis_signals:
+        parts.append(meta['no_sig'])
+        parts.append(f"(Headline GPI level remains L{global_level} -- driven by other axes.)")
+        return ' '.join(parts)
+
+    # Headline sentence: axis level + dominant regions
+    region_strs = []
+    for region, lvl in sorted(region_levels.items(), key=lambda x: -x[1]):
+        region_name = REGION_DISPLAY.get(region, {}).get('name', region)
+        region_strs.append(f"{region_name} L{lvl}")
+    region_summary = ', '.join(region_strs) if region_strs else 'multi-region'
+    parts.append(
+        f"Axis at L{axis_level} ({GLOBAL_LEVEL_LABELS.get(axis_level, '')}) -- "
+        f"{signal_count} active signal(s) across {len(region_levels)} region(s): "
+        f"{region_summary}."
+    )
+
+    # Top-signal sentences (up to 3) -- the specific story
+    top_lines = []
+    for sig in axis_signals[:3]:
+        stext = (sig.get('short_text') or sig.get('text') or '')[:140]
+        if stext:
+            icon = sig.get('icon') or meta['icon']
+            top_lines.append(f"{icon} {stext}")
+    if top_lines:
+        parts.append('Driving signals: ' + '; '.join(top_lines) + '.')
+
+    # Analytical lens reminder + cross-axis context
+    other_axes_high = []
+    all_axes = (axes_payload or {}).get('axes', {})
+    for other_name, other_data in all_axes.items():
+        if other_name == axis_name:
+            continue
+        if (other_data or {}).get('level', 0) >= 4:
+            other_axes_high.append(
+                f"{_AXIS_PROSE_PREAMBLES.get(other_name, {}).get('label', other_name)} L{other_data['level']}"
+            )
+    if other_axes_high:
+        parts.append(
+            f"Context: while {meta['label'].lower()} dominates this view, "
+            f"other axes are also elevated -- {', '.join(other_axes_high)}."
+        )
+
+    return ' '.join(parts)
+
+
+def _synthesize_all_axis_blufs(axes_payload, blufs, global_level):
+    """
+    Generate all 4 per-axis BLUFs as a dict keyed by axis name.
+    Frontend uses this to swap content when user clicks pressure vector cards.
+    """
+    return {
+        axis: _synthesize_axis_bluf(axis, axes_payload, blufs, global_level)
+        for axis in PRESSURE_AXES
+    }
+
+
+# ============================================================
 # REGIONAL CARD EXTRACTION
 # ============================================================
 def _build_regional_card(region, bluf):
@@ -1332,15 +1466,19 @@ def build_gpi(force=False):
         for region in CARD_ORDER:
             regional_cards.append(_build_regional_card(region, blufs.get(region)))
 
+        # v3.0 — Per-axis BLUF generation (one focused prose per pressure axis)
+        bluf_by_axis = _synthesize_all_axis_blufs(pressure_axes, blufs, global_level)
+
         result = {
             'success':         True,
             'from_cache':      False,
             'generated_at':    datetime.now(timezone.utc).isoformat(),
-            'version':         '2.2.0',
+            'version':         '3.0.0',
             'global_level':    global_level,
             'global_label':    GLOBAL_LEVEL_LABELS.get(global_level, ''),
             'global_color':    GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
             'bluf':            bluf_prose,
+            'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
             'narratives':      narratives,
             'top_signals':     top_signals,
             'pressure_axes':   pressure_axes,    # v2.2 — multi-axis stack payload
