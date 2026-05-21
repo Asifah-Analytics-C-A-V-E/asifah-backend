@@ -79,7 +79,8 @@ REGION_DISPLAY = {
 }
 
 # Alphabetical card order (matches Rachel's "presumably alphabetical" spec)
-CARD_ORDER = ['asia', 'europe', 'me', 'wha']
+CARD_ORDER = ['asia', 'europe', 'me',for sig in _signals_of(bluf)[:2]:  # top 2 per region
+              'wha']
 
 # Global level labels + colors (matches canonical regional schema)
 GLOBAL_LEVEL_LABELS = {
@@ -107,7 +108,7 @@ LEVEL_CACHE_KEY = 'gpi:level:latest'
 LEVEL_CACHE_TTL = 12 * 3600
 
 # Synthesis tuning
-TOP_GLOBAL_SIGNALS_COUNT = 7
+TOP_GLOBAL_SIGNALS_COUNT = 15   # v3.5.0 May 21 2026 — bumped from 7; future-proofs for Africa + Arctic
 REGIONAL_FETCH_TIMEOUT   = 8  # seconds
 
 
@@ -1013,7 +1014,7 @@ def _build_global_top_signals(blufs, narratives):
         bluf = blufs.get(region)
         if not bluf:
             continue
-        for sig in _signals_of(bluf)[:2]:  # top 2 per region
+        for sig in _signals_of(bluf)[:3]:  # v3.5.0 May 21 2026 — bumped from 2 to 3 per region
             signals.append({
                 'priority':   int(sig.get('priority', 5) or 5) - 2,  # demote vs. narratives
                 'category':   sig.get('category', 'regional'),
