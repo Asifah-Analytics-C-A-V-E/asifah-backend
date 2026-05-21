@@ -406,16 +406,39 @@ def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int,
             })
 
     # Theatre at high level
-    if threat_int >= 4:
+    # L5 GATE (v1.1.0 — May 21 2026): Per platform L5 Reservation Contract,
+    # L5 "Active Conflict" requires an explicit kinetic/humanitarian/economic/
+    # diplomatic trigger. If tracker emits l5_gate dict, we honor its decision.
+    # If tracker doesn't emit l5_gate (legacy trackers), we trust their level
+    # as-is until they're upgraded per the weekend audit.
+    # NOTE: v2.0+ self-emit trackers (Lebanon, Israel) bypass this synth
+    # entirely via the shortcut earlier in this file. Their L5 signals are
+    # not affected by this gate.
+    # LABEL PRESERVATION: prefer tracker's own theatre_label + signal_text_short
+    # if emitted. Falls back to ESCALATION_LABELS dict for legacy trackers.
+    effective_level = threat_int
+    l5_gate = raw_data.get('l5_gate')
+    if threat_int >= 5 and isinstance(l5_gate, dict):
+        # If tracker emits l5_gate, cap at L4 unless at least one axis gate is True
+        if not any(l5_gate.get(axis) for axis in ('kinetic', 'humanitarian', 'economic', 'diplomatic')):
+            effective_level = 4
+            print(f"[ME BLUF] L5 gate enforced: {theatre} capped at L4 "
+                  f"(no l5_gate axes fired; tracker score {score})")
+
+    if effective_level >= 4:
+        # Prefer tracker's own label; fall back to canonical dict
+        tracker_label = raw_data.get('theatre_label') or ESCALATION_LABELS.get(effective_level, '')
         signals.append({
-            'priority':  9 + threat_int,
+            'priority':  9 + effective_level,
             'category':  'theatre_high',
             'theatre':   theatre,
-            'level':     threat_int,
+            'level':     effective_level,
             'icon':      '🔴',
-            'color':     ESCALATION_COLORS.get(threat_int, '#6b7280'),
-            'short_text': f'{flag} {theatre.upper()} L{threat_int} — {ESCALATION_LABELS.get(threat_int, "")}',
-            'long_text':  f'{flag} {theatre.upper()} at L{threat_int} {ESCALATION_LABELS.get(threat_int, "")} (score {score}/100)',
+            'color':     ESCALATION_COLORS.get(effective_level, '#6b7280'),
+            'short_text': raw_data.get('signal_text_short') or
+                          f'{flag} {theatre.upper()} L{effective_level} — {tracker_label}',
+            'long_text':  raw_data.get('signal_text_long') or
+                          f'{flag} {theatre.upper()} at L{effective_level} {tracker_label} (score {score}/100)',
         })
 
     # Influence-side high (Oman pattern)
