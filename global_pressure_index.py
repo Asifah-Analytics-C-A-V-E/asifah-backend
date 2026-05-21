@@ -906,6 +906,12 @@ def _compute_global_level(blufs, narratives):
     """
     Determine the single GPI level (0-5).
     Logic: max regional level, +1 if cross-theater convergence narratives present.
+
+    L5 GATE (v3.4.0 — May 21 2026): Per platform L5 Reservation Contract,
+    global L5 "ACTIVE CONFLICT" requires at least one region to be genuinely
+    at L5 — convergence boost alone CANNOT push global to L5 from L4. This
+    is belt-and-suspenders defense; the BLUFs themselves enforce the gate
+    per-tracker, but this catches any future drift in BLUF behavior.
     """
     if not blufs:
         return 0
@@ -917,7 +923,16 @@ def _compute_global_level(blufs, narratives):
                                  and n.get('category') not in ('global_baseline', 'global_warning')]
     convergence_boost = 1 if high_priority_narratives else 0
 
-    return min(5, max_regional + convergence_boost)
+    proposed_level = min(5, max_regional + convergence_boost)
+
+    # L5 gate: convergence boost alone cannot push global to L5
+    # — at least one region must be genuinely at L5 already.
+    if proposed_level >= 5 and max_regional < 5:
+        print(f"[GPI L5 gate] convergence boost would push global to L5 from "
+              f"max_regional={max_regional}; capping at L4 per L5 Reservation Contract")
+        return 4
+
+    return proposed_level
 
 
 # ============================================================
