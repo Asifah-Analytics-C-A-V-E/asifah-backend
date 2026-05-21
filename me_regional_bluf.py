@@ -64,7 +64,8 @@ LEBANON_HUMANITARIAN_CACHE_TTL = 12 * 3600    # 12 hours — humanitarian data i
 
 BLUF_CACHE_KEY = 'rhetoric:me:regional_bluf'
 BLUF_CACHE_TTL = 14 * 3600  # 14h -- outlasts any individual tracker TTL
-TOP_SIGNALS_COUNT = 5  # v2.0: was 3
+TOP_SIGNALS_COUNT = 12  # v2.4.0 May 21 2026: was 5 (was 3 in v2.0); supports per-theatre quota
+MAX_PER_THEATRE   = 3   # v2.4.0 May 21 2026 — per-tracker quota during selection
 
 
 # ============================================================
@@ -619,16 +620,26 @@ def _extract_key_signals(trackers):
     # Global sort
     all_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
 
-    # Dedupe by (theatre, category)
-    seen = set()
-    deduped = []
+    # Dedupe by (theatre, category) AND enforce per-theatre quota (v2.4.0 May 21 2026)
+    # Per-tracker quota: max MAX_PER_THEATRE signals per country tracker.
+    # Cross-tracker signals (theatre='regional', e.g. cross-theater convergence)
+    # bypass the quota — they're platform-level signals, not per-country emissions.
+    # Lebanon's multiple legitimate L5 signals (kinetic, humanitarian, BREACH,
+    # diplomatic) will each count against Lebanon's quota of 3; the strongest 3
+    # by priority will surface.
+    seen           = set()
+    theatre_counts = {}
+    deduped        = []
     for s in all_signals:
-        key = f'{s.get("theatre", "")}:{s.get("category", "")}'
-        if key not in seen:
-            seen.add(key)
-            deduped.append(s)
-
-    return deduped
+        theatre = s.get('theatre', '')
+        key     = f'{theatre}:{s.get("category", "")}'
+        if key in seen:
+            continue
+        if theatre != 'regional' and theatre_counts.get(theatre, 0) >= MAX_PER_THEATRE:
+            continue
+        seen.add(key)
+        theatre_counts[theatre] = theatre_counts.get(theatre, 0) + 1
+        deduped.append(s)
 
 
 # ============================================================
