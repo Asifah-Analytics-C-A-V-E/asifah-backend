@@ -79,8 +79,7 @@ REGION_DISPLAY = {
 }
 
 # Alphabetical card order (matches Rachel's "presumably alphabetical" spec)
-CARD_ORDER = ['asia', 'europe', 'me',for sig in _signals_of(bluf)[:2]:  # top 2 per region
-              'wha']
+CARD_ORDER = ['asia', 'europe', 'me', 'wha']
 
 # Global level labels + colors (matches canonical regional schema)
 GLOBAL_LEVEL_LABELS = {
