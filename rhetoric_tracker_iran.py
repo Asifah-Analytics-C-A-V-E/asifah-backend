@@ -2382,6 +2382,47 @@ def classify_articles(articles, proxy_activation_level):
 # ============================================
 # SCORING — Proxy Activation is a weighted input
 # ============================================
+# ════════════════════════════════════════════════════════════════════════
+# IRAN STRIKE WINDOW INTEGRATION (May 22 2026)
+# ────────────────────────────────────────────────────────────────────────
+# Reads the iran_strike_window:current cache (written by
+# iran_strike_window_detector.py) and surfaces convergence state into:
+#   1. _calculate_rhetoric_score as a modifier (capped, severity-scaled)
+#   2. Cross-theater fingerprint for downstream consumers
+#   3. result dict for frontend rendering
+#
+# Framing discipline: CONVERGENCE, not prediction. Severity contributes to
+# score the same way diplomatic/regime modifiers do — additive, capped,
+# never dominant.
+# ════════════════════════════════════════════════════════════════════════
+
+def _read_strike_window_state():
+    """Read the latest strike window detector cache. Returns dict or None."""
+    try:
+        return _redis_get('iran_strike_window:current')
+    except Exception as e:
+        print(f"[Iran Rhetoric] Strike window read error: {str(e)[:100]}")
+        return None
+
+
+def _strike_window_score_modifier(sw_state):
+    """Convert strike-window severity to a score modifier.
+
+    Mirrors the diplomatic/regime modifier pattern: additive, capped,
+    severity-scaled. Convergence indicators contribute to score the same
+    way other dimensional signals do — they nudge it, they don't dominate it.
+
+      critical = +12
+      high     = +8
+      elevated = +4
+      normal/missing = 0
+    """
+    if not sw_state:
+        return 0
+    severity = (sw_state.get('severity') or 'normal').lower()
+    return {'critical': 12, 'high': 8, 'elevated': 4, 'normal': 0}.get(severity, 0)
+
+
 def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
                                actor_results, operation_true_promise_count,
                                regime_signals=None):
@@ -2451,6 +2492,19 @@ def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
             print(f"[Iran Rhetoric] 🌐 Regime signal modifier: +{regime_modifier} "
                   f"({active_count} dimensions at L3+)")
 
+    # ── v1.3 (May 22 2026): Strike Window Convergence Modifier ──
+    # When the iran_strike_window_detector reports operational-window
+    # convergence, contribute to score. Framing: convergence detected,
+    # NOT prediction of action. Capped at +12 (critical severity).
+    sw_state = _read_strike_window_state()
+    sw_modifier = _strike_window_score_modifier(sw_state)
+    if sw_modifier > 0:
+        base += sw_modifier
+        sev = (sw_state or {}).get('severity', 'unknown')
+        n_signals = (sw_state or {}).get('active_signal_count', 0)
+        print(f"[Iran Rhetoric] 🌙 Strike Window modifier: +{sw_modifier} "
+              f"(severity: {sev}, {n_signals} signals active)")
+
     return max(0, min(100, int(base)))
 
 
@@ -2504,6 +2558,16 @@ def run_iran_rhetoric_scan(days=3):
         theatre_summary, proxy_activation_level, actor_results, otp_count,
         regime_signals=regime_signals
     )
+
+    # ── v1.3 (May 22 2026): Read strike window state for result dict ──
+    # Already factored into rhetoric_score via the modifier in
+    # _calculate_rhetoric_score. Here we surface it for the frontend.
+    strike_window_state = _read_strike_window_state() or {}
+    if strike_window_state.get('severity') in ('elevated', 'high', 'critical'):
+        print(f"[Iran Rhetoric] 🌙 Strike Window state: "
+              f"severity={strike_window_state.get('severity')}, "
+              f"composite={strike_window_state.get('composite_score')}, "
+              f"signals={strike_window_state.get('active_signal_count', 0)}")
 
     # Theatre specificity
     all_specs = theatre_summary.get('all_specificity_scores', [])
@@ -2621,6 +2685,21 @@ def run_iran_rhetoric_scan(days=3):
 
     # Delta
     result['delta'] = _compute_delta()
+
+    # ── v1.3 (May 22 2026): Surface strike window state for frontend ──
+    if strike_window_state and strike_window_state.get('severity') in ('elevated', 'high', 'critical'):
+        result['strike_window'] = {
+            'severity':              strike_window_state.get('severity'),
+            'composite_score':       strike_window_state.get('composite_score', 0),
+            'active_signal_count':   strike_window_state.get('active_signal_count', 0),
+            'active_signals':        strike_window_state.get('active_signals', []),
+            'active_multipliers':    strike_window_state.get('active_multipliers', []),
+            'rationale':             strike_window_state.get('rationale', ''),
+            'disclaimer':            strike_window_state.get('disclaimer', ''),
+            'timestamp':             strike_window_state.get('timestamp', ''),
+        }
+    else:
+        result['strike_window'] = None
 
     # Write command node fingerprint THEN detect coordination
     _write_crosstheater_signal(result)
