@@ -31,6 +31,18 @@ import threading
 from military_tracker import register_military_endpoints, get_military_posture
 from rhetoric_tracker import register_rhetoric_endpoints
 
+# ── IRAN STRIKE WINDOW DETECTOR (May 22 2026) ──
+# Detects operational-window convergence for potential US/Israel kinetic
+# action against Iran. Pulls from Telegram (Iran + Israel channels),
+# Bluesky ME, and cross-reads military_tracker fingerprints.
+try:
+    from iran_strike_window_detector import register_strike_window_endpoints
+    STRIKE_WINDOW_AVAILABLE = True
+    print("[ME Backend] ✅ Iran Strike Window detector loaded")
+except ImportError as e:
+    STRIKE_WINDOW_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ Strike Window detector not available: {e}")
+
 try:
     from think_tank_feeds import register_think_tank_endpoints
     THINK_TANK_AVAILABLE = True
@@ -1125,6 +1137,16 @@ if register_iran_rhetoric_routes:
 
 if register_israel_rhetoric_routes:
     register_israel_rhetoric_routes(app)
+
+# ── IRAN STRIKE WINDOW endpoints (May 22 2026) ──
+# Endpoints registered:
+#   GET  /api/iran-strike-window              — current detection state
+#   GET  /api/iran-strike-window?force=true   — force fresh scan
+#   GET  /api/iran-strike-window/history      — historical snapshots
+#   POST /api/iran-strike-window/log-event    — manually label event
+if STRIKE_WINDOW_AVAILABLE:
+    register_strike_window_endpoints(app)
+    print("[ME Backend] ✅ Strike Window endpoints registered: /api/iran-strike-window, /history, /log-event")
 
 if register_oman_rhetoric_routes:
     register_oman_rhetoric_routes(app)
