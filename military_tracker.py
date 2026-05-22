@@ -221,8 +221,23 @@ REGIONAL_THEATRES = {
         'label': 'Middle East & North Africa',
         'icon': '🕌',
         'order': 3,
-        'actors': ['israel', 'iran', 'iraq', 'bahrain', 'egypt', 'jordan', 'kuwait', 'oman', 'qatar', 'saudi_arabia', 'uae'],
-        'description': 'CENTCOM area — Persian Gulf, Red Sea, Eastern Med, Levant, Iraq theatre'
+        'actors': ['israel', 'iran', 'iraq', 'bahrain', 'egypt', 'jordan', 'kuwait', 'oman', 'qatar', 'saudi_arabia', 'uae', 'libya'],
+        'description': 'CENTCOM area — Persian Gulf, Red Sea, Eastern Med, Levant, Iraq theatre. Libya cross-listed with Africa theater (AFRICOM AOR).'
+    },
+    # ──────────────────────────────────────────────────────────────────
+    # AFRICA THEATER (May 22 2026 — new theater build)
+    # AFRICOM AOR. Excludes North Africa (which sits in middle_east label
+    # but operationally covers Egypt only). Libya is cross-listed here
+    # AND in middle_east since it sits at the MENA/Africa boundary.
+    # ──────────────────────────────────────────────────────────────────
+    'africa': {
+        'label': 'Africa Theatre',
+        'icon': '🌍',
+        'order': 4,
+        'actors': ['nigeria', 'somalia', 'mali', 'niger', 'burkina_faso', 'drc',
+                   'sudan', 'libya', 'ethiopia', 'kenya', 'djibouti',
+                   'central_african_republic', 'wagner_africa'],
+        'description': 'AFRICOM area — Sahel junta belt, Horn of Africa, Lake Chad Basin, Great Lakes (DRC/Rwanda), Sudan civil war, Wagner/Africa Corps footprint'
     },
     'western_hemisphere': {
         'label': 'Western Hemisphere',
@@ -298,6 +313,102 @@ MILITARY_ACTORS = {
             'panama canal security', 'canal zone military',
             'us venezuela sanctions military', 'us venezuela naval',
             'us military haiti security mission',
+            # ── US HOME PORTS + ASSET MOVEMENT (May 22 2026 — Naval Asset Visibility expansion) ──
+            # Catches signals about where the US Navy actually lives/operates
+            # when not in a hot zone — Fleet Week, port returns, commissioning ceremonies,
+            # underway departures. Critical for movement persistence tracking.
+            # East Coast home ports
+            'naval station norfolk', 'norfolk naval', 'norfolk virginia naval',
+            'naval station mayport', 'mayport florida', 'mayport naval',
+            'naval submarine base kings bay', 'kings bay georgia',
+            'naval academy annapolis', 'annapolis fleet week',
+            'naval submarine base groton', 'groton connecticut', 'sub base groton',
+            'portsmouth naval shipyard', 'portsmouth naval', 'kittery maine',
+            'naval submarine base new london', 'new london submarine',
+            'naval weapons station yorktown',
+            # West Coast home ports
+            'naval base kitsap', 'bremerton naval', 'puget sound naval shipyard',
+            'naval base kitsap bangor', 'bangor submarine', 'bangor washington naval',
+            'naval station everett', 'everett washington naval',
+            'naval amphibious base coronado', 'coronado california naval',
+            'naval base point loma', 'point loma',
+            'naval base ventura', 'port hueneme',
+            'naval air station lemoore', 'lemoore california',
+            'naval air station fallon', 'fallon nevada',
+            'naval air station north island', 'north island',
+            # Pacific home ports
+            'pearl harbor naval', 'joint base pearl harbor hickam', 'pearl harbor hickam',
+            'naval base pearl harbor', 'naval station pearl harbor',
+            'apra harbor', 'naval base guam apra', 'guam naval base',
+            'naval base kitsap silverdale',
+            # Gulf Coast home ports
+            'naval station pascagoula', 'pascagoula mississippi naval',
+            'naval air station jacksonville', 'nas jacksonville',
+            'naval air station kingsville', 'kingsville texas naval',
+            'naval air station corpus christi', 'corpus christi naval',
+            # Carrier-specific homeport language
+            'home port san diego', 'home port norfolk', 'home port mayport',
+            'home port yokosuka', 'home port everett', 'home port bremerton',
+            'homeported in', 'homeported at',
+            # Movement language (catches news-pop transitions)
+            'returns to port', 'returns to san diego', 'returns to norfolk',
+            'returns to mayport', 'returns to yokosuka', 'returns to pearl harbor',
+            'departs san diego', 'departs norfolk', 'departs mayport',
+            'departs yokosuka', 'departs pearl harbor',
+            'underway from', 'underway departure', 'sailed from',
+            'commissioning ceremony', 'decommissioning ceremony',
+            'change of command', 'change of homeport',
+            'pier-side', 'pierside', 'tied up at',
+            'fleet week new york', 'fleet week san francisco', 'fleet week los angeles',
+            'fleet week port everglades', 'fleet week portland',
+            'open ship', 'ship tours public',
+            # Carrier strike group movement
+            'csg deployment', 'csg departs', 'csg returns',
+            'carrier strike group deploys', 'carrier strike group returns',
+            'strike group sails',
+            # ── IRAN KINETIC RE-HEATING (May 22 2026) ──
+            # Catches the specific patterns of US force flow into CENTCOM AOR
+            # as Iran posture re-escalates. Ben Gurion launch-hub language is
+            # the unique signature — Israel air bases used as US strike staging.
+            # Ben Gurion / Israel air bases as US launch hubs
+            'ben gurion launch', 'ben gurion launch pad', 'ben gurion staging',
+            'us bombers ben gurion', 'us aircraft ben gurion',
+            'us bombers israel', 'us tankers israel', 'us aircraft israel staging',
+            'israeli air bases us', 'israel air base us aircraft',
+            'kc-46 nevatim', 'kc-46 ramat david', 'kc-135 israel',
+            'b-2 israel', 'b-2 staging israel', 'b-2 nevatim',
+            'b-21 raider israel', 'b-21 staging',
+            'b-52 israel', 'b-1 israel',
+            'f-35 israel deployment', 'f-22 israel deployment',
+            'tanker bridge israel', 'aerial refueling bridge israel',
+            'us strike package israel', 'us aircraft staging israel',
+            # US troop surge / flow language (echoes Jan 2026 Operation Absolute Resolve)
+            'troop deployment iran', 'troop deployment middle east',
+            'us forces surge centcom', 'us forces surge middle east',
+            'army flowing middle east', 'army surge centcom',
+            'pentagon orders deployment', 'sec def orders deployment',
+            'us military prepositioning iran', 'army prepositioning middle east',
+            'rapid deployment iran', 'rapid deployment middle east',
+            'us forces flow', 'forces flow centcom',
+            # Aerial refueling / ISR bridge to CENTCOM
+            'aerial refueling track', 'tanker bridge centcom',
+            'kc-46 deployment middle east', 'kc-135 deployment middle east',
+            'tanker squadron deploys', 'tanker squadron forward deploys',
+            'rc-135 rivet joint iran', 'rc-135 deployment',
+            'e-3 awacs middle east', 'awacs deployment',
+            # Strike package + escalation language
+            'b-2 deployment iran', 'b-21 deployment iran',
+            'strike package iran', 'strike package centcom',
+            'pre-strike posture', 'pre-strike positioning',
+            'kinetic preparation iran', 'kinetic prep iran',
+            'wartime alert centcom', 'wartime posture iran',
+            # Saudi / Gulf air defense buildup
+            'patriot saudi', 'thaad saudi deployment', 'patriot kuwait',
+            'thaad uae deployment', 'patriot uae',
+            # Diego Garcia bomber posture (key signal)
+            'diego garcia bomber', 'diego garcia b-2',
+            'diego garcia b-52', 'diego garcia b-1',
+            'bomber forward deployed diego garcia',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=site:centcom.mil&hl=en&gl=US&ceid=US:en',
@@ -2107,6 +2218,357 @@ MILITARY_ACTORS = {
             'https://news.google.com/rss/search?q=brazil+military+OR+amazon+military+OR+brazil+armed+forces+operation&hl=en&gl=US&ceid=US:en',
         ]
     },
+
+    # ══════════════════════════════════════════════════════════════════
+    # AFRICA THEATER ACTORS (May 22 2026 — new theater build)
+    # AFRICOM AOR — Sahel junta belt, Horn of Africa, Lake Chad Basin,
+    # Great Lakes, Sudan civil war. Libya cross-listed in middle_east.
+    # AFRICOM US-side activity rolled into the existing 'us' actor.
+    # ══════════════════════════════════════════════════════════════════
+
+    'nigeria': {
+        'name': 'Nigeria',
+        'flag': '🇳🇬',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.7,
+        'feeds_into': ['regional_stability'],
+        'keywords': [
+            'nigerian army', 'nigerian armed forces', 'nigerian air force',
+            'nigerian military', 'nigerian troops', 'nigerian defense',
+            'nigeria boko haram', 'nigeria iswap', 'lake chad basin',
+            'nigeria military operation', 'operation hadin kai',
+            'nigeria bandits military', 'nigeria military offensive',
+            'nigeria security forces', 'borno state military',
+            'nigeria multinational joint task force', 'mnjtf',
+            # US military in Nigeria (recent activity)
+            'us forces nigeria', 'us military nigeria', 'us troops nigeria',
+            'us special forces nigeria', 'green berets nigeria',
+            'africom nigeria', 'us africa command nigeria',
+            'us nigeria security cooperation', 'us trained nigerian',
+            'nigeria christian persecution', 'nigeria genocide',
+            # Niger Delta militancy
+            'niger delta avengers', 'niger delta militants', 'nigerian oil region military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=nigeria+military+OR+nigerian+army+OR+nigeria+boko+haram&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'somalia': {
+        'name': 'Somalia',
+        'flag': '🇸🇴',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.8,
+        'feeds_into': ['us_operations'],
+        'keywords': [
+            'somali national army', 'snа somalia', 'somalia military',
+            'al-shabaab', 'al shabaab', 'shabaab somalia',
+            'somalia us strike', 'us strike somalia', 'us drone strike somalia',
+            'somalia mq-9', 'reaper somalia', 'us forces somalia',
+            'us special operations somalia', 'jsoc somalia',
+            'africom somalia strike', 'us africa command somalia',
+            'atmis somalia', 'amisom', 'amisom somalia',
+            'mogadishu attack', 'mogadishu military',
+            'somalia federal forces', 'danab somalia',
+            'puntland military', 'somaliland military',
+            'al-shabaab attack', 'shabab car bomb',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=somalia+military+OR+al+shabaab+OR+us+strike+somalia&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'mali': {
+        'name': 'Mali',
+        'flag': '🇲🇱',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.7,
+        'feeds_into': ['russia_proxy_pressure', 'sahel_instability'],
+        'keywords': [
+            'mali military junta', 'mali junta', 'malian armed forces',
+            'mali wagner', 'wagner mali', 'africa corps mali',
+            'mali russian mercenaries', 'mali russia military',
+            'fama mali', 'forces armées maliennes',
+            'mali ecowas military', 'mali sahel military',
+            'goita mali', 'assimi goita',
+            'mali french withdrawal', 'barkhane mali',
+            'mali coup', 'mali insurgency', 'jihadist mali',
+            'mali jnim', 'group support islam muslims',
+            'gao mali', 'kidal mali', 'menaka mali',
+            'mali iswap', 'mali isgs',
+            'aes alliance sahel', 'alliance sahel states military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=mali+military+OR+wagner+mali+OR+mali+sahel&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'niger': {
+        'name': 'Niger',
+        'flag': '🇳🇪',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.7,
+        'feeds_into': ['sahel_instability', 'us_operations'],
+        'keywords': [
+            'niger military junta', 'niger junta', 'niger coup',
+            'niger armed forces', 'forces armées nigériennes',
+            'cnsp niger', 'tchiani niger', 'general tchiani',
+            'niger ecowas military', 'niger sahel military',
+            'agadez niger', 'niamey military',
+            # Niger Air Base 201 — major US drone hub (now expelled)
+            'air base 201', 'niger air base 201', 'niger drone base',
+            'niger 101 air base', 'niger drone base agadez',
+            'us forces niger withdrawal', 'us military niger',
+            'us withdraw niger', 'pentagon niger',
+            'niger russia military', 'niger russian military',
+            'niger wagner', 'wagner niger', 'africa corps niger',
+            'niger uranium military', 'orano niger',
+            'aes alliance niger',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=niger+military+OR+niger+coup+OR+niger+sahel&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'burkina_faso': {
+        'name': 'Burkina Faso',
+        'flag': '🇧🇫',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.6,
+        'feeds_into': ['sahel_instability'],
+        'keywords': [
+            'burkina faso military', 'burkinabé military', 'burkinabe armed forces',
+            'burkina faso junta', 'burkina junta',
+            'ibrahim traore', 'traore burkina', 'captain traore',
+            'burkina faso wagner', 'wagner burkina faso',
+            'burkina faso russia military', 'africa corps burkina',
+            'burkina faso jihadist', 'burkina jnim',
+            'burkina ecowas military', 'burkina sahel',
+            'ouagadougou military', 'aes burkina',
+            'vdp burkina faso', 'volontaires defense patrie',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=burkina+faso+military+OR+burkina+junta&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'drc': {
+        'name': 'DR Congo',
+        'flag': '🇨🇩',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.7,
+        'feeds_into': ['regional_stability'],
+        'keywords': [
+            'drc military', 'congo military', 'fardc',
+            'forces armées rdc', 'congolese armed forces',
+            'drc m23', 'm23 rebels', 'm23 congo',
+            'drc rwanda military', 'rwanda backed m23',
+            'drc rwanda border military',
+            'eastern drc military', 'north kivu military', 'south kivu military',
+            'goma military', 'bukavu military', 'beni military',
+            'kinshasa military',
+            'drc adf', 'allied democratic forces', 'adf drc',
+            'monusco', 'un monusco drc', 'un peacekeepers drc',
+            'east african community force drc', 'eacrf',
+            'sadc mission drc', 'samidrc',
+            'drc wagner', 'wagner drc', 'romanian mercenaries drc',
+            'drc cobalt military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=drc+military+OR+m23+congo+OR+goma+military&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'sudan': {
+        'name': 'Sudan',
+        'flag': '🇸🇩',
+        'tier': 1,
+        'theatre': 'africa',
+        'weight': 0.9,
+        'feeds_into': ['humanitarian_cascade', 'russia_proxy_pressure'],
+        'keywords': [
+            'sudanese armed forces', 'saf sudan',
+            'rapid support forces', 'rsf sudan',
+            'sudan civil war', 'sudan war', 'sudan conflict',
+            'burhan sudan', 'general burhan', 'al-burhan',
+            'hemedti', 'hemeti', 'dagalo sudan', 'mohamed hamdan dagalo',
+            'darfur military', 'darfur attack', 'el fasher',
+            'el fashir', 'el-fasher', 'genocide darfur',
+            'khartoum military', 'khartoum fighting', 'omdurman fighting',
+            'port sudan military', 'port sudan attack',
+            'sudan uae weapons', 'uae rsf', 'uae sudan weapons',
+            'sudan iran weapons', 'iran sudan drones',
+            'sudan russia military', 'wagner sudan',
+            'sudan red sea military',
+            'sudan mass killing', 'sudan ethnic cleansing',
+            'sudan famine', 'sudan humanitarian crisis',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=sudan+military+OR+sudan+civil+war+OR+rsf+sudan&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'libya': {
+        'name': 'Libya',
+        'flag': '🇱🇾',
+        'tier': 2,
+        'theatre': 'africa',  # Primary theater = Africa (AFRICOM AOR)
+        'cross_theatre': ['middle_east'],  # Also visible in ME framing
+        'weight': 0.7,
+        'feeds_into': ['russia_proxy_pressure'],
+        'keywords': [
+            'libyan military', 'libyan armed forces', 'lna libya',
+            'libyan national army', 'haftar', 'khalifa haftar',
+            'lna haftar', 'tobruk parliament',
+            'gna libya', 'government national accord libya',
+            'gnu libya', 'government national unity libya',
+            'tripoli military', 'benghazi military', 'sirte military',
+            'misrata military', 'libya wagner', 'wagner libya',
+            'africa corps libya', 'russia libya military',
+            'turkey libya military', 'libya turkey drones',
+            'libya egypt military', 'libya uae military',
+            'al-watiya air base', 'al watiya libya',
+            'libya gaddafi', 'libya militias',
+            'libya oil military', 'libya nlc military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=libya+military+OR+haftar+OR+libya+wagner&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'ethiopia': {
+        'name': 'Ethiopia',
+        'flag': '🇪🇹',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.6,
+        'feeds_into': ['regional_stability'],
+        'keywords': [
+            'ethiopian national defense forces', 'endf ethiopia',
+            'ethiopian military', 'ethiopian air force',
+            'ethiopia tigray military', 'tplf ethiopia',
+            'ethiopia eritrea military', 'ethiopia somalia border',
+            'amhara fano', 'fano militia ethiopia',
+            'oromo liberation army ethiopia',
+            'abiy ahmed military', 'addis ababa military',
+            'ethiopia red sea', 'ethiopia somaliland port',
+            'ethiopia drone strike',
+            'ethiopia eritrea border', 'ethiopia sudan border',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=ethiopia+military+OR+endf+OR+ethiopia+tigray&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'kenya': {
+        'name': 'Kenya',
+        'flag': '🇰🇪',
+        'tier': 3,
+        'theatre': 'africa',
+        'weight': 0.5,
+        'feeds_into': ['us_operations'],
+        'keywords': [
+            'kenya defence forces', 'kdf kenya',
+            'kenyan military', 'kenyan army',
+            'kenya somalia military', 'kenya al-shabaab',
+            'manda bay kenya', 'camp simba kenya',
+            'manda bay attack', 'us forces kenya',
+            'kenya us military', 'lamu kenya military',
+            'kenya somalia border military',
+            'kenya haiti deployment', 'kenya haiti mission',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=kenya+military+OR+kdf+OR+manda+bay&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'djibouti': {
+        'name': 'Djibouti',
+        'flag': '🇩🇯',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.7,
+        'feeds_into': ['us_operations', 'great_power_competition'],
+        'keywords': [
+            'djibouti military', 'djiboutian armed forces',
+            'camp lemonnier', 'camp lemonier',
+            'us forces djibouti', 'us base djibouti',
+            'us military djibouti', 'africom djibouti',
+            'cjtf-hoa', 'combined joint task force horn africa',
+            'djibouti china base', 'china djibouti base',
+            'china military djibouti', 'plan djibouti',
+            'french base djibouti', 'japanese base djibouti',
+            'doraleh port djibouti',
+            'bab el-mandeb djibouti',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=djibouti+military+OR+camp+lemonnier+OR+horn+of+africa+us&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'central_african_republic': {
+        'name': 'Central African Republic',
+        'flag': '🇨🇫',
+        'tier': 3,
+        'theatre': 'africa',
+        'weight': 0.5,
+        'feeds_into': ['russia_proxy_pressure'],
+        'keywords': [
+            'car military', 'central african republic military',
+            'faca central african', 'far',
+            'car wagner', 'wagner car', 'wagner central african',
+            'car russian mercenaries', 'africa corps car',
+            'bangui military', 'touadera car',
+            'car rebels', 'car civil war',
+            'car coalition patriots change',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=central+african+republic+military+OR+car+wagner&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'wagner_africa': {
+        'name': 'Wagner Group / Africa Corps',
+        'flag': '🇷🇺',
+        'tier': 1,
+        'theatre': 'africa',
+        'weight': 0.9,
+        'feeds_into': ['russia_proxy_pressure', 'great_power_competition'],
+        'keywords': [
+            # Wagner / post-Prigozhin rebrand
+            'wagner group africa', 'wagner africa',
+            'africa corps', 'russia africa corps',
+            'russian mercenaries africa', 'russia military africa',
+            'russian military advisers africa',
+            'gru africa', 'rosgvardiya africa',
+            # Country footprint
+            'wagner mali', 'wagner burkina faso', 'wagner niger',
+            'wagner car', 'wagner sudan', 'wagner libya',
+            'wagner madagascar', 'wagner mozambique',
+            'africa corps mali', 'africa corps burkina',
+            'africa corps libya', 'africa corps niger',
+            'africa corps car', 'africa corps drc',
+            # Operations / activity
+            'wagner gold mining africa', 'wagner africa gold',
+            'wagner massacres', 'wagner africa civilians',
+            'wagner training african forces',
+            'russia private military africa',
+            'prigozhin africa legacy',
+            # Specific commanders / leaders
+            'andrey averyanov', 'gru general africa',
+            'yevkurov africa', 'russia deputy defense africa',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=wagner+africa+OR+africa+corps+OR+russia+mercenaries+africa&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
 }
 
 
@@ -2690,6 +3152,161 @@ LOCATION_MULTIPLIERS = {
     'sinaloa military': 2.0,
     'rio de janeiro military': 1.5,
     'brasilia military': 1.5,
+    # ──────────────────────────────────────────────────────────────────
+    # US HOME PORTS (May 22 2026 — Naval Asset Visibility expansion)
+    # Lower multipliers (1.0-1.5) because these are routine/home locations;
+    # a signal at home port = "asset is alive and accounted for" not
+    # "asset is poised for combat." Used by frontend to plot ALL US Navy
+    # positions on the deployment map, not just the hot zones.
+    # ──────────────────────────────────────────────────────────────────
+    # East Coast home ports
+    'norfolk naval':            1.3,
+    'naval station norfolk':    1.3,
+    'mayport':                  1.2,
+    'mayport naval':            1.2,
+    'kings bay':                1.5,   # Sub base — strategic deterrent
+    'naval submarine base kings bay': 1.5,
+    'annapolis':                1.0,   # Mostly ceremonial / Fleet Week
+    'fleet week':               1.2,   # Catches any Fleet Week city
+    'groton':                   1.5,   # Sub base
+    'sub base groton':          1.5,
+    'naval submarine base groton': 1.5,
+    'portsmouth naval':         1.2,
+    'portsmouth naval shipyard': 1.2,
+    'new london submarine':     1.5,
+    # West Coast home ports
+    'san diego':                1.5,   # Major fleet hub
+    'naval station san diego':  1.5,
+    'navbase san diego':        1.5,
+    'bremerton':                1.3,
+    'naval base kitsap':        1.3,
+    'bangor':                   1.7,   # SSBN sub base — Trident
+    'bangor submarine':         1.7,
+    'everett':                  1.3,
+    'naval station everett':    1.3,
+    'coronado':                 1.5,
+    'naval amphibious base coronado': 1.5,
+    'point loma':               1.3,
+    'naval base point loma':    1.3,
+    'lemoore':                  1.3,
+    'nas lemoore':              1.3,
+    'nas fallon':               1.3,
+    'north island':             1.3,
+    'naval air station north island': 1.3,
+    # Pacific home ports
+    'pearl harbor':             2.0,   # INDOPACOM nexus
+    'naval base pearl harbor':  2.0,
+    'joint base pearl harbor hickam': 2.0,
+    'apra harbor':              2.0,   # Guam
+    'naval base guam apra':     2.0,
+    # Gulf Coast home ports
+    'pascagoula':               1.3,   # Shipbuilding + station
+    'naval air station jacksonville': 1.3,
+    'nas jacksonville':         1.3,
+    'kingsville naval':         1.2,
+    'corpus christi naval':     1.2,
+    # Japan / Forward home ports
+    'sasebo':                   2.2,   # Amphib hub Western Pacific
+    'naval base sasebo':        2.2,
+    # ──────────────────────────────────────────────────────────────────
+    # IRAN KINETIC RE-HEATING — Additional hotspots (May 22 2026)
+    # ──────────────────────────────────────────────────────────────────
+    'nevatim air base':         3.0,   # Israeli AB used by US (joint exercises, Iran ops)
+    'tel nof':                  2.5,   # Israeli AB
+    'sde dov':                  2.0,
+    'ovda':                     2.5,   # Israeli AB, Eilat region
+    'ramat david air base':     2.5,
+    'ben gurion launch':        3.5,   # Specific phrase = major signal
+    'us bombers israel':        3.0,
+    'tanker bridge':            2.5,
+    'aerial refueling bridge':  2.5,
+    'strike package iran':      3.5,
+    'kinetic prep iran':        3.5,
+    'pre-strike posture':       3.0,
+    'pre-strike positioning':   3.0,
+    'b-2 staging israel':       3.5,
+    'b-21 deployment':          3.0,   # Newest stealth bomber
+    'kc-46 nevatim':            3.0,
+    # ──────────────────────────────────────────────────────────────────
+    # AFRICA THEATER LOCATIONS (May 22 2026 — new theater build)
+    # AFRICOM AOR — Sahel/Horn/Lake Chad/Great Lakes hotspots + key bases.
+    # ──────────────────────────────────────────────────────────────────
+    # AFRICOM HQ + major US bases
+    'africom':                  2.0,
+    'us africa command':        2.0,
+    'africom hq':               2.0,
+    'stuttgart africom':        1.5,
+    'camp lemonnier':           2.5,   # Already in CENTCOM block, but key for Africa
+    'cjtf-hoa':                 2.5,
+    # Niger (former US drone hub — eviction is a major signal in itself)
+    'air base 201':             2.5,
+    'niger air base 201':       2.5,
+    'agadez':                   2.0,
+    'niger drone base':         2.5,
+    'niamey':                   1.8,
+    # Sahel hotspots
+    'gao mali':                 2.0,
+    'kidal mali':                2.0,
+    'mopti mali':               2.0,
+    'timbuktu military':        1.5,
+    'bamako military':          1.5,
+    'ouagadougou military':     1.5,
+    # Nigeria / Lake Chad Basin
+    'borno state':              2.0,
+    'maiduguri':                2.0,
+    'lake chad basin':          2.0,
+    'sambisa forest':           2.0,
+    'abuja military':           1.5,
+    'lagos military':           1.5,
+    # Horn of Africa
+    'mogadishu':                2.5,
+    'mogadishu attack':         2.5,
+    'kismayo':                  1.8,
+    'baidoa':                   1.5,
+    'manda bay':                2.5,   # Kenya — US base attacked Jan 2020
+    'camp simba':               2.0,
+    'lamu kenya':               1.5,
+    'doraleh port':             2.0,
+    'addis ababa military':     1.5,
+    'asmara':                   1.5,
+    # Great Lakes / DRC
+    'goma':                     2.5,
+    'goma military':            2.5,
+    'bukavu':                   2.0,
+    'beni drc':                 2.0,
+    'north kivu':               2.0,
+    'south kivu':               2.0,
+    'kinshasa military':        1.5,
+    'kigali military':          1.5,   # Rwanda
+    # Sudan civil war
+    'khartoum military':        2.5,
+    'khartoum fighting':        2.5,
+    'omdurman':                 2.5,
+    'port sudan':               2.0,
+    'darfur':                   2.5,
+    'el fasher':                3.0,   # Genocide-watch hotspot
+    'el-fasher':                3.0,
+    'el fashir':                3.0,
+    'nyala':                    2.0,
+    # Libya
+    'tripoli libya':            2.0,
+    'benghazi':                 2.0,
+    'sirte':                    2.0,
+    'misrata':                  1.8,
+    'al-watiya':                2.0,
+    'al watiya':                2.0,
+    'tobruk':                   1.8,
+    # Central African Republic
+    'bangui':                   1.8,
+    'car bangui':               1.8,
+    # Strategic waterways near Africa
+    'mozambique channel':       1.5,
+    'gulf of guinea':           1.5,
+    'cabo delgado':             1.8,   # Mozambique ISIS-linked insurgency
+    # Cross-region high-signal phrases
+    'wagner africa':            2.5,
+    'africa corps':             2.5,
+    'russian mercenaries africa': 2.5,
 }
 
 
@@ -3190,6 +3807,15 @@ REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 
 FINGERPRINT_TTL_SECONDS = 13 * 3600   # 13h — outlasts 12h scan refresh + 1h buffer
 
+# ── ASSET POSITION TTL (May 22 2026 — Naval Asset Visibility expansion) ──
+# Naval assets move slowly between news pops. A ship spotted in San Diego
+# Monday may not appear in news again until Pacific Thursday. We keep
+# asset-position fingerprints alive for a full week to trace movement
+# across slow news cycles. Political/threat signals still expire at 13h.
+ASSET_POSITION_TTL_SECONDS = 168 * 3600   # 7 days — captures multi-day asset movement
+ASSET_MOVEMENT_HISTORY_TTL_SECONDS = 30 * 24 * 3600   # 30 days — for movement-trail Redis lists
+ASSET_MOVEMENT_HISTORY_MAX_ENTRIES = 50   # Cap stored position history per named ship
+
 # Chokepoint mapping — translates LOCATION_MULTIPLIERS hits into chokepoint
 # fingerprints. Each chokepoint accumulates signal_count + score from any
 # article where the matched_location resolves to one of its keywords.
@@ -3542,6 +4168,148 @@ def _compute_asset_distribution_for_actor(actor_id, all_signals):
     return {'counts': counts, 'weighted': {k: round(v, 2) for k, v in weighted.items()}}
 
 
+# ════════════════════════════════════════════════════════════════════════
+# ASSET MOVEMENT HISTORY (May 22 2026)
+# ────────────────────────────────────────────────────────────────────────
+# Named US Navy ships (USS Nimitz, USS Ford, etc.) tend to surface
+# in news at irregular intervals — Monday at San Diego, Thursday in the
+# Pacific. To trace their movement, we:
+#   (a) Write their current position as a 168h-TTL fingerprint so the
+#       location persists even if news goes quiet for a week
+#   (b) Append each new position to a per-ship Redis LIST capped at 50
+#       entries with a 30-day TTL — provides movement-trail history
+#
+# Frontend can read these lists later to draw movement arrows on the
+# naval-asset map, or surface "USS Nimitz: Pacific → Caribbean (3 days)"
+# style signals in the so-what synthesis.
+# ════════════════════════════════════════════════════════════════════════
+
+# Named US Navy ships pattern: "uss <something>" + optional ship designation.
+# Matches "USS Nimitz", "USS Gerald R. Ford", "USS Carl Vinson", etc.
+import re as _re
+_NAMED_SHIP_PATTERN = _re.compile(r'\b(uss\s+[a-z][a-z\.\s]{2,40}?)(?=\s+(?:carrier|csg|departed|departs|return|returns|enters?|exits?|left|arrived|arrives|in|near|at|off|conducts|will|to|patrol|deployed|deploys|transit|sail|sails|underway|home)|[\,\.\;])', _re.IGNORECASE)
+
+
+def _extract_named_ships(text):
+    """Extract named US Navy ships from signal text. Returns list of canonical names."""
+    if not text:
+        return []
+    text_lower = text.lower()
+    matches = _NAMED_SHIP_PATTERN.findall(text_lower)
+    # Canonicalize: "uss nimitz" → "uss_nimitz" for Redis key
+    canonical = []
+    for m in matches:
+        # Clean trailing whitespace + punctuation, collapse internal spaces
+        clean = ' '.join(m.split()).strip(' .,;')
+        if 4 <= len(clean) <= 50:  # Sanity bounds
+            canonical.append(clean)
+    return list(set(canonical))  # Dedupe
+
+
+def _redis_list_lpush_trim(key, value, max_entries, ttl_seconds):
+    """LPUSH a value to a Redis list, trim to max_entries, set TTL.
+    Returns True on success.
+    """
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return False
+    try:
+        # LPUSH
+        url = f"{UPSTASH_REDIS_URL}/lpush/{key}/{value}"
+        resp = requests.post(
+            url,
+            headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'},
+            timeout=4,
+        )
+        if resp.status_code != 200:
+            return False
+        # LTRIM 0 max-1 (keeps newest max_entries)
+        url_trim = f"{UPSTASH_REDIS_URL}/ltrim/{key}/0/{max_entries - 1}"
+        requests.post(
+            url_trim,
+            headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'},
+            timeout=4,
+        )
+        # EXPIRE
+        url_exp = f"{UPSTASH_REDIS_URL}/expire/{key}/{ttl_seconds}"
+        requests.post(
+            url_exp,
+            headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'},
+            timeout=4,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _write_asset_movement_history(all_signals):
+    """For each signal naming a specific US Navy ship AND with a hotspot location,
+    write:
+      (a) military:asset:{ship_id}:position fingerprint (168h TTL)
+      (b) Append to military:asset:{ship_id}:positions Redis list (30d TTL, max 50)
+
+    Returns (position_write_count, movement_append_count).
+    """
+    if not all_signals:
+        return (0, 0)
+
+    position_count = 0
+    movement_count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Build a deduped map: ship_id → most recent (location, weight, signal)
+    ship_latest = {}
+    for sig in all_signals:
+        text = (sig.get('article_title') or '') + ' ' + (sig.get('signal_text') or '')
+        ships = _extract_named_ships(text)
+        location = sig.get('hotspot_location')
+        if not ships or not location:
+            continue
+        for ship in ships:
+            ship_id = ship.replace(' ', '_').replace('.', '').lower()
+            # Keep highest-weight signal per ship per scan
+            current = ship_latest.get(ship_id)
+            if not current or (sig.get('weight', 0) > current.get('weight', 0)):
+                ship_latest[ship_id] = {
+                    'ship_name':       ship.title(),
+                    'location':        location,
+                    'weight':          sig.get('weight', 0),
+                    'asset_class':     sig.get('asset', ''),
+                    'article_title':   sig.get('article_title', ''),
+                    'article_url':     sig.get('article_url', ''),
+                    'last_seen':       now_iso,
+                }
+
+    # Now write each ship's position + movement history
+    for ship_id, data in ship_latest.items():
+        # (a) Position fingerprint with extended TTL
+        pos_key = f"military:asset:{ship_id}:position"
+        if _redis_fp_set(pos_key, data, ttl_seconds=ASSET_POSITION_TTL_SECONDS):
+            position_count += 1
+
+        # (b) Movement-history Redis list (LPUSH + LTRIM + EXPIRE)
+        history_key = f"military:asset:{ship_id}:positions"
+        history_entry = json.dumps({
+            'location':      data['location'],
+            'asset_class':   data['asset_class'],
+            'seen_at':       data['last_seen'],
+            'article_title': data['article_title'][:150],
+        })
+        # URL-encode the JSON for Upstash REST API
+        from urllib.parse import quote
+        encoded = quote(history_entry, safe='')
+        if _redis_list_lpush_trim(history_key, encoded,
+                                  ASSET_MOVEMENT_HISTORY_MAX_ENTRIES,
+                                  ASSET_MOVEMENT_HISTORY_TTL_SECONDS):
+            movement_count += 1
+
+    if position_count > 0 or movement_count > 0:
+        print(f"[Military Fingerprints] Asset movement tracking: "
+              f"{position_count} position fingerprints, "
+              f"{movement_count} movement-history appends "
+              f"across {len(ship_latest)} named ships")
+    return (position_count, movement_count)
+
+
 def _write_military_fingerprints(scan_result, all_signals):
     """Write all fingerprint types to Redis based on the scan result.
     This is called once per successful _run_full_scan().
@@ -3731,12 +4499,31 @@ def _write_military_fingerprints(scan_result, all_signals):
             if _redis_fp_set(f"military:chokepoint_convergence:{label}", payload):
                 written['chokepoint_convergence'] += 1
 
+        # ── 8. Asset-position fingerprints + movement history ─────────
+        # (May 22 2026 — Naval Asset Visibility expansion)
+        # For each signal that names a specific ship (USS Nimitz, USS Ford, etc.)
+        # and has a hotspot_location, write:
+        #   (a) Position fingerprint with 168h TTL (catches ship across multiple
+        #       news cycles even if news goes quiet for days)
+        #   (b) Append to per-asset movement-history Redis list (30-day window,
+        #       max 50 entries) so we can trace the ship's path over time
+        written['asset_position'] = 0
+        written['asset_movement'] = 0
+        try:
+            asset_position_count, movement_append_count = _write_asset_movement_history(all_signals)
+            written['asset_position'] = asset_position_count
+            written['asset_movement'] = movement_append_count
+        except Exception as e:
+            print(f"[Military Fingerprints] Asset movement write error: {str(e)[:200]}")
+
         total = sum(written.values())
         print(f"[Military Fingerprints] ✅ Wrote {total} fingerprints — "
               f"posture:{written['posture']} asset:{written['asset_distribution']} "
               f"theatre:{written['theatre']} chokepoint:{written['chokepoint']} "
               f"evac:{written['evacuation']} cross:{written['cross']} "
-              f"convergence:{written['chokepoint_convergence']}")
+              f"convergence:{written['chokepoint_convergence']} "
+              f"asset_position:{written.get('asset_position', 0)} "
+              f"asset_movement:{written.get('asset_movement', 0)}")
         return written
 
     except Exception as e:
@@ -5802,6 +6589,63 @@ def register_military_endpoints(app, start_background=True):
             })
         except Exception as e:
             return jsonify({'label': label, 'error': str(e)[:200]}), 500
+
+    @app.route('/api/military/asset/<ship_id>/movement', methods=['GET', 'OPTIONS'])
+    def api_military_asset_movement(ship_id):
+        """Return movement history for a named US Navy ship.
+
+        ship_id should be canonical (lowercase, underscores), e.g.:
+            /api/military/asset/uss_nimitz/movement
+            /api/military/asset/uss_gerald_r_ford/movement
+
+        Returns:
+            current_position: latest position fingerprint (or null)
+            movement_history: list of recent positions (newest first), up to 50 entries
+                              spanning up to 30 days
+        """
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            ship_id = (ship_id or '').lower().strip().replace(' ', '_').replace('.', '')
+
+            # Current position (single fingerprint with 168h TTL)
+            position = _redis_fp_get(f"military:asset:{ship_id}:position")
+
+            # Movement history (Redis list)
+            history = []
+            if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+                try:
+                    url = f"{UPSTASH_REDIS_URL}/lrange/military:asset:{ship_id}:positions/0/49"
+                    resp = requests.get(
+                        url,
+                        headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'},
+                        timeout=5,
+                    )
+                    if resp.status_code == 200:
+                        result = resp.json().get('result', [])
+                        from urllib.parse import unquote
+                        for entry in result or []:
+                            try:
+                                decoded = unquote(entry) if isinstance(entry, str) else entry
+                                parsed = json.loads(decoded)
+                                history.append(parsed)
+                            except (json.JSONDecodeError, TypeError):
+                                continue
+                except Exception as e:
+                    print(f"[Military API] Movement history read error for {ship_id}: {str(e)[:100]}")
+
+            return jsonify({
+                'ship_id':           ship_id,
+                'current_position':  position,
+                'movement_history':  history,
+                'history_count':     len(history),
+                'has_data':          position is not None or len(history) > 0,
+            })
+        except Exception as e:
+            return jsonify({'ship_id': ship_id, 'error': str(e)[:200]}), 500
 
     @app.route('/api/military-interpretation', methods=['GET', 'OPTIONS'])
     def api_military_interpretation():
