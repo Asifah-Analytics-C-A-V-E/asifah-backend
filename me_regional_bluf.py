@@ -1,1351 +1,2938 @@
 """
-me_regional_bluf.py
-Asifah Analytics -- ME Backend Module
-v2.0.0  (Apr 26 2026)
+Asifah Analytics — Iran Rhetoric & Command Node Tracker
+v1.0.0 — April 4, 2026
+ANALYTICAL FRAME:
+Iran is not just an actor — it is the COMMAND NODE of the resistance axis.
+This tracker answers two questions:
+  1. Is Iran activating or directing its proxy network?
+  2. Is Iran preparing to launch new or different strikes itself?
 
-ME Regional BLUF (Bottom Line Up Front) Engine.
+Unlike other trackers that detect what actors SAY, this tracker detects
+COMMAND SIGNALS — the patterns that precede proxy activation or direct
+Iranian military operations.
 
-Reads from all SEVEN ME rhetoric tracker Redis caches simultaneously
-and synthesizes a single analyst-prose BLUF paragraph + top-5 structured
-signals.
+KEY INNOVATION — PROXY COORDINATION INDEX:
+Reads the shared `rhetoric:crosstheater:fingerprints` Redis key (written by
+Yemen, Lebanon, Iraq, Syria trackers) and uses simultaneous proxy elevation
+as a direct INPUT to Iran's own score. High cross-theater coordination =
+Iran command node likely active.
 
-v2.0 Architectural Changes:
-  - Dual-axis aware (handles Oman threat + influence vectors)
-  - Backward compatibility shim — works with v1.x trackers AND
-    v2.x trackers that self-emit top_signals[]
-  - New signal categories: mediation_active, influence_high, green_line_active
-  - Top 5 signals (was top 3) — richer briefing while still scannable
-  - Designed to be GPI-compatible: emits regional top_signals[] for
-    consumption by global_pressure_index.py at the next altitude
+Iran writes `is_command_node: True` in its own fingerprint so other
+trackers can distinguish Iran elevation from proxy elevation.
 
-Updated every time any tracker scan completes, or on-demand via
-/api/rhetoric/me/bluf endpoint.
+ACTORS:
+- Khamenei / Supreme Leader Office — directive language, fatwa signals
+- IRGC / Quds Force — operation announcements, numbered waves, proxy direction
+- Iranian Government (Pezeshkian / MFA) — diplomatic cover, escalation framing
+- Iranian People / Civil Signals — domestic pressure, protest, economic collapse
+- Hezbollah (Iran-directed) — Lebanon proxy activation signals
+- Houthi / Ansar Allah (Iran-directed) — Yemen proxy activation signals
+- PMF Iraq (Iran-directed) — Iraq proxy activation signals
+- Israel (re: Iran) — Israeli strike posture, rhetoric about Iran
+- US / CENTCOM (re: Iran) — US strike posture, force movements
 
-No new scanning -- pure synthesis layer over existing cached data.
+FIVE THREAT VECTORS:
+1. IRGC DIRECT — IRGC/Quds Force statements, numbered operations, direct strikes
+2. PROXY ACTIVATION — Cross-theater coordination index (reads Redis live)
+3. NUCLEAR ESCALATION — Natanz, Fordow, enrichment, red lines, ambiguity signals
+4. DOMESTIC PRESSURE — Protests, economic collapse, regime stability signals
+5. REGIONAL RETALIATION — Hormuz, Gulf states, energy infrastructure threats
 
-Author: RCGG / Asifah Analytics
+SCORING:
+  IRGC Direct         weight 3.0 (max 15 pts per level)
+  Proxy Activation    weight 2.5 (reads cross-theater Redis — novel input)
+  Nuclear Escalation  weight 2.0
+  Domestic Pressure   weight 1.0
+  Regional Retaliation weight 1.5
+  Coordination bonus: +15 if 3+ proxies simultaneously elevated
+  Command node bonus: +10 if Iran level >= 4 AND any proxy >= 3
+
+SOURCE STRATEGY:
+  Primary:   Telegram (IRAN_CHANNELS — Persian + Arabic + OSINT)
+  Secondary: RSS (EN/AR — Iranian state media, opposition, CENTCOM)
+  Tertiary:  GDELT (fas: 2-3 focused queries only — GDELT Farsi errors under load)
+             GDELT (ara: 3-4 queries), GDELT (eng: standard)
+  Reddit:    r/iran (domestic pressure), r/geopolitics, r/CredibleDefense
+
+REDIS KEYS:
+  Cache:      rhetoric:iran:latest
+  Legacy:     iran_rhetoric_cache
+  History:    rhetoric:iran:history
+  Baselines:  rhetoric_baseline:iran
+  Cross-theater: rhetoric:crosstheater:fingerprints (READS + WRITES)
+
+ENDPOINTS:
+  GET /api/rhetoric/iran
+  GET /api/rhetoric/iran/summary
+  GET /api/rhetoric/iran/history
+
+CHANGELOG:
+  v1.0.0 (2026-03-21): Initial build — command node architecture
+
+COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
 """
 
+import os
 import json
+import threading
 import time
 import requests
-from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
+from flask import jsonify, request
 
-import os
+# Signal interpreter — So What, Red Lines, Historical Patterns + canonical top_signals
+try:
+    from iran_signal_interpreter import (
+        interpret_signals as iran_interpret_signals,
+        build_top_signals as iran_build_top_signals,
+    )
+    INTERPRETER_AVAILABLE = True
+    print("[Iran Rhetoric] ✅ Signal interpreter loaded (incl. build_top_signals v2.0)")
+except Exception as e:
+    import traceback as _tb
+    INTERPRETER_AVAILABLE = False
+    iran_build_top_signals = None
+    print(f"[Iran Rhetoric] ⚠️ Signal interpreter not available: {e}")
+    _tb.print_exc()
 
-# ════════════════════════════════════════════════════════════════════
-# DEPLOY MARKER v2.1.0 — fires ONCE when this module is imported.
-# If you see this in Render logs, the new code is loaded into the worker.
-# If you DON'T see this, Render is running an older cached version.
-# ════════════════════════════════════════════════════════════════════
-print('[ME BLUF DEPLOY MARKER v2.1.0] Module loaded — Lebanon humanitarian + convergence registry active')
+# ============================================
+# CONFIG
+# ============================================
+UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
+UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+NEWSAPI_KEY         = os.environ.get('NEWSAPI_KEY')
+GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 
-UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
-UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
+try:
+    from telegram_signals import fetch_telegram_signals_iran
+    TELEGRAM_AVAILABLE = True
+    print("[Iran Rhetoric] ✅ Telegram signals available")
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[Iran Rhetoric] ⚠️ Telegram signals not available — RSS/GDELT only")
 
-# ============================================================
-# LEBANON HUMANITARIAN BACKEND (cross-backend HTTP fetch)
-# ============================================================
-# lebanon_humanitarian module lives on a SEPARATE Render backend
-# (lebanon-stability-backend.onrender.com). ME BLUF fetches via HTTP
-# and caches in its own Redis to avoid hammering the Lebanon backend.
-#
-# Pattern mirrors commodity_proxy_europe.py:
-#   1. Try Redis cache (12hr TTL) — return if fresh
-#   2. On miss → HTTP fetch from Lebanon backend
-#   3. Write-through cache → return fresh data
-#   4. On Lebanon backend failure → return None (humanitarian signal omitted, BLUF still works)
-LEBANON_HUMANITARIAN_BACKEND = os.environ.get(
-    'LEBANON_HUMANITARIAN_BACKEND_URL',
-    'https://lebanon-stability-backend.onrender.com'
-)
-LEBANON_HUMANITARIAN_CACHE_KEY = 'me_bluf:lebanon_humanitarian'
-LEBANON_HUMANITARIAN_CACHE_TTL = 12 * 3600    # 12 hours — humanitarian data is structural, not minute-by-minute
+RHETORIC_CACHE_KEY        = 'rhetoric:iran:latest'
+RHETORIC_CACHE_KEY_LEGACY = 'iran_rhetoric_cache'
+HISTORY_KEY               = 'rhetoric:iran:history'
+BASELINE_KEY              = 'rhetoric_baseline:iran'
+CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'
+COMMODITY_CACHE_KEY       = 'commodity_tracker_cache'  # Phase 2B: read-only
 
-BLUF_CACHE_KEY = 'rhetoric:me:regional_bluf'
-BLUF_CACHE_TTL = 14 * 3600  # 14h -- outlasts any individual tracker TTL
-TOP_SIGNALS_COUNT = 12  # v2.4.0 May 21 2026: was 5 (was 3 in v2.0); supports per-theatre quota
-MAX_PER_THEATRE   = 3   # v2.4.0 May 21 2026 — per-tracker quota during selection
+RHETORIC_CACHE_TTL  = 6 * 3600
+SCAN_INTERVAL_HOURS = 6
+
+_rhetoric_running = False
+_rhetoric_lock    = threading.Lock()
 
 
-# ============================================================
+# ============================================
+# ESCALATION LEVELS
+# ============================================
+ESCALATION_LEVELS = {
+    0: {'label': 'Baseline',       'color': '#6b7280', 'description': 'No significant signals'},
+    1: {'label': 'Rhetoric',       'color': '#3b82f6', 'description': 'Standard state/IRGC statements'},
+    2: {'label': 'Warning',        'color': '#f59e0b', 'description': 'Escalatory language, proxy warnings'},
+    3: {'label': 'Directive',      'color': '#f97316', 'description': 'Command signals, proxy activation language'},
+    4: {'label': 'Operational',    'color': '#ef4444', 'description': 'Strike posture, imminent action signals'},
+    5: {'label': 'Active Command', 'color': '#dc2626', 'description': 'Confirmed operations, numbered waves'},
+}
+
+
+# ============================================
+# ACTORS
+# ============================================
+ACTORS = {
+    'khamenei': {
+        'name': 'Khamenei / Supreme Leader',
+        'flag': '🇮🇷',
+        'icon': '👁️',
+        'color': '#dc2626',
+        'role': 'Supreme Command Authority',
+        'description': 'Supreme Leader — final authority on IRGC operations and proxy activation',
+        'keywords': [
+            'khamenei', 'supreme leader', 'rahbar', 'khamenei says',
+            'khamenei warns', 'khamenei orders', 'khamenei statement',
+            'office of the supreme leader', 'leader of the revolution',
+            'ayatollah khamenei', 'ali khamenei',
+            'خامنه‌ای', 'رهبر انقلاب', 'مقام معظم رهبری',
+            'بیانات رهبری', 'فرمان رهبری',
+            'خامنئي', 'المرشد الأعلى', 'ولي الفقيه',
+        ],
+        'baseline_statements_per_week': 5,
+    },
+    'irgc': {
+        'name': 'IRGC / Quds Force',
+        'flag': '🇮🇷',
+        'icon': '⚔️',
+        'color': '#b91c1c',
+        'role': 'Military Command / Proxy Director',
+        'description': 'Islamic Revolutionary Guard Corps — conducts direct strikes and directs proxy network',
+        'keywords': [
+            'irgc', 'revolutionary guard', 'quds force', 'pasdaran',
+            'irgc statement', 'irgc announces', 'irgc launches',
+            'irgc strikes', 'irgc missile', 'irgc drone',
+            'operation true promise', 'true promise', 'wave of attacks',
+            'irgc aerospace force', 'irgc navy',
+            'esmail qaani', 'qaani', 'irgc commander',
+            'sepah', 'سپاه پاسداران', 'نیروی قدس', 'قاسم سلیمانی',
+            'عملیات وعده صادق', 'موشک سپاه', 'پهپاد سپاه',
+            'حرس الثوري', 'فيلق القدس', 'عملية الوعد الصادق',
+            'صواريخ الحرس الثوري',
+        ],
+        'baseline_statements_per_week': 12,
+    },
+    'iran_gov': {
+        'name': 'Iranian Government / MFA',
+        'flag': '🇮🇷',
+        'icon': '🏛️',
+        'color': '#7c3aed',
+        'role': 'Diplomatic Cover / Escalation Framing',
+        'description': 'Pezeshkian government and MFA — diplomatic framing, often lags behind IRGC action',
+        'keywords': [
+            'iran foreign ministry', 'iranian foreign minister',
+            'pezeshkian', 'araghchi', 'iran government',
+            'tehran says', 'tehran warns', 'tehran threatens',
+            'iran official', 'iran state', 'iran president',
+            'iran nuclear talks', 'iran diplomacy',
+            # IAEA / inspection-status keywords (v1.1 — May 17 — Grossi/Isfahan)
+            'grossi', 'rafael grossi', 'iaea', 'iaea director general',
+            'iaea inspectors', 'iaea inspection', 'iaea seals',
+            'iaea verification', 'nuclear watchdog', 'un nuclear chief',
+            'un nuclear agency', 'iaea board of governors',
+            'inspection blackout', 'inspectors expelled iran',
+            'iran nuclear inspection', 'iran iaea cooperation',
+            'iaea isfahan', 'iaea natanz', 'iaea fordo', 'iaea fordow',
+            'enriched uranium iran', 'iran uranium stockpile',
+            '60% enriched', 'highly enriched uranium iran',
+            # Persian + Arabic
+            'آژانس بین‌المللی انرژی اتمی', 'بازرسان آژانس',
+            'الوكالة الدولية للطاقة الذرية', 'مفتشي الوكالة',
+            # Sulfur + cascade commodity (v1.1 -- May 17 -- Andy Home Reuters cascade thesis)
+            # Iran is a top-5 global sulfur producer (byproduct of South Pars gas refining).
+            # Hormuz closure trapped Gulf sulfur; ripples through copper/nickel/fertilizer.
+            'iran sulfur', 'iran sulfuric acid', 'iranian sulfur',
+            'gulf sulfur', 'gulf sulfuric acid', 'hormuz sulfur',
+            'sulfur export', 'sulfur shortage', 'sulfuric acid shortage',
+            'sulfur cascade', 'sulfur trapped', 'gulf sulfur exports',
+            'south pars sulfur', 'bandar abbas sulfur', 'asaluyeh sulfur',
+            'iran natural gas refining', 'iran refining byproduct',
+            # Persian
+            'گوگرد ایران', 'صادرات گوگرد', 'پارس جنوبی گوگرد',
+            'وزارت خارجه ایران', 'پزشکیان', 'عراقچی',
+            'وزارة الخارجية الإيرانية', 'الحكومة الإيرانية',
+            'طهران تحذر', 'إيران الرسمية',
+        ],
+        'baseline_statements_per_week': 8,
+    },
+    'iran_people': {
+        'name': 'Iranian People / Civil Signals',
+        'flag': '🇮🇷',
+        'icon': '✊',
+        'color': '#0ea5e9',
+        'role': 'Domestic Pressure Signal',
+        'description': 'Street-level sentiment, protest activity, economic pressure — regime stability indicators',
+        'keywords': [
+            'iran protests', 'iran protest', 'iranians protest',
+            'tehran protest', 'iran demonstrations', 'iran unrest',
+            'iran economy', 'iran rial', 'iran inflation',
+            'iran sanctions impact', 'iran fuel prices',
+            'iran internet shutdown', 'iran dissent',
+            'woman life freedom', 'mahsa amini',
+            'iran opposition', 'mek iran', 'zan zendegi azadi',
+            'اعتراضات ایران', 'اعتراض مردم', 'بحران اقتصادی ایران',
+            'تورم ایران', 'احتجاجات إيران', 'الشعب الإيراني',
+        ],
+        'baseline_statements_per_week': 4,
+    },
+    'hezbollah_iran': {
+        'name': 'Hezbollah (Iran-directed)',
+        'flag': '🇱🇧',
+        'icon': '🔗',
+        'color': '#16a34a',
+        'role': 'Lebanon Proxy — Activation Signal',
+        'description': 'Hezbollah as Iran proxy — when Hezbollah escalates, Iran likely directed it',
+        'keywords': [
+            'hezbollah iran', 'iran hezbollah', 'iran directs hezbollah',
+            'iran orders hezbollah', 'hezbollah on orders',
+            'hezbollah coordination iran', 'nasrallah iran',
+            'naim qassem iran', 'iran resistance lebanon',
+            'hezbollah operation', 'hezbollah launches', 'hezbollah fires',
+            'islamic resistance lebanon', 'resistance axis lebanon',
+            'حزب الله وإيران', 'توجيهات إيران لحزب الله',
+            'المقاومة الإسلامية لبنان بأوامر إيرانية',
+        ],
+        'baseline_statements_per_week': 10,
+    },
+    'houthi_iran': {
+        'name': 'Houthi / Ansar Allah (Iran-directed)',
+        'flag': '🇾🇪',
+        'icon': '🔗',
+        'color': '#f59e0b',
+        'role': 'Yemen Proxy — Activation Signal',
+        'description': 'Houthis as Iran proxy — escalation signals coordinated with IRGC',
+        'keywords': [
+            # Iran-Houthi coordination
+            'houthi iran', 'iran houthi', 'iran directs houthi',
+            'iran ansar allah', 'houthi coordination iran',
+            'iran red sea', 'iran shipping attacks',
+            'houthi missile iran', 'houthi drone iran',
+            'iran proxy yemen', 'houthi operation',
+            'ansar allah iran coordination',
+            # Standalone Houthi operational signals
+            'houthi missile', 'houthi ballistic', 'houthi attack',
+            'houthi launches', 'houthi fired', 'houthi strike',
+            'houthi drone attack', 'houthi targets israel',
+            'houthi targets red sea', 'houthi ship attack',
+            'ansar allah missile', 'ansar allah attack',
+            'ansar allah launches', 'ansar allah strike',
+            'houthi israel', 'houthi tel aviv', 'houthi ben gurion',
+            'houthi hypersonic', 'houthi ballistic missile israel',
+            'true promise', 'wave 84', 'operation yemen',
+            'yemen missile israel', 'yemen attack israel',
+            'red sea attack', 'bab el-mandeb attack',
+            'houthi navy', 'houthi naval', 'houthi blockade',
+            # Arabic
+            'الحوثيون وإيران', 'توجيهات إيران للحوثيين',
+            'إيران والبحر الأحمر', 'عمليات الحوثيين بدعم إيراني',
+            'الحوثيون يطلقون', 'صاروخ الحوثيين',
+            'هجوم الحوثيين', 'أنصار الله يهاجم',
+        ],
+        'baseline_statements_per_week': 8,
+        'tripwires': [
+            'houthi ballistic missile israel',
+            'houthi targets tel aviv',
+            'houthi hypersonic missile',
+            'ansar allah declares war',
+            'wave 84',
+            'true promise 4',
+        ],
+    },
+    'pmf_iran': {
+        'name': 'PMF Iraq (Iran-directed)',
+        'flag': '🇮🇶',
+        'icon': '🔗',
+        'color': '#f97316',
+        'role': 'Iraq Proxy — Activation Signal',
+        'description': 'PMF/Hashd as Iran proxy — IRGC Quds Force directing Iraq militia operations',
+        'keywords': [
+            'pmf iran', 'iran pmf', 'iran hashd',
+            'iran directs pmf', 'irgc pmf coordination',
+            'quds force iraq', 'iran militia iraq',
+            'kataib iran', 'iran proxy iraq',
+            'islamic resistance iraq iran',
+            'الحشد الشعبي وإيران', 'توجيه إيران للحشد',
+            'فيلق القدس يوجه الفصائل العراقية',
+            'المقاومة الإسلامية في العراق بدعم إيراني',
+        ],
+        'baseline_statements_per_week': 8,
+    },
+    # ============================================
+    # v1.2.0 (April 2026) — Axis actors SPLIT.
+    # Previous single 'china_russia_axis' actor has been split
+    # into two dedicated actors because China and Russia play
+    # architecturally different roles in supporting Iran:
+    #   - China: ISR/logistics enabler (satellites, ground stations,
+    #     dual-use components). More covert, harder to detect.
+    #   - Russia: Strategic partner (satellite launches, arms,
+    #     military coordination). More overt, publicly signaled.
+    # Splitting allows accurate attribution and separate
+    # cross-theater fingerprint fields per partner.
+    # ============================================
+    'china_iran_axis': {
+        'name': 'China → Iran (Axis Support)',
+        'flag': '🇨🇳',
+        'icon': '🛰️',
+        'color': '#dc2626',
+        'role': 'External Military Supporter — China (ISR / Logistics)',
+        'description': (
+            'China as active supporter of Iran. Sub-categorized across '
+            'four dimensions: weapons transfer, ISR/satellite cooperation, '
+            'dual-use components, and diplomatic cover. The ISR dimension '
+            '(e.g. TEE-01B satellite, Emposat ground stations — FT Apr 2026) '
+            'is particularly consequential as it enables kinetic targeting.'
+        ),
+        'keywords': [
+            # China → Iran — weapons / hardware
+            'china iran missiles', 'china ships missiles iran',
+            'china manpads iran', 'chinese missiles iran',
+            'china arms iran', 'china weapons iran',
+            'china military aid iran', 'china supplies iran war',
+            'china iran shipment', 'chinese shoulder fired iran',
+            # China → Iran — ISR / satellite / space cooperation
+            'china satellite iran', 'chinese satellite iran',
+            'tee-01b', 'emposat', 'earth eye co',
+            'chinese spy satellite iran', 'china ground station iran',
+            'irgc chinese satellite', 'chinese imagery iran',
+            'china targeting data iran', 'chinese isr iran',
+            'china space cooperation iran', 'in-orbit transfer iran',
+            'chinese satellite irgc', 'belt and road iran space',
+            # China → Iran — dual-use
+            'china dual use iran', 'china components iran',
+            'china chemicals iran military', 'china fuel iran military',
+            'china electronics iran', 'china semiconductor iran military',
+            # China → Iran — diplomatic cover
+            'china intelligence iran', 'beijing tehran military',
+            'china iran military cooperation', 'china iran axis',
+            'china backs iran', 'beijing backs tehran',
+            'china shields iran un', 'china blocks iran sanctions',
+            # ============================================================
+            # China <-> Iran -- diplomatic mediation + pre-summit shuttle
+            # + sanctions defiance (v1.1 May 17 -- Bloomberg May 5 Araghchi
+            # Beijing visit; precedes Trump-Xi summit by 1 week)
+            # ============================================================
+            # Iran FM Beijing shuttle diplomacy
+            'araghchi beijing', 'araghchi china', 'araghchi wang yi',
+            'iran fm beijing', 'iran fm china', 'iran foreign minister beijing',
+            'iran foreign minister china', 'wang yi araghchi',
+            'wang yi iran', 'china foreign minister iran',
+            'beijing meeting iran', 'beijing talks iran',
+            'iran china talks', 'tehran beijing diplomacy',
+            # China mediator positioning re: Iran
+            'china mediator iran', 'beijing mediator iran',
+            'china brokered iran', 'beijing brokered iran',
+            'china brokered ceasefire iran', 'china secured iran acceptance',
+            'china pushed iran ceasefire', 'last minute china iran',
+            'china diplomatic push iran', 'beijing diplomatic push iran',
+            # Pre-summit shuttle dynamics (China positioning between Iran + Trump)
+            'pre-summit china iran', 'pre trump summit iran',
+            'before trump xi summit', 'before xi trump summit',
+            'china shuttle iran', 'iran briefs china',
+            'iran briefs beijing', 'china between iran trump',
+            'china straddle iran trump', 'xi trump summit iran',
+            # China sanctions defiance / refiner protection
+            'china defies sanctions iran', 'china unprecedented defiance',
+            'china ignores us sanctions iran', 'china refiner sanctions',
+            'china protects refiners', 'teapot refiners china iran',
+            'china orders companies ignore sanctions', 'china private refiners',
+            'china refiners iranian oil', 'sanctions defiance china iran',
+            # US asks of China re: Hormuz / Iran
+            'bessent china hormuz', 'us asks china hormuz',
+            'china mediate hormuz', 'china open hormuz',
+            'escort ships hormuz china', 'china escort operation',
+            'china pressure iran hormuz', 'us pressure china iran',
+            # Arabic / Farsi / Chinese
+            'الصين تسلح إيران', 'الصين تدعم إيران',
+            'چین ایران موشک', 'چین ماهواره ایران',
+            'وانگ یی', 'عراقچی پکن', 'پکن میانجی',
+            '王毅', '阿拉格齐', '中国调解伊朗',
+        ],
+        'baseline_statements_per_week': 3,
+    },
+
+    'russia_iran_axis': {
+        'name': 'Russia → Iran (Axis Support)',
+        'flag': '🇷🇺',
+        'icon': '🚀',
+        'color': '#dc2626',
+        'role': 'External Military Supporter — Russia (Launch / Arms / Coordination / Mediation)',
+        'description': (
+            'Russia as active supporter of Iran. Sub-categorized across '
+            'five dimensions: launch partnership (Russian rockets carrying '
+            'Iranian satellites), arms/hardware, intelligence sharing, '
+            'strategic coordination, and diplomatic / mediation cover '
+            '(top-level meetings, UN Security Council vetoes, mediation '
+            'channel substitution when other tracks stall). Russia has '
+            'launched several Iranian satellites in recent years, provides '
+            'targeting data for IRGC strikes on US installations, and '
+            'increasingly provides diplomatic cover at the UN.'
+        ),
+        'keywords': [
+            # Russia → Iran — launch partnership / space
+            'russia launches iranian satellite', 'russian rocket iran',
+            'russia iran satellite launch', 'soyuz iran satellite',
+            'iranian satellite russian launch', 'noor russia launch',
+            # Russia → Iran — intelligence / targeting
+            'russia satellite iran', 'russia targeting iran',
+            'russia intelligence iran', 'russia helps iran',
+            'russia iran targeting us ships', 'russia satellite irgc',
+            'russia targets us iran', 'russian targeting data iran',
+            'russia satellite imagery iran', 'satellite imagery warship',
+            'russia warship locations iran',
+            # Russia → Iran — arms / hardware
+            'russia arms iran', 'russia weapons iran',
+            'russia supplies iran', 'russia iran military supplies',
+            'russia air defense iran', 'russian s-400 iran',
+            'russian jets iran', 'sukhoi iran',
+            'advanced drones russia iran', 'shahed russia iran',
+            'russia drone delivery iran',
+            # Russia → Iran — strategic coordination
+            'moscow tehran military', 'russia iran military coordination',
+            'russia backs iran war', 'russia iran cooperation war',
+            'russia food aid iran', 'russia nonlethal iran',
+            'russia iran defense pact', 'comprehensive partnership iran russia',
+            # ── v2.4 — TOP-LEVEL DIPLOMATIC COORDINATION (Apr 2026) ──
+            # Single-word + short-phrase triggers that match real article text.
+            # NYT writes "Abbas Araghchi ... met with President Vladimir V Putin"
+            # so "araghchi putin" as adjacent text rarely appears -- need both
+            # standalone names + short phrases that DO appear adjacent.
+            'araghchi',           # Foreign Minister name (rare in non-coordination context)
+            'mojtaba khamenei',   # New supreme leader - names appear adjacent
+            'mojtaba',            # Standalone (only one Mojtaba in this domain)
+            'iran foreign minister',
+            'iranian foreign minister',
+            'iran fm',
+            'foreign minister moscow',
+            'foreign minister russia',
+            'foreign minister putin',
+            # ── v2.4 — UN / DIPLOMATIC COVER ──
+            'russia veto', 'russia vetoes', 'russia vetoed',
+            'hormuz resolution', 'hormuz veto',
+            'vetoing a resolution', 'diplomatic cover for iran',
+            'russia un cover', 'russia security council iran',
+            # ── v2.4 — URANIUM / NUCLEAR HANDOVER ──
+            'take iranian uranium', 'take that uranium',
+            'iranian uranium', 'uranium russia',
+            'kremlin uranium', 'iranian stockpile',
+            'enriched uranium russia', 'readiness to take',
+            # ── v2.4 — CASPIAN TRADE WORKAROUND ──
+            'caspian sea', 'caspian trade', 'caspian shipping',
+            'caspian transit', 'via the caspian',
+            # ── v2.4 — MEDIATION SUBSTITUTION ──
+            'moscow mediation', 'putin mediates',
+            'russia mediation', 'russia broker',
+            'phased approach hormuz', 'reopening the strait of hormuz',
+            'phased hormuz', 'mediation channel',
+            'witkoff', 'kushner pakistan',
+            'called off the trip', 'cancelled the trip',
+            'trump abruptly called', 'trump cancels iran',
+            'pakistan and oman', 'pakistan talks',
+            # ── v2.4 — INTELLIGENCE / WEAPONS SUPPLY (specific) ──
+            'satellite imagery showing', 'warships and military',
+            'advanced drones to iran', 'deliver advanced drones',
+            'shahed flow', 'uranium and shahed',
+            # Arabic / Farsi
+            'روسيا تدعم إيران', 'روسیه ایران حمایت',
+            'پرتاب ماهواره ایرانی روسیه',
+            'عراقچی', 'مجتبی خامنه‌ای',  # Araghchi / Mojtaba Khamenei
+            'وتو روسيا',                     # Russia veto
+        ],
+        'baseline_statements_per_week': 3,
+    },
+
+    'israel_iran': {
+        'name': 'Israel (re: Iran)',
+        'flag': '🇮🇱',
+        'icon': '🔷',
+        'color': '#3b82f6',
+        'role': 'Adversary / Strike Actor',
+        'description': 'Israeli government and IDF — strike posture, shadow war ops, nuclear red lines',
+        'keywords': [
+            # Direct kinetic / strike language
+            'israel iran', 'israel strikes iran', 'idf iran',
+            'netanyahu iran', 'israel nuclear iran', 'israel attack iran',
+            'israel warns iran', 'israel threatens iran',
+            'israel operation iran', 'f-35 iran', 'israeli jets iran',
+            'dimona', 'natanz israel', 'israel iran nuclear',
+            'israel operation rising lion',
+            # Shadow war / covert operations (v2.1)
+            'mossad iran', 'mossad operation iran',
+            'israel sabotage iran', 'explosion iran israel',
+            'iran scientist killed', 'iran nuclear scientist assassinated',
+            'israel all options iran', 'israel red line iran',
+            'israel preemptive iran', 'israel strike capability iran',
+            'iran enrichment israel', 'israel 90 percent iran',
+            'israel weapons grade iran', 'israel prevent iran bomb',
+            'gallant iran', 'katz iran', 'israel defense minister iran',
+            'israel will not allow iran nuclear',
+            'israel iran deal opposition', 'israel opposes iran deal',
+            'iran deal bad for israel', 'israel nuclear threshold iran',
+            # Hebrew
+            'מוסד איראן', 'ישראל קו אדום', 'ישראל מניעה איראן',
+            'ישראל איראן', 'צה"ל איראן', 'ישראל תוקפת',
+            # Arabic
+            'إسرائيل إيران', 'الغارات الإسرائيلية على إيران',
+            'إسرائيل تضرب إيران', 'الموساد إيران',
+            'إسرائيل الخط الأحمر النووي', 'إسرائيل تعارض الاتفاق',
+        ],
+        'baseline_statements_per_week': 12,
+    },
+    'us_iran': {
+        'name': 'US / CENTCOM (re: Iran)',
+        'flag': '🇺🇸',
+        'icon': '🛡️',
+        'color': '#2563eb',
+        'role': 'Adversary / Strike Actor',
+        'description': 'US military, Trump, and government — strike posture, deal signals, Iran pressure',
+        'keywords': [
+            # Military / CENTCOM
+            'us strikes iran', 'us attack iran', 'centcom iran',
+            'us iran war', 'pentagon iran', 'us military iran',
+            'us iran operation', 'us forces iran', 'b-2 iran',
+            'carrier iran', 'b-52 iran', 'us bombers iran',
+            'us carrier strike group iran', 'us destroys iran',
+            # Trump direct statements (v2.1)
+            'trump iran', 'trump warns iran', 'trump threatens iran',
+            'trump iran deal', 'trump maximum pressure iran',
+            'trump bomb iran', 'trump attack iran',
+            'trump iran nuclear', 'trump iran sanctions',
+            'trump iran 60 days', 'trump iran ultimatum',
+            'trump iran letter', 'trump envoy iran',
+            'steve witkoff iran', 'witkoff iran deal',
+            'rubio iran', 'rubio iran deal', 'rubio iran sanctions',
+            # Deal / diplomatic pressure
+            'us iran deal', 'us iran nuclear deal', 'us iran talks',
+            'us iran negotiations', 'us iran agreement',
+            'us iran sanctions', 'snapback iran',
+            # Arabic
+            'القوات الأمريكية في إيران', 'سنتكوم إيران',
+            'الضربات الأمريكية على إيران', 'ترامب إيران',
+            'ترامب يهدد إيران', 'أمريكا إيران نووي',
+        ],
+        'baseline_statements_per_week': 10,
+    },
+}
+
+
+# ============================================
+# REPORTING ACTOR DOWNGRADE
+# ============================================
+# iran_gov and iran_people report ON events more than threaten.
+# israel_iran and us_iran are adversaries — their language about
+# Iran is reporting/analysis, not Iran-directed threats.
+REPORTING_ACTORS = {'iran_gov', 'iran_people', 'israel_iran', 'us_iran'}
+
+REPORTING_LANGUAGE = [
+    'condemns', 'condemned', 'denounces', 'denounced',
+    'calls on', 'calls for', 'urges', 'urged',
+    'protests', 'mourns', 'condolences',
+    'in response to', 'following the attack',
+    'expressed concern', 'deeply concerned',
+    'according to', 'reports that', 'confirms that',
+    'iran says it will', 'iran claims', 'iran denies',
+    'يستنكر', 'استنكر', 'يدين', 'أدان',
+    'في أعقاب', 'بعد الهجوم',
+    'محکوم می‌کند', 'واکنش نشان داد',
+]
+
+
+# ============================================
+# THREAT VECTORS
+# ============================================
+
+# Vector 1: IRGC Direct (operation announcements, numbered waves, direct strikes)
+IRGC_DIRECT_TRIGGERS = {
+    5: [
+        'operation true promise', 'wave of attacks iran',
+        'irgc launches missiles', 'irgc fires ballistic',
+        'iran ballistic missile strike', 'iran drone swarm',
+        'iran direct attack', 'iran strikes israel',
+        'iran strikes us', 'iran strikes base',
+        'عملية الوعد الصادق', 'الموجة', 'سپاه موشک شلیک',
+        'حمله مستقیم ایران',
+    ],
+    4: [
+        'irgc operation announced', 'irgc on full alert',
+        'quds force deployed', 'iran readying strike',
+        'iran strike imminent', 'iran military exercise',
+        'iran missile test', 'iran threatens direct attack',
+        'iran warns of consequences', 'iran prepares response',
+        'سپاه آماده', 'فيلق القدس ينتشر',
+        'إيران تستعد للرد',
+    ],
+    3: [
+        'irgc warns', 'quds force warns', 'iran will respond',
+        'iran retaliation', 'iran red line crossed',
+        'iran will not tolerate', 'we will strike',
+        'resistance axis will respond',
+        'سپاه هشدار داد', 'الحرس الثوري يحذر',
+        'إيران ستنتقم', 'محور المقاومة سيرد',
+    ],
+    2: [
+        'irgc statement', 'iran military statement',
+        'iran military drill', 'iran defense posture',
+        'iran arms shipment', 'iran weapons transfer',
+        'بیانیه سپاه', 'بیانیه نظامی ایران',
+        'بيان الحرس الثوري',
+    ],
+    1: [
+        'irgc', 'quds force', 'revolutionary guard',
+        'iran military', 'iran missile', 'iran drone',
+        'سپاه', 'فيلق القدس', 'حرس الثوري',
+    ],
+}
+
+# Vector 2: Proxy Activation (computed from Redis cross-theater data — see function below)
+# Trigger levels computed dynamically in _compute_proxy_activation_index()
+
+# Vector 3: Nuclear Escalation
+NUCLEAR_TRIGGERS = {
+    5: [
+        'iran nuclear bomb', 'iran nuclear weapon ready',
+        'iran weaponizes uranium', 'iran nuclear breakout',
+        'iran has nuclear weapon', 'iran detonates',
+        'ایران بمب هسته‌ای', 'إيران تمتلك قنبلة نووية',
+    ],
+    4: [
+        'natanz attacked', 'fordow attacked', 'iran nuclear facility struck',
+        'iran nuclear program destroyed', 'iran enrichment halted',
+        'iran 90 percent enrichment', 'iran weapons grade',
+        'نطنز تعرض لهجوم', 'فردو تعرض لهجوم',
+        'تأسیسات هسته‌ای ایران مورد حمله',
+    ],
+    3: [
+        'iran enriches uranium', 'iran nuclear threshold',
+        'iran breakout timeline', 'iran nuclear red line',
+        'iran expels inspectors', 'iran iaea',
+        'iran nuclear deal collapsed', 'iran nuclear ambiguity',
+        'غنی‌سازی اورانیوم', 'آستانه هسته‌ای ایران',
+        'إيران تخصب اليورانيوم', 'الخط الأحمر النووي',
+    ],
+    2: [
+        'iran nuclear talks', 'iran nuclear negotiations',
+        'iran nuclear deal', 'jcpoa', 'iran centrifuges',
+        'iran nuclear program', 'iran uranium',
+        'مذاکرات هسته‌ای', 'برنامه هسته‌ای ایران',
+        'مفاوضات نووية إيران', 'البرنامج النووي الإيراني',
+    ],
+    1: [
+        'nuclear iran', 'iran nuclear', 'natanz', 'fordow',
+        'arak reactor', 'iran enrichment',
+        'هسته‌ای ایران', 'نووي إيران',
+    ],
+}
+
+# Vector 4: Domestic Pressure (regime stability signals)
+DOMESTIC_TRIGGERS = {
+    5: [
+        'iran regime collapse', 'iran revolution',
+        'iran government falls', 'iran uprising',
+        'سقوط رژیم', 'انقلاب ایران',
+        'انهيار النظام الإيراني',
+    ],
+    4: [
+        'iran massive protests', 'iran widespread unrest',
+        'iran security forces open fire', 'iran crackdown',
+        'iran internet blackout', 'iran generals arrested',
+        'اعتراضات گسترده ایران', 'سرکوب ایران',
+        'احتجاجات واسعة في إيران',
+    ],
+    3: [
+        'iran protests', 'iran demonstrations',
+        'iran economic crisis', 'iran rial collapse',
+        'iran fuel shortage', 'iran power cuts',
+        'iran dissent', 'iran opposition',
+        'اعتراض ایران', 'بحران اقتصادی',
+        'احتجاجات إيران', 'الأزمة الاقتصادية الإيرانية',
+    ],
+    2: [
+        'iran inflation', 'iran sanctions', 'iran economy',
+        'iran currency', 'iran unemployment',
+        'تورم ایران', 'تحریم‌های ایران',
+        'اقتصاد إيران', 'العقوبات على إيران',
+    ],
+    1: [
+        'iran economy', 'iran people', 'iran society',
+        'iran civil', 'iran domestic',
+        'مردم ایران', 'الشعب الإيراني',
+    ],
+}
+
+# Vector 5: Regional Retaliation (Hormuz, Gulf states, energy infrastructure)
+# Vector 6: Diplomatic Track (de-escalation signals — REDUCES pressure)
+# Catches Araghchi shuttles, Pakistan/Oman/Russia mediation, Trump waivers,
+# Witkoff envoy activity, JCPOA / nuclear deal language.
+DIPLOMATIC_TRIGGERS = {
+    5: [
+        # Active deal / agreement
+        'iran us deal signed', 'iran nuclear deal signed',
+        'iran ceasefire signed', 'jcpoa restored',
+        'iran agreement reached', 'iran us framework agreed',
+        'توافق ایران آمریکا', 'اتفاق نووي إيران أمريكا',
+    ],
+    4: [
+        # Active negotiations / direct talks
+        'araghchi pakistan', 'araghchi oman', 'araghchi russia',
+        'iran second round talks', 'iran direct talks us',
+        'iran nuclear deal talks', 'iran us negotiations',
+        'witkoff iran', 'witkoff tehran', 'witkoff araghchi',
+        'iran ceasefire negotiations', 'iran us second round',
+        'us iran ceasefire talks', 'iran us framework',
+        'pakistan iran us mediator', 'oman iran us mediator',
+        'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
+    ],
+    3: [
+        # Mediator activity
+        'pakistan mediates iran', 'oman mediates iran',
+        'russia mediates iran', 'pakistan brokers iran',
+        'envoy visits tehran', 'us envoy iran', 'iran nuclear envoy',
+        'islamabad iran us', 'oman shuttle iran',
+        'iran nuclear talks resume', 'iran nuclear talks restart',
+        'trump extends iran ceasefire', 'trump 90-day waiver',
+        'trump iran ceasefire extension', 'jones act waiver',
+        'us extends iran ceasefire', 'iran ceasefire extension',
+        'iran nuclear envoy', 'special envoy iran',
+        'پاکستان وساطت', 'وساطة باكستانية',
+    ],
+    2: [
+        # Diplomatic push
+        'iran nuclear talks', 'iran nuclear negotiations',
+        'iran us diplomacy', 'iran nuclear diplomacy',
+        'iran diplomatic outreach', 'iran ceasefire offer',
+        'pakistan iran diplomacy', 'oman iran diplomacy',
+        'tehran offers talks', 'iran open to talks',
+        'مذاکرات هسته‌ای ایران', 'دبلوماسية إيرانية',
+    ],
+    1: [
+        # Background diplomatic mentions
+        'iran diplomacy', 'jcpoa', 'iran deal',
+        'iran nuclear program negotiation',
+        'دیپلماسی ایران', 'دبلوماسية إيران',
+    ],
+}
+
+
+REGIONAL_TRIGGERS = {
+    5: [
+        'iran closes hormuz', 'iran blockades hormuz',
+        'iran attacks saudi', 'iran attacks uae',
+        'iran gulf state attack', 'iran oil field attack',
+        'iran attacks qatar', 'iran gulf war',
+        'ایران تنگه هرمز را می‌بندد',
+        'إيران تغلق مضيق هرمز',
+    ],
+    4: [
+        'iran threatens hormuz', 'iran mining hormuz',
+        'iran threatens gulf', 'iran threatens saudi',
+        'iran oil embargo', 'iran energy attack',
+        'iran attacks tanker', 'iran seizes ship',
+        'ایران تهدید هرمز', 'إيران تهدد بإغلاق هرمز',
+        'إيران تهاجم ناقلة',
+    ],
+    3: [
+        'iran hormuz warning', 'iran gulf tension',
+        'iran saudi tension', 'iran uae tension',
+        'iran energy weapon', 'iran oil threat',
+        'iran shipping disruption',
+        'هشدار هرمز', 'تنش خلیج فارس',
+        'تحذير مضيق هرمز', 'توتر الخليج',
+    ],
+    2: [
+        'hormuz tension', 'gulf iran', 'iran gulf',
+        'iran shipping', 'iran tanker',
+        'هرمز', 'خلیج فارس', 'مضيق هرمز',
+    ],
+    1: [
+        'strait of hormuz', 'persian gulf', 'gulf',
+        'hormuz', 'iran energy', 'iran oil',
+        'تنگه هرمز', 'خلیج', 'النفط الإيراني',
+    ],
+}
+
+# Operation True Promise detection — numbered wave language
+OPERATION_TRUE_PROMISE_PATTERNS = [
+    'operation true promise', 'true promise', 'وعده صادق',
+    'wave 1', 'wave 2', 'wave 3', 'wave 4', 'wave 5',
+    'wave 6', 'wave 7', 'wave 8', 'wave 9', 'wave 10',
+    'wave 11', 'wave 12', 'wave 15', 'wave 20', 'wave 25',
+    'wave 30', 'wave 40', 'wave 50', 'wave 60', 'wave 70',
+    'wave 71', 'wave 72', 'wave 73', 'wave 74', 'wave 75',
+    'موجة', 'الموجة', 'عملية الوعد الصادق',
+    'موج', 'حمله موج',
+]
+
+# Proxy activation language — Iran directing proxies
+PROXY_DIRECTIVE_LANGUAGE = [
+    'on orders from iran', 'directed by iran', 'iran ordered',
+    'at iran direction', 'iran commanded', 'quds force ordered',
+    'irgc directed', 'iran activated', 'iran green light',
+    'resistance axis coordinated', 'axis of resistance activates',
+    'بأوامر إيران', 'بتوجيه إيران', 'الحرس الثوري وجّه',
+    'تنسيق المحور', 'به دستور ایران', 'با هماهنگی سپاه',
+]
+
+SOFT_POWER_KEYWORDS = {
+    4: [
+        'iran lego', 'iran rap video', 'iran music video',
+        'iranian soft power', 'iran viral video', 'iran meme',
+        'iran propaganda video', 'iran influence operation',
+        'anti-war iran video', 'iran creative campaign',
+    ],
+    3: [
+        'resistance narrative', 'iran western audience',
+        'presstv viral', 'iran social media campaign',
+        'iran information war', 'iran narrative control',
+        'us aggressor iran', 'iran war crimes us',
+        'american imperialism iran', 'iran self defense',
+    ],
+    2: [
+        'resistance framing', 'zionist aggressor',
+        'us war criminal', 'martyred iran',
+        'iran innocent victims', 'iran civilians',
+        'axis of resistance message', 'iran anti-war',
+    ],
+    1: [
+        'resistance', 'oppressor', 'arrogance',
+        'great satan', 'zionist entity',
+        'iranian people resilient',
+    ],
+}
+
+
+# ============================================
+# REGIME SIGNALS (May 7 2026)
+# Six sub-detection ladders for structural shifts in the international system.
+# Distinct from kinetic/nuclear/proxy axes — these measure the post-1971 dollar
+# order, sanctions architecture, OPEC discipline, and arms-trade flows.
+# Each fires from Iran-origin content and writes to the cross-theater
+# fingerprint for the convergence registry to consume.
+# ============================================
+
+# Sub-signal 1: Gold-for-Oil / Sanctions Evasion Behavior
+# Feeds: sanctions_evasion_cluster, financial_system_fragmentation
+# FIRING TODAY (5/7/2026): Iran gold market SURGE — L4 economic
+GOLD_FOR_OIL_TRIGGERS = {
+    5: [
+        'gold for oil settlement confirmed', 'iran oil settled gold',
+        'tehran bourse surge gold', 'iranian oil paid gold',
+        'gold-backed oil trade iran',
+        'تسویه طلا نفت', 'النفط بالذهب إيران',
+    ],
+    4: [
+        'iran gold market surge', 'gold for oil iran',
+        'tehran bourse gold', 'sepah bank gold',
+        'iran sanctions evasion gold', 'iranian gold reserves',
+        'gold-denominated oil iran', 'iran circumvent sanctions gold',
+        'shadow fleet gold payment', 'iran gold yuan settlement',
+        'بازار طلا ایران', 'بانک سپه طلا',
+        'الذهب الإيراني', 'إيران تتحايل العقوبات',
+    ],
+    3: [
+        'iran gold reserves growing', 'iran central bank gold',
+        'iranian gold accumulation', 'iran gold purchase',
+        'sanctions evasion iran', 'iran circumvents sanctions',
+        'iran shadow oil trade', 'iran sanctions workaround',
+        'تجارت طلا ایران', 'دور زدن تحریم',
+        'تجارة الذهب الإيرانية', 'الالتفاف على العقوبات',
+    ],
+    2: [
+        'iran sanctions impact', 'iran sanctions evasion',
+        'iran gold trade', 'iran reserves',
+        'iran financial pressure',
+        'تحریم ایران طلا', 'العقوبات الإيرانية',
+    ],
+    1: [
+        'iran sanctions', 'iran gold', 'tehran bourse',
+        'تحریم', 'الذهب', 'بورس تهران',
+    ],
+}
+
+# Sub-signal 2: Dedollarization Rhetoric (Iranian leadership / MFA / state media)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+DEDOLLARIZATION_TRIGGERS = {
+    5: [
+        'iran abandons dollar', 'iran dollar trade banned',
+        'iran exits dollar system', 'iran dollar-free trade',
+        'ایران ترک دلار', 'إيران تتخلى عن الدولار',
+    ],
+    4: [
+        'iran non-dollar trade', 'iran de-dollarization',
+        'iran dollar replacement', 'iran resistance economy',
+        'iran swift alternative', 'iran economic sovereignty',
+        'iran financial independence west',
+        'اقتصاد مقاومتی', 'اقتصاد المقاومة',
+        'استقلال مالی ایران', 'الاستقلال المالي',
+    ],
+    3: [
+        'iran swift sanctions', 'iran payment alternative',
+        'iran non-western trade', 'iran multipolar economy',
+        'iran financial sovereignty', 'iran sanctions-resistant',
+        'iran trade in national currencies',
+        'سوئیفت ایران', 'سويفت إيران',
+        'استقلال اقتصادی', 'الاستقلال الاقتصادي',
+    ],
+    2: [
+        'iran economic resistance', 'iran trade sanctions',
+        'iran financial system', 'iran swift',
+        'مقاومت اقتصادی', 'الاقتصاد المقاوم',
+    ],
+    1: [
+        'iran economy', 'iran trade', 'resistance economy',
+        'اقتصاد ایران', 'الاقتصاد الإيراني',
+    ],
+}
+
+# Sub-signal 3: Yuan Settlement (China-Iran specific trade behavior)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+# Distinct from rhetoric: this is BEHAVIOR (actual yuan-denominated trade)
+YUAN_SETTLEMENT_TRIGGERS = {
+    5: [
+        'iran china oil yuan confirmed', 'iran sells oil yuan settled',
+        'iran-china yuan trade scaled', 'petroyuan iran china',
+        'پتروپوآن ایران چین', 'البترويوان الإيراني',
+    ],
+    4: [
+        'iran yuan settlement', 'iran china yuan trade',
+        'iran oil yuan', 'iran-china rmb',
+        'iran cips integration', 'iran china currency swap',
+        'cross-border interbank payment iran', 'iran yuan oil',
+        'تسویه یوآن', 'التسوية باليوان',
+        'یوآن ایران چین', 'اليوان الإيراني الصيني',
+    ],
+    3: [
+        'iran china currency', 'iran yuan trade',
+        'iran rmb settlement', 'iran-china financial',
+        'iran china non-dollar', 'china iran payment',
+        'یوآن چین ایران', 'اليوان الصيني إيران',
+    ],
+    2: [
+        'iran china trade', 'iran china financial',
+        'iran china oil', 'china iran economy',
+        'تجارت ایران چین', 'التجارة الإيرانية الصينية',
+    ],
+    1: [
+        'iran china', 'china iran', 'yuan iran',
+        'ایران چین', 'إيران الصين',
+    ],
+}
+
+# Sub-signal 4: BRICS Alignment (multilateral system signaling)
+# Feeds: financial_system_fragmentation, dedollarization_drumbeat
+BRICS_ALIGNMENT_TRIGGERS = {
+    5: [
+        'iran brics formal member', 'iran brics integration complete',
+        'iran brics pay activated', 'iran ndb member',
+        'عضویت بریکس ایران', 'إيران بريكس عضوية',
+    ],
+    4: [
+        'iran brics summit', 'iran brics expansion',
+        'iran brics pay', 'iran brics payment system',
+        'iran new development bank', 'iran brics currency',
+        'iran brics financial', 'iran brics trade',
+        'بریکس ایران', 'بريكس إيران',
+    ],
+    3: [
+        'iran brics partnership', 'iran brics cooperation',
+        'iran multipolar order', 'iran shanghai cooperation',
+        'iran sco brics', 'iran multilateral trade',
+        'سازمان شانگهای ایران', 'منظمة شنغهاي إيران',
+    ],
+    2: [
+        'iran brics', 'iran sco',
+        'iran emerging economies', 'iran multipolar',
+        'بریکس', 'بريكس',
+    ],
+    1: [
+        'brics iran', 'shanghai cooperation',
+        'برکس', 'شنغهاي',
+    ],
+}
+
+# Sub-signal 5: OPEC Realignment (energy-bloc fragmentation)
+# Feeds: energy_bloc_consolidation
+# Anchored to UAE-leaving-OPEC story (per memory: 4/28/2026 Mamdouh Salameh signal)
+OPEC_REALIGNMENT_TRIGGERS = {
+    5: [
+        'iran exits opec', 'iran leaves opec',
+        'opec collapse iran', 'opec dissolved iran',
+        'خروج ایران اوپک', 'إيران تغادر أوبك',
+    ],
+    4: [
+        'iran outside opec quota', 'iran non-opec oil',
+        'iran china oil non-opec', 'iran defies opec',
+        'opec fragmentation iran', 'iran opec discipline',
+        'uae opec departure', 'uae leaves opec',
+        'gcc opec rift', 'saudi iran opec',
+        'iran opec realignment', 'iran energy bloc',
+        'اوپک ایران', 'أوبك إيران',
+        'تشکیل بلوک انرژی', 'كتلة الطاقة',
+    ],
+    3: [
+        'iran opec tension', 'iran opec quota',
+        'iran oil discipline', 'iran energy alliance',
+        'opec plus iran', 'iran russia oil cooperation',
+        'تنش اوپک ایران', 'توتر أوبك إيران',
+    ],
+    2: [
+        'iran opec', 'iran oil quota',
+        'iran energy market', 'opec iran',
+        'اوپک', 'أوبك',
+    ],
+    1: [
+        'iran oil market', 'opec', 'oil exporters',
+        'صادرکنندگان نفت', 'مصدري النفط',
+    ],
+}
+
+# Sub-signal 6: Iranian Arms Export (parallel arms trade ecosystem)
+# Feeds: arms_trade_realignment
+# Iran as SUPPLIER to Russia/Venezuela/proxy networks (Shahed exports primary signal)
+ARMS_EXPORT_TRIGGERS = {
+    5: [
+        'iran exports advanced missiles', 'iran ships ballistic missiles abroad',
+        'iran arms major non-state actor confirmed',
+        'صادرات موشک ایران', 'صواريخ إيرانية مصدرة',
+    ],
+    4: [
+        'iran shahed export', 'iran drone export russia',
+        'iran weapons russia ukraine', 'iran arms venezuela',
+        'iran missile export', 'irgc export drones',
+        'iran arms transfer confirmed', 'shahed-136 export',
+        'iran ballistic export', 'iran weapons supplier',
+        'صادرات شاهد', 'تصدير شاهد',
+        'صادرات تسلیحات ایران', 'تصدير الأسلحة الإيرانية',
+    ],
+    3: [
+        'iran arms supplier', 'iran weapons supply',
+        'iran drone transfer', 'iran missile transfer',
+        'iran defense export', 'iran arms deal',
+        'iran weapons proliferation', 'iran arms partner',
+        'تامین تسلیحات ایران', 'توريد الأسلحة الإيرانية',
+    ],
+    2: [
+        'iran defense industry', 'iran arms cooperation',
+        'iran military export', 'iran defense partnership',
+        'صنایع دفاعی ایران', 'الصناعات الدفاعية الإيرانية',
+    ],
+    1: [
+        'iran weapons', 'iran arms', 'iran defense',
+        'تسلیحات ایران', 'الأسلحة الإيرانية',
+    ],
+}
+
+
+# ============================================
+# SPECIFICITY SCORER
+# ============================================
+SPECIFIC_GEOGRAPHIES_IRAN = [
+    # Iranian nuclear sites
+    'natanz', 'fordow', 'arak', 'isfahan', 'bushehr',
+    'parchin', 'khondab',
+    # Iranian cities / military
+    'tehran', 'mashhad', 'isfahan', 'shiraz', 'tabriz',
+    'kharg island', 'bandar abbas', 'chabahar',
+    # Proxy theater geographies (when Iran mentions these it's directive)
+    'strait of hormuz', 'persian gulf', 'red sea',
+    'bab el-mandeb', 'gulf of aden',
+    # Israeli targets Iran mentions
+    'dimona', 'tel aviv', 'haifa', 'eilat',
+    'nevatim', 'ramon airbase',
+    # US targets Iran mentions
+    'al asad', 'ain al-asad', 'us embassy baghdad',
+    'diego garcia', 'us carrier',
+    # Omani targets — added v2.4 for cross-theater Oman tracker
+    'salalah', 'duqm', 'muscat', 'dhofar', 'sohar',
+]
+
+SPECIFIC_ASSETS_IRAN = [
+    'ballistic missile', 'hypersonic missile', 'shahab',
+    'fateh', 'emad', 'ghadr', 'kheibar shekan',
+    'shahed drone', 'shahed-136', 'shahed-238',
+    'suicide drone', 'loitering munition',
+    'cruise missile iran', 'iran f-14', 'iran navy',
+    'ir-6 centrifuge', 'ir-8 centrifuge', '60 percent enriched',
+    '90 percent enriched', 'weapons grade uranium',
+]
+
+TIME_BOUNDED_IRAN = [
+    'within 24 hours', 'within 48 hours', 'within 72 hours',
+    'by tomorrow', 'imminent', 'tonight', 'this week',
+    'in the coming hours', 'before the end of',
+    'ultimatum expires', 'deadline',
+    'در ساعات آینده', 'به زودی',
+    'خلال ساعات', 'قريباً',
+]
+
+OPERATIONAL_FRAMING_IRAN = [
+    'preparing to launch', 'positioned to strike', 'ready to fire',
+    'forces deployed', 'on combat footing', 'full readiness',
+    'ordered to strike', 'strike authorized',
+    'all options on the table iran', 'iran will act',
+    'آماده حمله', 'دستور حمله صادر شد',
+    'مستعد للضرب', 'الأمر صدر بالضرب',
+]
+
+
+def _score_specificity(text):
+    score = 0
+    breakdown = {'named_geographies': [], 'named_assets': [],
+                 'time_bounded': [], 'operational_framing': []}
+    for geo in SPECIFIC_GEOGRAPHIES_IRAN:
+        if geo in text:
+            breakdown['named_geographies'].append(geo)
+            score += 1
+    for asset in SPECIFIC_ASSETS_IRAN:
+        if asset in text:
+            breakdown['named_assets'].append(asset)
+            score += 1
+    for tb in TIME_BOUNDED_IRAN:
+        if tb in text:
+            breakdown['time_bounded'].append(tb)
+            score += 2
+    for op in OPERATIONAL_FRAMING_IRAN:
+        if op in text:
+            breakdown['operational_framing'].append(op)
+            score += 2
+    return min(score, 10), breakdown
+
+
+# ============================================
+# REGIME SIGNAL SUB-SCORER (May 7 2026)
+# Mirrors china tracker's _score_china_iran_axis_subscores pattern.
+# Runs all six regime-signal ladders against the article corpus and
+# returns per-dimension max levels. Output flows to (a) the
+# cross-theater fingerprint write, and (b) the score modifier.
+# ============================================
+def _score_iran_regime_signals(articles):
+    """
+    Score each regime-signal dimension separately.
+    Returns dict: {
+        'gold_for_oil':       0-5,
+        'dedollarization':    0-5,
+        'yuan_settlement':    0-5,
+        'brics_alignment':    0-5,
+        'opec_realignment':   0-5,
+        'arms_export':        0-5,
+        'max':                0-5,  # highest across all dimensions
+        'active_count':       int,  # count of dimensions at L3+
+    }
+    Active count is what feeds the score modifier (capped at +5 in
+    _calculate_rhetoric_score). Per-dimension levels are written to the
+    cross-theater fingerprint so the convergence registry can read them.
+    """
+    dimensions = {
+        'gold_for_oil':     GOLD_FOR_OIL_TRIGGERS,
+        'dedollarization':  DEDOLLARIZATION_TRIGGERS,
+        'yuan_settlement':  YUAN_SETTLEMENT_TRIGGERS,
+        'brics_alignment':  BRICS_ALIGNMENT_TRIGGERS,
+        'opec_realignment': OPEC_REALIGNMENT_TRIGGERS,
+        'arms_export':      ARMS_EXPORT_TRIGGERS,
+    }
+    scores = {dim: 0 for dim in dimensions}
+
+    for article in articles:
+        title = (article.get('title', '') or '').lower()
+        desc  = (article.get('description', '') or '').lower()
+        text  = f"{title} {desc}"
+
+        for dim, ladder in dimensions.items():
+            # Find highest level matched in this article for this dimension
+            for level in range(5, 0, -1):
+                phrases = ladder.get(level, [])
+                if any(phrase.lower() in text for phrase in phrases):
+                    if level > scores[dim]:
+                        scores[dim] = level
+                    break
+
+    scores['max'] = max(scores.values()) if scores else 0
+    scores['active_count'] = sum(1 for dim in dimensions if scores[dim] >= 3)
+    return scores
+
+
+# ============================================
 # REDIS HELPERS
-# ============================================================
-
+# ============================================
 def _redis_get(key):
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
         return None
     try:
         resp = requests.get(
-            f'{UPSTASH_REDIS_URL}/get/{key}',
-            headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'},
+            f"{UPSTASH_REDIS_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
             timeout=5
         )
-        result = resp.json().get('result')
-        return json.loads(result) if result else None
+        data = resp.json()
+        if data.get('result'):
+            return json.loads(data['result'])
     except Exception as e:
-        print(f'[ME BLUF] Redis GET error ({key}): {e}')
-        return None
+        print(f"[Iran Rhetoric Redis] GET error: {e}")
+    return None
 
 
-def _redis_set(key, value, ttl=BLUF_CACHE_TTL):
+def _redis_set(key, value, ttl=RHETORIC_CACHE_TTL):
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
         return False
     try:
         payload = json.dumps(value, default=str)
-        params = {'EX': ttl} if ttl else {}
         resp = requests.post(
-            f'{UPSTASH_REDIS_URL}/set/{key}',
+            f"{UPSTASH_REDIS_URL}/set/{key}",
             headers={
-                'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}',
-                'Content-Type': 'application/json'
+                "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                "Content-Type": "application/json"
             },
             data=payload,
-            params=params,
+            params={"EX": ttl},
             timeout=5
         )
         return resp.json().get('result') == 'OK'
     except Exception as e:
-        print(f'[ME BLUF] Redis SET error ({key}): {e}')
-        return False
+        print(f"[Iran Rhetoric Redis] SET error: {e}")
+    return False
 
 
-# ============================================================
-# CACHE KEY MAP -- all SEVEN ME trackers
-# ============================================================
-TRACKER_KEYS = {
-    'israel':  ('rhetoric:israel:latest',   'israel_rhetoric_cache'),
-    'iran':    ('rhetoric:iran:latest',      'iran_rhetoric_cache'),
-    'lebanon': ('rhetoric:lebanon:latest',   'lebanon_rhetoric_cache'),
-    'yemen':   ('yemen_rhetoric_cache',      None),
-    'syria':   ('rhetoric:syria:latest',     'syria_rhetoric_cache'),
-    'iraq':    ('rhetoric:iraq:latest',      'iraq_rhetoric_cache'),
-    'oman':    ('rhetoric:oman:latest',      None),  # v2.0: dual-axis stability anchor
-}
-
-THEATRE_FLAGS = {
-    'israel':  '\U0001f1ee\U0001f1f1',
-    'iran':    '\U0001f1ee\U0001f1f7',
-    'lebanon': '\U0001f1f1\U0001f1e7',
-    'yemen':   '\U0001f1fe\U0001f1ea',
-    'syria':   '\U0001f1f8\U0001f1fe',
-    'iraq':    '\U0001f1ee\U0001f1f6',
-    'oman':    '\U0001f1f4\U0001f1f2',  # v2.0: Oman flag 🇴🇲
-}
-
-ESCALATION_LABELS = {
-    0: 'Monitoring',
-    1: 'Rhetoric',
-    2: 'Warning',
-    3: 'Direct Threat',
-    4: 'Incident',
-    5: 'Active Conflict',
-}
-
-ESCALATION_COLORS = {
-    0: '#6b7280',
-    1: '#3b82f6',
-    2: '#f59e0b',
-    3: '#f97316',
-    4: '#ef4444',
-    5: '#dc2626',
-}
-
-# v2.0: Per-region influence-side coloring (for stability anchors like Oman)
-INFLUENCE_LABELS = {
-    0: 'Standby',
-    1: 'Engaged',
-    2: 'Active',
-    3: 'Mediation Engaged',
-    4: 'High-Stakes Mediation',
-    5: 'Crisis Mediation',
-}
-
-INFLUENCE_COLORS = {
-    0: '#6b7280',
-    1: '#a78bfa',
-    2: '#8b5cf6',
-    3: '#7c3aed',
-    4: '#6d28d9',
-    5: '#5b21b6',
-}
-
-
-# ============================================================
-# COMPATIBILITY SHIM -- v2.0
-# ============================================================
-# Trackers will gradually be upgraded to emit a canonical shape.
-# Until then, this shim normalizes ALL trackers (old and new) into
-# the same internal representation that the BLUF engine consumes.
+# ============================================
+# COMMODITY PRESSURE READER (Phase 2B)
+# ============================================
+# Reads the shared commodity_tracker_cache Redis key (written by
+# commodity_tracker.py's periodic scan) and extracts Iran's exposure
+# summary in a shape the signal interpreter can consume.
 #
-# Canonical internal shape:
-# {
-#     'theatre':           str,
-#     'flag':              str,
-#     'levels': {
-#         'threat':         0-5,
-#         'influence':      0-5 or None,   # only for stability anchors
-#         'green':          0-5 or None,   # only for trackers w/ green lines
-#         'dominant_axis':  'threat' | 'influence' | 'green',
-#         'dominant_level': 0-5,
-#     },
-#     'score':             0-100,
-#     'so_what':           {...},          # interpreter output
-#     'red_lines':         {...},
-#     'green_lines':       {...} or None,  # OPTIONAL
-#     'diplomatic_track':  {...} or None,  # OPTIONAL
-#     'historical_matches':[...] or None,  # OPTIONAL
-#     'top_signals':       [...],          # NEW v2.0 — pre-prioritized
-#     'silence_anomalies': [...],          # legacy
-#     'crosstheater_coordination': [...],  # legacy
-#     'raw':               <untouched original>,  # for legacy access
-# }
-# ============================================================
+# Iran has 5 commodity exposures (defined in commodity_tracker.py):
+#   oil, natural_gas, uranium, gold, wheat.
+#
+# Returns a dict with the Iran-specific summary, suitable for direct
+# injection as scan_data['commodity_pressure'].  Returns None on
+# failure or if Iran isn't found in the bundle.
+# ============================================
 
-def _normalize_tracker_data(theatre, raw_data):
+def _read_iran_commodity_pressure():
     """
-    v2.0 compatibility shim.
-    Takes raw cached tracker data (any version) and returns canonical shape.
-    Trackers that have been upgraded to v2.0 self-emit 'top_signals' — we use it.
-    Trackers that haven't been upgraded yet — we synthesize 'top_signals' here.
-    """
-    if not raw_data:
-        return None
+    Read commodity-pressure data for Iran from the shared
+    commodity_tracker_cache Redis key.
 
-    flag = THEATRE_FLAGS.get(theatre, '')
+    Returns a dict shaped like:
+        {
+            'commodity_pressure': float,       # Iran-specific score
+            'alert_level':        str,         # normal|elevated|high|surge
+            'commodity_summaries': [           # Iran's 5 commodities
+                {
+                    'commodity':           str,
+                    'name':                str,
+                    'icon':                str,
+                    'role':                str,
+                    'rank':                int|None,
+                    'note':                str,
+                    'signal_count':        int,
+                    'global_alert_level':  str,
+                    'global_signal_count': int,
+                    'global_total_score':  float,
+                },
+                ...
+            ],
+            'last_updated':       str,         # iso8601
+        }
 
-    # ---- THREAT LEVEL ----
-    threat = _legacy_get_theatre_level(raw_data, theatre)
-
-    # ---- INFLUENCE LEVEL (Oman & future stability anchors) ----
-    influence = raw_data.get('influence_level')
-    if influence is None and theatre == 'oman':
-        # Fallback: compute from interpreter output if present
-        interp = raw_data.get('interpretation', {}) or {}
-        so_what = interp.get('so_what', {}) if interp else {}
-        influence = so_what.get('influence_level', 0)
-
-    # ---- GREEN LEVEL (Russia & future de-escalation trackers) ----
-    green = None
-    interp = raw_data.get('interpretation', {}) or {}
-    green_lines = interp.get('green_lines') if interp else None
-    if green_lines and isinstance(green_lines, dict):
-        green = green_lines.get('count', 0)
-        if green > 5:
-            green = 5  # cap
-
-    # ---- DOMINANT AXIS ----
-    threat_int    = int(threat or 0)
-    influence_int = int(influence or 0)
-    green_int     = int(green or 0)
-    dominant_level = max(threat_int, influence_int)
-    if influence_int > threat_int:
-        dominant_axis = 'influence'
-    elif green_int >= 3 and threat_int <= 2:
-        dominant_axis = 'green'
-        dominant_level = max(dominant_level, green_int)
-    else:
-        dominant_axis = 'threat'
-
-    # ---- SCORE ----
-    score = _legacy_get_theatre_score(raw_data, theatre)
-
-    # ---- TOP SIGNALS (v2.0 native if present, else synthesize) ----
-    if 'top_signals' in raw_data and isinstance(raw_data['top_signals'], list):
-        # v2.0 tracker — already self-emits kinetic/threat/anomaly signals
-        top_signals = list(raw_data['top_signals'])
-    else:
-        # Legacy tracker — synthesize from raw fields
-        top_signals = _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int, score)
-
-    # ALWAYS augment with BLUF-level diplomatic signals (v3.2.0).
-    # Diplomatic propagation is a BLUF-level concern, not per-tracker. v2.0 trackers
-    # don't self-emit diplomatic signals (they emit kinetic/threat/anomaly), so without
-    # this we'd lose them entirely. We deduplicate by category to avoid double-add for
-    # the legacy path (where _synthesize_top_signals_legacy ALSO calls the helper).
-    diplomatic_sigs = _extract_diplomatic_signals(theatre, raw_data, threat_int)
-    existing_categories = {s.get('category') for s in top_signals}
-    for ds in diplomatic_sigs:
-        if ds.get('category') not in existing_categories:
-            top_signals.append(ds)
-
-    return {
-        'theatre':       theatre,
-        'flag':          flag,
-        'levels': {
-            'threat':         threat_int,
-            'influence':      influence_int if influence is not None else None,
-            'green':          green_int     if green     is not None else None,
-            'dominant_axis':  dominant_axis,
-            'dominant_level': dominant_level,
-        },
-        'score':         score,
-        'so_what':       (interp.get('so_what', {}) if interp else {}) or raw_data.get('so_what', {}),
-        'red_lines':     (interp.get('red_lines', {}) if interp else {}) or raw_data.get('red_lines', {}),
-        'green_lines':   green_lines,
-        'diplomatic_track':   (interp.get('diplomatic_track') if interp else None) or raw_data.get('diplomatic_track'),
-        'historical_matches': (interp.get('historical_matches') if interp else None) or raw_data.get('historical_matches'),
-        'top_signals':   top_signals,
-        'silence_anomalies':         raw_data.get('silence_anomalies', []),
-        'crosstheater_coordination': raw_data.get('crosstheater_coordination', []),
-        'scanned_at':    raw_data.get('scanned_at') or raw_data.get('timestamp', ''),
-        'raw':           raw_data,
-    }
-
-
-def _extract_diplomatic_signals(theatre, raw_data, threat_int):
-    """
-    BLUF-level diplomatic signal extractor (v3.2.0 — extracted for cross-path reuse).
-
-    Reads diplomatic_track + green_lines from a tracker's interpretation block and
-    emits diplomatic-axis signals. Runs for EVERY tracker regardless of whether the
-    tracker is v2.0-self-emit or legacy-synthesized — diplomatic propagation is a
-    BLUF-level architectural responsibility, not a per-tracker concern.
-
-    Why this matters: v2.0 trackers like Lebanon emit their own top_signals[] but
-    don't include diplomatic signals (they emit kinetic/threat/anomaly). Without
-    this helper, diplomatic data exists in interpretation.diplomatic_track but never
-    surfaces to BLUF top_signals → GPI diplomatic axis stays at L0.
-
-    Returns list of signal dicts (possibly empty).
-    """
-    flag    = THEATRE_FLAGS.get(theatre, '')
-    interp  = raw_data.get('interpretation', {}) or {}
-    signals = []
-
-    # Green lines / diplomatic de-escalation (UNGATED + dual-schema).
-    # Previously gated on threat_int <= 2, which meant diplomatic signals were
-    # SUPPRESSED during exactly the periods (high-threat) when off-ramps matter
-    # most analytically. Now fires whenever ≥1 green-line trigger is active.
-    # Schema compat: handles both legacy {'count': N} (Russia, etc.) AND newer
-    # {'active_count': N, 'signaled_count': M, 'triggered': [...]} (Lebanon Apr 2026+).
-    green_lines = interp.get('green_lines') if interp else None
-    if green_lines and isinstance(green_lines, dict):
-        # Read count from whichever schema is present
-        if 'count' in green_lines:
-            gl_count = green_lines.get('count', 0)
-        else:
-            gl_count = green_lines.get('active_count', 0) + green_lines.get('signaled_count', 0)
-        if gl_count >= 1:
-            # Priority scales with threat — high threat + diplomatic signal is more
-            # analytically valuable than low-threat + diplomatic
-            gl_priority = 6 + min(threat_int, 4)   # 6→10 sliding scale
-            signals.append({
-                'priority':       gl_priority,
-                'category':       'green_line_active',
-                'theatre':        theatre,
-                'level':          min(threat_int, 4),  # cap at 4 — green lines never "active conflict"
-                'icon':           '✅',
-                'color':          '#10b981',
-                'pressure_type':  'diplomatic',
-                'short_text':     f'{flag} {theatre.upper()}: De-escalation signals ({gl_count})',
-                'long_text':      f'{flag} {theatre.upper()}: {gl_count} green-line de-escalation '
-                                  f'trigger{"s" if gl_count != 1 else ""} active.',
-            })
-
-    # Diplomatic track — Witkoff mediation, Salalah talks, LAF enforcement, etc.
-    # Tracker layer emits the rich data; BLUF surfaces it to top_signals → GPI.
-    diplomatic_track = interp.get('diplomatic_track') if interp else None
-    if diplomatic_track and isinstance(diplomatic_track, dict):
-        active_count   = diplomatic_track.get('active_count', 0)
-        signaled_count = diplomatic_track.get('signaled_count', 0)
-        scenario       = diplomatic_track.get('scenario', '')
-        score          = diplomatic_track.get('score', 0)
-        # Fire when there's any diplomatic activity (active OR signaled)
-        if active_count + signaled_count > 0:
-            # Priority scales with threat — diplomatic signals during high threat
-            # carry more analytical weight (off-ramp during crisis > off-ramp during calm)
-            dt_priority = 7 + min(threat_int, 4)   # 7→11 sliding scale
-            short_status = 'ACTIVE' if active_count > 0 else 'SIGNALED'
-            signals.append({
-                'priority':       dt_priority,
-                'category':       'diplomatic_track_active',
-                'theatre':        theatre,
-                'level':          min(threat_int, 4),
-                'icon':           '🕊️',
-                'color':          '#0ea5e9',          # sky blue — matches GPI diplomatic axis
-                'pressure_type':  'diplomatic',
-                'short_text':     f'{flag} {theatre.upper()}: Diplomatic track {short_status} ({scenario[:40]})',
-                'long_text':      f'{flag} {theatre.upper()} diplomatic track: {active_count} active + '
-                                  f'{signaled_count} signaled off-ramp triggers (score {score}/100). '
-                                  f'Scenario: {scenario}.',
-                # Pass through structured data for GPI / frontend rendering
-                'diplomatic_active_count':   active_count,
-                'diplomatic_signaled_count': signaled_count,
-                'diplomatic_score':          score,
-                'diplomatic_scenario':       scenario,
-            })
-
-    return signals
-
-
-def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int, score):
-    """
-    For trackers not yet upgraded to v2.0 self-emit pattern.
-    Synthesize top_signals[] from raw fields using the same logic as
-    the original _extract_key_signals() — but per-tracker, ranked by priority.
-    Returns list of signal dicts; BLUF will consume them globally.
-    """
-    flag    = THEATRE_FLAGS.get(theatre, '')
-    interp  = raw_data.get('interpretation', {}) or {}
-    so_what = interp.get('so_what', {}) if interp else {}
-    rl_obj  = interp.get('red_lines', {}) if interp else {}
-    signals = []
-
-    # Red lines breached (highest priority)
-    for rl in rl_obj.get('triggered', []):
-        if rl.get('status') == 'BREACHED':
-            signals.append({
-                'priority':  10 + threat_int,
-                'category':  'red_line_breached',
-                'theatre':   theatre,
-                'level':     threat_int,
-                'icon':      rl.get('icon', '🚨'),
-                'color':     '#dc2626',
-                'short_text': f'{flag} {theatre.upper()}: {rl.get("label", "Red line breached")[:60]}',
-                'long_text':  f'{flag} {theatre.upper()} L{threat_int}: {rl.get("label", "")} — {rl.get("trigger", "")[:120]}',
-            })
-
-    # Theatre at high level
-    # L5 GATE (v1.1.0 — May 21 2026): Per platform L5 Reservation Contract,
-    # L5 "Active Conflict" requires an explicit kinetic/humanitarian/economic/
-    # diplomatic trigger. If tracker emits l5_gate dict, we honor its decision.
-    # If tracker doesn't emit l5_gate (legacy trackers), we trust their level
-    # as-is until they're upgraded per the weekend audit.
-    # NOTE: v2.0+ self-emit trackers (Lebanon, Israel) bypass this synth
-    # entirely via the shortcut earlier in this file. Their L5 signals are
-    # not affected by this gate.
-    # LABEL PRESERVATION: prefer tracker's own theatre_label + signal_text_short
-    # if emitted. Falls back to ESCALATION_LABELS dict for legacy trackers.
-    effective_level = threat_int
-    l5_gate = raw_data.get('l5_gate')
-    if threat_int >= 5 and isinstance(l5_gate, dict):
-        # If tracker emits l5_gate, cap at L4 unless at least one axis gate is True
-        if not any(l5_gate.get(axis) for axis in ('kinetic', 'humanitarian', 'economic', 'diplomatic')):
-            effective_level = 4
-            print(f"[ME BLUF] L5 gate enforced: {theatre} capped at L4 "
-                  f"(no l5_gate axes fired; tracker score {score})")
-
-    if effective_level >= 4:
-        # Prefer tracker's own label; fall back to canonical dict
-        tracker_label = raw_data.get('theatre_label') or ESCALATION_LABELS.get(effective_level, '')
-        signals.append({
-            'priority':  9 + effective_level,
-            'category':  'theatre_high',
-            'theatre':   theatre,
-            'level':     effective_level,
-            'icon':      '🔴',
-            'color':     ESCALATION_COLORS.get(effective_level, '#6b7280'),
-            'short_text': raw_data.get('signal_text_short') or
-                          f'{flag} {theatre.upper()} L{effective_level} — {tracker_label}',
-            'long_text':  raw_data.get('signal_text_long') or
-                          f'{flag} {theatre.upper()} at L{effective_level} {tracker_label} (score {score}/100)',
-        })
-
-    # Influence-side high (Oman pattern)
-    if influence_int >= 3:
-        signals.append({
-            'priority':  7 + influence_int,
-            'category':  'mediation_active' if theatre == 'oman' else 'influence_high',
-            'theatre':   theatre,
-            'level':     influence_int,
-            'icon':      '🕊️',
-            'color':     INFLUENCE_COLORS.get(influence_int, '#7c3aed'),
-            'short_text': f'{flag} {theatre.upper()}: {INFLUENCE_LABELS.get(influence_int, "Active influence")}',
-            'long_text':  f'{flag} {theatre.upper()} influence L{influence_int} — {INFLUENCE_LABELS.get(influence_int, "Active")}; mediation channel engaged.',
-        })
-
-    # Silence anomalies
-    for anom in raw_data.get('silence_anomalies', []):
-        if anom.get('deviation') and '100%' in str(anom.get('deviation', '')):
-            actor_name = anom.get('actor_name', anom.get('actor_id', 'Unknown'))
-            signals.append({
-                'priority':  6 + threat_int,
-                'category':  'silence_anomaly',
-                'theatre':   theatre,
-                'level':     threat_int,
-                'icon':      '🔇',
-                'color':     '#f59e0b',
-                'short_text': f'{flag} {theatre.upper()}: {actor_name} silent',
-                'long_text':  f'{flag} {theatre.upper()}: {actor_name} SILENT — {anom.get("signal", "Unusual quiet pattern")}',
-            })
-
-    # Cross-theater coordination
-    for ct in raw_data.get('crosstheater_coordination', []):
-        if ct.get('confidence', 0) >= 60 and ct.get('type') == 'simultaneous_elevation':
-            theaters_in = ct.get('theaters', [])
-            signals.append({
-                'priority':  8,
-                'category':  'crosstheater',
-                'theatre':   'regional',
-                'level':     threat_int,
-                'icon':      '🔗',
-                'color':     '#7c3aed',
-                'short_text': f'CROSS-THEATER: {", ".join(t.upper() for t in theaters_in[:3])}',
-                'long_text':  f'CROSS-THEATER: Simultaneous elevation across {", ".join(t.upper() for t in theaters_in)} ({ct.get("confidence", 0)}% confidence) — {ct.get("signal", "")}',
-            })
-
-    # Diplomatic signals (green_lines + diplomatic_track) extracted via shared helper.
-    # The helper runs at the _normalize_tracker level too (for v2.0 trackers), but
-    # legacy synthesis also needs them — they're part of the canonical signal set.
-    signals.extend(_extract_diplomatic_signals(theatre, raw_data, threat_int))
-
-    # Interpreter-specific flags (legacy support)
-    if so_what.get('sadr_silent') and theatre == 'iraq':
-        signals.append({
-            'priority': 7, 'category': 'sadr_silent', 'theatre': 'iraq',
-            'level': threat_int, 'icon': '👁️', 'color': '#7c3aed',
-            'short_text': '🇮🇶 IRAQ: Al-Sadr silent',
-            'long_text':  'IRAQ: Al-Sadr SILENT — historical pattern precedes mobilization (2020, 2022)',
-        })
-    if so_what.get('dual_chokepoint') and theatre == 'yemen':
-        signals.append({
-            'priority': 10, 'category': 'dual_chokepoint', 'theatre': 'yemen',
-            'level': threat_int, 'icon': '🔱', 'color': '#7c3aed',
-            'short_text': '🔱 DUAL CHOKEPOINT: Hormuz + Bab el-Mandeb',
-            'long_text':  'DUAL CHOKEPOINT: Hormuz + Bab el-Mandeb simultaneous signals — coordinated blockade risk',
-        })
-    if so_what.get('laf_enforcement_gap') and theatre == 'lebanon':
-        signals.append({
-            'priority': 6, 'category': 'laf_gap', 'theatre': 'lebanon',
-            'level': threat_int, 'icon': '🏳️', 'color': '#f97316',
-            'short_text': '🇱🇧 LEBANON: LAF enforcement gap',
-            'long_text':  'LEBANON: LAF enforcement gap persists — Israeli withdrawal conditions not met',
-        })
-    if so_what.get('iran_expelled') and theatre == 'syria':
-        signals.append({
-            'priority': 5, 'category': 'iran_expelled', 'theatre': 'syria',
-            'level': threat_int, 'icon': '✅', 'color': '#10b981',
-            'short_text': '🇸🇾 SYRIA: Iran corridor severed',
-            'long_text':  'SYRIA: Iran expelled — Hezbollah resupply corridor severed. Transition holding.',
-        })
-
-    return signals
-
-
-# ============================================================
-# DATA INGESTION -- read all SEVEN caches
-# ============================================================
-
-def _read_all_trackers():
-    """Read all SEVEN ME tracker caches. Returns dict of NORMALIZED tracker data
-    (post-shim), keyed by theatre. Each value is the canonical internal shape."""
-    results = {}
-    for theatre, (primary_key, fallback_key) in TRACKER_KEYS.items():
-        raw = _redis_get(primary_key)
-        if not raw and fallback_key:
-            raw = _redis_get(fallback_key)
-        if raw:
-            normalized = _normalize_tracker_data(theatre, raw)
-            if normalized:
-                results[theatre] = normalized
-                lvls = normalized['levels']
-                axis_str = (f"T{lvls['threat']}" +
-                            (f"/I{lvls['influence']}" if lvls['influence'] is not None else ''))
-                print(f'[ME BLUF] {theatre}: loaded ({axis_str}, score={normalized["score"]})')
-        else:
-            print(f'[ME BLUF] {theatre}: no cache available')
-    return results
-
-
-def _legacy_get_theatre_level(data, theatre):
-    """Normalize theatre level across different tracker field names."""
-    if theatre == 'israel':
-        # Israel uses inbound/outbound; use inbound as primary
-        return data.get('inbound_max_level', data.get('theatre_escalation_level', 0))
-    elif theatre == 'iran':
-        return data.get('theatre_escalation_level', 0)
-    elif theatre == 'yemen':
-        # Yemen uses string level
-        score = data.get('theatre_score', 0)
-        if score >= 80: return 5
-        if score >= 60: return 4
-        if score >= 40: return 3
-        if score >= 25: return 2
-        if score >= 10: return 1
-        return 0
-    else:
-        return data.get('theatre_escalation_level',
-               data.get('theatre_level', 0))
-
-
-def _legacy_get_theatre_score(data, theatre):
-    return data.get('theatre_score',
-           data.get('rhetoric_score', 0))
-
-
-# ============================================================
-# SYNTHESIS ENGINE
-# ============================================================
-
-def _build_posture_label(max_level, theatres_at_l3plus):
-    """Derive regional posture label from signal state."""
-    if max_level == 5:
-        return ('ACTIVE CONFLICT', '#dc2626')
-    elif max_level >= 4 or theatres_at_l3plus >= 3:
-        return ('ELEVATED -- INCIDENT LEVEL', '#ef4444')
-    elif max_level >= 3 or theatres_at_l3plus >= 2:
-        return ('ELEVATED -- DIRECT THREAT', '#f97316')
-    elif max_level >= 2:
-        return ('WARNING', '#f59e0b')
-    elif max_level >= 1:
-        return ('MONITORING -- RHETORIC LEVEL', '#3b82f6')
-    return ('MONITORING', '#6b7280')
-
-
-def _extract_key_signals(trackers):
-    """
-    v2.0 NEW PIPELINE — v2.3.0 update: returns FULL deduped pool (not capped).
-    Each tracker — whether v2.0 self-emitting or v1.x shimmed —
-    arrives with a 'top_signals' array attached. This function:
-      1. Collects all top_signals from all trackers
-      2. Globally sorts by priority (descending)
-      3. Dedupes by (theatre, category) key
-      4. Returns full deduped pool — caller is responsible for capping for display.
-         (Axis aggregation in GPI needs the full pool to honor axis-quota.)
-    """
-    all_signals = []
-    for theatre, data in trackers.items():
-        for sig in data.get('top_signals', []):
-            # Backfill defensive fields if a v2.0 tracker omitted any
-            sig.setdefault('priority', 5)
-            sig.setdefault('category', 'unknown')
-            sig.setdefault('theatre', theatre)
-            sig.setdefault('icon', '•')
-            sig.setdefault('color', '#6b7280')
-            sig.setdefault('short_text', '')
-            sig.setdefault('long_text', sig.get('short_text', ''))
-            all_signals.append(sig)
-
-    # Global sort
-    all_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
-
-    # Dedupe by (theatre, category) AND enforce per-theatre quota (v2.4.0 May 21 2026)
-    # Per-tracker quota: max MAX_PER_THEATRE signals per country tracker.
-    # Cross-tracker signals (theatre='regional', e.g. cross-theater convergence)
-    # bypass the quota — they're platform-level signals, not per-country emissions.
-    # Lebanon's multiple legitimate L5 signals (kinetic, humanitarian, BREACH,
-    # diplomatic) will each count against Lebanon's quota of 3; the strongest 3
-    # by priority will surface.
-    seen           = set()
-    theatre_counts = {}
-    deduped        = []
-    for s in all_signals:
-        theatre = s.get('theatre', '')
-        key     = f'{theatre}:{s.get("category", "")}'
-        if key in seen:
-            continue
-        if theatre != 'regional' and theatre_counts.get(theatre, 0) >= MAX_PER_THEATRE:
-            continue
-        seen.add(key)
-        theatre_counts[theatre] = theatre_counts.get(theatre, 0) + 1
-        deduped.append(s)
-
-
-# ============================================================
-# LEBANON HUMANITARIAN — CROSS-BACKEND FETCH + CACHE
-# ============================================================
-def _fetch_lebanon_humanitarian():
-    """
-    Fetch Lebanon humanitarian data from lebanon-stability-backend with
-    Redis caching. Pattern mirrors commodity_proxy_europe.py.
-
-    Returns:
-        dict — humanitarian data payload (matches /api/lebanon/humanitarian schema)
-        None — if backend unreachable AND no cache available (BLUF continues without humanitarian)
-    """
-    # 1. Try cache first
-    cached = _redis_get(LEBANON_HUMANITARIAN_CACHE_KEY)
-    if cached:
-        try:
-            data = json.loads(cached) if isinstance(cached, str) else cached
-            cached_at_str = data.get('_cached_at')
-            if cached_at_str:
-                cached_at = datetime.fromisoformat(cached_at_str)
-                age = (datetime.now(timezone.utc) - cached_at).total_seconds()
-                if age < LEBANON_HUMANITARIAN_CACHE_TTL:
-                    print(f'[ME BLUF] Lebanon humanitarian: cache hit (age {age/3600:.1f}h)')
-                    return data
-        except Exception as e:
-            print(f'[ME BLUF] Lebanon humanitarian cache parse error: {e}')
-
-    # 2. Cache miss or stale — fetch from Lebanon backend
-    try:
-        url = f'{LEBANON_HUMANITARIAN_BACKEND}/api/lebanon/humanitarian'
-        resp = requests.get(url, timeout=15)
-        if resp.status_code != 200:
-            print(f'[ME BLUF] Lebanon backend HTTP {resp.status_code}; using stale cache if any')
-            return cached  # may be stale but better than nothing
-        data = resp.json()
-        # Stamp cached_at and write through
-        data['_cached_at'] = datetime.now(timezone.utc).isoformat()
-        try:
-            _redis_set(LEBANON_HUMANITARIAN_CACHE_KEY, json.dumps(data, default=str),
-                       ttl=LEBANON_HUMANITARIAN_CACHE_TTL)
-            print(f'[ME BLUF] Lebanon humanitarian: fresh fetch + cached ({LEBANON_HUMANITARIAN_CACHE_TTL/3600:.0f}h TTL)')
-        except Exception as e:
-            print(f'[ME BLUF] Lebanon humanitarian cache write failed: {e}')
-        return data
-    except Exception as e:
-        print(f'[ME BLUF] Lebanon humanitarian fetch failed: {e}; returning stale cache if any')
-        return cached  # graceful degradation
-
-
-def _fetch_commodity_pressure(commodity_id):
-    """
-    Generic helper: fetch the global commodity pressure state for any commodity.
-    Used by Layer 2 convergence enrichment — replaces bespoke per-commodity fetchers.
-
-    Reads commodity_tracker output via in-process helper. Imported lazily so
-    ME BLUF still works if commodity_tracker is unavailable.
-
-    Args:
-        commodity_id: e.g. 'wheat', 'oil', 'cobalt' — must match commodity_tracker.COMMODITY_TYPES key
-
-    Returns:
-        dict — {'alert_level': str, 'pressure_score': float, 'signal_count': int,
-                'top_signal': str}
-               where alert_level is one of: 'normal', 'elevated', 'high', 'surge'
-        None — if commodity_tracker unavailable or no data yet
+    Returns None on any failure -- callers should treat None as "no
+    commodity data available, skip the feature".
     """
     try:
-        # commodity_tracker lives in the same backend process — direct import OK
-        from commodity_tracker import load_commodity_cache
-        cache = load_commodity_cache()
-        if not cache:
+        bundle = _redis_get(COMMODITY_CACHE_KEY)
+        if not bundle or not isinstance(bundle, dict):
             return None
 
-        # commodity_summaries is a DICT keyed by commodity_id (e.g. 'wheat', 'oil', 'cobalt')
-        # Each value is a summary dict with alert_level, signal_count, top_signals, etc.
-        commodity_summaries = cache.get('commodity_summaries', {}) or {}
-        cs = commodity_summaries.get(commodity_id)
-        if not cs or not isinstance(cs, dict):
+        country_summaries  = bundle.get('country_summaries', {}) or {}
+        commodity_summary  = bundle.get('commodity_summaries', {}) or {}
+        iran_country       = country_summaries.get('iran') or {}
+        if not iran_country:
+            # Iran not in the bundle yet (commodity tracker may have just
+            # started; commodity_tracker.py adds Iran in Phase 2A).
             return None
+
+        # Iran-specific overall score + alert level
+        iran_score   = float(iran_country.get('total_score', 0) or 0)
+        iran_alert   = str(iran_country.get('alert_level', 'normal') or 'normal')
+
+        # Per-commodity breakdown for Iran (oil/natural_gas/uranium/gold/wheat)
+        iran_breakdown   = iran_country.get('commodity_signals', {}) or {}
+
+        commodity_summaries_out = []
+        for commodity_id, breakdown in iran_breakdown.items():
+            full = commodity_summary.get(commodity_id, {}) or {}
+            commodity_summaries_out.append({
+                'commodity':           commodity_id,
+                'name':                full.get('name', commodity_id.title()),
+                'icon':                full.get('icon', '📊'),
+                'role':                breakdown.get('role'),
+                'rank':                breakdown.get('rank'),
+                'note':                breakdown.get('note'),
+                'signal_count':        int(breakdown.get('signal_count', 0) or 0),
+                # Global pressure on this commodity (matters even when Iran
+                # itself is quiet -- e.g. global wheat surge → Iran the
+                # consumer feels it regardless of Iranian-actor language)
+                'global_alert_level':  str(full.get('alert_level', 'normal') or 'normal'),
+                'global_signal_count': int(full.get('signal_count', 0) or 0),
+                'global_total_score':  float(full.get('total_score', 0) or 0),
+            })
 
         return {
-            'alert_level':     cs.get('alert_level', 'normal'),
-            'pressure_score':  cs.get('total_score', 0),    # commodity_tracker uses 'total_score', not 'pressure_score'
-            'signal_count':    cs.get('signal_count', 0),
-            'top_signal':      (cs.get('top_signals') or [{}])[0].get('title', '') if cs.get('top_signals') else '',
+            'commodity_pressure':  iran_score,
+            'alert_level':         iran_alert,
+            'commodity_summaries': commodity_summaries_out,
+            'last_updated':        bundle.get('last_updated', bundle.get('cached_at')),
         }
-    except ImportError:
-        return None
+
     except Exception as e:
-        print(f'[ME BLUF] Commodity pressure fetch failed for {commodity_id}: {e}')
+        print(f"[Iran Rhetoric Commodity] Read error (non-fatal): {str(e)[:120]}")
         return None
 
 
-def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
+# ============================================
+# PROXY ACTIVATION INDEX — reads cross-theater Redis live
+# ============================================
+def _compute_proxy_activation_index():
     """
-    Generic Layer 2 enrichment: looks up CONVERGENCE_REGISTRY for any convergences
-    registered for this country. For each match, checks if the relevant commodity
-    is at or above its configured threshold. If yes, appends enrichment text to
-    long_text_parts AND sets the convergence flag on signal_dict.
+    THE CORE INNOVATION — reads shared cross-theater fingerprints
+    and computes a 0-5 proxy activation index.
 
-    Args:
-        country:       country name (must match registry entries)
-        signal_dict:   the signal dict being built — convergence flags get added IN PLACE
-        long_text_parts: list of strings being assembled into long_text — appended IN PLACE
+    1 proxy elevated at L2+ = 1
+    2 proxies elevated       = 2
+    3 proxies elevated       = 4  (non-linear — very significant)
+    4 proxies elevated       = 5  (full activation signal)
 
-    Returns:
-        list of activated convergence ids (empty if none matched)
+    Also detects synchronized language across proxies.
+    Returns (level, detail_dict).
     """
-    activated = []
     try:
-        from convergence_registry import (
-            find_convergences_for_country,
-            alert_meets_threshold,
-            format_enrichment_text,
-        )
-    except ImportError:
-        # Registry module not available — silent no-op (defensive)
-        return activated
+        fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
+        if not fingerprints:
+            return 0, {'reason': 'No cross-theater data available', 'proxies': {}}
 
-    convergences = find_convergences_for_country(country)
-    if not convergences:
-        return activated
+        now = datetime.now(timezone.utc)
+        proxy_theaters = ['yemen', 'lebanon', 'iraq', 'syria']
+        fresh_proxies = {}
 
-    for entry in convergences:
-        commodity_id = entry['commodity']
-        threshold    = entry['commodity_threshold']
-
-        commodity_state = _fetch_commodity_pressure(commodity_id)
-        if not commodity_state:
-            continue
-
-        actual_alert = commodity_state.get('alert_level', 'normal')
-        if not alert_meets_threshold(actual_alert, threshold):
-            continue
-
-        # Convergence is active — enrich the signal
-        signals_count = commodity_state.get('signal_count', 0)
-        enrichment_text = format_enrichment_text(entry, actual_alert, signals_count)
-        long_text_parts.append(enrichment_text)
-
-        # Set per-convergence flag on the signal so Layer 1 (GPI) can detect it.
-        # Convention: signal['{convergence_id}_active'] = True
-        # AND signal['convergence_states'][{id}] = full state dict
-        signal_dict[f'{entry["id"]}_active'] = True
-        signal_dict.setdefault('convergence_states', {})[entry['id']] = {
-            'alert_level':     actual_alert,
-            'signal_count':    signals_count,
-            'commodity':       commodity_id,
-            'commodity_state': commodity_state,
-        }
-        activated.append(entry['id'])
-        print(f'[ME BLUF] Convergence activated: {entry["id"]} ({commodity_id} at {actual_alert.upper()})')
-
-    return activated
-
-
-
-def _build_lebanon_humanitarian_signal():
-    """
-    Build a high-priority humanitarian signal for Lebanon, sourced via HTTP
-    from lebanon-stability-backend.
-
-    Returns a dict matching the top_signals canonical schema, or None if:
-      - backend unreachable AND no cache
-      - data fetch fails
-      - casualty/displacement counts below salience threshold
-
-    Pressure type: humanitarian (purple #a855f7) — gets dedicated treatment in GPI.
-    Priority:      9 (very high — humanitarian crises >L4 should lead the BLUF)
-    Category:      'humanitarian_lebanon' (uniqueness key for dedupe)
-    """
-    print('[ME BLUF MARKER] _build_lebanon_humanitarian_signal() called')
-    data = _fetch_lebanon_humanitarian()
-    if not data:
-        print('[ME BLUF MARKER] _fetch_lebanon_humanitarian returned None — aborting signal build')
-        return None
-
-    # Lebanon humanitarian endpoint returns FLAT structure (not nested under 'static').
-    # Casualties / displacement / etc. are top-level keys.
-    # DTM live data lives under 'dtm_raw' (not 'dtm_displacement').
-    casualties   = data.get('casualties', {}) or {}
-    displacement = data.get('displacement', {}) or {}
-    healthcare   = data.get('healthcare', {}) or {}
-    appeal       = data.get('flash_appeal', {}) or {}
-    food         = data.get('food_security', {}) or {}
-    last_update  = data.get('last_manual_update', 'unknown')
-
-    # Live DTM displacement count — nested inside dtm_raw.country_level if present
-    dtm_raw      = data.get('dtm_raw', {}) or {}
-    dtm_country  = (dtm_raw.get('country_level') or {}) if dtm_raw else {}
-    live_idps    = dtm_country.get('total_idps') if dtm_country else None
-
-    killed   = casualties.get('killed') or 0
-    injured  = casualties.get('injured') or 0
-    hw_killed   = healthcare.get('health_workers_killed_since_mar2') or 0
-    hc_attacks  = healthcare.get('healthcare_attacks_since_mar2') or 0
-
-    # Live DTM total preferred over static when available
-    live_total = (live_idps
-                  or displacement.get('total_displaced_registered')
-                  or 0)
-
-    print(f'[ME BLUF MARKER] Humanitarian metrics: killed={killed}, injured={injured}, live_total={live_total}, hc_attacks={hc_attacks}')
-
-    # Salience filter — don't surface humanitarian signal if all metrics below threshold
-    if killed < 100 and live_total < 100000:
-        print(f'[ME BLUF MARKER] Salience filter triggered — signal suppressed (killed={killed}, live_total={live_total})')
-        return None
-    print('[ME BLUF MARKER] Salience filter passed — building signal')
-
-    # Format numbers for display
-    killed_fmt   = f'{killed:,}'  if killed   else '?'
-    injured_fmt  = f'{injured:,}' if injured  else '?'
-    idp_fmt      = f'{live_total/1_000_000:.1f}M' if live_total >= 1_000_000 else f'{live_total:,}'
-    appeal_pct   = appeal.get('funded_pct')
-
-    # Compose human-readable signal text
-    short_text = (
-        f'LEBANON humanitarian crisis: {idp_fmt} displaced, '
-        f'{killed_fmt} killed, {injured_fmt} injured'
-    )
-    if hc_attacks and hw_killed:
-        short_text += f' ({hc_attacks} healthcare attacks, {hw_killed} health workers killed)'
-
-    # Compose long_text with full context
-    long_text_parts = [
-        f'Lebanon humanitarian situation as of {last_update}: '
-        f'{idp_fmt} people displaced ({displacement.get("total_displaced_pct_population", "?")}% of population), '
-        f'{killed_fmt} killed and {injured_fmt} injured since 2 March 2026.',
-    ]
-    if hc_attacks:
-        long_text_parts.append(
-            f'WHO has documented {hc_attacks} attacks on healthcare; '
-            f'{hw_killed} health workers killed, '
-            f'{healthcare.get("hospitals_closed", "?")} hospitals closed.'
-        )
-    if food.get('people_in_ipc_phase3_or_above'):
-        food_count = food['people_in_ipc_phase3_or_above']
-        long_text_parts.append(
-            f'{food_count/1_000_000:.2f}M people projected to face acute food insecurity '
-            f'(IPC Phase 3+) through August 2026.'
-        )
-    if appeal_pct is not None and appeal_pct < 60:
-        long_text_parts.append(
-            f'Flash Appeal only {appeal_pct}% funded '
-            f'(${appeal.get("received_usd", 0)/1_000_000:.0f}M of '
-            f'${appeal.get("amount_usd", 0)/1_000_000:.0f}M target).'
-        )
-
-    # ── UNIFIL peacekeeper casualties — national-stake diplomatic signal ──
-    # Each killed peacekeeper triggers high-level reaction from contributing nation.
-    # Currently: 4 Indonesian + 2 French = 6 dead in 2026. France maintains Lebanon
-    # commitment after UNIFIL drawdown end-2026 per Macron April 22 statement.
-    unifil_killed = healthcare.get('unifil_peacekeepers_killed') or 0
-    if unifil_killed > 0:
-        unifil_id = healthcare.get('unifil_peacekeepers_killed_indonesian') or 0
-        unifil_fr = healthcare.get('unifil_peacekeepers_killed_french') or 0
-        if unifil_id and unifil_fr:
-            breakdown = f' ({unifil_id} Indonesian, {unifil_fr} French)'
-        elif unifil_id:
-            breakdown = f' ({unifil_id} Indonesian)'
-        elif unifil_fr:
-            breakdown = f' ({unifil_fr} French)'
-        else:
-            breakdown = ''
-        long_text_parts.append(
-            f'{unifil_killed} UNIFIL peacekeepers killed{breakdown} '
-            f'— national-stake diplomatic signal; April 18 Ghandouriyeh ambush '
-            f'attributed to Hezbollah by France/UNIFIL/Israel.'
-        )
-
-    # Build the signal first so we can pass it into the registry-driven enrichment.
-    # The enrichment helper mutates signal_dict and long_text_parts in place,
-    # adding any active convergences (e.g. wheat-Lebanon if global wheat is in surge).
-    signal = {
-        'priority':       12,                  # v3.1.0: bumped from 9 → 12 so a 1M-displaced humanitarian
-                                                #         crisis reliably leads BLUF over composite kinetic signals
-                                                #         (kinetic_pressure=14, multi_axis=11, inbound=10, etc.)
-        'category':       'humanitarian_lebanon',
-        'theatre':        'lebanon',
-        'level':          5 if killed >= 1000 or live_total >= 500000 else 4,
-        'icon':           '🆘',
-        'color':          '#a855f7',           # purple — humanitarian (matches GPI PRESSURE_HUMANITARIAN axis)
-        'pressure_type':  'humanitarian',       # explicit so GPI doesn't have to infer
-        'short_text':     short_text[:120],
-    }
-
-    # ── Layer 2 enrichment: registry-driven convergence detection ──
-    # Looks up CONVERGENCE_REGISTRY for any convergences registered for this country,
-    # checks each commodity's threshold, and appends enrichment text + sets flags.
-    # Adding a new convergence for Lebanon (e.g. lebanon-fertilizer) needs zero code change here.
-    _apply_convergence_enrichments('lebanon', signal, long_text_parts)
-
-    # Finalize long_text after all enrichments have appended
-    signal['long_text'] = ' '.join(long_text_parts)
-
-    return signal
-
-
-def _write_bluf_prose(trackers, levels, scores, max_level,
-                      theatres_at_l3plus, top_signals):
-    """
-    Write a single analyst-prose BLUF paragraph.
-    Style: direct declarative sentences, no hedging, intelligence product voice.
-    v2.0: Reads from normalized trackers (post-shim). Adds Oman/influence handling.
-    """
-    now_str = datetime.now(timezone.utc).strftime('%d %b %Y %H:%MZ')
-
-    # v2.0: levels = {theatre: int} of THREAT level (not influence)
-    l5_theatres  = [t for t, l in levels.items() if l >= 5]
-    l4_theatres  = [t for t, l in levels.items() if l == 4]
-    l3_theatres  = [t for t, l in levels.items() if l == 3]
-    low_theatres = [t for t, l in levels.items() if l <= 1]
-
-    parts = []
-
-    # Opening posture sentence
-    if l5_theatres and l4_theatres:
-        active = ', '.join(t.upper() for t in l5_theatres)
-        incident = ', '.join(t.upper() for t in l4_theatres)
-        parts.append(
-            f'ME BLUF ({now_str}): Regional posture is CRITICAL with {len(l5_theatres)+len(l4_theatres)} '
-            f'theatres at L4+. Active conflict in {active}; incident-level in {incident}.'
-        )
-    elif l5_theatres:
-        active = ', '.join(t.upper() for t in l5_theatres)
-        parts.append(
-            f'ME BLUF ({now_str}): Active conflict confirmed in {len(l5_theatres)} '
-            f'theatre{"s" if len(l5_theatres) > 1 else ""} ({active}). '
-            f'Regional posture ELEVATED.'
-        )
-    elif l4_theatres:
-        incident = ', '.join(t.upper() for t in l4_theatres)
-        parts.append(
-            f'ME BLUF ({now_str}): Incident-level signals in {incident}. '
-            f'Regional posture ELEVATED.'
-        )
-    elif l3_theatres:
-        parts.append(
-            f'ME BLUF ({now_str}): Direct threat signals in '
-            f'{", ".join(t.upper() for t in l3_theatres)}. '
-            f'Regional posture at WARNING level.'
-        )
-    else:
-        parts.append(
-            f'ME BLUF ({now_str}): All ME theatres below direct threat threshold. '
-            f'Regional posture MONITORING.'
-        )
-
-    # Cross-theater coordination sentence (v2.0: from normalized data)
-    coordination_theatres = []
-    for t, data in trackers.items():
-        for ct in data.get('crosstheater_coordination', []) or []:
-            if ct.get('confidence', 0) >= 60:
-                for theatre in ct.get('theaters', []):
-                    if theatre not in coordination_theatres:
-                        coordination_theatres.append(theatre)
-
-    if len(coordination_theatres) >= 2:
-        parts.append(
-            f'Cross-theater coordination signals detected across '
-            f'{", ".join(t.upper() for t in coordination_theatres[:3])} -- '
-            f'watch for synchronized proxy operations.'
-        )
-
-    # Iran/ceasefire context (v2.0: read so_what from normalized shape)
-    iran_data = trackers.get('iran', {}) or {}
-    iran_so   = iran_data.get('so_what', {}) or {}
-    iraq_data = trackers.get('iraq', {}) or {}
-    iraq_so   = iraq_data.get('so_what', {}) or {}
-    ceasefire = iraq_so.get('ceasefire_active', False)
-
-    raw_iran  = iran_data.get('raw', {}) or {}
-    otp_count = raw_iran.get('otp_signal_count', raw_iran.get('otp_count', 0))
-    if otp_count and otp_count >= 10:
-        parts.append(
-            f'Iran Operation True Promise signals at {otp_count} -- '
-            f'axis-wide escalation posture active.'
-        )
-    elif ceasefire:
-        parts.append(
-            'Trump-Iran ceasefire (7 Apr) in effect -- '
-            'watch IRGC-directed proxies in Iraq/Lebanon for compliance signals.'
-        )
-
-    # Lebanon/Hezbollah sentence if active
-    leb_data  = trackers.get('lebanon', {}) or {}
-    leb_level = levels.get('lebanon', 0)
-    leb_so    = leb_data.get('so_what', {}) or {}
-    if leb_level >= 4:
-        iran_directing = leb_so.get('iran_directing', False)
-        laf_gap        = leb_so.get('laf_enforcement_gap', False)
-        parts.append(
-            f'Hezbollah operating at L{leb_level}'
-            f'{" under Iranian direction" if iran_directing else ""}'
-            f'{"; LAF enforcement gap persists" if laf_gap else ""}.'
-        )
-
-    # Lebanon humanitarian crisis sentence — derived from top_signals injection upstream.
-    # Phrasing pulls directly from the humanitarian signal so prose + signal stay consistent.
-    leb_humanitarian = next(
-        (s for s in top_signals if s.get('category') == 'humanitarian_lebanon'),
-        None
-    )
-    if leb_humanitarian:
-        parts.append(leb_humanitarian['short_text'] + '.')
-
-    # Houthi silence if detected
-    yemen_data    = trackers.get('yemen', {}) or {}
-    raw_yemen     = yemen_data.get('raw', {}) or {}
-    houthi_actor  = (raw_yemen.get('actors', {}) or {}).get('houthis', {}) or {}
-    houthi_silent = houthi_actor.get('statement_count', 1) == 0
-    if houthi_silent:
-        parts.append(
-            'Houthi/Ansar Allah anomalously silent -- '
-            'operational security or patron (Iran) direction to stand down.'
-        )
-
-    # Syria positive note if transition holding
-    syria_data = trackers.get('syria', {}) or {}
-    syria_so   = syria_data.get('so_what', {}) or {}
-    if syria_so.get('iran_expelled') and levels.get('syria', 0) <= 1:
-        parts.append(
-            'Syria transition holding; Iran expelled and corridor severed.'
-        )
-
-    # v2.0 NEW: Oman / influence sentence — stability anchor pattern
-    oman_data = trackers.get('oman', {}) or {}
-    if oman_data:
-        oman_lvls       = oman_data.get('levels', {}) or {}
-        oman_threat     = oman_lvls.get('threat', 0) or 0
-        oman_influence  = oman_lvls.get('influence', 0) or 0
-        oman_so         = oman_data.get('so_what', {}) or {}
-        oman_scenario   = oman_so.get('scenario', '')
-
-        if oman_influence >= 4:
-            parts.append(
-                f'Oman in active mediation posture (influence L{oman_influence}); '
-                f'Muscat back-channel engaged — de-escalation lever available.'
-            )
-        elif oman_influence >= 3:
-            parts.append(
-                f'Oman influence vector elevated (L{oman_influence}); '
-                f'mediation channels engaged.'
-            )
-        elif oman_threat >= 3:
-            # Threat to Oman itself (Salalah/Duqm/succession) — escalatory, not stabilizing
-            parts.append(
-                f'Oman threat vector at L{oman_threat} ({oman_scenario or "external pressure"}); '
-                f'stability anchor function compromised.'
-            )
-
-    # Closing risk sentence
-    if max_level >= 4:
-        parts.append(
-            'Primary risk: ceasefire collapse triggering simultaneous multi-axis activation '
-            'across Lebanon, Iraq, and Yemen vectors.'
-        )
-    elif max_level >= 3:
-        parts.append(
-            'Primary risk: proxy escalation without direct state direction '
-            'expanding conflict footprint.'
-        )
-
-    return ' '.join(parts)
-
-
-# ============================================================
-# MAIN BUILD FUNCTION
-# ============================================================
-
-def build_regional_bluf(force=False):
-    """
-    Build the ME regional BLUF. Reads all SEVEN caches, synthesizes,
-    caches result in Redis. Returns dict.
-    v2.0: Uses normalized tracker shape, emits dual-axis-aware output, top-5 signals.
-    """
-    if not force:
-        cached = _redis_get(BLUF_CACHE_KEY)
-        if cached and cached.get('generated_at'):
+        for name in proxy_theaters:
+            fp = fingerprints.get(name, {})
+            if not fp:
+                continue
             try:
-                age = (datetime.now(timezone.utc) -
-                       datetime.fromisoformat(cached['generated_at'])).total_seconds()
-                if age < BLUF_CACHE_TTL:
-                    cached['from_cache'] = True
-                    return cached
+                age = (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600
+                if age <= 24:  # Fresh within 24 hours — covers all proxy scan cycles
+                    fresh_proxies[name] = fp
             except Exception:
                 pass
 
-    print('[ME BLUF v2.0] Building regional BLUF from all SEVEN tracker caches...')
-    trackers = _read_all_trackers()  # Already normalized post-shim
+        if not fresh_proxies:
+            return 0, {'reason': 'No fresh proxy theater data', 'proxies': {}}
 
-    if not trackers:
+        elevated_proxies = {
+            k: v for k, v in fresh_proxies.items()
+            if v.get('level', 0) >= 2
+        }
+
+        n = len(elevated_proxies)
+        if n == 0:
+            level = 0
+        elif n == 1:
+            level = 1
+        elif n == 2:
+            level = 2
+        elif n == 3:
+            level = 4  # Non-linear jump — 3 simultaneous is very significant
+        else:
+            level = 5  # Full activation signal
+
+        # Check for synchronized language across proxies
+        all_phrases = {}
+        for name, fp in fresh_proxies.items():
+            for phrase in fp.get('top_phrases', []):
+                phrase_key = phrase[:30].lower()
+                all_phrases.setdefault(phrase_key, []).append(name)
+        shared_phrases = {p: t for p, t in all_phrases.items() if len(t) >= 2}
+
+        # Check for shared targets (very significant)
+        all_targets = {}
+        for name, fp in fresh_proxies.items():
+            for target in fp.get('named_targets', []):
+                all_targets.setdefault(target, []).append(name)
+        shared_targets = {t: ts for t, ts in all_targets.items() if len(ts) >= 2}
+
+        # Boost level if shared phrases or targets detected
+        if shared_phrases and level < 5:
+            level = min(level + 1, 5)
+        if shared_targets and level < 5:
+            level = min(level + 1, 5)
+
+        detail = {
+            'elevated_proxies': {k: v.get('level', 0) for k, v in elevated_proxies.items()},
+            'fresh_proxies': list(fresh_proxies.keys()),
+            'missing_proxies': [p for p in proxy_theaters if p not in fresh_proxies],
+            'shared_phrases': list(shared_phrases.keys())[:5],
+            'shared_targets': list(shared_targets.keys())[:5],
+            'synchronized_language': len(shared_phrases) > 0,
+            'shared_target_convergence': len(shared_targets) > 0,
+            'n_elevated': n,
+        }
+
+        print(f"[Iran Rhetoric] 🔗 Proxy Activation Index: L{level} "
+              f"({n} proxies elevated: {list(elevated_proxies.keys())})")
+        return level, detail
+
+    except Exception as e:
+        print(f"[Iran Rhetoric] Proxy activation index error: {e}")
+        return 0, {'reason': str(e), 'proxies': {}}
+
+
+# ============================================
+# DELTA CALCULATION
+# ============================================
+def _compute_delta():
+    try:
+        if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+            return None
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/13",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5
+        )
+        raw = resp.json().get('result', [])
+        entries = []
+        for item in raw:
+            try:
+                entries.append(json.loads(item))
+            except Exception:
+                pass
+        if len(entries) < 3:
+            return {'direction': 'insufficient_data', 'entries_available': len(entries)}
+        current = entries[0]
+        prior = entries[1:]
+        prior_avg_score = round(sum(e.get('score', 0) for e in prior) / len(prior), 1)
+        prior_avg_level = round(sum(e.get('level', 0) for e in prior) / len(prior), 2)
+        score_change = current.get('score', 0) - prior_avg_score
         return {
-            'success': False,
-            'error':   'No tracker data available',
-            'bluf':    'BLUF unavailable -- no tracker caches loaded.',
-            'signals': [],
+            'direction': 'rising' if score_change > 10 else 'falling' if score_change < -10 else 'stable',
+            'score_change': round(score_change, 1),
+            'level_change': round(current.get('level', 0) - prior_avg_level, 2),
+            'current_score': current.get('score', 0),
+            'prior_avg_score': prior_avg_score,
+            'prior_avg_level': prior_avg_level,
+            'vs_period': f'{len(prior)}-scan average',
         }
+    except Exception as e:
+        print(f"[Iran Rhetoric] Delta error: {e}")
+        return None
 
-    # Pull threat levels and scores from normalized shape
-    # (Influence levels live in theatre_summary; not used as primary level)
-    levels = {t: d['levels']['threat'] for t, d in trackers.items()}
-    scores = {t: d['score']            for t, d in trackers.items()}
 
-    max_level          = max(levels.values()) if levels else 0
-    avg_score          = round(sum(scores.values()) / len(scores), 1) if scores else 0
-    theatres_at_l3plus = sum(1 for l in levels.values() if l >= 3)
-    theatres_live      = len(trackers)
+# ============================================
+# ACTOR BASELINES
+# ============================================
+def _update_actor_baselines(actor_results):
+    try:
+        existing = _redis_get(BASELINE_KEY) or {}
+        updated = {}
+        alpha = 0.2
+        for actor_id, ar in actor_results.items():
+            current_statements = ar.get('statement_count', 0)
+            current_level = ar.get('max_level', 0)
+            prev = existing.get(actor_id, {})
+            if not prev:
+                updated[actor_id] = {'avg_statements': current_statements,
+                                     'avg_level': current_level, 'scans': 1}
+            else:
+                updated[actor_id] = {
+                    'avg_statements': round(alpha * current_statements + (1 - alpha) * prev.get('avg_statements', current_statements), 2),
+                    'avg_level': round(alpha * current_level + (1 - alpha) * prev.get('avg_level', current_level), 3),
+                    'scans': min(prev.get('scans', 1) + 1, 999),
+                }
+        _redis_set(BASELINE_KEY, updated, ttl=30 * 24 * 3600)
+        print(f"[Iran Rhetoric] ✅ Actor baselines updated")
+        return updated
+    except Exception as e:
+        print(f"[Iran Rhetoric] Baseline error: {e}")
+        return {}
 
-    posture_label, posture_color = _build_posture_label(max_level, theatres_at_l3plus)
 
-    # Extract top 5 signals (was 3)
-    top_signals = _extract_key_signals(trackers)
+def _detect_silence_anomalies(actor_results, baselines):
+    anomalies = []
+    try:
+        for actor_id, ar in actor_results.items():
+            baseline = baselines.get(actor_id, {})
+            avg_statements = baseline.get('avg_statements', 0)
+            scans = baseline.get('scans', 0)
+            if scans < 5 or avg_statements < 3:
+                continue
+            actual = ar.get('statement_count', 0)
+            if actual < avg_statements * 0.30:
+                pct_below = round((1 - actual / avg_statements) * 100)
+                actor_info = ACTORS.get(actor_id, {})
+                anomalies.append({
+                    'actor_id': actor_id,
+                    'actor_name': actor_info.get('name', actor_id),
+                    'actor_flag': actor_info.get('flag', ''),
+                    'expected_statements': round(avg_statements),
+                    'actual_statements': actual,
+                    'deviation': f'{pct_below}% below baseline',
+                    'signal': 'Unusual quiet — possible operational security',
+                })
+                # IRGC silence is especially significant
+                if actor_id == 'irgc':
+                    print(f"[Iran Rhetoric] 🔇 IRGC SILENCE ANOMALY — {actual} vs avg {avg_statements:.1f}")
+                else:
+                    print(f"[Iran Rhetoric] 🔇 Silence: {actor_id} ({actual} vs avg {avg_statements:.1f})")
+    except Exception as e:
+        print(f"[Iran Rhetoric] Silence detection error: {e}")
+    return anomalies
 
-    # Inject Lebanon humanitarian signal (cross-backend fetch — see _build_lebanon_humanitarian_signal).
-    # Function returns None if backend unreachable, data missing, or below salience threshold.
-    humanitarian_sig = _build_lebanon_humanitarian_signal()
-    if humanitarian_sig:
-        # Insert at top — humanitarian crisis at this scale leads the analyst-prose BLUF.
-        # If we already have N signals, this becomes N+1 — global sort handles it.
-        top_signals = [humanitarian_sig] + top_signals
-        # Re-sort by priority (humanitarian sig at priority 12 → leads naturally)
-        top_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
-        print(f'[ME BLUF] Lebanon humanitarian signal injected: {humanitarian_sig["short_text"][:60]}...')
 
-    # v2.3.0: keep full signal pool separate from capped top_signals.
-    # `all_signals` retains every BLUF-level signal for downstream axis aggregation
-    # (GPI's diplomatic + humanitarian axis cards need the full pool, not top 5).
-    # `top_signals_capped` is the trimmed display version used for prose synthesis.
-    all_signals = list(top_signals)                          # full pool — preserved
-    top_signals_capped = top_signals[:TOP_SIGNALS_COUNT]      # capped for prose
+# ============================================
+# CROSS-THEATER — Iran writes as command node
+# ============================================
+def _write_crosstheater_signal(result):
+    """
+    Iran writes to shared fingerprints with is_command_node: True.
+    Other trackers will detect this and display differently.
+    """
+    try:
+        existing = _redis_get(CROSSTHEATER_KEY) or {}
 
-    # Write BLUF prose using capped top_signals (prose has limited word count)
-    bluf_prose = _write_bluf_prose(
-        trackers, levels, scores,
-        max_level, theatres_at_l3plus, top_signals_capped
-    )
+        actors = result.get('actors', {})
+        top_phrases = []
+        for sig in result.get('operation_true_promise_signals', [])[:3]:
+            top_phrases.append(sig.get('phrase', '')[:60])
+        for actor_id in ['irgc', 'khamenei']:
+            for art in actors.get(actor_id, {}).get('top_articles', [])[:2]:
+                title = art.get('title', '')[:60]
+                if title:
+                    top_phrases.append(title)
 
-    # v2.0: Per-theatre summary (now includes BOTH axis levels for dual-axis trackers)
-    theatre_summary = {}
-    for t, data in trackers.items():
-        lvls         = data.get('levels', {}) or {}
-        threat_lvl   = lvls.get('threat', 0)
-        infl_lvl     = lvls.get('influence')
-        green_lvl    = lvls.get('green')
-        dom_axis     = lvls.get('dominant_axis', 'threat')
-        dom_level    = lvls.get('dominant_level', threat_lvl)
-        theatre_summary[t] = {
-            'level':            threat_lvl,                                  # back-compat: legacy single-axis
-            'label':            ESCALATION_LABELS.get(threat_lvl, 'Unknown'),
-            'color':            ESCALATION_COLORS.get(threat_lvl, '#6b7280'),
-            'score':            scores[t],
-            'flag':             data.get('flag', THEATRE_FLAGS.get(t, '')),
-            'timestamp':        data.get('scanned_at', ''),
-            # v2.0 NEW dual-axis fields:
-            'threat_level':     threat_lvl,
-            'influence_level':  infl_lvl,
-            'green_level':      green_lvl,
-            'dominant_axis':    dom_axis,
-            'dominant_level':   dom_level,
-            'is_dual_axis':     infl_lvl is not None,
-            'influence_label':  INFLUENCE_LABELS.get(infl_lvl, '') if infl_lvl is not None else None,
-            'influence_color':  INFLUENCE_COLORS.get(infl_lvl, '#6b7280') if infl_lvl is not None else None,
+        named_targets = []
+        for actor_id in ['irgc', 'khamenei']:
+            for art in actors.get(actor_id, {}).get('top_articles', [])[:3]:
+                title_lower = art.get('title', '').lower()
+                for geo in SPECIFIC_GEOGRAPHIES_IRAN:
+                    if geo in title_lower and geo not in named_targets:
+                        named_targets.append(geo)
+
+        # Axis levels — split into per-partner fields (v1.2.0, April 2026)
+        china_iran_level  = actors.get('china_iran_axis',  {}).get('max_level', 0)
+        russia_iran_level = actors.get('russia_iran_axis', {}).get('max_level', 0)
+        # Combined level for readers that want aggregate (highest wins)
+        axis_level = max(china_iran_level, russia_iran_level)
+
+        # ── v2.4: Oman-specific signal extraction (for Oman tracker reads) ──
+        # Detect Iran rhetoric specifically targeting Omani territory/logistics.
+        # Salalah = US/UK logistics hub on Indian Ocean coast.
+        # Duqm = expanding UK base + dry dock + outside Hormuz, strategically critical.
+        # Muscat = capital, MOFA hosts US-Iran back-channel.
+        salalah_targeted = False
+        duqm_logistics_active = False
+        oman_diplomatic_active = False
+        for actor_id in ['khamenei', 'irgc', 'iran_gov']:
+            for art in actors.get(actor_id, {}).get('top_articles', [])[:5]:
+                title_lower = art.get('title', '').lower()
+                desc_lower = art.get('description', '').lower()
+                full_text = f"{title_lower} {desc_lower}"
+                # Hostile signals toward Omani territory
+                if 'salalah' in full_text and any(kw in full_text for kw in
+                        ['threat', 'strike', 'target', 'missile', 'attack', 'mining', 'mine',
+                         'تهديد', 'استهداف', 'ضربة', 'تهدید', 'هدف', 'حمله']):
+                    salalah_targeted = True
+                if 'duqm' in full_text and any(kw in full_text for kw in
+                        ['british', 'uk', 'logistics', 'base', 'naval',
+                         'بريطاني', 'بریتانیا', 'لوجستي', 'قاعدة']):
+                    duqm_logistics_active = True
+                # Oman as diplomatic channel signal (de-escalatory)
+                if 'muscat' in full_text and any(kw in full_text for kw in
+                        ['talks', 'mediation', 'channel', 'back-channel', 'witkoff',
+                         'محادثات', 'وساطة', 'مفاوضات', 'گفتگو']):
+                    oman_diplomatic_active = True
+
+        existing['iran'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theatre': 'Iran',
+            'is_command_node': True,               # ← Key flag for other trackers
+            'level': result.get('theatre_escalation_level', 0),
+            'score': result.get('theatre_score', 0),
+            'theatre_score': result.get('theatre_score', 0),
+            'irgc_level': result.get('irgc_direct_level', 0),
+            'proxy_activation_level': result.get('proxy_activation_level', 0),
+            'nuclear_level': result.get('nuclear_level', 0),
+            'operation_true_promise_active': result.get('operation_true_promise_count', 0) > 0,
+            'top_phrases': top_phrases[:5],
+            'named_targets': named_targets[:8],
+            'actor_levels': {
+                aid: actors.get(aid, {}).get('max_level', 0)
+                for aid in ['khamenei', 'irgc', 'iran_gov']
+            },
+            'specificity_score': result.get('specificity_score', 0),
+            'proxy_detail': result.get('proxy_activation_detail', {}),
+            # ── v1.2.0 Axis fingerprint (SPLIT — April 2026) ──
+            # Written from Iran's perspective: what Iran is RECEIVING.
+            # Severity levels (0-5) per partner:
+            'china_iran_perspective_level':  china_iran_level,
+            'russia_iran_perspective_level': russia_iran_level,
+            # Binary flags preserved for backwards-compat with existing consumers:
+            'china_iran_active':  china_iran_level >= 2,
+            'russia_iran_active': russia_iran_level >= 2,
+            'axis_support_level': axis_level,  # combined MAX — legacy consumers
+            # ── v1.1: Diplomatic Track Fingerprint ──
+            # Israel's tracker reads these to factor Iran's diplomatic posture
+            # into its inbound score (mirrors Lebanon pattern).
+            'diplomatic_active':   result.get('diplomatic_track_active', False),
+            'ceasefire_level':     result.get('ceasefire_level', 0),
+            'diplomatic_modifier': result.get('diplomatic_modifier', 0),
+            'diplomatic_label':    result.get('diplomatic_label_detailed', 'Quiet'),
+            # ── v2.4 Oman cross-theater signals ──
+            'salalah_targeted':       salalah_targeted,
+            'duqm_logistics_active':  duqm_logistics_active,
+            'oman_diplomatic_active': oman_diplomatic_active,
+
+            # ── Regime Signals (May 7 2026) — Convergence Registry Consumer Surface ──
+            # Per-dimension max levels for the 6 regime-signal sub-detection ladders.
+            # Read by convergence_registry entries: financial_system_fragmentation,
+            # dedollarization_drumbeat, sanctions_evasion_cluster, energy_bloc_consolidation,
+            # arms_trade_realignment. Active flag = level >= 3 (Directive or above).
+            'iran_gold_for_oil_level':     result.get('regime_signals', {}).get('gold_for_oil', 0),
+            'iran_gold_for_oil_active':    result.get('regime_signals', {}).get('gold_for_oil', 0) >= 3,
+            'iran_dedollarization_level':  result.get('regime_signals', {}).get('dedollarization', 0),
+            'iran_dedollarization_active': result.get('regime_signals', {}).get('dedollarization', 0) >= 3,
+            'iran_yuan_settlement_level':  result.get('regime_signals', {}).get('yuan_settlement', 0),
+            'iran_yuan_settlement_active': result.get('regime_signals', {}).get('yuan_settlement', 0) >= 3,
+            'iran_brics_alignment_level':  result.get('regime_signals', {}).get('brics_alignment', 0),
+            'iran_brics_alignment_active': result.get('regime_signals', {}).get('brics_alignment', 0) >= 3,
+            'iran_opec_realignment_level': result.get('regime_signals', {}).get('opec_realignment', 0),
+            'iran_opec_realignment_active': result.get('regime_signals', {}).get('opec_realignment', 0) >= 3,
+            'iran_arms_export_level':      result.get('regime_signals', {}).get('arms_export', 0),
+            'iran_arms_export_active':     result.get('regime_signals', {}).get('arms_export', 0) >= 3,
+            # Aggregate flags for convergence registry simple-AND logic
+            'iran_regime_signals_max':     result.get('regime_signals', {}).get('max', 0),
+            'iran_regime_signals_active':  result.get('regime_signals', {}).get('active_count', 0),
         }
+        _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
+        print(f"[Iran Rhetoric] ✅ Command node fingerprint written (is_command_node: True)")
+        if salalah_targeted or duqm_logistics_active or oman_diplomatic_active:
+            print(f"[Iran Rhetoric] 🇴🇲 Oman signals: salalah={salalah_targeted}, "
+                  f"duqm={duqm_logistics_active}, diplomatic={oman_diplomatic_active}")
+    except Exception as e:
+        print(f"[Iran Rhetoric] Cross-theater write error: {e}")
 
-    result = {
-        'success':           True,
-        'from_cache':        False,
-        'bluf':              bluf_prose,
-        'signals':           all_signals,             # v2.3.0: FULL signal pool — for GPI axis aggregation
-        'top_signals':       top_signals_capped,      # v2.3.0: capped — for display + prose synthesis
-        'posture_label':     posture_label,
-        'posture_color':     posture_color,
-        'max_level':         max_level,
-        'avg_score':         avg_score,
-        'theatres_at_l3plus':theatres_at_l3plus,
-        'theatres_live':     theatres_live,
-        'theatre_summary':   theatre_summary,
-        'generated_at':      datetime.now(timezone.utc).isoformat(),
-        'version':           '2.0.0',
-        'region':            'middle_east',  # v2.0: GPI-readable
-        'top_signals_count': len(top_signals_capped),
+
+def _detect_crosstheater_coordination(proxy_activation_level, proxy_detail):
+    """
+    Iran's cross-theater view — it looks at proxy data as signals
+    of its own command effectiveness, not just coordination.
+    """
+    findings = []
+    try:
+        elevated_proxies = proxy_detail.get('elevated_proxies', {})
+        n_elevated = proxy_detail.get('n_elevated', 0)
+
+        if n_elevated >= 2:
+            findings.append({
+                'type': 'proxy_activation',
+                'message': f"Iran proxy network activation — {n_elevated} theater(s) simultaneously elevated",
+                'elevated_proxies': elevated_proxies,
+                'proxy_activation_level': proxy_activation_level,
+                'confidence': min(n_elevated * 25 + proxy_activation_level * 5, 95),
+                'signal': 'Multiple Iran-directed theaters elevated simultaneously — possible coordinated command signal',
+                'is_command_node': True,
+            })
+
+        if proxy_detail.get('synchronized_language'):
+            findings.append({
+                'type': 'proxy_language_sync',
+                'message': 'Synchronized language detected across proxy theaters',
+                'shared_phrases': proxy_detail.get('shared_phrases', []),
+                'confidence': 75,
+                'signal': 'Proxies using similar framing within 14h — narrative coordination from Iran likely',
+                'is_command_node': True,
+            })
+
+        if proxy_detail.get('shared_target_convergence'):
+            findings.append({
+                'type': 'proxy_target_convergence',
+                'message': 'Proxies converging on same target sets',
+                'shared_targets': proxy_detail.get('shared_targets', []),
+                'confidence': 80,
+                'signal': 'Multiple proxy theaters referencing same targets — possible coordinated targeting directive',
+                'is_command_node': True,
+            })
+
+    except Exception as e:
+        print(f"[Iran Rhetoric] Cross-theater detection error: {e}")
+
+    return findings
+
+
+# ============================================
+# RSS FEEDS
+# ============================================
+RHETORIC_RSS_FEEDS = [
+    # Iranian state media (English)
+    ("https://www.presstv.ir/rss.xml", 1.0),
+    ("https://en.mehrnews.com/rss", 1.0),
+    ("https://news.google.com/rss/search?q=IRGC+Iran+missile+drone+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Khamenei+statement+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+Quds+Force+proxy+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Operation+True+Promise+Iran&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+nuclear+natanz+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Iran+strait+hormuz+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Iran+protests+economy+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    ("https://news.google.com/rss/search?q=Iran+US+war+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+Israel+war+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Iran International (opposition — domestic pressure signals)
+    ("https://www.iranintl.com/en/rss", 0.95),
+    # CENTCOM
+    ("https://news.google.com/rss/search?q=CENTCOM+Iran+strikes+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    # Arabic — Iranian state/proxy framing
+    ("https://news.google.com/rss/search?q=إيران+الحرس+الثوري+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
+    ("https://news.google.com/rss/search?q=خامنئي+بيان+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
+    ("https://news.google.com/rss/search?q=عملية+الوعد+الصادق+إيران&hl=ar&gl=SA&ceid=SA:ar", 1.0),
+    ("https://news.google.com/rss/search?q=إيران+محور+المقاومة+2026&hl=ar&gl=SA&ceid=SA:ar", 0.95),
+    # Farsi — 2-3 focused queries only (GDELT Farsi errors under load)
+    ("https://news.google.com/rss/search?q=سپاه+پاسداران+عملیات+2026&hl=fa&gl=IR&ceid=IR:fa", 0.95),
+    ("https://news.google.com/rss/search?q=خامنه‌ای+بیانیه+2026&hl=fa&gl=IR&ceid=IR:fa", 0.95),
+    # Hebrew — Israeli perspective on Iran
+    ("https://news.google.com/rss/search?q=איראן+תקיפה+2026&hl=iw&gl=IL&ceid=IL:iw", 0.9),
+    # Israeli shadow war / nuclear red line signals (v2.1)
+    ("https://news.google.com/rss/search?q=Israel+Iran+nuclear+red+line+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Mossad+Iran+operation+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Israel+Iran+deal+opposition+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    # Trump / US Iran pressure signals (v2.1)
+    ("https://news.google.com/rss/search?q=Trump+Iran+nuclear+deal+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Trump+warns+Iran+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Trump+maximum+pressure+Iran+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Witkoff+Iran+deal+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Rubio+Iran+sanctions+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    # Truth Social — Trump direct statements (public RSS, no auth required)
+    ("https://truthsocial.com/@realDonaldTrump.rss", 1.1),
+    # Nitter deprecated platform-wide. Trump direct still captured via
+    # Truth Social RSS (above, weight 1.1). Leaving this commented out
+    # as a marker — replace with Bluesky mirror (@realdonaldtrump.govmirrors.com)
+    # in a future session when we port Bluesky to the ME backend.
+    # ("https://nitter.poast.org/realDonaldTrump/rss", 1.0),
+    # ============================================
+    # v2.2.0 (April 2026) — Israeli + ME investigative feeds
+    # Same augmentation as China/Taiwan trackers. Catches stories
+    # like FT TEE-01B satellite fusion story that Iranian state
+    # media will NEVER break but IDF-adjacent press and premier
+    # investigative outlets surface first.
+    # ============================================
+    # Israeli press — breaks China/Russia-Iran cooperation stories first
+    ("https://rss.jpost.com/rss/rssfeedsheadlines.aspx", 0.95),
+    ("https://www.timesofisrael.com/feed/", 0.95),
+    # ME regional analysis — China/Russia engagement in Gulf & Levant
+    ("https://www.al-monitor.com/rss", 0.90),
+    ("https://www.middleeasteye.net/rss.xml", 0.85),
+    # Premier investigative — intelligence/finance scoops (FT, Reuters)
+    ("https://www.ft.com/world?format=rss", 1.0),
+    ("https://feeds.reuters.com/Reuters/worldNews", 1.0),
+    # Targeted queries for China-Iran axis specifically
+    ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # ── v2.4 — Targeted queries for Iran-Russia DIPLOMATIC coordination ──
+    # Catches NYT/Reuters analytical framing on top-level meetings,
+    # mediation substitution, UN cover, uranium handover. Iranian state
+    # media reports the meeting fact; Western OSINT reports the substance.
+    ("https://news.google.com/rss/search?q=Araghchi+Putin+OR+%22Iran+foreign+minister%22+Russia+2026&hl=en&gl=US&ceid=US:en", 1.05),
+    ("https://news.google.com/rss/search?q=Russia+veto+Iran+OR+%22Hormuz+resolution%22+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Russia+uranium+Iran+OR+%22Caspian%22+Iran+trade+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    # Barak Ravid — first-mover Israel/Iran OSINT journalist (v2.3)
+    # 2 queries — Ravid covers Iran less centrally than Israel/Lebanon
+    # but his US-Iran ceasefire + nuclear deal scoops are high-value
+    ('https://news.google.com/rss/search?q=%22Barak+Ravid%22+Iran&hl=en&gl=US&ceid=US:en', 1.2),
+    ('https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%90%D7%99%D7%A8%D7%90%D7%9F&hl=iw&gl=IL&ceid=IL:iw', 1.2),
+]
+
+# ============================================
+# NITTER -- Primary source Twitter/X accounts
+# Iran-specific: Trump, Rubio, CENTCOM, IDF, Witkoff
+# Mirror fallback — no API key required.
+# ============================================
+NITTER_MIRRORS = [
+    "nitter.poast.org",
+    "nitter.privacydev.net",
+    "nitter.woodland.cafe",
+]
+
+NITTER_ACCOUNTS_IRAN = [
+    ("realDonaldTrump", 1.3, "Trump — Iran ultimatum, deal, maximum pressure direct statements"),
+    ("SecRubio",        1.2, "US SecState — Iran sanctions, deal signals, red lines"),
+    ("CENTCOM",         1.1, "CENTCOM — force posture, Houthi strikes, carrier deployments"),
+    ("POTUS",           1.0, "White House — executive Iran policy"),
+    ("StateDept",       1.0, "State Dept — diplomatic signals, sanctions"),
+    ("Witkoff",         1.1, "Steve Witkoff — Iran nuclear deal envoy"),
+    ("IDF",             1.1, "IDF — strike posture, Iran targeting language"),
+    ("AvichayAdraee",   1.0, "IDF Arabic spokesperson — strike claims vs Iran/proxies"),
+    ("IsraeliPM",       1.1, "Israeli PM — Iran red line statements"),
+    ("IranIntl",        1.0, "Iran International — opposition, domestic signals"),
+    ("AlinejadMasih",   0.9, "Iranian activist — domestic pressure signals"),
+    ("ElintNews",       0.9, "ELINT News — Iran missile/nuclear OSINT"),
+    ("LongWarJournal",  0.9, "Long War Journal — proxy network analysis"),
+]
+
+
+def _fetch_nitter_iran(username, weight=1.0, timeout=8):
+    import re as _re
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
+    for mirror in NITTER_MIRRORS:
+        url = f"https://{mirror}/{username}/rss"
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code != 200:
+                continue
+            root = ET.fromstring(resp.content)
+            posts = []
+            for item in root.findall(".//item")[:20]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                pubdate_el = item.find("pubDate")
+                desc_el    = item.find("description")
+                if title_el is None:
+                    continue
+                title = title_el.text or ""
+                link  = link_el.text if link_el is not None else ""
+                pub   = ""
+                if pubdate_el is not None and pubdate_el.text:
+                    try:
+                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
+                    except Exception:
+                        pub = pubdate_el.text
+                desc = ""
+                if desc_el is not None and desc_el.text:
+                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
+                posts.append({
+                    "title":       title,
+                    "url":         link,
+                    "published":   pub,
+                    "description": desc,
+                    "source":      f"Nitter @{username}",
+                    "weight":      weight,
+                })
+            if posts:
+                print(f"[Iran Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
+                return posts
+        except Exception as e:
+            print(f"[Iran Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
+            continue
+    print(f"[Iran Rhetoric/Nitter] @{username}: all mirrors failed")
+    return []
+
+
+def fetch_nitter_iran(days=3):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_posts = []
+    seen = set()
+    for username, weight, desc in NITTER_ACCOUNTS_IRAN:
+        posts = _fetch_nitter_iran(username, weight=weight)
+        for p in posts:
+            if p["url"] in seen:
+                continue
+            try:
+                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=timezone.utc)
+                if pub < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen.add(p["url"])
+            all_posts.append(p)
+        time.sleep(0.3)
+    print(f"[Iran Rhetoric/Nitter] Total: {len(all_posts)} posts")
+    return all_posts
+
+
+REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+IRAN_SUBREDDITS = ['iran', 'geopolitics', 'CredibleDefense', 'worldnews', 'IRG']
+IRAN_REDDIT_KEYWORDS = [
+    'irgc', 'iran missile', 'iran strike', 'khamenei',
+    'iran nuclear', 'iran protests', 'iran war', 'quds force',
+    'operation true promise', 'iran proxy', 'iran hezbollah',
+]
+
+ACTOR_KEYWORDS = {
+    'khamenei':     ['khamenei', 'supreme leader', 'خامنه‌ای', 'المرشد', 'خامنئي'],
+    'irgc':         ['irgc', 'revolutionary guard', 'quds force', 'pasdaran',
+                     'سپاه', 'فيلق القدس', 'حرس الثوري', 'operation true promise'],
+    'iran_gov':     ['iran foreign ministry', 'pezeshkian', 'araghchi',
+                     'tehran says', 'iran official', 'وزارت خارجه', 'وزارة الخارجية الإيرانية'],
+    'iran_people':  ['iran protests', 'iran demonstrations', 'iran economy',
+                     'iran rial', 'iran unrest', 'اعتراضات ایران', 'احتجاجات إيران'],
+    'hezbollah_iran': ['hezbollah iran', 'iran hezbollah', 'iran directs hezbollah',
+                       'حزب الله وإيران', 'resistance axis lebanon'],
+    'houthi_iran':  ['houthi iran', 'iran houthi', 'iran ansar allah',
+                     'الحوثيون وإيران', 'iran red sea'],
+    'pmf_iran':     ['pmf iran', 'iran pmf', 'quds force iraq', 'iran militia iraq',
+                     'الحشد الشعبي وإيران', 'فيلق القدس يوجه'],
+    # v1.2.0 — Axis actors split into China and Russia tracks
+    'china_iran_axis': [
+        # Direct mentions (both orders)
+        'china iran', 'iran china', 'chinese iran', 'iran chinese',
+        'beijing tehran', 'tehran beijing', 'china tehran', 'beijing iran',
+        # Material/capability transfers
+        'china arms iran', 'china backs iran', 'china supplies iran',
+        'china military aid iran', 'china iran axis',
+        # ISR / satellite (multiple word orders for FT-style headlines)
+        'chinese satellite', 'chinese spy satellite', 'china satellite iran',
+        'chinese satellite iran', 'iran chinese satellite',
+        'irgc chinese', 'chinese isr', 'china ground station iran',
+        # Named entities from TEE-01B story
+        'tee-01b', 'tee01b', 'emposat', 'earth eye co', 'earth eye',
+        # Cross-language
+        'چین ایران', 'ایران چین',
+        'الصين إيران', 'إيران الصين',
+    ],
+    'russia_iran_axis': ['russia iran', 'moscow tehran', 'russian iran',
+                         'russia arms iran', 'russia backs iran',
+                         'russian satellite iran', 'russia launches iran',
+                         'russia supplies iran', 'russia iran military',
+                         'russian targeting iran', 'russian rocket iran',
+                         # v2.4 — top-level diplomatic / mediation
+                         'araghchi', 'mojtaba khamenei', 'mojtaba',
+                         'iran foreign minister', 'iranian foreign minister',
+                         'foreign minister moscow', 'foreign minister putin',
+                         'russia veto', 'hormuz resolution',
+                         'iranian uranium', 'kremlin uranium',
+                         'caspian sea', 'via the caspian',
+                         'moscow mediation', 'witkoff',
+                         'called off the trip', 'pakistan and oman',
+                         'روسیه ایران', 'روسيا إيران',
+                         'عراقچی', 'مجتبی خامنه‌ای'],
+    'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
+                     'netanyahu iran', 'mossad iran', 'israel red line iran',
+                     'israel nuclear iran', 'israel sabotage iran',
+                     'ישראל איראן', 'מוסד איראן', 'إسرائيل إيران', 'الموساد إيران'],
+    'us_iran':      ['us strikes iran', 'centcom iran', 'us iran war',
+                     'pentagon iran', 'trump iran', 'trump warns iran',
+                     'trump threatens iran', 'trump maximum pressure',
+                     'witkoff iran', 'rubio iran',
+                     'القوات الأمريكية إيران', 'ترامب إيران'],
+}
+
+
+def fetch_reddit_iran(days=3):
+    time_filter = 'day' if days <= 1 else 'week' if days <= 7 else 'month'
+    query = ' OR '.join(IRAN_REDDIT_KEYWORDS[:4])
+    posts = []
+    for subreddit in IRAN_SUBREDDITS:
+        try:
+            time.sleep(2)
+            url = f'https://www.reddit.com/r/{subreddit}/search.json'
+            params = {'q': query, 'restrict_sr': 'true', 'sort': 'new',
+                      't': time_filter, 'limit': 25}
+            resp = requests.get(url, params=params,
+                                headers={'User-Agent': REDDIT_USER_AGENT}, timeout=10)
+            if resp.status_code != 200:
+                continue
+            children = resp.json().get('data', {}).get('children', [])
+            count = 0
+            for post in children:
+                pd = post.get('data', {})
+                title = pd.get('title', '')
+                text_lower = f"{title} {pd.get('selftext','')}".lower()
+                if not any(kw in text_lower for kw in IRAN_REDDIT_KEYWORDS):
+                    continue
+                posts.append({
+                    'title': title[:200],
+                    'url': f"https://www.reddit.com{pd.get('permalink','')}",
+                    'published': datetime.fromtimestamp(
+                        pd.get('created_utc', 0), tz=timezone.utc).isoformat(),
+                    'description': pd.get('selftext', '')[:300],
+                    'source': f'r/{subreddit}',
+                    'weight': 0.9,
+                })
+                count += 1
+            print(f"[Iran Rhetoric/Reddit] r/{subreddit}: {count} posts")
+        except Exception as e:
+            print(f"[Iran Rhetoric/Reddit] r/{subreddit} error: {e}")
+    return posts
+
+
+# ============================================
+# ARTICLE FETCHING
+# ============================================
+def fetch_rhetoric_articles(days=3):
+    articles = []
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # RSS
+    for feed_url, weight in RHETORIC_RSS_FEEDS:
+        try:
+            resp = requests.get(feed_url, timeout=12,
+                                headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code != 200:
+                continue
+            root = ET.fromstring(resp.content)
+            for item in root.findall('.//item'):
+                title = item.findtext('title', '')
+                url   = item.findtext('link', '')
+                pub   = item.findtext('pubDate', '')
+                desc  = item.findtext('description', '')
+                try:
+                    pub_dt = parsedate_to_datetime(pub)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                    if pub_dt < since:
+                        continue
+                    pub_str = pub_dt.isoformat()
+                except Exception:
+                    pub_str = pub
+                articles.append({
+                    'title': title,
+                    'url': url,
+                    'published': pub_str if isinstance(pub_str, str) else '',
+                    'description': desc[:300],
+                    'source': feed_url.split('q=')[1].split('&')[0] if 'q=' in feed_url else 'RSS',
+                    'weight': weight,
+                })
+        except Exception as e:
+            print(f"[Iran Rhetoric RSS] Error: {str(e)[:80]}")
+
+    print(f"[Iran Rhetoric] RSS: {len(articles)} articles")
+
+    # Telegram — primary Persian/Arabic signal source
+    if TELEGRAM_AVAILABLE:
+        try:
+            tg_messages = fetch_telegram_signals_iran(hours_back=days * 24)
+            tg_count = 0
+            for msg in tg_messages:
+                pub = msg.get('published', '')
+                try:
+                    pub_dt = datetime.fromisoformat(pub)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                    if pub_dt < since:
+                        continue
+                    pub_str = pub_dt.isoformat()
+                except Exception:
+                    pub_str = pub
+                articles.append({
+                    'title': msg.get('title', '')[:300],
+                    'url': msg.get('url', ''),
+                    'published': pub_str if isinstance(pub_str, str) else '',
+                    'description': msg.get('body', msg.get('title', ''))[:500],
+                    'source': msg.get('source', 'Telegram'),
+                    'weight': 1.3,  # Telegram gets highest boost — real-time Persian/Arabic
+                    'views': msg.get('views', 0),
+                    'forwards': msg.get('forwards', 0),
+                })
+                tg_count += 1
+            print(f"[Iran Rhetoric] Telegram: {tg_count} messages (primary Persian/Arabic source)")
+        except Exception as e:
+            print(f"[Iran Rhetoric] Telegram error: {e}")
+
+    # Reddit — domestic pressure signals
+    try:
+        reddit_posts = fetch_reddit_iran(days=days)
+        articles.extend(reddit_posts)
+        print(f"[Iran Rhetoric] Reddit: {len(reddit_posts)} posts")
+    except Exception as e:
+        print(f"[Iran Rhetoric] Reddit error: {e}")
+
+    # GDELT — balanced, Farsi limited to avoid overload
+    gdelt_queries = {
+        'eng': [
+            'IRGC Iran missile strike 2026',
+            'Khamenei statement warns',
+            'Iran proxy coordination hezbollah houthi',
+            'Operation True Promise Iran wave',
+            'Iran nuclear natanz enrichment',
+            'Iran strait hormuz threat',
+        ],
+        'ara': [
+            'إيران الحرس الثوري عملية',
+            'خامنئي بيان تحذير',
+            'محور المقاومة إيران تنسيق',
+            'عملية الوعد الصادق',
+        ],
+        'fas': [
+            # Only 2 focused Farsi queries — GDELT Farsi errors under load
+            'سپاه پاسداران عملیات موشکی',
+            'خامنه‌ای بیانیه هشدار',
+        ],
     }
 
-    _redis_set(BLUF_CACHE_KEY, result)
-    print(f'[ME BLUF] Built: posture={posture_label}, max_level={max_level}, '
-          f'avg_score={avg_score}, signals={len(top_signals_capped)}')
+    gdelt_count = 0
+    for lang, queries in gdelt_queries.items():
+        for query in queries:
+            try:
+                params = {
+                    'query': query, 'mode': 'artlist', 'maxrecords': 25,
+                    'timespan': f'{days}d', 'format': 'json', 'sourcelang': lang,
+                }
+                resp = None
+                for attempt in range(2):
+                    try:
+                        resp = requests.get(GDELT_BASE_URL, params=params, timeout=45)
+                        if resp.status_code == 200:
+                            break
+                    except requests.Timeout:
+                        if attempt == 0:
+                            time.sleep(3)
+                            continue
+                        raise
+                if resp and resp.status_code == 200:
+                    try:
+                        data = resp.json()
+                    except Exception:
+                        continue
+                    for art in data.get('articles', []):
+                        articles.append({
+                            'title': art.get('title', ''),
+                            'url': art.get('url', ''),
+                            'published': art.get('seendate', ''),
+                            'description': art.get('title', ''),
+                            'source': f'GDELT ({lang})',
+                            'weight': 0.9,
+                        })
+                        gdelt_count += 1
+            except Exception as e:
+                print(f"[Iran Rhetoric GDELT] {lang} error: {str(e)[:60]}")
+            time.sleep(0.8)  # Slightly longer delay — GDELT is under load
+
+    print(f"[Iran Rhetoric] GDELT: {gdelt_count} articles")
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for a in articles:
+        u = a.get('url', '')
+        if u and u not in seen:
+            seen.add(u)
+            unique.append(a)
+
+    # Nitter — primary source accounts (v2.1)
+    try:
+        nitter_posts = fetch_nitter_iran(days=days)
+        for p in nitter_posts:
+            u = p.get('url', '')
+            if u and u not in seen:
+                seen.add(u)
+                unique.append(p)
+    except Exception as e:
+        print(f"[Iran Rhetoric] Nitter error: {e}")
+
+    tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
+    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
+    red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
+    rss_c = len(unique) - tg_c - nit_c - red_c
+    print(f"[Iran Rhetoric] Total unique: {len(unique)} ({rss_c} RSS/GDELT + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
+    return unique
+
+
+# ============================================
+# CLASSIFY ARTICLES
+# ============================================
+def classify_articles(articles, proxy_activation_level):
+    """
+    Classify articles. Reporting actors get downgraded.
+    Operation True Promise patterns detected separately.
+    Proxy directive language tracked as coordination signal.
+    """
+    actor_results = {
+        actor_id: {
+            'name': info['name'],
+            'flag': info['flag'],
+            'icon': info['icon'],
+            'color': info['color'],
+            'role': info['role'],
+            'statement_count': 0,
+            'irgc_direct_score': 0,
+            'nuclear_score': 0,
+            'domestic_score': 0,
+            'regional_score': 0,
+            'soft_power_score': 0,
+            'max_level': 0,
+            'top_articles': [],
+            'silence_alert': False,
+            'specificity_scores': [],
+        }
+        for actor_id, info in ACTORS.items()
+    }
+
+    theatre_summary = {
+        'irgc_direct_max': 0,
+        'nuclear_max': 0,
+        'domestic_max': 0,
+        'regional_max': 0,
+        'soft_power_max': 0,
+        'diplomatic_max': 0,   # v1.1: De-escalation signals
+        'total_articles': len(articles),
+        'operation_true_promise_signals': [],
+        'proxy_directive_signals': [],
+        'all_specificity_scores': [],
+    }
+
+    for article in articles:
+        text = f"{article.get('title', '')} {article.get('description', '')}".lower()
+        pub_date = article.get('published', '')
+
+        # Operation True Promise detection
+        otp_hits = [p for p in OPERATION_TRUE_PROMISE_PATTERNS if p in text]
+        if otp_hits:
+            theatre_summary['operation_true_promise_signals'].append({
+                'phrase': otp_hits[0],
+                'article': article.get('title', '')[:100],
+                'published': pub_date,
+                'source': article.get('source', ''),
+            })
+
+        # Proxy directive language
+        directive_hits = [p for p in PROXY_DIRECTIVE_LANGUAGE if p in text]
+        if directive_hits:
+            theatre_summary['proxy_directive_signals'].append({
+                'phrase': directive_hits[0],
+                'article': article.get('title', '')[:100],
+                'published': pub_date,
+            })
+
+        # Specificity
+        spec_score, _ = _score_specificity(text)
+        if spec_score > 0:
+            theatre_summary['all_specificity_scores'].append(spec_score)
+
+        # Reporting language check
+        is_reporting_context = any(phrase in text for phrase in REPORTING_LANGUAGE)
+
+        # Multi-actor matching
+        matched_actors = []
+        for actor_id in ACTORS:
+            for kw in ACTOR_KEYWORDS.get(actor_id, []):
+                if kw.lower() in text:
+                    matched_actors.append(actor_id)
+                    break
+
+        if not matched_actors:
+            continue
+
+        for actor_id in matched_actors:
+            ar = actor_results[actor_id]
+            ar['statement_count'] += 1
+            if spec_score > 0:
+                ar['specificity_scores'].append(spec_score)
+
+            if len(ar['top_articles']) < 5:
+                ar['top_articles'].append({
+                    'title': article.get('title', '')[:120],
+                    'url': article.get('url', ''),
+                    'source': article.get('source', ''),
+                    'published': pub_date,
+                    'specificity_score': spec_score,
+                })
+
+            # Score vectors with reporting downgrade
+            for level in range(5, 0, -1):
+                # IRGC Direct
+                for kw in IRGC_DIRECT_TRIGGERS.get(level, []):
+                    if kw in text:
+                        effective_level = level
+                        if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
+                            effective_level = 2
+                        if effective_level > ar['irgc_direct_score']:
+                            ar['irgc_direct_score'] = effective_level
+                        if level > theatre_summary['irgc_direct_max']:
+                            theatre_summary['irgc_direct_max'] = level
+                        break
+
+                # Nuclear
+                for kw in NUCLEAR_TRIGGERS.get(level, []):
+                    if kw in text:
+                        effective_level = level
+                        if actor_id in REPORTING_ACTORS and level >= 4 and is_reporting_context:
+                            effective_level = 3
+                        if effective_level > ar['nuclear_score']:
+                            ar['nuclear_score'] = effective_level
+                        if level > theatre_summary['nuclear_max']:
+                            theatre_summary['nuclear_max'] = level
+                        break
+
+                # Domestic
+                for kw in DOMESTIC_TRIGGERS.get(level, []):
+                    if kw in text:
+                        if level > ar['domestic_score']:
+                            ar['domestic_score'] = level
+                        if level > theatre_summary['domestic_max']:
+                            theatre_summary['domestic_max'] = level
+                        break
+
+                # Regional
+                for kw in REGIONAL_TRIGGERS.get(level, []):
+                    if kw in text:
+                        effective_level = level
+                        if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
+                            effective_level = 2
+                        if effective_level > ar['regional_score']:
+                            ar['regional_score'] = effective_level
+                        if level > theatre_summary['regional_max']:
+                            theatre_summary['regional_max'] = level
+                        break
+
+                # Soft Power / Influence Operations
+                for kw in SOFT_POWER_KEYWORDS.get(level, []):
+                    if kw in text:
+                        if level > ar['soft_power_score']:
+                            ar['soft_power_score'] = level
+                        if level > theatre_summary['soft_power_max']:
+                            theatre_summary['soft_power_max'] = level
+                        break
+
+                # ── v1.1: Diplomatic Track (de-escalation, REDUCES pressure) ──
+                for kw in DIPLOMATIC_TRIGGERS.get(level, []):
+                    if kw in text:
+                        if level > theatre_summary['diplomatic_max']:
+                            theatre_summary['diplomatic_max'] = level
+                        break
+
+    # Per-actor finalization
+    for actor_id, ar in actor_results.items():
+        ar['max_level'] = max(
+            ar['irgc_direct_score'], ar['nuclear_score'],
+            ar['domestic_score'], ar['regional_score'],
+            ar['soft_power_score']
+        )
+        ar['escalation_level'] = ar['max_level']
+        ar['escalation_label'] = ESCALATION_LEVELS.get(ar['max_level'], {}).get('label', 'Baseline')
+        ar['escalation_color'] = ESCALATION_LEVELS.get(ar['max_level'], {}).get('color', '#6b7280')
+
+        baseline = ACTORS[actor_id].get('baseline_statements_per_week', 3)
+        expected = baseline * (3 / 7.0)
+        ar['silence_alert'] = ar['statement_count'] == 0 and expected >= 2
+
+        specs = ar.pop('specificity_scores', [])
+        ar['specificity_score'] = round(sum(specs) / len(specs), 1) if specs else 0
+
+    return actor_results, theatre_summary
+
+
+# ============================================
+# SCORING — Proxy Activation is a weighted input
+# ============================================
+# ════════════════════════════════════════════════════════════════════════
+# IRAN STRIKE WINDOW INTEGRATION (May 22 2026)
+# ────────────────────────────────────────────────────────────────────────
+# Reads the iran_strike_window:current cache (written by
+# iran_strike_window_detector.py) and surfaces convergence state into:
+#   1. _calculate_rhetoric_score as a modifier (capped, severity-scaled)
+#   2. Cross-theater fingerprint for downstream consumers
+#   3. result dict for frontend rendering
+#
+# Framing discipline: CONVERGENCE, not prediction. Severity contributes to
+# score the same way diplomatic/regime modifiers do — additive, capped,
+# never dominant.
+# ════════════════════════════════════════════════════════════════════════
+
+def _read_strike_window_state():
+    """Read the latest strike window detector cache. Returns dict or None."""
+    try:
+        return _redis_get('iran_strike_window:current')
+    except Exception as e:
+        print(f"[Iran Rhetoric] Strike window read error: {str(e)[:100]}")
+        return None
+
+
+def _strike_window_score_modifier(sw_state):
+    """Convert strike-window severity to a score modifier.
+
+    Mirrors the diplomatic/regime modifier pattern: additive, capped,
+    severity-scaled. Convergence indicators contribute to score the same
+    way other dimensional signals do — they nudge it, they don't dominate it.
+
+      critical = +12
+      high     = +8
+      elevated = +4
+      normal/missing = 0
+    """
+    if not sw_state:
+        return 0
+    severity = (sw_state.get('severity') or 'normal').lower()
+    return {'critical': 12, 'high': 8, 'elevated': 4, 'normal': 0}.get(severity, 0)
+
+
+def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
+                               actor_results, operation_true_promise_count,
+                               regime_signals=None):
+    """
+    Weighted score with proxy activation as a direct input.
+
+    v1.2 (May 7 2026) — adds optional regime_signals parameter. When 3+ regime
+    signals fire at L3+, applies a capped +5 modifier reflecting that Iran is
+    contributing to structural-system fragmentation (parallel financial
+    infrastructure, OPEC realignment, arms trade realignment). The cap prevents
+    rhetoric noise from inflating the score; only L3+ (Directive level) signals
+    count toward the modifier.
+    """
+    irgc    = theatre_summary['irgc_direct_max']
+    nuclear = theatre_summary['nuclear_max']
+    domestic = theatre_summary['domestic_max']
+    regional = theatre_summary['regional_max']
+    proxy   = proxy_activation_level
+
+    weighted = (
+        irgc    * 3.0 +
+        proxy   * 2.5 +   # ← Cross-theater Redis input
+        nuclear * 2.0 +
+        regional * 1.5 +
+        domestic * 1.0
+    )
+    max_possible = 5 * (3.0 + 2.5 + 2.0 + 1.5 + 1.0)
+    base = (weighted / max_possible) * 75
+
+    # Coordination bonus
+    if proxy >= 3:
+        base += 15  # 3+ proxies simultaneously elevated
+    elif proxy >= 2:
+        base += 8
+
+    # Command node bonus
+    max_actor_level = max((ar['max_level'] for ar in actor_results.values()), default=0)
+    if max_actor_level >= 4 and proxy >= 3:
+        base += 10  # Iran at Operational + 3+ proxies = clear command signal
+
+    # Operation True Promise bonus
+    if operation_true_promise_count > 0:
+        base += min(operation_true_promise_count * 3, 12)
+
+    # ── v1.1: Diplomatic Track Modifier (active negotiations REDUCE pressure) ──
+    diplomatic_level = theatre_summary.get('diplomatic_max', 0)
+    diplomatic_modifier_map = {
+        0: 0,    # Quiet
+        1: -1,   # Background diplomatic mentions
+        2: -3,   # Diplomatic push
+        3: -6,   # Mediator activity (Pakistan/Oman/Russia shuttle)
+        4: -10,  # Active negotiations / direct talks
+        5: -15,  # Agreement reached / signed
+    }
+    base += diplomatic_modifier_map.get(diplomatic_level, 0)
+
+    # ── v1.2 (May 7 2026): Regime Signal Modifier (capped +5) ──
+    # When Iran is contributing to structural-system fragmentation
+    # (gold-for-oil, yuan settlement, OPEC realignment, arms exports),
+    # bump the score modestly. Capped so rhetoric noise can't dominate.
+    if regime_signals:
+        active_count = regime_signals.get('active_count', 0)
+        # +1 per active dimension (L3+), capped at +5
+        regime_modifier = min(active_count, 5)
+        if regime_modifier > 0:
+            base += regime_modifier
+            print(f"[Iran Rhetoric] 🌐 Regime signal modifier: +{regime_modifier} "
+                  f"({active_count} dimensions at L3+)")
+
+    # ── v1.3 (May 22 2026): Strike Window Convergence Modifier ──
+    # When the iran_strike_window_detector reports operational-window
+    # convergence, contribute to score. Framing: convergence detected,
+    # NOT prediction of action. Capped at +12 (critical severity).
+    sw_state = _read_strike_window_state()
+    sw_modifier = _strike_window_score_modifier(sw_state)
+    if sw_modifier > 0:
+        base += sw_modifier
+        sev = (sw_state or {}).get('severity', 'unknown')
+        n_signals = (sw_state or {}).get('active_signal_count', 0)
+        print(f"[Iran Rhetoric] 🌙 Strike Window modifier: +{sw_modifier} "
+              f"(severity: {sev}, {n_signals} signals active)")
+
+    return max(0, min(100, int(base)))
+
+
+# ============================================
+# MAIN SCAN
+# ============================================
+def run_iran_rhetoric_scan(days=3):
+    """
+    Full Iran command node scan.
+    Reads proxy theater data from Redis as INPUT to scoring.
+    """
+    print(f"\n[Iran Rhetoric] ═══ Starting command node scan v1.0 (days={days}) ═══")
+    start = datetime.now(timezone.utc)
+
+    # ── Step 1: Read proxy activation BEFORE fetching articles ──
+    print(f"[Iran Rhetoric] 🔗 Reading cross-theater proxy data...")
+    proxy_activation_level, proxy_detail = _compute_proxy_activation_index()
+    print(f"[Iran Rhetoric] 🔗 Proxy Activation Index: L{proxy_activation_level}")
+
+    # ── Step 2: Fetch and classify articles ──
+    articles = fetch_rhetoric_articles(days)
+    actor_results, theatre_summary = classify_articles(articles, proxy_activation_level)
+
+    # ── Step 3: Compute theatre levels ──
+    max_irgc     = theatre_summary['irgc_direct_max']
+    max_nuclear  = theatre_summary['nuclear_max']
+    max_domestic = theatre_summary['domestic_max']
+    max_regional = theatre_summary['regional_max']
+
+    otp_count = len(theatre_summary['operation_true_promise_signals'])
+
+    # Overall level = max of all vectors including proxy activation
+    max_level = max(max_irgc, max_nuclear, max_domestic, max_regional, proxy_activation_level)
+    max_level = min(max_level, 5)
+
+    # ── Regime Signals (May 7 2026) ──
+    # Computed BEFORE _calculate_rhetoric_score so the score modifier
+    # can reference active_count. Six sub-detection ladders for structural
+    # shifts in the international system. Output feeds (a) score modifier,
+    # (b) cross-theater fingerprint, (c) result dict for frontend.
+    regime_signals = _score_iran_regime_signals(articles)
+    if regime_signals.get('active_count', 0) > 0:
+        active_dims = [d for d in
+                       ['gold_for_oil', 'dedollarization', 'yuan_settlement',
+                        'brics_alignment', 'opec_realignment', 'arms_export']
+                       if regime_signals.get(d, 0) >= 3]
+        print(f"[Iran Rhetoric] 🌐 Regime signals: {regime_signals['active_count']} active "
+              f"({', '.join(active_dims)}) — max L{regime_signals['max']}")
+
+    rhetoric_score = _calculate_rhetoric_score(
+        theatre_summary, proxy_activation_level, actor_results, otp_count,
+        regime_signals=regime_signals
+    )
+
+    # ── v1.3 (May 22 2026): Read strike window state for result dict ──
+    # Already factored into rhetoric_score via the modifier in
+    # _calculate_rhetoric_score. Here we surface it for the frontend.
+    strike_window_state = _read_strike_window_state() or {}
+    if strike_window_state.get('severity') in ('elevated', 'high', 'critical'):
+        print(f"[Iran Rhetoric] 🌙 Strike Window state: "
+              f"severity={strike_window_state.get('severity')}, "
+              f"composite={strike_window_state.get('composite_score')}, "
+              f"signals={strike_window_state.get('active_signal_count', 0)}")
+
+    # Theatre specificity
+    all_specs = theatre_summary.get('all_specificity_scores', [])
+    theatre_specificity = round(sum(all_specs) / len(all_specs), 1) if all_specs else 0
+
+    scan_time = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
+
+    result = {
+        'success': True,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'scanned_at': datetime.now(timezone.utc).isoformat(),
+        'days_analyzed': days,
+        'total_articles': len(articles),
+        'theatre': 'Iran',
+        'is_command_node': True,
+
+        # Theatre summary
+        'theatre_score': rhetoric_score,
+        'theatre_level': max_level,
+        'theatre_escalation_level': max_level,
+        'theatre_escalation_label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Baseline'),
+        'theatre_escalation_color': ESCALATION_LEVELS.get(max_level, {}).get('color', '#6b7280'),
+        'theatre_escalation_description': ESCALATION_LEVELS.get(max_level, {}).get('description', ''),
+
+        # Vectors
+        'irgc_direct_level':      max_irgc,
+        'irgc_direct_label':      ESCALATION_LEVELS.get(max_irgc, {}).get('label', 'Baseline'),
+        'proxy_activation_level': proxy_activation_level,
+        'proxy_activation_label': ESCALATION_LEVELS.get(proxy_activation_level, {}).get('label', 'Baseline'),
+        'proxy_activation_detail': proxy_detail,
+        'nuclear_level':          max_nuclear,
+        'nuclear_label':          ESCALATION_LEVELS.get(max_nuclear, {}).get('label', 'Baseline'),
+        'domestic_level':         max_domestic,
+        'domestic_label':         ESCALATION_LEVELS.get(max_domestic, {}).get('label', 'Baseline'),
+        'regional_level':         max_regional,
+        'regional_label':         ESCALATION_LEVELS.get(max_regional, {}).get('label', 'Baseline'),
+        'soft_power_level':       theatre_summary['soft_power_max'],
+        'soft_power_label':       ESCALATION_LEVELS.get(theatre_summary['soft_power_max'], {}).get('label', 'Baseline'),
+
+        # ── v1.1: Diplomatic Track (de-escalation signals) ──
+        'ceasefire_level':           theatre_summary['diplomatic_max'],
+        'ceasefire_label':           ESCALATION_LEVELS.get(theatre_summary['diplomatic_max'], {}).get('label', 'Baseline'),
+        'diplomatic_track_active':   theatre_summary['diplomatic_max'] >= 2,
+        'diplomatic_modifier':       {0:0, 1:-1, 2:-3, 3:-6, 4:-10, 5:-15}.get(theatre_summary['diplomatic_max'], 0),
+        'diplomatic_label_detailed': {
+            0: 'Quiet',
+            1: 'Background Mentions',
+            2: 'Diplomatic Push',
+            3: 'Mediator Activity',
+            4: 'Active Negotiations',
+            5: 'Agreement Reached',
+        }.get(theatre_summary['diplomatic_max'], 'Quiet'),
+
+        # Special signals
+        'operation_true_promise_count': otp_count,
+        'operation_true_promise_signals': theatre_summary['operation_true_promise_signals'][:5],
+        'proxy_directive_signals': theatre_summary['proxy_directive_signals'][:5],
+
+        # v2.0 enriched
+        'specificity_score': theatre_specificity,
+        'delta': None,
+        'silence_anomalies': [],
+        'crosstheater_coordination': [],
+
+        # ── Regime Signals (May 7 2026) ──
+        # Per-dimension max levels for cross-theater fingerprint + GPI consumption.
+        'regime_signals': regime_signals,
+        'regime_signals_active_count': regime_signals.get('active_count', 0),
+        'regime_signals_max_level':    regime_signals.get('max', 0),
+
+        # Actors
+        'actors': actor_results,
+        'scan_time_seconds': scan_time,
+        'version': '1.0.0-iran-command-node',
+    }
+
+    # Save initial cache
+    _redis_set(RHETORIC_CACHE_KEY, result)
+    _redis_set(RHETORIC_CACHE_KEY_LEGACY, result)
+
+    # History snapshot
+    try:
+        snapshot = json.dumps({
+            'ts':         datetime.now(timezone.utc).isoformat(),
+            'score':      rhetoric_score,
+            'level':      max_level,
+            'label':      ESCALATION_LEVELS.get(max_level, {}).get('label', 'Baseline'),
+            'irgc':       max_irgc,
+            'proxy':      proxy_activation_level,
+            'nuclear':    max_nuclear,
+            'regional':   max_regional,
+            'domestic':   max_domestic,
+            'otp_count':  otp_count,
+            'specificity': theatre_specificity,
+        })
+        if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+            enc = urllib.parse.quote(snapshot, safe='')
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/lpush/{HISTORY_KEY}/{enc}",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/ltrim/{HISTORY_KEY}/0/119",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=5
+            )
+            print(f"[Iran Rhetoric] 📈 History snapshot saved")
+    except Exception as e:
+        print(f"[Iran Rhetoric] History error (non-fatal): {e}")
+
+    # Baselines + silence anomalies
+    baselines = _update_actor_baselines(actor_results)
+    result['silence_anomalies'] = _detect_silence_anomalies(actor_results, baselines)
+
+    # Delta
+    result['delta'] = _compute_delta()
+
+    # ── v1.3 (May 22 2026): Surface strike window state for frontend ──
+    if strike_window_state and strike_window_state.get('severity') in ('elevated', 'high', 'critical'):
+        result['strike_window'] = {
+            'severity':              strike_window_state.get('severity'),
+            'composite_score':       strike_window_state.get('composite_score', 0),
+            'active_signal_count':   strike_window_state.get('active_signal_count', 0),
+            'active_signals':        strike_window_state.get('active_signals', []),
+            'active_multipliers':    strike_window_state.get('active_multipliers', []),
+            'rationale':             strike_window_state.get('rationale', ''),
+            'disclaimer':            strike_window_state.get('disclaimer', ''),
+            'timestamp':             strike_window_state.get('timestamp', ''),
+        }
+    else:
+        result['strike_window'] = None
+
+    # Write command node fingerprint THEN detect coordination
+    _write_crosstheater_signal(result)
+    result['crosstheater_coordination'] = _detect_crosstheater_coordination(
+        proxy_activation_level, proxy_detail
+    )
+
+    # ── Commodity pressure (Phase 2B) ──
+    # Read from shared commodity_tracker_cache Redis key. Inject into
+    # scan_data BEFORE interpreter + build_top_signals so they can
+    # emit canonical commodity_pressure / dual_chokepoint / nuclear_signaling
+    # signals derived from oil/gas/uranium/gold/wheat exposure.
+    try:
+        commodity_data = _read_iran_commodity_pressure()
+        if commodity_data:
+            result['commodity_pressure'] = commodity_data
+            n_summaries = len(commodity_data.get('commodity_summaries', []))
+            iran_alert  = commodity_data.get('alert_level', 'normal')
+            print(f"[Iran Rhetoric] 🌾 Commodity pressure: alert={iran_alert}, {n_summaries} exposures")
+        else:
+            print(f"[Iran Rhetoric] ℹ️ Commodity pressure: no data (cache cold or Iran not in bundle yet)")
+    except Exception as e:
+        print(f"[Iran Rhetoric] ⚠️ Commodity read error (non-fatal): {str(e)[:120]}")
+
+    # Signal interpretation — So What, Red Lines, Historical Patterns
+    if INTERPRETER_AVAILABLE:
+        try:
+            result['interpretation'] = iran_interpret_signals(result)
+            best = result['interpretation']['historical_matches']
+            best_pct = best[0]['similarity'] if best else 'none'
+            print(f"[Iran Rhetoric] ✅ Interpreter: {result['interpretation']['red_lines']['breached_count']} red lines breached, best match: {best_pct}%")
+        except Exception as e:
+            print(f"[Iran Rhetoric] ⚠️ Interpreter error (non-fatal): {e}")
+
+    # Canonical top_signals[] for ME regional BLUF + GPI consumption
+    if iran_build_top_signals:
+        try:
+            result['top_signals'] = iran_build_top_signals(result)
+            print(f"[Iran Rhetoric] ✅ Built {len(result['top_signals'])} top_signals for BLUF/GPI")
+        except Exception as e:
+            print(f"[Iran Rhetoric] ⚠️ build_top_signals error: {str(e)[:120]}")
+            result['top_signals'] = []
+    else:
+        result['top_signals'] = []
+
+    # Re-save with all enriched fields
+    _redis_set(RHETORIC_CACHE_KEY, result)
+    _redis_set(RHETORIC_CACHE_KEY_LEGACY, result)
+
+    print(f"[Iran Rhetoric] ✅ Command node scan complete in {scan_time}s")
+    print(f"[Iran Rhetoric]    Level: {result['theatre_escalation_label']} ({max_level})")
+    print(f"[Iran Rhetoric]    Score: {rhetoric_score}/100")
+    print(f"[Iran Rhetoric]    IRGC Direct: L{max_irgc} | Proxy Activation: L{proxy_activation_level}")
+    print(f"[Iran Rhetoric]    Nuclear: L{max_nuclear} | Regional: L{max_regional}")
+    print(f"[Iran Rhetoric]    Operation True Promise signals: {otp_count}")
+    print(f"[Iran Rhetoric]    Specificity: {theatre_specificity}/10")
     return result
 
 
-# ============================================================
+def _bg_scan():
+    global _rhetoric_running
+    try:
+        run_iran_rhetoric_scan()
+    except Exception as e:
+        print(f"[Iran Rhetoric] Background scan error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        with _rhetoric_lock:
+            _rhetoric_running = False
+
+
+# ============================================
 # ROUTE REGISTRATION
-# ============================================================
+# ============================================
+def register_iran_rhetoric_routes(app):
 
-def register_me_bluf_routes(app):
-    """Register BLUF endpoint on ME Flask app."""
-    from flask import jsonify, request as flask_request
+    # Periodic scan thread
+    def _periodic_scan():
+        time.sleep(90)  # Stagger startup
+        print("[Iran Rhetoric] Starting initial scan...")
+        _bg_scan()
+        while True:
+            print(f"[Iran Rhetoric] Sleeping {SCAN_INTERVAL_HOURS}h until next scan...")
+            time.sleep(SCAN_INTERVAL_HOURS * 3600)
+            _bg_scan()
 
-    @app.route('/api/rhetoric/me/bluf', methods=['GET'])
-    def me_regional_bluf():
-        force = flask_request.args.get('force', 'false').lower() == 'true'
-        result = build_regional_bluf(force=force)
-        return jsonify(result)
+    thread = threading.Thread(target=_periodic_scan, daemon=True)
+    thread.start()
+    print(f"[Iran Rhetoric] ✅ Periodic scan thread started ({SCAN_INTERVAL_HOURS}h cycle)")
 
-    @app.route('/debug/me-bluf-version', methods=['GET'])
-    def me_bluf_version():
-        """
-        Diagnostic endpoint — returns version info from the live deployed code.
-        If you can hit this URL and see the v2.1.0 marker, new code is running.
-        If you get 404, the new code isn't deployed.
-        """
-        # Probe what functions exist in the current module
-        existing_functions = []
-        for fn_name in (
-            '_fetch_lebanon_humanitarian',
-            '_fetch_commodity_pressure',
-            '_apply_convergence_enrichments',
-            '_build_lebanon_humanitarian_signal',
-        ):
-            if fn_name in globals():
-                existing_functions.append(fn_name)
+    @app.route('/api/rhetoric/iran', methods=['GET'])
+    def iran_rhetoric():
+        force = request.args.get('force', '').lower() in ('true', '1', 'yes')
+        if force:
+            print("[Iran Rhetoric] Force refresh requested — running with 25s gateway-safe timeout")
+            # Iran scans take ~6 minutes; Render's gateway times out at 30s.
+            # Run scan in background thread with 25s ceiling. If it finishes in time,
+            # return fresh data. Otherwise return last cached response with a flag
+            # indicating a fresh scan is in progress — Render won't 502.
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(run_iran_rhetoric_scan)
+            executor.shutdown(wait=False)  # Let scan continue in background after timeout
+            try:
+                result = future.result(timeout=25)
+                return jsonify(result)
+            except FuturesTimeoutError:
+                print("[Iran Rhetoric] Force scan exceeded 25s — returning cached + scan_triggered flag")
+                cached = _redis_get(RHETORIC_CACHE_KEY) or _redis_get(RHETORIC_CACHE_KEY_LEGACY)
+                if cached:
+                    cached['cached'] = True
+                    cached['scan_triggered'] = True
+                    cached['scan_status'] = 'in_progress'
+                    cached['message'] = 'Fresh scan in progress (background). Cached data shown — refresh in 3-5 min for updated regime signals.'
+                    return jsonify(cached)
+                return jsonify({
+                    'success': False,
+                    'awaiting_scan': True,
+                    'scan_triggered': True,
+                    'message': 'Fresh scan triggered, no cached data available yet. Check back in 3-5 min.',
+                }), 503
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)[:200]}), 500
 
-        # Probe convergence registry availability
-        try:
-            from convergence_registry import CONVERGENCE_REGISTRY
-            registry_available = True
-            registry_count = len(CONVERGENCE_REGISTRY)
-            registry_ids = [e['id'] for e in CONVERGENCE_REGISTRY]
-        except ImportError:
-            registry_available = False
-            registry_count = 0
-            registry_ids = []
+        cached = _redis_get(RHETORIC_CACHE_KEY) or _redis_get(RHETORIC_CACHE_KEY_LEGACY)
+        if cached:
+            cached['cached'] = True
+            return jsonify(cached)
+
+        global _rhetoric_running
+        with _rhetoric_lock:
+            if not _rhetoric_running:
+                _rhetoric_running = True
+                t = threading.Thread(target=_bg_scan, daemon=True)
+                t.start()
 
         return jsonify({
-            'deploy_marker':         'v2.1.0',
-            'lebanon_humanitarian_backend': LEBANON_HUMANITARIAN_BACKEND,
-            'cache_key':             LEBANON_HUMANITARIAN_CACHE_KEY,
-            'cache_ttl_hours':       LEBANON_HUMANITARIAN_CACHE_TTL / 3600,
-            'expected_new_functions': [
-                '_fetch_lebanon_humanitarian',
-                '_fetch_commodity_pressure',
-                '_apply_convergence_enrichments',
-                '_build_lebanon_humanitarian_signal',
-            ],
-            'actual_existing_functions': existing_functions,
-            'all_functions_present':  len(existing_functions) == 4,
-            'convergence_registry_available': registry_available,
-            'convergence_registry_count':     registry_count,
-            'convergence_registry_ids':       registry_ids,
+            'success': True,
+            'awaiting_scan': True,
+            'theatre': 'Iran',
+            'is_command_node': True,
+            'theatre_score': 0,
+            'theatre_escalation_level': 0,
+            'theatre_escalation_label': 'Scanning...',
+            'theatre_escalation_color': '#6b7280',
+            'actors': {},
+            'message': 'First scan in progress — check back in 3-4 minutes',
+            'version': '1.0.0-iran-command-node',
         })
 
-    print('[ME BLUF] Routes registered: /api/rhetoric/me/bluf, /debug/me-bluf-version')
+    @app.route('/api/rhetoric/iran/summary', methods=['GET'])
+    def iran_rhetoric_summary():
+        """Lightweight summary — includes all v2.0 fields + Iran-specific signals."""
+        cached = _redis_get(RHETORIC_CACHE_KEY) or _redis_get(RHETORIC_CACHE_KEY_LEGACY)
+        if cached:
+            return jsonify({
+                'success': True,
+                'is_command_node': True,
+                # Core
+                'theatre_score':            cached.get('theatre_score', 0),
+                'theatre_level':            cached.get('theatre_level', 0),
+                'theatre_escalation_level': cached.get('theatre_escalation_level', 0),
+                'theatre_escalation_label': cached.get('theatre_escalation_label', 'Baseline'),
+                'theatre_escalation_color': cached.get('theatre_escalation_color', '#6b7280'),
+                'theatre_label':            cached.get('theatre_escalation_label', 'Baseline'),
+                'theatre_color':            cached.get('theatre_escalation_color', '#6b7280'),
+                # Vectors
+                'irgc_direct_level':      cached.get('irgc_direct_level', 0),
+                'irgc_direct_label':      cached.get('irgc_direct_label', 'Baseline'),
+                'proxy_activation_level': cached.get('proxy_activation_level', 0),
+                'proxy_activation_label': cached.get('proxy_activation_label', 'Baseline'),
+                'proxy_activation_detail': cached.get('proxy_activation_detail', {}),
+                'nuclear_level':          cached.get('nuclear_level', 0),
+                'nuclear_label':          cached.get('nuclear_label', 'Baseline'),
+                'domestic_level':         cached.get('domestic_level', 0),
+                'domestic_label':         cached.get('domestic_label', 'Baseline'),
+                'regional_level':         cached.get('regional_level', 0),
+                'regional_label':         cached.get('regional_label', 'Baseline'),
+                # ── v1.1: Diplomatic Track ──
+                'ceasefire_level':           cached.get('ceasefire_level', 0),
+                'ceasefire_label':           cached.get('ceasefire_label', 'Baseline'),
+                'diplomatic_track_active':   cached.get('diplomatic_track_active', False),
+                'diplomatic_modifier':       cached.get('diplomatic_modifier', 0),
+                'diplomatic_label_detailed': cached.get('diplomatic_label_detailed', 'Quiet'),
+                # Iran-specific
+                'operation_true_promise_count':   cached.get('operation_true_promise_count', 0),
+                'operation_true_promise_signals': cached.get('operation_true_promise_signals', [])[:3],
+                'proxy_directive_signals':        cached.get('proxy_directive_signals', [])[:3],
+                # v2.0
+                'specificity_score':  cached.get('specificity_score', 0),
+                'delta':              cached.get('delta'),
+                'silence_anomalies':  cached.get('silence_anomalies', []),
+                'total_articles':     cached.get('total_articles', 0),
+                'timestamp':  cached.get('timestamp'),
+                'scanned_at': cached.get('scanned_at', cached.get('timestamp', '')),
+                'cached': True,
+            })
+        return jsonify({
+            'success': False,
+            'message': 'No cached data yet — scan in progress',
+            'awaiting_scan': True,
+            'is_command_node': True,
+        })
 
+    @app.route('/api/rhetoric/iran/history', methods=['GET'])
+    def iran_rhetoric_history():
+        try:
+            limit = int(request.args.get('limit', 120))
+            limit = max(1, min(limit, 120))
+            entries = []
+            if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+                resp = requests.get(
+                    f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/{limit - 1}",
+                    headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                    timeout=5
+                )
+                raw = resp.json().get('result', [])
+                for item in raw:
+                    try:
+                        entries.append(json.loads(item))
+                    except Exception:
+                        pass
+            entries.reverse()
+            return jsonify({
+                'success': True,
+                'theatre': 'Iran',
+                'is_command_node': True,
+                'history_key': HISTORY_KEY,
+                'count': len(entries),
+                'entries': entries,
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
-# ============================================================
-# STANDALONE TEST
-# ============================================================
-if __name__ == '__main__':
-    print("ME Regional BLUF Engine -- standalone test")
-    print("(Requires Redis env vars to actually read tracker caches)")
-    print()
-
-    # Simulate what the output looks like with mock data
-    mock_result = {
-        'bluf': (
-            'ME BLUF (08 Apr 2026 00:00Z): Regional posture is CRITICAL with 3 theatres at L4+. '
-            'Active conflict in ISRAEL, IRAN, LEBANON; incident-level in IRAQ. '
-            'Cross-theater coordination signals detected across LEBANON, IRAQ, YEMEN -- '
-            'watch for synchronized proxy operations. '
-            'Iran Operation True Promise signals at 46 -- axis-wide escalation posture active. '
-            'Hezbollah operating at L5 under Iranian direction; LAF enforcement gap persists. '
-            'Houthi/Ansar Allah anomalously silent -- operational security or patron direction to stand down. '
-            'Syria transition holding; Iran expelled and corridor severed. '
-            'Primary risk: ceasefire collapse triggering simultaneous multi-axis activation '
-            'across Lebanon, Iraq, and Yemen vectors.'
-        ),
-        'signals': [
-            {
-                'icon': '🔴', 'color': '#dc2626',
-                'text': '🇮🇱 ISRAEL at L5 Active Conflict (score 97/100)',
-            },
-            {
-                'icon': '🔗', 'color': '#7c3aed',
-                'text': 'CROSS-THEATER: Simultaneous elevation across LEBANON, IRAQ, YEMEN (90% confidence)',
-            },
-            {
-                'icon': '🔇', 'color': '#f59e0b',
-                'text': '🇾🇪 YEMEN: Ansar Allah (Houthis) SILENT -- possible operational security',
-            },
-        ],
-        'posture_label': 'ELEVATED -- INCIDENT LEVEL',
-        'posture_color': '#ef4444',
-        'max_level': 5,
-        'avg_score': 56.8,
-        'theatres_at_l3plus': 4,
-        'theatres_live': 6,
-    }
-
-    print('BLUF:')
-    print(mock_result['bluf'])
-    print()
-    print('TOP SIGNALS:')
-    for s in mock_result['signals']:
-        print(f'  {s["icon"]} {s["text"][:100]}')
-    print()
-    print(f'POSTURE: {mock_result["posture_label"]} | MAX L{mock_result["max_level"]} | AVG {mock_result["avg_score"]}')
+    print("[Iran Rhetoric] ✅ Command node routes registered: "
+          "/api/rhetoric/iran, /api/rhetoric/iran/summary, /api/rhetoric/iran/history")
