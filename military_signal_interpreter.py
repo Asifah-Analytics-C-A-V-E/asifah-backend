@@ -88,6 +88,19 @@ REGIONAL_BASELINE_TEMPLATES = {
         ),
         'context_actors': ['us'],
     },
+    # ── AFRICA THEATER (May 22 2026) ──
+    'africa': {
+        'display': 'Africa / AFRICOM',
+        'baseline': (
+            'AFRICOM AOR baseline. Routine US-Africa Command counter-terrorism posture '
+            'across the Sahel, Horn of Africa, and Lake Chad Basin, with Wagner/Africa '
+            'Corps footprint stable across Mali, Burkina Faso, Libya, CAR, and Sudan. '
+            'Sudan civil war (SAF vs RSF) at established conflict tempo. No theatre-wide '
+            'escalation signal beyond ongoing baseline humanitarian and security pressures.'
+        ),
+        'context_actors': ['nigeria', 'somalia', 'sudan', 'libya', 'mali',
+                           'djibouti', 'drc', 'wagner_africa'],
+    },
 }
 
 # Critical-event keywords surfaced by chokepoint prose builder.
@@ -166,6 +179,20 @@ COUNTRY_DISPLAY = {
     'greenland':     'Greenland',
     'poland':        'Poland',
     'nato':          'NATO',
+    # ── AFRICA THEATER (May 22 2026) ──
+    'nigeria':                  'Nigeria',
+    'somalia':                  'Somalia',
+    'mali':                     'Mali',
+    'niger':                    'Niger',
+    'burkina_faso':             'Burkina Faso',
+    'drc':                      'the DR Congo',
+    'sudan':                    'Sudan',
+    'libya':                    'Libya',
+    'ethiopia':                 'Ethiopia',
+    'kenya':                    'Kenya',
+    'djibouti':                 'Djibouti',
+    'central_african_republic': 'the Central African Republic',
+    'wagner_africa':            'Wagner / Africa Corps',
 }
 
 # Alert-level phrasing maps. Used to inject correct severity wording.
@@ -768,6 +795,279 @@ def build_executive_summary(scan_result):
 # UMBRELLA BUILDER — single call returns full prose package
 # ============================================================
 
+# ════════════════════════════════════════════════════════════════════════
+# IRAN KINETIC RE-HEATING PROSE (May 22 2026)
+# ════════════════════════════════════════════════════════════════════════
+# Surfaces high-signal Iran-escalation patterns that should NOT blend into
+# generic CENTCOM volume. Specifically:
+#   - Israeli air bases serving as US launch hubs (Ben Gurion, Nevatim)
+#   - B-2/B-21 staging at Israeli AB
+#   - US troop surge keyword cluster
+#   - Diego Garcia bomber forward-deployment
+# Each pattern gets its own analytical voice in the prose layer.
+
+# Phrases (lowercase) that signal "US using Israel as strike-staging hub"
+_IRAN_KINETIC_LAUNCH_PHRASES = [
+    'ben gurion launch', 'us bombers ben gurion', 'us bombers israel',
+    'b-2 israel', 'b-2 nevatim', 'b-2 staging israel',
+    'b-21 israel', 'b-21 staging', 'kc-46 nevatim',
+    'us tankers israel', 'us aircraft staging israel', 'tanker bridge israel',
+]
+
+# Phrases that signal "US force flow toward CENTCOM"
+_IRAN_KINETIC_SURGE_PHRASES = [
+    'troop deployment iran', 'us forces surge centcom', 'us forces surge middle east',
+    'army flowing middle east', 'us military prepositioning iran',
+    'pentagon orders deployment', 'pre-strike posture', 'pre-strike positioning',
+    'kinetic preparation iran', 'kinetic prep iran',
+    'strike package iran', 'strike package centcom',
+]
+
+# Phrases that signal "Diego Garcia bomber posture"
+_IRAN_KINETIC_BOMBER_PHRASES = [
+    'diego garcia bomber', 'diego garcia b-2', 'diego garcia b-52',
+    'diego garcia b-1', 'bomber forward deployed diego garcia',
+]
+
+
+def build_iran_kinetic_prose(scan_result):
+    """Detect Iran kinetic re-heating patterns in top signals.
+
+    Returns dict:
+        {
+            'active':           bool,
+            'severity':         'elevated' | 'high' | 'surge',
+            'pattern_detected': str   ('launch_hub' | 'troop_surge' | 'bomber_posture' | 'multi'),
+            'prose':            str,
+            'matched_phrases':  list[str],
+        }
+
+    Returns {'active': False, 'prose': ''} when no kinetic patterns detected.
+    """
+    scan_result = _safe_dict(scan_result)
+    top_signals = _safe_list(scan_result.get('top_signals'))
+    actor_summaries = _safe_dict(scan_result.get('actor_summaries'))
+
+    # Also pull all signals from the scan if available
+    all_signals_text = ''
+    for sig in top_signals:
+        all_signals_text += ' ' + (sig.get('short_text') or '') + ' ' + (sig.get('long_text') or '')
+    # Iran actor's own signals if we have them
+    iran_data = _safe_dict(actor_summaries.get('iran'))
+    for sig in _safe_list(iran_data.get('top_signals')):
+        all_signals_text += ' ' + str(sig)
+    all_signals_text = all_signals_text.lower()
+
+    matched_launch = [p for p in _IRAN_KINETIC_LAUNCH_PHRASES if p in all_signals_text]
+    matched_surge  = [p for p in _IRAN_KINETIC_SURGE_PHRASES  if p in all_signals_text]
+    matched_bomber = [p for p in _IRAN_KINETIC_BOMBER_PHRASES if p in all_signals_text]
+
+    total_matches = len(matched_launch) + len(matched_surge) + len(matched_bomber)
+    if total_matches == 0:
+        return {'active': False, 'prose': '', 'severity': 'normal',
+                'pattern_detected': None, 'matched_phrases': []}
+
+    # Determine severity
+    if total_matches >= 5 or (matched_launch and matched_surge and matched_bomber):
+        severity = 'surge'
+    elif total_matches >= 3 or (matched_launch and matched_surge):
+        severity = 'high'
+    else:
+        severity = 'elevated'
+
+    # Determine dominant pattern
+    counts = {
+        'launch_hub':     len(matched_launch),
+        'troop_surge':    len(matched_surge),
+        'bomber_posture': len(matched_bomber),
+    }
+    nonzero = [(p, c) for p, c in counts.items() if c > 0]
+    if len(nonzero) >= 2:
+        pattern = 'multi'
+    else:
+        pattern = nonzero[0][0] if nonzero else None
+
+    # Compose prose
+    pieces = []
+    if matched_launch:
+        pieces.append(
+            'Israeli air bases — particularly Nevatim, Ben Gurion, and Ramat David — are '
+            'showing signal patterns consistent with US strike-staging activity. '
+            'B-2/B-21 staging or KC-46 tanker positioning at Israeli AB is the canonical '
+            'signature of US-Iran pre-kinetic posture.'
+        )
+    if matched_surge:
+        pieces.append(
+            'US force-flow language detected in CENTCOM AOR — troop deployment orders, '
+            'army prepositioning, or pre-strike positioning signals. This pattern '
+            'preceded Operation Absolute Resolve (Jan 2026).'
+        )
+    if matched_bomber:
+        pieces.append(
+            'Diego Garcia bomber forward-deployment signals active. B-2/B-52/B-1 '
+            'staging at the BIOT base is a long-range strike-readiness indicator.'
+        )
+
+    if severity == 'surge':
+        prefix = 'IRAN KINETIC RE-HEATING — SURGE PATTERN. '
+    elif severity == 'high':
+        prefix = 'IRAN KINETIC RE-HEATING — HIGH-TEMPO. '
+    else:
+        prefix = 'IRAN KINETIC RE-HEATING — EARLY INDICATORS. '
+
+    prose = prefix + ' '.join(pieces)
+
+    return {
+        'active':           True,
+        'severity':         severity,
+        'pattern_detected': pattern,
+        'prose':            prose,
+        'matched_phrases':  matched_launch + matched_surge + matched_bomber,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# ASSET MOVEMENT PROSE (May 22 2026)
+# ════════════════════════════════════════════════════════════════════════
+# Reads asset movement-history fingerprints (when available) and constructs
+# prose for named US Navy ships showing multi-position movement patterns.
+
+def build_asset_movement_prose(scan_result):
+    """Build prose for named US Navy ships with multi-position movement.
+
+    Looks for ships that appear in 2+ distinct locations in the current scan
+    or via movement_history attached to scan_result.
+
+    Returns:
+        {
+            'active':    bool,
+            'movements': list of {'ship': str, 'positions': list, 'prose': str},
+            'prose':     combined paragraph (or empty if no movements)
+        }
+    """
+    scan_result = _safe_dict(scan_result)
+    movement_data = _safe_dict(scan_result.get('asset_movement_summary')) or {}
+
+    # If scan_result has explicit movement_summary, use it. Otherwise scan
+    # top_signals for multi-location named-ship occurrences.
+    if movement_data and movement_data.get('ships'):
+        ships = movement_data['ships']
+    else:
+        # Build from top_signals — look for named ships with multiple locations
+        ships = {}
+        for sig in _safe_list(scan_result.get('top_signals')):
+            text = (sig.get('short_text') or '') + ' ' + (sig.get('long_text') or '')
+            text = text.lower()
+            import re as _re
+            for m in _re.finditer(r'(uss\s+[a-z][a-z\s\.]{3,30})', text):
+                ship = m.group(1).strip(' .,;')
+                loc = sig.get('hotspot_location') or sig.get('theatre') or ''
+                if ship and loc:
+                    ships.setdefault(ship, set()).add(loc)
+        # Convert to list-of-positions, keeping only multi-location ships
+        ships = {ship: sorted(locs) for ship, locs in ships.items() if len(locs) >= 2}
+
+    if not ships:
+        return {'active': False, 'movements': [], 'prose': ''}
+
+    movements = []
+    pieces = []
+    for ship, positions in list(ships.items())[:5]:  # Cap at 5 ships
+        if isinstance(positions, dict):
+            positions = positions.get('positions', [])
+        if len(positions) < 2:
+            continue
+        # Take last 3 positions max
+        positions = positions[:3] if len(positions) > 3 else positions
+        ship_display = ship.upper()
+        path = ' → '.join(positions)
+        sentence = f"{ship_display}: {path}"
+        movements.append({'ship': ship_display, 'positions': positions, 'prose': sentence})
+        pieces.append(sentence)
+
+    if not pieces:
+        return {'active': False, 'movements': [], 'prose': ''}
+
+    prose = "Named-asset multi-position movement detected — " + '; '.join(pieces) + "."
+
+    return {
+        'active':    True,
+        'movements': movements,
+        'prose':     prose,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# HUMANITARIAN-PANDEMIC CONVERGENCE PROSE (May 22 2026)
+# ════════════════════════════════════════════════════════════════════════
+# When the tracker detects hospital-ship + pandemic co-occurrence, this
+# builds the analytical voice for that convergence. High-fidelity signal —
+# the US committing a strategic 1,000-bed asset indicates official
+# recognition of severe humanitarian crisis.
+
+def build_humanitarian_convergence_prose(scan_result):
+    """Build prose for humanitarian-pandemic convergence signal.
+
+    Reads scan_result['humanitarian_convergences'] (written by the tracker's
+    _detect_humanitarian_convergence()).
+
+    Returns:
+        {
+            'active':      bool,
+            'convergences': list (raw),
+            'prose':       str (paragraph for each convergence),
+        }
+    """
+    scan_result = _safe_dict(scan_result)
+    convergences = _safe_list(scan_result.get('humanitarian_convergences'))
+
+    if not convergences:
+        return {'active': False, 'convergences': [], 'prose': ''}
+
+    pieces = []
+    for conv in convergences:
+        conv = _safe_dict(conv)
+        severity = conv.get('severity', 'elevated')
+        ship = conv.get('hospital_ship_name', 'US hospital ship')
+        region = conv.get('region', 'unspecified region').replace('_', ' ').title()
+        pandemic_kws = conv.get('pandemic_keywords', [])
+        h_count = conv.get('hospital_signal_count', 0)
+        p_count = conv.get('pandemic_signal_count', 0)
+
+        if severity == 'surge':
+            severity_prefix = 'CRITICAL HUMANITARIAN CONVERGENCE'
+        elif severity == 'high':
+            severity_prefix = 'HUMANITARIAN CONVERGENCE — HIGH SIGNAL'
+        else:
+            severity_prefix = 'HUMANITARIAN CONVERGENCE — EARLY INDICATOR'
+
+        sentence = (
+            f"{severity_prefix}: {ship} deployment co-occurring with active pandemic/"
+            f"disease signals in {region}. {h_count} hospital-ship signal(s), "
+            f"{p_count} pandemic signal(s)"
+        )
+        if pandemic_kws:
+            kw_str = ', '.join(kw for kw in pandemic_kws[:3] if kw)
+            if kw_str:
+                sentence += f" (detected: {kw_str})"
+        sentence += (
+            ". US committing strategic 1,000-bed humanitarian asset is a high-fidelity "
+            "indicator that Washington recognizes the health emergency as severe enough "
+            "to warrant naval-scale response. Watch for: CDC/WHO declarations, AFRICOM "
+            "support announcements, evacuation activity, and downstream regional "
+            "stability implications."
+        )
+        pieces.append(sentence)
+
+    prose = ' '.join(pieces)
+
+    return {
+        'active':       True,
+        'convergences': convergences,
+        'prose':        prose,
+    }
+
+
 def build_full_interpretation(scan_result):
     """
     One-call wrapper that returns the complete interpretation package.
@@ -784,13 +1084,17 @@ def build_full_interpretation(scan_result):
         }
     """
     return {
-        'executive_summary':   build_executive_summary(scan_result),
-        'theater_prose':       build_theater_prose(scan_result),
-        'chokepoint_prose':    build_chokepoint_prose(scan_result),
-        'convergence_prose':   build_convergence_prose(scan_result),
-        'evacuation_prose':    build_evacuation_prose(scan_result),
-        'top_signals':         build_top_signals(scan_result),
-        'interpreter_version': '1.0.0',
+        'executive_summary':            build_executive_summary(scan_result),
+        'theater_prose':                build_theater_prose(scan_result),
+        'chokepoint_prose':             build_chokepoint_prose(scan_result),
+        'convergence_prose':            build_convergence_prose(scan_result),
+        'evacuation_prose':             build_evacuation_prose(scan_result),
+        'top_signals':                  build_top_signals(scan_result),
+        # ── May 22 2026 additions ──
+        'iran_kinetic_prose':           build_iran_kinetic_prose(scan_result),
+        'asset_movement_prose':         build_asset_movement_prose(scan_result),
+        'humanitarian_convergence_prose': build_humanitarian_convergence_prose(scan_result),
+        'interpreter_version':          '1.1.0',  # bumped for Africa + kinetic + movement + humanitarian
     }
 
 
