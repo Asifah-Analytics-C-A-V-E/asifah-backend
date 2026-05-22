@@ -409,6 +409,37 @@ MILITARY_ACTORS = {
             'diego garcia bomber', 'diego garcia b-2',
             'diego garcia b-52', 'diego garcia b-1',
             'bomber forward deployed diego garcia',
+            # ── US HOSPITAL SHIPS (May 22 2026) ──
+            # USNS Mercy (T-AH-19, San Diego homeport) + USNS Comfort (T-AH-20,
+            # Norfolk homeport). 1,000-bed hospital ships, primary HA/DR mission.
+            # Deployment = US recognizing humanitarian crisis severity.
+            # Co-occurrence with pandemic signals = high-fidelity analytical signal.
+            'usns mercy', 'uss mercy', 'mercy hospital ship', 't-ah-19',
+            'usns comfort', 'uss comfort', 'comfort hospital ship', 't-ah-20',
+            'us hospital ship', 'us navy hospital ship',
+            'hospital ship deployment', 'hospital ship deploys',
+            'hospital ship arrives', 'hospital ship sails',
+            'mercy deployed', 'comfort deployed', 'mercy sails', 'comfort sails',
+            'mercy departs', 'comfort departs', 'mercy returns', 'comfort returns',
+            'pacific partnership mercy', 'continuing promise comfort',
+            'pacific partnership exercise', 'continuing promise exercise',
+            # HA/DR (Humanitarian Assistance / Disaster Response) mission language
+            'ha/dr deployment', 'humanitarian assistance disaster response',
+            'us military humanitarian deployment', 'us navy disaster relief',
+            'medical mission deployment', 'us navy medical mission',
+            'medical relief ship', 'medical treatment facility ship',
+            # Pandemic / disease surveillance signals (catches the convergence)
+            'ebola outbreak', 'ebola surge', 'ebola cases rising',
+            'ebola response military', 'ebola sudan', 'ebola drc', 'ebola uganda',
+            'marburg outbreak', 'marburg virus', 'marburg cases',
+            'lassa fever outbreak', 'mpox outbreak', 'mpox cases surge',
+            'cholera outbreak africa', 'cholera surge',
+            'who declares emergency', 'who pheic',
+            'public health emergency international concern',
+            'cdc deployment', 'cdc team africa', 'cdc disease response',
+            'us pandemic response', 'us military disease response',
+            'biosurveillance africa', 'biosurveillance deployment',
+            'medical evacuation mass casualty',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=site:centcom.mil&hl=en&gl=US&ceid=US:en',
@@ -2898,6 +2929,40 @@ ASSET_CATEGORIES = {
             'one-way attack drone', 'uav attack',
             'airspace closed', 'airspace violation',
         ]
+    },
+    # ────────────────────────────────────────────────────────────────
+    # HOSPITAL SHIP (May 22 2026 — humanitarian convergence signal)
+    # USNS Mercy (T-AH-19, Pacific) + USNS Comfort (T-AH-20, Atlantic)
+    # Hospital ship deployment is a high-fidelity strategic signal:
+    #   - Indicates US recognition of severe humanitarian crisis
+    #   - Co-occurrence with pandemic/disease signals = major convergence
+    #   - 1,000-bed capacity, lengthy planning/sail times
+    # Weight 3.5: more than logistics, less than carrier (significant but
+    # not strike-related). Frontend should display as distinct asset class.
+    # ────────────────────────────────────────────────────────────────
+    'hospital_ship': {
+        'label': 'Hospital Ship',
+        'icon': '🏥',
+        'weight': 3.5,
+        'description': (
+            'USNS Mercy / Comfort deployment — strategic humanitarian asset. '
+            'Co-occurrence with pandemic/disease signals = major convergence indicator.'
+        ),
+        'keywords': [
+            'usns mercy', 'uss mercy', 'mercy hospital ship', 't-ah-19',
+            'usns comfort', 'uss comfort', 'comfort hospital ship', 't-ah-20',
+            'us hospital ship', 'us navy hospital ship',
+            'hospital ship deployment', 'hospital ship deploys',
+            'hospital ship arrives', 'hospital ship sails',
+            'hospital ship departs', 'hospital ship returns',
+            'mercy deployed', 'comfort deployed', 'mercy sails', 'comfort sails',
+            'mercy departs', 'comfort departs',
+            'pacific partnership mercy', 'continuing promise comfort',
+            'medical treatment facility ship',
+            # HA/DR mission deployments that frequently use hospital ships
+            'us navy disaster relief', 'us navy medical mission',
+            'medical relief ship', 'medical mission deployment',
+        ]
     }
 }
 
@@ -4310,6 +4375,161 @@ def _write_asset_movement_history(all_signals):
     return (position_count, movement_count)
 
 
+# ════════════════════════════════════════════════════════════════════════
+# HUMANITARIAN-PANDEMIC CONVERGENCE DETECTOR (May 22 2026)
+# ────────────────────────────────────────────────────────────────────────
+# Detects when US hospital ship deployment co-occurs with pandemic/disease
+# signals in the same theater or region. This is a high-fidelity analytical
+# signal — the US committing a strategic 1,000-bed hospital ship indicates
+# recognition of severe humanitarian crisis.
+#
+# Pattern: hospital_ship signal + pandemic_keyword signal within same scan +
+#          overlapping geographic context = convergence fires.
+#
+# Writes a fingerprint: military:humanitarian_convergence:{region} with TTL
+# matching general fingerprints. Interpreter reads this to surface the
+# analytical signal in prose.
+# ════════════════════════════════════════════════════════════════════════
+
+# Keywords that indicate active pandemic/disease emergency (not just routine)
+_PANDEMIC_KEYWORDS = [
+    'ebola outbreak', 'ebola surge', 'ebola cases rising',
+    'ebola sudan', 'ebola drc', 'ebola uganda', 'ebola response',
+    'marburg outbreak', 'marburg virus', 'marburg cases',
+    'lassa fever outbreak', 'mpox outbreak', 'mpox cases surge',
+    'cholera outbreak africa', 'cholera surge',
+    'who declares emergency', 'who pheic',
+    'public health emergency international concern',
+    'biosurveillance', 'cdc deployment',
+]
+
+
+def _detect_humanitarian_convergence(all_signals):
+    """Scan all signals for hospital-ship + pandemic co-occurrence patterns.
+
+    Returns a list of convergence dicts:
+        [
+          {
+            'region':                'africa' | 'asia_pacific' | 'middle_east' | 'wha',
+            'hospital_ship_signals': [signal_dict, ...],
+            'pandemic_signals':      [signal_dict, ...],
+            'severity':              'elevated' | 'high' | 'surge',
+            'hospital_ship_name':    'USNS Mercy' | 'USNS Comfort' | 'Unknown',
+            'rationale':             'Why this fires',
+          },
+          ...
+        ]
+
+    Fires only when BOTH signal types appear in the same scan. Severity scales
+    with signal volume and weight.
+    """
+    if not all_signals:
+        return []
+
+    # Bucket 1: hospital-ship signals (any with asset == 'hospital_ship')
+    hospital_signals = [s for s in all_signals
+                        if s.get('asset') == 'hospital_ship']
+
+    if not hospital_signals:
+        return []  # No hospital ship activity — no convergence possible
+
+    # Bucket 2: pandemic-relevant signals (text matches a pandemic keyword)
+    pandemic_signals = []
+    for sig in all_signals:
+        text = ((sig.get('article_title') or '') + ' ' +
+                (sig.get('signal_text') or '')).lower()
+        if not text.strip():
+            continue
+        for kw in _PANDEMIC_KEYWORDS:
+            if kw in text:
+                # Tag the matching keyword on the signal for downstream prose
+                sig_copy = dict(sig)
+                sig_copy['_pandemic_keyword'] = kw
+                pandemic_signals.append(sig_copy)
+                break
+
+    if not pandemic_signals:
+        return []  # Hospital ship but no pandemic → not the convergence we're after
+
+    # Convergence DETECTED. Now characterize it.
+    # ── Identify which ship ──
+    ship_text = ' '.join(((s.get('article_title') or '') + ' ' +
+                          (s.get('signal_text') or '')).lower()
+                         for s in hospital_signals)
+    if 'mercy' in ship_text and 'comfort' not in ship_text:
+        ship_name = 'USNS Mercy'
+    elif 'comfort' in ship_text and 'mercy' not in ship_text:
+        ship_name = 'USNS Comfort'
+    elif 'mercy' in ship_text and 'comfort' in ship_text:
+        ship_name = 'USNS Mercy + USNS Comfort'
+    else:
+        ship_name = 'US hospital ship (unspecified)'
+
+    # ── Determine region from signal locations ──
+    # Try to bucket by hotspot_location
+    AFRICA_HOTSPOTS = ['mogadishu', 'goma', 'khartoum', 'el fasher', 'tripoli',
+                       'lagos', 'abuja', 'addis ababa', 'kinshasa', 'bangui',
+                       'manda bay', 'camp lemonnier', 'djibouti', 'cabo delgado',
+                       'south sudan', 'uganda', 'kampala']
+    region_votes = {}
+    for sig in hospital_signals + pandemic_signals:
+        loc = (sig.get('hotspot_location') or '').lower()
+        text = ((sig.get('article_title') or '') + ' ' +
+                (sig.get('signal_text') or '')).lower()
+        for african_hp in AFRICA_HOTSPOTS:
+            if african_hp in loc or african_hp in text:
+                region_votes['africa'] = region_votes.get('africa', 0) + 1
+                break
+        else:
+            # Check pandemic keyword for region hint
+            for kw in ['ebola sudan', 'ebola drc', 'ebola uganda', 'cholera outbreak africa']:
+                if kw in text:
+                    region_votes['africa'] = region_votes.get('africa', 0) + 1
+                    break
+
+    region = max(region_votes, key=region_votes.get) if region_votes else 'unknown'
+
+    # ── Severity scoring ──
+    # surge: 2+ hospital signals AND 3+ pandemic signals
+    # high:  1+ hospital AND 2+ pandemic
+    # elevated: 1 hospital + 1 pandemic
+    h_count = len(hospital_signals)
+    p_count = len(pandemic_signals)
+    total_weight = (sum(s.get('weight', 0) for s in hospital_signals) +
+                    sum(s.get('weight', 0) for s in pandemic_signals))
+    if h_count >= 2 and p_count >= 3:
+        severity = 'surge'
+    elif h_count >= 1 and p_count >= 2:
+        severity = 'high'
+    else:
+        severity = 'elevated'
+
+    # ── Build rationale ──
+    pandemic_kw_summary = list(set(s.get('_pandemic_keyword', '') for s in pandemic_signals))
+    rationale = (
+        f"{ship_name} deployment co-occurs with {p_count} pandemic/disease signal(s) "
+        f"in {region.replace('_', ' ').title()}. "
+        f"Pandemic keywords detected: {', '.join(pandemic_kw_summary[:5])}. "
+        f"US committing strategic humanitarian asset to active health emergency — "
+        f"signals official recognition of crisis severity."
+    )
+
+    convergence = {
+        'region':                region,
+        'hospital_ship_name':    ship_name,
+        'hospital_signal_count': h_count,
+        'pandemic_signal_count': p_count,
+        'total_signal_weight':   round(total_weight, 2),
+        'severity':              severity,
+        'pandemic_keywords':     pandemic_kw_summary,
+        'rationale':             rationale,
+        'top_hospital_signal':   hospital_signals[0] if hospital_signals else None,
+        'top_pandemic_signal':   pandemic_signals[0] if pandemic_signals else None,
+    }
+
+    return [convergence]
+
+
 def _write_military_fingerprints(scan_result, all_signals):
     """Write all fingerprint types to Redis based on the scan result.
     This is called once per successful _run_full_scan().
@@ -4515,6 +4735,25 @@ def _write_military_fingerprints(scan_result, all_signals):
             written['asset_movement'] = movement_append_count
         except Exception as e:
             print(f"[Military Fingerprints] Asset movement write error: {str(e)[:200]}")
+
+        # ── 9. Humanitarian-pandemic convergence (May 22 2026) ──
+        # Detects US hospital ship + pandemic disease co-occurrence.
+        # Fires only when both signals present — surfaces the convergence
+        # to the interpreter prose layer for analytical voice.
+        written['humanitarian_convergence'] = 0
+        try:
+            convergences = _detect_humanitarian_convergence(all_signals)
+            for conv in convergences:
+                region = conv.get('region', 'unknown')
+                if _redis_fp_set(f"military:humanitarian_convergence:{region}", conv):
+                    written['humanitarian_convergence'] += 1
+                    print(f"[Military Fingerprints] ⚕️ Humanitarian convergence detected: "
+                          f"{conv.get('hospital_ship_name')} + pandemic in {region} "
+                          f"(severity: {conv.get('severity')})")
+            # Also attach convergences to scan_result so interpreter can read them
+            scan_result['humanitarian_convergences'] = convergences
+        except Exception as e:
+            print(f"[Military Fingerprints] Humanitarian convergence error: {str(e)[:200]}")
 
         total = sum(written.values())
         print(f"[Military Fingerprints] ✅ Wrote {total} fingerprints — "
