@@ -1,30 +1,4 @@
 """
-Asifah Analytics — Iran Rhetoric & Command Node Tracker
-v1.0.0 — April 4, 2026
-ANALYTICAL FRAME:
-Iran is not just an actor — it is the COMMAND NODE of the resistance axis.
-This tracker answers two questions:
-  1. Is Iran activating or directing its proxy network?
-  2. Is Iran preparing to launch new or different strikes itself?
-
-Unlike other trackers that detect what actors SAY, this tracker detects
-COMMAND SIGNALS — the patterns that precede proxy activation or direct
-Iranian military operations.
-
-KEY INNOVATION — PROXY COORDINATION INDEX:
-Reads the shared `rhetoric:crosstheater:fingerprints` Redis key (written by
-Yemen, Lebanon, Iraq, Syria trackers) and uses simultaneous proxy elevation
-as a direct INPUT to Iran's own score. High cross-theater coordination =
-Iran command node likely active.
-
-Iran writes `is_command_node: True` in its own fingerprint so other
-trackers can distinguish Iran elevation from proxy elevation.
-
-ACTORS:
-- Khamenei / Supreme Leader Office — directive language, fatwa signals
-- IRGC / Quds Force — operation announcements, numbered waves, proxy direction
-- Iranian Government (Pezeshkian / MFA) — diplomatic cover, escalation framing
-- Iranian People / Civil Signals — domestic pressure, protest, economic collapse"""
 global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
 v2.0.0 — April 2026
