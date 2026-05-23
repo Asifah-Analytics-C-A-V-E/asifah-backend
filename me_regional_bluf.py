@@ -630,7 +630,7 @@ def _extract_key_signals(trackers):
     seen           = set()
     theatre_counts = {}
     deduped        = []
-    for s in all_signals:
+        for s in all_signals:
         theatre = s.get('theatre', '')
         key     = f'{theatre}:{s.get("category", "")}'
         if key in seen:
@@ -640,6 +640,8 @@ def _extract_key_signals(trackers):
         seen.add(key)
         theatre_counts[theatre] = theatre_counts.get(theatre, 0) + 1
         deduped.append(s)
+
+    return deduped
 
 
 # ============================================================
