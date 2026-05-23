@@ -1,7 +1,7 @@
 """
 ═══════════════════════════════════════════════════════════════════════
   ASIFAH ANALYTICS — CONVERGENCE REGISTRY ENDPOINTS
-  v1.0.0 (May 7 2026)
+  v1.1.0 (May 23 2026)
 ═══════════════════════════════════════════════════════════════════════
 
 HTTP-facing endpoints for convergence_registry.py. Lives on the ME
@@ -10,10 +10,11 @@ WHA) consume these endpoints via their per-backend proxy modules.
 
 ARCHITECTURE:
   ME backend (canonical convergence_registry.py)
-    └─→ /api/convergence/<id>           — single entry
-    └─→ /api/convergence/all            — full registry
-    └─→ /api/convergence/by-country/<c> — country-filtered list
-    └─→ /api/convergence/by-region/<r>  — region-filtered list
+    └─→ /api/convergence/<id>             — single entry
+    └─→ /api/convergence/all              — full registry
+    └─→ /api/convergence/by-country/<c>   — country-filtered list
+    └─→ /api/convergence/by-region/<r>    — region-filtered list
+    └─→ /api/convergence/by-commodity/<c> — commodity-filtered list (v1.1)
 
 CONSUMED BY:
   - Asia backend  → convergence_proxy_asia.py
@@ -84,7 +85,7 @@ def register_convergence_endpoints(app):
                 # Alias for proxy backwards compatibility
                 'convergences':  entries,
                 'fetched_at':    datetime.now(timezone.utc).isoformat(),
-                'version':       '1.0.0',
+                'version':       '1.1.0',
             })
         except Exception as e:
             print(f"[Convergence Endpoints] /all error: {e}")
@@ -162,5 +163,38 @@ def register_convergence_endpoints(app):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)[:200]}), 500
 
-    print("[Convergence Endpoints] ✅ Registered: "
-          "/api/convergence/all, /<id>, /by-country/<c>, /by-region/<r>")
+    @app.route('/api/convergence/by-commodity/<commodity>', methods=['GET'])
+    def convergence_by_commodity(commodity):
+        """
+        Return all convergences anchored on a given commodity.
+
+        Useful for surfacing all convergence narratives that involve, e.g.,
+        diamonds, cobalt, or phosphate. Matches the registry entry's
+        'commodity' field (not 'top_producers' / 'top_consumers').
+
+        Examples:
+            /api/convergence/by-commodity/diamonds  -> diamonds_sanctions_regime
+            /api/convergence/by-commodity/cobalt    -> cobalt_drc_active
+            /api/convergence/by-commodity/oil       -> hormuz_china_oil_dependency
+        """
+        if not REGISTRY_AVAILABLE:
+            return jsonify({'success': False, 'error': 'Registry not loaded'}), 503
+        try:
+            commodity = commodity.lower()
+            matches = [
+                _serialize_entry(e)
+                for e in CONVERGENCE_REGISTRY
+                if (e.get('commodity') or '').lower() == commodity
+            ]
+            return jsonify({
+                'success':    True,
+                'commodity':  commodity,
+                'count':      len(matches),
+                'matches':    matches,
+                'fetched_at': datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)[:200]}), 500
+
+        print("[Convergence Endpoints] ✅ Registered: "
+          "/api/convergence/all, /<id>, /by-country/<c>, /by-region/<r>, /by-commodity/<c>")
