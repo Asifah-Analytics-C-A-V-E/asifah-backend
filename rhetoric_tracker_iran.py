@@ -2893,6 +2893,8 @@ def register_iran_rhetoric_routes(app):
                 'delta':              cached.get('delta'),
                 'silence_anomalies':  cached.get('silence_anomalies', []),
                 'total_articles':     cached.get('total_articles', 0),
+                # ── v1.3 (May 22 2026): Strike Window convergence — surface to summary ──
+                'strike_window':      cached.get('strike_window'),
                 'timestamp':  cached.get('timestamp'),
                 'scanned_at': cached.get('scanned_at', cached.get('timestamp', '')),
                 'cached': True,
