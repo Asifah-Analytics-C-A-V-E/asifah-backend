@@ -1,7 +1,8 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
-v1.0.0 -- May 17, 2026
+v1.4.0 -- May 23, 2026 (Health/Pandemic + Africa Expansion)
+(prior: v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
 
 GLOBAL HUMANITARIAN CONVERGENCE DETECTOR
 
@@ -22,13 +23,15 @@ ARCHITECTURE:
   pressure_type classifier picks up the humanitarian tags
   automatically — no GPI logic changes needed. Today.
 
-SIGNAL CATEGORIES (6):
+SIGNAL CATEGORIES (7):
   1. FOOD_PRICE_CRISIS    -- bread/vegetable/rice price surges, food shortages
   2. FUEL_ENERGY_CRISIS   -- fuel shortages, blackouts, panic buying
   3. FERTILIZER_SCARCITY  -- planting season crisis, urea shortages
   4. AID_SHORTFALL        -- UN appeals underfunded, WFP ration cuts
   5. DISPLACEMENT_SURGE   -- IDP surges, mass displacement events
   6. CURRENCY_COLLAPSE    -- currency crashes, banking collapses, reserves drain
+  7. HEALTH_EMERGENCY     -- Ebola/Marburg/cholera/mpox outbreaks, WHO PHEIC declarations,
+                             pandemic warnings, disease surveillance failures (v1.4.0, May 2026)
 
 CONVERGENCE THRESHOLDS:
   1-2 countries active                  -> BASELINE       (L0-L1)
@@ -126,13 +129,16 @@ SIGNAL_CATEGORIES = {
             'un appeal underfunded', 'un appeal funded only',
             'humanitarian appeal underfunded', 'wfp ration cut',
             'wfp ration cuts', 'wfp cuts rations',
-            'unhcr funding shortfall', 'unicef appeal',
+            'unhcr funding shortfall', 'unhcr appeal underfunded',  # v1.4.0
+            'unhcr appeal', 'unicef appeal',                        # v1.4.0
             'humanitarian funds frozen', 'usaid cuts',
             'humanitarian assistance suspended', 'aid suspended',
             'foreign aid cut', 'foreign aid suspended',
             'ngo withdrawal', 'ngo suspends operations',
             'oxfam withdrawal', 'msf withdraws', 'icrc withdrawal',
             'humanitarian funding gap', 'humanitarian budget cut',
+            'humanitarian response plan underfunded',               # v1.4.0
+            'cerf allocation', 'cerf appeal',                       # v1.4.0
             'state department humanitarian frozen',
             'bureau humanitarian response funds unspent',
         ],
@@ -147,15 +153,22 @@ SIGNAL_CATEGORIES = {
         'description': 'IDP surges, mass displacement events, refugee waves',
         'keywords': [
             'mass displacement', 'mass displacement event',
+            'displacement surge', 'displacement continues',     # v1.4.0
+            'displaced from drc', 'displaced from sudan',       # v1.4.0
+            'displaced from myanmar',                            # v1.4.0
             'idp surge', 'idp camps', 'idps displaced',
             'refugee surge', 'refugee wave', 'refugees fleeing',
+            'refugees pour into', 'refugees overwhelm',          # v1.4.0
+            'refugee camps overwhelmed', 'camps overwhelmed',    # v1.4.0
             'thousands displaced', 'million displaced',
+            'thousands flee', 'hundreds of thousands flee',      # v1.4.0
             'displaced civilians', 'displacement crisis',
             'refugee crisis acute', 'forced displacement',
             'people on the move', 'forcibly displaced',
             'mass exodus', 'mass migration crisis',
             'humanitarian corridor', 'evacuation corridor',
             'internally displaced persons',
+            'cross-border displacement',                          # v1.4.0
         ],
         'high_intensity_markers': [
             'million displaced', 'mass exodus', 'forced displacement',
@@ -180,6 +193,75 @@ SIGNAL_CATEGORIES = {
         ],
         'high_intensity_markers': [
             'hyperinflation', 'sovereign default', 'banking collapse',
+        ],
+    },
+
+    # ─────────────────────────────────────────────────────────────
+    # v1.4.0 (May 23, 2026) -- HEALTH EMERGENCY CATEGORY
+    # ─────────────────────────────────────────────────────────────
+    # Surfaces disease outbreaks (Ebola, Marburg, cholera, mpox, RVF, etc.),
+    # WHO PHEIC declarations, pandemic warnings, vaccine-stock failures,
+    # and "disease X" pandemic-prep language. Particularly important for
+    # African humanitarian context — Ebola in DRC/Uganda, Marburg in Rwanda/
+    # Tanzania, cholera in Sudan/Yemen/Haiti, mpox cross-border surges.
+    # Routes to GPI humanitarian axis via category-substring hints
+    # ('ebola', 'marburg', 'cholera', 'mpox', 'outbreak', 'disease',
+    # 'epidemic', 'pandemic', 'who_emergency', 'health_emergency').
+    # ─────────────────────────────────────────────────────────────
+    'health_emergency': {
+        'label':       'Health Emergency / Outbreak',
+        'icon':        '🦠',
+        'description': 'Disease outbreaks (Ebola/Marburg/cholera/mpox), WHO emergency declarations, pandemic warnings',
+        'keywords': [
+            # ── Named outbreak diseases (high-priority watchlist) ──
+            'ebola outbreak', 'ebola virus disease', 'ebola cases',
+            'ebola death toll', 'ebola confirmed', 'ebola suspected',
+            'ebola sudan strain', 'ebola zaire strain', 'sudan virus',
+            'marburg outbreak', 'marburg virus disease', 'marburg cases',
+            'marburg confirmed', 'mvd outbreak',
+            'cholera outbreak', 'cholera cases', 'cholera epidemic',
+            'cholera deaths', 'cholera vaccine shortage',
+            'mpox outbreak', 'mpox cases', 'monkeypox outbreak',
+            'mpox clade i', 'mpox clade ib', 'monkeypox spread',
+            'rift valley fever', 'rvf outbreak',
+            'lassa fever outbreak', 'crimean congo fever',
+            'nipah virus', 'avian flu outbreak', 'h5n1 outbreak',
+            'h5n1 human cases', 'bird flu spillover',
+            # ── Outbreak language (generic) ──
+            'disease outbreak', 'outbreak declared', 'outbreak confirmed',
+            'epidemic declared', 'epidemic spreading', 'epidemic surge',
+            'cases surge outbreak', 'mortality rate climbs',
+            'case fatality rate', 'novel pathogen',
+            # ── WHO emergency declarations + pandemic-prep language ──
+            'who emergency declared', 'who pheic', 'pheic declared',
+            'public health emergency international concern',
+            'pandemic warning', 'pandemic alert', 'pandemic prep',
+            'disease x', 'who director-general statement',
+            'who africa region alert', 'who afro alert',
+            # ── Health system stress + vaccine logistics ──
+            'health system collapse', 'hospitals overwhelmed',
+            'health workers strike', 'medical supply shortage',
+            'vaccine shortage', 'vaccine stock-out', 'cold chain failure',
+            'oral cholera vaccine shortage', 'ocv shortage',
+            'medical evacuation', 'medical aid suspended',
+            'icrc health mission', 'msf health response',
+            # ── Specific subnational outbreaks (Africa-heavy) ──
+            'kivu outbreak', 'goma outbreak', 'beni outbreak',
+            'uganda ebola', 'rwanda marburg', 'tanzania marburg',
+            'darfur cholera', 'khartoum cholera',
+            'haiti cholera', 'yemen cholera',
+            # ── Spillover + zoonotic language ──
+            'zoonotic spillover', 'bat virus', 'fruit bat virus',
+            'wildlife outbreak', 'spillover event',
+        ],
+        'high_intensity_markers': [
+            # Severity-amplifying language that justifies SEVERITY_HIGH
+            'pheic declared', 'who emergency declared',
+            'public health emergency international concern',
+            'pandemic warning', 'pandemic alert',
+            'ebola outbreak', 'marburg outbreak',
+            'cases surge outbreak', 'mortality rate climbs',
+            'health system collapse', 'hospitals overwhelmed',
         ],
     },
 }
@@ -238,7 +320,52 @@ COUNTRY_PATTERNS = {
     # Mozambique + Cabo Delgado (active insurgency)
     'mozambique':       ['mozambique', 'mozambican'],
     'cabo_delgado':     ['cabo delgado', 'palma mozambique'],
-    # Southern Africa
+    # ─── v1.4.0 (May 23 2026) Africa health/displacement expansion ───
+    # Uganda (Ebola history, largest refugee host in Africa, Marburg risk)
+    'uganda':           ['uganda', 'ugandan'],
+    'kampala':          ['kampala'],
+    # Rwanda (Marburg outbreak 2024; refugees from DRC/Burundi)
+    'rwanda':           ['rwanda', 'rwandan'],
+    'kigali':           ['kigali'],
+    # Burundi (RVF history, displacement, paired with DRC eastern story)
+    'burundi':          ['burundi', 'burundian'],
+    # Tanzania (Marburg risk; Lake Victoria basin)
+    'tanzania':         ['tanzania', 'tanzanian'],
+    # Central African Republic (chronic crisis, paired with DRC/Chad)
+    'car':              ['central african republic',
+                          'car humanitarian', 'central african'],
+    'bangui':           ['bangui'],
+    # Eritrea (humanitarian gap state; paired with Tigray story)
+    'eritrea':          ['eritrea', 'eritrean'],
+    # West Africa: Sahel coastal spillover + Ebola "home base" states
+    'guinea':           ['guinea conakry', 'guinea republic',
+                          'guinean republic', 'conakry'],
+    'guinea_bissau':    ['guinea-bissau', 'guinea bissau', 'bissau'],
+    'sierra_leone':     ['sierra leone', 'sierra leonean', 'freetown'],
+    'liberia':          ['liberia', 'liberian', 'monrovia'],
+    'cote_divoire':     ["cote d'ivoire", "cote d ivoire", "côte d'ivoire",
+                          'ivory coast', 'ivorian', 'abidjan'],
+    'ghana':            ['ghana', 'ghanaian', 'accra'],
+    'benin':            ['benin', 'beninese'],
+    'togo':             ['togo', 'togolese', 'lome'],
+    'senegal':          ['senegal', 'senegalese', 'dakar'],
+    'mauritania':       ['mauritania', 'mauritanian'],
+    'gambia':           ['gambia', 'gambian'],
+    'cameroon':         ['cameroon', 'cameroonian', 'yaounde', 'far north cameroon'],
+    'gabon':            ['gabon', 'gabonese'],
+    'congo_brazzaville':['republic of the congo', 'congo-brazzaville',
+                          'congo brazzaville', 'brazzaville'],
+    # Angola (refugee receiver from DRC; cholera history)
+    'angola':           ['angola', 'angolan', 'luanda'],
+    # Botswana (drought/food security exposure; commodities-tracked)
+    'botswana':         ['botswana', 'gaborone'],
+    # Namibia (climate vulnerability; refugee corridor)
+    'namibia':          ['namibia', 'namibian'],
+    # Lesotho (food security; SACU economic vulnerability)
+    'lesotho':          ['lesotho'],
+    # Eswatini (formerly Swaziland; food security)
+    'eswatini':         ['eswatini', 'swaziland'],
+    # Southern Africa (existing)
     'madagascar':       ['madagascar', 'malagasy'],
     'malawi':           ['malawi'],
     'zambia':           ['zambia'],
@@ -709,7 +836,7 @@ def build_humanitarian_bluf(signals, aggregation=None):
             'categories':          aggregation['categories'],
             'novel_countries':     aggregation['novel_countries'],
             'tracked_countries_present': aggregation['tracked_countries_present'],
-            'detector_version':    'humanitarian_convergence_detector v1.0.0',
+            'detector_version':    'humanitarian_convergence_detector v1.4.0',
         },
     }
 
@@ -991,6 +1118,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.0.0'
+__version__ = '1.4.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
