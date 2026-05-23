@@ -612,7 +612,14 @@ COMMODITY_TYPES = {
         'yahoo_ticker': None,
         'yahoo_proxies': ['AAL.L', 'PDL.AX', 'LUC.TO'],  # Anglo American (De Beers parent), Petra, Lucara
         'unit': 'USD/carat (rough, proxy)',
-        'description': 'Rough diamonds: ~$15-20B annual global production by value. Botswana + Russia + Canada + Australia (Argyle closed 2020) + Angola + Namibia + DRC + South Africa + Sierra Leone are the producer set. The four downstream trade/cutting/retail hubs: Antwerp (Belgium, ~84% of world rough trade), Mumbai/Surat (India, ~90% world cutting+polishing by volume), Ramat Gan (Israel, ~50% of US polished imports), and Dubai (UAE, rising third hub). G7 SANCTIONS REGIME (active since Jan 1 2024): G7 imposed direct ban on Russian diamonds, then ban on Russian diamonds via third countries from March 1 2024. Verification system requires certification-of-origin via designated "nodes": Antwerp (Belgium) operational since March 1 2024 as the FIRST cert node; Botswana cert node under construction with G7 technical team (joint statement Nov 27 2024). This makes Belgium + Botswana de facto sanctions-enforcement actors — foreign-policy weight, not just commercial.
+                'description': (
+            'Rough diamonds: ~$15-20B annual global production by value. '
+            'Botswana + Russia + Canada + Australia (Argyle closed 2020) + Angola + Namibia + DRC + South Africa + Sierra Leone are the producer set. '
+            'The four downstream trade/cutting/retail hubs: Antwerp (Belgium, ~84% of world rough trade), Mumbai/Surat (India, ~90% world cutting+polishing by volume), Ramat Gan (Israel, ~50% of US polished imports), and Dubai (UAE, rising third hub). '
+            'G7 SANCTIONS REGIME (active since Jan 1 2024): G7 imposed direct ban on Russian diamonds, then ban on Russian diamonds via third countries from March 1 2024. '
+            'Verification system requires certification-of-origin via designated "nodes": Antwerp (Belgium) operational since March 1 2024 as the FIRST cert node; Botswana cert node under construction with G7 technical team (joint statement Nov 27 2024). '
+            'This makes Belgium + Botswana de facto sanctions-enforcement actors — foreign-policy weight, not just commercial.'
+        ),
         'chokepoints': [
             'jwaneng', 'orapa', 'debswana', 'okavango diamond company',
             'antwerp diamond hub', 'awdc', 'gia certification',
