@@ -1,7 +1,7 @@
 """
 ═══════════════════════════════════════════════════════════════════════
   ASIFAH ANALYTICS — CONVERGENCE REGISTRY
-  v1.0.0 (May 3 2026)
+  v1.1.0 (May 23 2026)
 ═══════════════════════════════════════════════════════════════════════
 
 Single source of truth for cross-axis / cross-regional convergence narratives.
@@ -35,9 +35,11 @@ ADDING A NEW CONVERGENCE:
 REQUIRED FIELDS per convergence entry:
   id                       — unique snake_case identifier (also used as category)
   commodity                — must match commodity_tracker COMMODITY_TYPES key
-  country                  — country name for display + matching
+                             (use None for non-commodity-anchored convergences)
+  country                  — primary country name for display + matching
   trigger_signal_category  — category string Layer 2 watches for in BLUF
-  trigger_region           — which regional BLUF carries the trigger ('me', 'asia', etc.)
+  trigger_region           — which regional BLUF carries the trigger
+                             (recognized: 'me', 'asia', 'europe', 'wha', 'africa')
   commodity_threshold      — min alert level: 'elevated', 'high', or 'surge'
   regions                  — list of regions for cross-regional Tier-1 boost
   priority                 — narrative priority (10-15 range)
@@ -533,6 +535,257 @@ CONVERGENCE_REGISTRY = [
         ),
     },
 
+
+    # ───────────────────────────────────────────────────────────────
+    # AFRICA / BELT-AND-ROAD / SANCTIONS CONVERGENCES (May 23 2026)
+    # Phase 1A Africa launch + diamonds sanctions architecture.
+    # These four convergences capture the structural pattern of
+    # critical-minerals great-power competition: resource-leverage,
+    # sanctions enforcement, and food-security cascades anchored in
+    # African + Jordanian commodity producers.
+    # ───────────────────────────────────────────────────────────────
+    {
+        'id':                      'cobalt_drc_active',
+        'commodity':               'cobalt',
+        'country':                 'drc',
+        'trigger_signal_category': 'drc_conflict_kivu',
+        'trigger_region':          'africa',                       # Theatre = Africa (when africa.html ships)
+        'commodity_threshold':     'elevated',
+        'regions':                 ['africa', 'asia', 'wha'],     # DRC = producer, China = consumer, US = strategic re-entry
+        'priority':                15,                              # Highest -- structural EV-battery dependency
+        'icon':                    '\U0001f50b',                   # 🔋
+        'color':                   '#f59e0b',                       # amber — economic axis
+        'headline_template':       'DRC cobalt supply convergence -- Kivu instability compounded by global cobalt {alert}',
+        'detail': (
+            'DRC produces ~72% of global cobalt supply (essential for EV battery NMC '
+            'cathode chemistry). CCP-linked entities control ~80% of Congolese cobalt '
+            'mining (15 of 19 best deposits per public reporting); China refines ~73% '
+            'of global cobalt regardless of mine origin. STRUCTURAL REPOSITIONING (2025-2026): '
+            'US-DRC Strategic Partnership signed 2025; Orion Critical Mineral Consortium '
+            'MOU with Glencore (Feb 2026) signals Western re-entry; Project Vault channels '
+            'DRC minerals into US strategic stockpiles; June 2025 US-brokered DRC-Rwanda '
+            'peace deal explicitly tied to mineral access. EASTERN CONGO CONFLICT: M23 + '
+            'ADF + FDLR + Russia-linked PMC (Africa Corps) operations create real-time '
+            'supply disruption risk + sanctions-evasion gold-flow architecture. Compound risk: '
+            'any DRC instability (Kivu surge, Kinshasa political crisis, Lobito Corridor '
+            'disruption) during global cobalt price pressure forces structural change to '
+            'Chinese + Western battery supply chains. Watch: M23 territorial control, '
+            'Lobito throughput, Glencore-Orion offtake terms, Kinshasa-Beijing renegotiation.'
+        ),
+        'facts': {
+            'drc_cobalt_share':    '~72% of global mined cobalt',
+            'china_refining':      '~73% of global cobalt refining',
+            'china_drc_control':   '~80% of DRC cobalt mining via CCP-linked entities',
+            'us_repositioning':    'US-DRC Strategic Partnership (2025) + Orion MOU (Feb 2026) + Project Vault',
+            'lobito_corridor':     'DRC->Zambia->Angola rail bypasses Chinese-controlled infrastructure',
+            'historical_analog':   'No clean analog -- this is the canonical critical-minerals great-power competition test case',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f COBALT-DRC CONVERGENCE: Global cobalt at {alert} '
+            '({signals} signals) AND DRC instability elevated. DRC produces ~72% of global '
+            'cobalt; CCP-linked entities control ~80% of mining. US-DRC Strategic Partnership '
+            '(2025) + Orion MOU (Feb 2026) + Project Vault repositioning Western access. '
+            'Compound risk: Kivu instability + global cobalt pressure stresses BOTH Chinese '
+            'and Western EV battery supply chains. Watch M23 territorial control, Lobito '
+            'throughput, Glencore-Orion offtake terms.'
+        ),
+        'notes': (
+            'Africa Phase 1A convergence -- May 23 2026 build. Activates the placeholder '
+            'cobalt_drc that has lived in this registry since v1.0. trigger_region=africa '
+            'will need africa_regional_bluf.py to emit drc_conflict_kivu category once '
+            'rhetoric_tracker_sudan.py and africa.html ship. Until then, can be triggered '
+            'manually via /api/convergence/cobalt_drc_active or read by GPI directly.'
+        ),
+    },
+    {
+        'id':                      'diamonds_sanctions_regime',
+        'commodity':               'diamonds',
+        'country':                 'botswana',                      # Anchor = G7 cert node host
+        'trigger_signal_category': 'g7_diamond_enforcement_stress',
+        'trigger_region':          'africa',                        # Trigger region = Africa producers
+        'commodity_threshold':     'elevated',
+        'regions':                 ['africa', 'europe', 'asia', 'me'],  # Africa=producers, EU=Antwerp, Asia=India/HK, ME=UAE
+        'priority':                15,                               # Specialized but architecturally important
+        'icon':                    '\U0001f48e',                    # 💎
+        'color':                   '#a855f7',                          # purple — regime axis (sanctions-enforcement)
+        'headline_template':       'Diamond sanctions regime convergence -- G7 enforcement architecture under stress',
+        'detail': (
+            'STRUCTURAL READOUT: The G7 sanctions regime on Russian diamonds (effective '
+            'Jan 1 2024 direct ban + March 1 2024 third-country ban) routes ALL '
+            'compliance enforcement through two certification nodes: Antwerp (Belgium, '
+            'operational since March 1 2024) and Botswana (under construction with G7 '
+            'technical team since Nov 27 2024). When 2+ of the following fire '
+            'simultaneously, the enforcement architecture is materially stressed: '
+            '(1) Russian-origin seizures at Antwerp/EU customs spike, (2) Botswana cert '
+            'node operational delays or political pressure, (3) Russian rough re-routing '
+            'volume through UAE (DMCC) + India (Surat cutters) rises sharply, '
+            '(4) De Beers ownership-event volatility (Anglo American $4.9B divestment + '
+            'Botswana-Angola joint-acquisition talks), (5) lab-grown diamond market share '
+            'displacement accelerates beyond 50% of US engagement-ring market. WHAT IT '
+            'MEANS: diamonds are uniquely fungible + high-value-per-gram + opaque -- '
+            'making them the canonical sanctions-evasion substrate for high-net-worth '
+            'Russian flows. When the G7 architecture stresses, the broader sanctions '
+            'regime credibility comes under pressure. Watch: Belgian Federal Police '
+            'seizure announcements, DMCC monthly trade volumes, GJEPC Russian-rough '
+            'boycott compliance, Botswana credit rating actions.'
+        ),
+        'facts': {
+            'g7_ban_effective':    'Direct Russian ban Jan 1 2024; third-country ban Mar 1 2024',
+            'cert_nodes':          'Antwerp (Belgium) operational; Botswana under construction',
+            'russian_pre_ban':     'Alrosa was world #2-3 rough exporter at ~$3.8B/yr by value',
+            'evasion_routes':      'UAE (DMCC) + India (Surat cutters) + Hong Kong mixed-origin polishing',
+            'belgian_seizures':    'Belgian customs seized millions in suspected Russian-origin stones Feb 2024',
+            'de_beers_event':      'Anglo American $4.9B divestment + Botswana-Angola joint-acquisition talks (May 2025)',
+            'botswana_fiscal_exp': 'Diamonds = ~75% Botswana exports, ~30% GDP',
+            'lab_grown_pressure':  '~50% of US engagement-ring market is now synthetic',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f DIAMOND SANCTIONS REGIME: {signals} G7-enforcement-stress '
+            'indicators at {alert} levels across Antwerp + Botswana cert nodes, UAE/India '
+            'evasion routes, De Beers ownership events. STRUCTURAL READ: G7 Russian-diamond '
+            'ban enforcement architecture under stress; diamonds are canonical sanctions-'
+            'evasion substrate for Russian flows. Watch Belgian seizure announcements, '
+            'DMCC trade volumes, GJEPC Russian-rough boycott compliance, Botswana cert '
+            'node readiness.'
+        ),
+        'notes': (
+            'Africa Phase 1A convergence -- May 23 2026 build. Dedicated sanctions-regime '
+            'hook for diamonds per Coco preference (Option B, deeper build). '
+            'PHASE 2 NEEDS: g7_diamond_enforcement_stress fingerprint emitter -- likely '
+            'lives in europe_regional_bluf.py (Antwerp/AWDC scanning) + africa_regional_bluf.py '
+            '(Botswana cert-node tracking when shipped) + me_regional_bluf.py (UAE DMCC '
+            'mediator scanning). PHASE 3 NEEDS: surfacing on rhetoric-russia.html + '
+            'belgium country page (when shipped) + africa.html + GPI narrative. Companion '
+            'to sanctions_evasion_cluster -- specialized rather than general; could merge '
+            'later if Phase 2 build shows overlap.'
+        ),
+    },
+    {
+        'id':                      'belt_and_road_resource_leverage',
+        'commodity':               None,                             # Meta-signal across cobalt/bauxite/potash/etc
+        'country':                 'china',                          # Anchor = the resource-leverager
+        'trigger_signal_category': 'china_resource_leverage_active',
+        'trigger_region':          'asia',                           # Trigger from China-side rhetoric
+        'commodity_threshold':     None,
+        'regions':                 ['asia', 'africa', 'me'],         # China = leverager, Africa+ME = anchors
+        'priority':                16,                               # Highest -- structural BRI architecture
+        'icon':                    '\U0001f3ed',                     # 🏭
+        'color':                   '#a855f7',                          # purple — regime axis
+        'headline_template':       'Belt and Road resource-leverage convergence -- coordinated Chinese stakes in critical-commodity producers',
+        'detail': (
+            'STRUCTURAL READOUT: The Belt-and-Road Initiative includes a recurring '
+            'resource-leverage architecture in which Chinese state capital acquires '
+            'controlling or significant equity stakes in developing-country flagship '
+            'resource companies, in exchange for infrastructure investment (rail, port, '
+            'power). When 3+ of these anchor relationships fire simultaneously with '
+            'visible rhetoric/policy stress, the pattern indicates either coordinated '
+            'Chinese strategic positioning OR coordinated host-country renegotiation '
+            'pressure. CANONICAL ANCHORS (current registry): (1) China-DRC cobalt -- '
+            '~80% of Congolese mining via CCP-linked entities; (2) China-Guinea bauxite -- '
+            'SMB Winning + Boké railway + Conakry port; (3) China-Jordan potash -- '
+            'SDIC owns 28% of Arab Potash Company since 2017 ($500M); (4) China-Indonesia '
+            'nickel -- Tsingshan + Huayou + GEM Co dominate Sulawesi HPAL parks; '
+            '(5) China-Angola/Zambia/Mozambique infrastructure-for-resources packages. '
+            'WHAT IT MEANS: when multiple anchor relationships simultaneously show stress '
+            '(Western re-entry deals, host-country export quotas, leadership transitions, '
+            'sovereign renegotiation rhetoric), the BRI resource architecture itself is '
+            'under pressure -- not just any single commodity. Watch: Arab-Chinese '
+            'Cooperation Forum outcomes (June 2026), DRC-Beijing renegotiation signals, '
+            'Guinea SMB output disruptions, Indonesian nickel export-policy shifts, '
+            'SDIC Jordan presence, Lobito Corridor throughput as Western counter-positioning.'
+        ),
+        'facts': {
+            'anchor_pattern':       'Chinese state capital + flagship resource company stake + infrastructure investment',
+            'current_anchors':      'DRC cobalt, Guinea bauxite, Jordan potash, Indonesia nickel, multiple Sub-Saharan infrastructure-for-resources',
+            'sdic_jordan':          '28% of Arab Potash Co since 2017 ($500M)',
+            'china_drc':            '~80% of DRC cobalt mining via CCP-linked entities',
+            'china_guinea':         'SMB Winning + Boké-Conakry rail + Kamsar/Conakry ports',
+            'china_indonesia':      'Tsingshan + Huayou + GEM Co Sulawesi HPAL parks',
+            'western_counter':      'Lobito Corridor (US DFC + EU + G7 $2.5B 2023-2026)',
+            'measurement':          '3+ anchor relationships under simultaneous renegotiation/replacement pressure',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f BELT-AND-ROAD RESOURCE LEVERAGE: {signals} indicators at '
+            '{alert} levels across China-anchored resource relationships (DRC cobalt, '
+            'Guinea bauxite, Jordan potash, Indonesia nickel). STRUCTURAL READ: BRI '
+            'resource architecture under pressure; multiple host countries simultaneously '
+            'renegotiating Chinese stakes or accepting Western counter-positioning '
+            '(Lobito, Project Vault, Orion MOU). Watch Arab-Chinese Cooperation Forum '
+            'outcomes, DRC-Beijing renegotiation, Indonesian nickel policy shifts.'
+        ),
+        'notes': (
+            'Africa Phase 1A convergence -- May 23 2026 build. Meta-convergence linking '
+            'multiple commodity-specific stories (cobalt_drc_active, bauxite_guinea '
+            '[future], potash_jordan [future], nickel_indonesia [future]) into one '
+            'structural pattern. Companion to financial_system_fragmentation -- BRI '
+            'resource leverage is the COMMERCIAL/INFRASTRUCTURE axis of the same '
+            'multi-axis structural-realignment story. PHASE 2 NEEDS: china_resource_leverage_active '
+            'fingerprint emitter in china rhetoric tracker + per-country anchor '
+            'fingerprints (drc_belt_and_road_active, guinea_belt_and_road_active, '
+            'jordan_belt_and_road_active, indonesia_belt_and_road_active). PHASE 3 '
+            'NEEDS: surfacing on GPI as Tier-1 narrative when 3+ anchor fingerprints '
+            'fire simultaneously.'
+        ),
+    },
+    {
+        'id':                      'phosphate_food_security',
+        'commodity':               'phosphate',
+        'country':                 'morocco',                       # Anchor = OCP, world #1 phosphate
+        'trigger_signal_category': 'phosphate_supply_stress',
+        'trigger_region':          'africa',                        # Trigger from Morocco/OCP signal
+        'commodity_threshold':     'elevated',
+        'regions':                 ['africa', 'asia', 'me'],         # Africa=producers, Asia=India consumer, ME=Jordan+Saudi+Hormuz cascade
+        'priority':                14,                               # High -- food-security cascade
+        'icon':                    '\U0001fab5',                     # 🪵 placeholder for phosphate rock 🪨
+        'color':                   '#f59e0b',                          # amber — economic axis
+        'headline_template':       'Phosphate supply convergence -- Moroccan-OCP {alert} compounded by India import dependency + Hormuz sulfur cascade',
+        'detail': (
+            'Morocco/OCP controls ~70% of global proven phosphate reserves -- the most '
+            'geographically concentrated fertilizer input on Earth. India is the world #1 '
+            'phosphate consumer (~10-12 Mt/yr DAP/MAP) and ~90% reliant on imports -- '
+            'single most concentrated fertilizer dependency on Earth. CASCADE LINK: '
+            'phosphate processing into DAP/MAP fertilizers requires sulfuric acid, which '
+            'flows downstream from the Hormuz Sulfur Cascade -- meaning any Hormuz '
+            'disruption + China sulfur export ban directly elevates Indian + Brazilian + '
+            'Egyptian DAP/MAP prices. WHAT IT MEANS: when (1) Moroccan OCP guidance '
+            'tightens (export quotas, EU-Western Sahara legal challenges, OCP financial '
+            'stress), (2) Indian phosphate tender stress (IPL/Coromandel/IFFCO failed '
+            'tenders or extreme price-take), and (3) Hormuz sulfur cascade active -- '
+            'global agricultural input prices spike, with downstream effects on Egyptian + '
+            'Indian + Brazilian + Sub-Saharan-African food security. Compound risk: '
+            'phosphate stress during active humanitarian crisis (Lebanon, Yemen, Sudan, '
+            'eastern DRC) is materially worse. Watch: OCP quarterly results, India DAP '
+            'tender outcomes (IPL/Coromandel), Hormuz sulfur cascade status (cascade_detector), '
+            'Brazil DAP import volumes, Egyptian Mostakbal Misr fertilizer purchasing.'
+        ),
+        'facts': {
+            'morocco_share':       '~70% of global proven phosphate reserves (OCP Group)',
+            'india_dep':           'World #1 phosphate consumer, ~90% imported',
+            'cascade_link':        'Phosphate -> DAP/MAP requires sulfuric acid (Hormuz cascade)',
+            'historical_analog':   '2008 fertilizer crisis (DAP +400% YoY) catalyzed food riots in 30+ countries',
+            'western_sahara':      'EU court rulings (2024) distinguish Bou Craa provenance from Morocco-proper',
+            'food_security_chain': 'Morocco OCP -> India/Brazil/Egypt DAP -> grain yields -> food prices -> stability',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f PHOSPHATE-FOOD-SECURITY CONVERGENCE: Global phosphate at {alert} '
+            '({signals} signals). Morocco/OCP controls ~70% of global reserves; India is '
+            '~90% import-dependent at world #1 consumption levels. Hormuz sulfur cascade '
+            'flows downstream into DAP/MAP prices. Compound risk: phosphate stress during '
+            'active humanitarian crises (Lebanon, Yemen, Sudan) materially worsens food '
+            'security. Watch OCP guidance, India DAP tenders, Hormuz sulfur cascade status.'
+        ),
+        'notes': (
+            'Africa Phase 1A convergence -- May 23 2026 build. Fourth axis of food-security '
+            'architecture alongside wheat_lebanon (existing). Phosphate is the agri-supply '
+            'story that potash + sulfur + commodity tracker collectively expose but no '
+            'single convergence has captured. PHASE 2 NEEDS: phosphate_supply_stress '
+            'fingerprint emitter -- could live in cascade_detector.py as 4th cascade '
+            'chain (hormuz_phosphate_cascade) OR as standalone fingerprint in morocco '
+            'commodity exposure scanning. PHASE 3 NEEDS: surfacing on morocco country '
+            'page (when shipped) + india-stability.html + GPI economic-axis narrative.'
+        ),
+    },
+
     # ───────────────────────────────────────────────────────────────
     # FUTURE CONVERGENCES — uncomment / adapt as new ones get identified.
     # Examples sketched below show how broad the pattern can stretch.
@@ -560,16 +813,8 @@ CONVERGENCE_REGISTRY = [
     #     'regions':                 ['me'],
     #     ...
     # },
-    # {
-    #     'id':                      'cobalt_drc',
-    #     'commodity':               'cobalt',
-    #     'country':                 'drc',
-    #     'trigger_signal_category': 'drc_conflict_kivu',
-    #     'trigger_region':          'wha',                      # or 'africa' once routed
-    #     'commodity_threshold':     'elevated',
-    #     'regions':                 ['wha', 'asia'],            # DRC = source, China = consumer
-    #     ...
-    # },
+    # NOTE: cobalt_drc has been ACTIVATED above as cobalt_drc_active (May 23 2026).
+    # See the Africa / Belt-and-Road / Sanctions Convergences block.
 ]
 
 
