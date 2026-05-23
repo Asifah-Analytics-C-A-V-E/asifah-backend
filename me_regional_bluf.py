@@ -601,10 +601,11 @@ def _extract_key_signals(trackers):
       1. Collects all top_signals from all trackers
       2. Globally sorts by priority (descending)
       3. Dedupes by (theatre, category) key
-      4. Returns full deduped pool — caller is responsible for capping for display.
-         (Axis aggregation in GPI needs the full pool to honor axis-quota.)
+      4. Enforces per-theatre quota
+      5. Returns full deduped pool — caller is responsible for display capping.
     """
     all_signals = []
+
     for theatre, data in trackers.items():
         for sig in data.get('top_signals', []):
             # Backfill defensive fields if a v2.0 tracker omitted any
@@ -620,29 +621,26 @@ def _extract_key_signals(trackers):
     # Global sort
     all_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
 
-    # Dedupe by (theatre, category) AND enforce per-theatre quota (v2.4.0 May 21 2026)
-    # Per-tracker quota: max MAX_PER_THEATRE signals per country tracker.
-    # Cross-tracker signals (theatre='regional', e.g. cross-theater convergence)
-    # bypass the quota — they're platform-level signals, not per-country emissions.
-    # Lebanon's multiple legitimate L5 signals (kinetic, humanitarian, BREACH,
-    # diplomatic) will each count against Lebanon's quota of 3; the strongest 3
-    # by priority will surface.
-    seen           = set()
+    # Dedupe by (theatre, category) and enforce per-theatre quota.
+    seen = set()
     theatre_counts = {}
-    deduped        = []
-        for s in all_signals:
+    deduped = []
+
+    for s in all_signals:
         theatre = s.get('theatre', '')
-        key     = f'{theatre}:{s.get("category", "")}'
+        key = f'{theatre}:{s.get("category", "")}'
+
         if key in seen:
             continue
+
         if theatre != 'regional' and theatre_counts.get(theatre, 0) >= MAX_PER_THEATRE:
             continue
+
         seen.add(key)
         theatre_counts[theatre] = theatre_counts.get(theatre, 0) + 1
         deduped.append(s)
 
     return deduped
-
 
 # ============================================================
 # LEBANON HUMANITARIAN — CROSS-BACKEND FETCH + CACHE
