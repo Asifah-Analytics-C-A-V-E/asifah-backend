@@ -278,6 +278,8 @@ ABSORPTION_SIGNATURES_STATIC = {
         # before the analysis lags behind events. Computed staleness fields
         # are appended in read_absorption_signature() at read time.
         'analytical_validity_days': 30,
+    },
+
     #
     # ════════════════════════════════════════════════════════════════════
     # 🚨 PHASE 2 BACKLOG REMINDER 🚨
