@@ -1,7 +1,8 @@
 """
 global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
-v2.0.0 — April 2026
+v3.6.0 — May 23 2026 (AFRICA-READY + HUMANITARIAN SCAFFOLDING)
+(prior: v3.5.0 May 21 2026 ENRICHED OUTPUT EDITION; v3.4.x earlier; v2.0.0 April 2026 baseline)
 
 THE TOP OF THE ANALYTICAL PYRAMID.
 
@@ -54,6 +55,12 @@ REGIONAL_BLUF_ENDPOINTS = {
     'asia':   os.environ.get('ASIA_BACKEND_URL',   'https://asifah-asia-backend.onrender.com')   + '/api/rhetoric/asia/bluf',
     'europe': os.environ.get('EUROPE_BACKEND_URL', 'https://asifa-europe-backend.onrender.com') + '/api/rhetoric/europe/bluf',
     'wha':    os.environ.get('WHA_BACKEND_URL',    'https://asifah-wha-backend.onrender.com')    + '/api/rhetoric/wha/bluf',
+    # v3.6 (May 23 2026) -- Africa theatre placeholder.
+    # Activates when africa_regional_bluf.py + rhetoric_tracker_sudan.py ship.
+    # Until then, fetch returns None and GPI gracefully skips. The convergence
+    # registry already has 3 africa-trigger_region entries (cobalt_drc_active,
+    # diamonds_sanctions_regime, phosphate_food_security) ready to consume this.
+    # 'africa': os.environ.get('AFRICA_BACKEND_URL', 'https://asifah-africa-backend.onrender.com') + '/api/rhetoric/africa/bluf',
     # v2.3 (May 17, 2026) — Humanitarian Convergence Detector
     # Pseudo-region: distributed weak-signal aggregation across countries
     # WITHOUT dedicated Asifah trackers. Lives on ME backend; consumed by
@@ -73,13 +80,16 @@ REGION_DISPLAY = {
     'asia':   {'flag': '\U0001f30f', 'name': 'Asia & Pacific',    'hub': 'rhetoric-asia.html'},    # 🌏
     'europe': {'flag': '\U0001f30d', 'name': 'Europe',            'hub': 'rhetoric-europe.html'},  # 🌍
     'wha':    {'flag': '\U0001f30e', 'name': 'Western Hemisphere','hub': 'rhetoric-wha.html'},     # 🌎
+    'africa': {'flag': '\U0001f30d', 'name': 'Africa',            'hub': 'rhetoric-africa.html'},  # 🌍 (v3.6, activates with africa.html)
     # v2.3 — Humanitarian Convergence Detector pseudo-region
     'global_humanitarian': {'flag': '\U0001f198', 'name': 'Global Humanitarian', 'hub': 'gpi.html'},  # 🆘
     'global_cascade': {'flag': '\u2697\ufe0f', 'name': 'Global Cascade', 'hub': 'gpi.html'},  # alembic emoji
 }
 
 # Alphabetical card order (matches Rachel's "presumably alphabetical" spec)
-CARD_ORDER = ['asia', 'europe', 'me', 'wha']
+# v3.6 (May 23 2026): africa added in alphabetical position. Renders when
+# africa BLUF endpoint activates; until then, _signals_of() returns [] gracefully.
+CARD_ORDER = ['africa', 'asia', 'europe', 'me', 'wha']
 
 # Global level labels + colors (matches canonical regional schema)
 GLOBAL_LEVEL_LABELS = {
@@ -107,8 +117,17 @@ LEVEL_CACHE_KEY = 'gpi:level:latest'
 LEVEL_CACHE_TTL = 12 * 3600
 
 # Synthesis tuning
-TOP_GLOBAL_SIGNALS_COUNT = 15   # v3.5.0 May 21 2026 — bumped from 7; future-proofs for Africa + Arctic
-REGIONAL_FETCH_TIMEOUT   = 8  # seconds
+TOP_GLOBAL_SIGNALS_COUNT = 20   # v3.6.0 May 23 2026 — bumped from 15; gives axis-distribution headroom
+                                # for Africa + Arctic + Phase 2 humanitarian (Ebola, displacement) signals
+MIN_SIGNALS_PER_AXIS     = 2    # v3.6.0 May 23 2026 — axis distribution guard. After the top
+                                # CORE_HEADLINE_COUNT slots fill by tier+priority, the remaining slots
+                                # (up to TOP_GLOBAL_SIGNALS_COUNT) prefer underrepresented axes so the
+                                # final 20 isn't all kinetic. Ensures economic/diplomatic/humanitarian
+                                # axes get visible representation when their signals exist.
+CORE_HEADLINE_COUNT      = 12   # v3.6.0 May 23 2026 — first N slots are pure tier+priority (no axis
+                                # rebalancing). Protects the headline narrative integrity. Slots 13-20
+                                # apply axis-distribution logic.
+REGIONAL_FETCH_TIMEOUT   = 8    # seconds
 
 
 # ============================================================
@@ -356,6 +375,29 @@ _CATEGORY_AXIS_HINTS = {
     'civilian_harm':     PRESSURE_HUMANITARIAN,
     'casualties':        PRESSURE_HUMANITARIAN,
     'idp':               PRESSURE_HUMANITARIAN,
+    # v3.6 (May 23 2026) — Africa humanitarian scaffolding.
+    # Disease outbreaks (Ebola, Marburg, cholera, mpox) are a canonical Africa
+    # humanitarian signal class. When rhetoric_tracker_sudan.py + africa_regional_bluf.py
+    # ship in Phase 2, they will emit signals with these category substrings; they will
+    # automatically route into the Humanitarian axis without further GPI changes.
+    'ebola':             PRESSURE_HUMANITARIAN,
+    'marburg':           PRESSURE_HUMANITARIAN,
+    'cholera':           PRESSURE_HUMANITARIAN,
+    'mpox':              PRESSURE_HUMANITARIAN,
+    'monkeypox':         PRESSURE_HUMANITARIAN,
+    'outbreak':          PRESSURE_HUMANITARIAN,    # generic disease outbreak
+    'disease':           PRESSURE_HUMANITARIAN,
+    'epidemic':          PRESSURE_HUMANITARIAN,
+    'pandemic':          PRESSURE_HUMANITARIAN,
+    'who_emergency':     PRESSURE_HUMANITARIAN,    # WHO PHEIC declarations
+    'health_emergency':  PRESSURE_HUMANITARIAN,
+    # v3.6 — Africa-specific humanitarian signal categories (Phase 2 scaffolding)
+    'sudan_conflict':    PRESSURE_HUMANITARIAN,    # Sudan RSF/SAF conflict + Darfur famine
+    'tigray':            PRESSURE_HUMANITARIAN,    # Ethiopia Tigray humanitarian residue
+    'sahel_displacement':PRESSURE_HUMANITARIAN,    # Mali/Burkina/Niger coup-belt displacement
+    'kivu_displacement': PRESSURE_HUMANITARIAN,    # Eastern DRC M23/ADF/FDLR displacement
+    'lake_chad':         PRESSURE_HUMANITARIAN,    # Boko Haram + climate-driven Chad basin crisis
+    'food_security':     PRESSURE_HUMANITARIAN,    # IPC Phase 3+ classifications
 }
 
 
@@ -768,6 +810,153 @@ def _narrative_arctic_convergence(blufs):
 
 
 # ════════════════════════════════════════════════════════════════════
+# DEDICATED NARRATIVE: BELT-AND-ROAD RESOURCE LEVERAGE (v3.6.0)
+# ════════════════════════════════════════════════════════════════════
+# China's Belt-and-Road resource-leverage pattern is structurally important
+# enough to warrant a dedicated narrative function rather than relying solely
+# on the generic registry-driven detector. The generic detector fires on any
+# single trigger; this function COUNTS how many anchor relationships are
+# simultaneously under stress and amplifies the narrative accordingly.
+#
+# Anchor relationships (Phase 1A baseline, May 23 2026):
+#   1. China-DRC cobalt          (~80% of DRC mining via CCP-linked entities)
+#   2. China-Guinea bauxite      (SMB Winning + Boké rail + Conakry port)
+#   3. China-Jordan potash       (SDIC 28% of Arab Potash Co since 2017)
+#   4. China-Indonesia nickel    (Tsingshan + Huayou Sulawesi HPAL parks)
+#
+# Phase 2 anchors to add as Asifah expands:
+#   - China-Zambia copper
+#   - China-Angola infrastructure-for-resources
+#   - China-Mozambique infrastructure
+#   - China-Saudi/UAE energy partnerships
+#   - China-Argentina lithium
+#
+# DETECTION LOGIC (v3.6.0):
+#   Read each regional BLUF for signals carrying anchor-specific flags
+#   ({anchor}_belt_and_road_active). Count how many distinct anchors fire.
+#   Emit narrative scaled to anchor count:
+#     1 anchor   -> no narrative (single-anchor stories belong to generic detector)
+#     2 anchors  -> WATCH narrative (priority 12)
+#     3 anchors  -> ELEVATED narrative (priority 14)
+#     4+ anchors -> STRUCTURAL narrative (priority 16) — BRI architecture under stress
+#
+# CONVERGENCE FRAMING DISCIPLINE: We report WHAT signals are present, NOT
+# WHETHER China's BRI architecture is "failing" or "succeeding." Active
+# anchor stress is a measurement, not a verdict.
+# ════════════════════════════════════════════════════════════════════
+def _narrative_belt_and_road_resource_leverage(blufs):
+    """
+    Counts active Belt-and-Road resource-leverage anchor flags across regions.
+    Emits a narrative only when 2+ anchors fire simultaneously.
+
+    Phase 2 dependency: regional BLUFs (especially africa + asia + me) need
+    to emit signals carrying the {anchor}_belt_and_road_active flag in their
+    convergence_states. Until trackers ship, this function returns None
+    silently (no false positives).
+    """
+    # Anchor flags Phase 2 trackers will set on relevant signals:
+    ANCHORS = [
+        ('drc_belt_and_road_active',         'DRC cobalt',          'africa'),
+        ('guinea_belt_and_road_active',      'Guinea bauxite',      'africa'),
+        ('jordan_belt_and_road_active',      'Jordan potash',       'me'),
+        ('indonesia_belt_and_road_active',   'Indonesia nickel',    'asia'),
+        # Phase 2+ additions (uncomment as trackers ship):
+        # ('zambia_belt_and_road_active',     'Zambia copper',      'africa'),
+        # ('angola_belt_and_road_active',     'Angola corridor',    'africa'),
+        # ('argentina_belt_and_road_active',  'Argentina lithium',  'wha'),
+    ]
+
+    active_anchors = []
+    for flag, label, primary_region in ANCHORS:
+        # Scan primary region first, fallback to all regions for cross-stamped flags
+        regions_to_scan = [primary_region] + [r for r in blufs.keys() if r != primary_region]
+        for region in regions_to_scan:
+            bluf = blufs.get(region)
+            if not bluf:
+                continue
+            signals = _signals_of(bluf)
+            if any(s.get(flag) for s in signals):
+                active_anchors.append(label)
+                break  # don't double-count this anchor across regions
+
+    n_active = len(active_anchors)
+
+    # 0 or 1 anchor active: no dedicated narrative (let generic detector handle)
+    if n_active < 2:
+        return None
+
+    anchor_list = ', '.join(active_anchors)
+
+    if n_active >= 4:
+        priority = 16
+        severity_label = 'STRUCTURAL'
+        headline = (
+            f'Belt-and-Road resource leverage: STRUCTURAL convergence -- '
+            f'{n_active} anchor relationships simultaneously stressed'
+        )
+        detail = (
+            f'CONVERGENCE READOUT: {n_active} anchor relationships in China\'s '
+            f'Belt-and-Road resource-leverage architecture are simultaneously '
+            f'showing stress: {anchor_list}. WHAT THIS MEASURES: Chinese state '
+            f'capital + flagship-resource-company stake + infrastructure '
+            f'investment is the canonical BRI playbook (SDIC-Jordan, China-DRC, '
+            f'China-Guinea, China-Indonesia). When 4+ anchors fire simultaneously, '
+            f'either (a) Western counter-positioning is accelerating (Lobito '
+            f'Corridor, Project Vault, Orion MOU), (b) host-country renegotiation '
+            f'rhetoric is concurrent across multiple sovereign actors, or '
+            f'(c) coordinated stress is signaling structural pressure on the BRI '
+            f'commercial architecture itself. FRAMING DISCIPLINE: This is a '
+            f'CONVERGENCE indicator, NOT a prediction of BRI collapse or success. '
+            f'Active anchor stress is a measurement.'
+        )
+    elif n_active == 3:
+        priority = 14
+        severity_label = 'ELEVATED'
+        headline = (
+            f'Belt-and-Road resource leverage: ELEVATED -- '
+            f'{n_active} anchors stressed ({anchor_list})'
+        )
+        detail = (
+            f'Three of the canonical Belt-and-Road resource-leverage anchor '
+            f'relationships are simultaneously showing stress: {anchor_list}. '
+            f'When 3+ anchors fire concurrently, the pattern suggests either '
+            f'coordinated Western counter-positioning or coordinated host-country '
+            f'renegotiation pressure. Watch: Arab-Chinese Cooperation Forum '
+            f'outcomes (June 2026), Lobito Corridor throughput, Indonesian '
+            f'nickel export-policy shifts, DRC-Beijing renegotiation signals. '
+            f'CONVERGENCE framing -- not prediction.'
+        )
+    else:  # n_active == 2
+        priority = 12
+        severity_label = 'WATCH'
+        headline = (
+            f'Belt-and-Road resource leverage: WATCH -- '
+            f'{n_active} anchors stressed ({anchor_list})'
+        )
+        detail = (
+            f'Two Belt-and-Road resource-leverage anchor relationships are '
+            f'concurrently showing stress: {anchor_list}. Single-anchor stress '
+            f'is routine; concurrent multi-anchor stress is the early signal '
+            f'that the broader BRI commercial architecture may be entering a '
+            f'period of recalibration. CONVERGENCE framing -- not prediction.'
+        )
+
+    return {
+        'priority': priority,
+        'category': 'belt_and_road_resource_leverage',
+        'regions':  ['africa', 'asia', 'me'],   # Cross-regional by definition (Tier 1)
+        'icon':     '\U0001f3ed',                # 🏭
+        'color':    '#a855f7',                    # purple — regime axis
+        'headline': headline[:120],
+        'detail':   detail,
+        'pressure_type': 'economic',   # BRI resource leverage is economic-axis primary
+        'severity_label': severity_label,
+        'anchor_count':   n_active,
+        'active_anchors': active_anchors,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
 # REGISTRY-DRIVEN CONVERGENCE DETECTOR (Layer 1)
 # ════════════════════════════════════════════════════════════════════
 def _detect_convergences_from_registry(blufs):
@@ -975,12 +1164,13 @@ def _narrative_global_baseline(blufs):
 # Registry of detectors. Order doesn't matter -- sorting is by priority.
 NARRATIVE_DETECTORS = [
     _narrative_nuclear_signaling_global,
-    _narrative_iran_strike_window,         # NEW (May 22 2026) — convergence framing
+    _narrative_iran_strike_window,                       # convergence framing (May 22 2026)
     _narrative_china_taiwan_takeover,
     _narrative_dual_chokepoint,
     _narrative_russia_iran_axis,
     _narrative_arctic_convergence,
-    _detect_convergences_from_registry,    # registry-driven (returns LIST of narratives)
+    _narrative_belt_and_road_resource_leverage,          # v3.6.0 May 23 2026 — multi-anchor BRI detector
+    _detect_convergences_from_registry,                  # registry-driven (returns LIST of narratives)
     _narrative_dprk_russia_axis,
     _narrative_wha_cascade,
     _narrative_houthi_fragility,
@@ -1120,7 +1310,7 @@ def _build_global_top_signals(blufs, narratives):
     for n in narratives[:5]:   # widened from 3 to 5 since tier sort handles ranking
         if n.get('category') in ('global_baseline', 'global_warning'):
             continue
-        signals.append({
+        promoted = {
             'priority':   n['priority'],
             'category':   n['category'],
             'theatre':    'global',
@@ -1130,7 +1320,14 @@ def _build_global_top_signals(blufs, narratives):
             'short_text': n['headline'][:120],     # v2.3.0: 80→120 — fits "Wheat-Lebanon convergence ... ELEVATED" (85 chars)
             'long_text':  n['detail'],
             'regions':    n.get('regions', []),
-        })
+        }
+        # v3.6.0 (May 23 2026): propagate pressure_type from narrative if set.
+        # This lets dedicated narratives (BRI, sanctions evasion, etc.) declare
+        # their axis explicitly rather than being defaulted to kinetic via the
+        # inference layer (which has no category hint for narrative-derived signals).
+        if n.get('pressure_type'):
+            promoted['pressure_type'] = n['pressure_type']
+        signals.append(promoted)
 
     # 2. Pull top regional signals (alphabetical, then by priority)
     for region in CARD_ORDER:
@@ -1155,18 +1352,87 @@ def _build_global_top_signals(blufs, narratives):
         s['_tier_boost'] = _tier_boost(s)
         s['_sort_key']   = s['_tier_boost'] + int(s.get('priority', 0) or 0)
 
-    # Dedupe by category+theatre, sort by tier-adjusted score, return top N
+    # Dedupe by category+theatre, then apply tier+priority sort.
+    # v3.6 (May 23 2026): split into two phases for axis-distribution control.
     seen = set()
     deduped = []
     for s in sorted(signals, key=lambda x: x.get('_sort_key', 0), reverse=True):
         key = f"{s.get('theatre', '')}:{s.get('category', '')}"
         if key not in seen:
             seen.add(key)
-            # Strip internal sort fields before returning
+            deduped.append(s)
+
+    # ─────────────────────────────────────────────────────────────────────
+    # AXIS DISTRIBUTION (v3.6.0 May 23 2026)
+    # ─────────────────────────────────────────────────────────────────────
+    # The first CORE_HEADLINE_COUNT slots fill by pure tier+priority — this
+    # protects the analyst-priority headline narrative integrity (you never
+    # want a wheat-price signal pre-empting an active-conflict L5 signal).
+    #
+    # Slots CORE_HEADLINE_COUNT..TOP_GLOBAL_SIGNALS_COUNT apply rebalancing:
+    # the remaining slots PREFER signals from underrepresented axes so the
+    # final 20 includes diplomatic + humanitarian + economic representation
+    # rather than 20 kinetic. MIN_SIGNALS_PER_AXIS sets the floor we aim for.
+    #
+    # Why this matters: when Africa/Ebola signals + diamond sanctions + BRI
+    # resource leverage all fire simultaneously, the headline tier still
+    # gets the loudest narrative, but operators see the full picture in
+    # slots 13-20 rather than only the kinetic axis. Sudan IDP surge during
+    # active Iran kinetic = visible side-by-side.
+    if len(deduped) <= CORE_HEADLINE_COUNT:
+        # Not enough signals to need rebalancing — strip internals and return
+        for s in deduped:
             s.pop('_tier_boost', None)
             s.pop('_sort_key', None)
-            deduped.append(s)
-    return deduped[:TOP_GLOBAL_SIGNALS_COUNT]
+        return deduped[:TOP_GLOBAL_SIGNALS_COUNT]
+
+    # Take first CORE_HEADLINE_COUNT as-is (pure tier+priority)
+    headline_block = deduped[:CORE_HEADLINE_COUNT]
+    candidate_pool = deduped[CORE_HEADLINE_COUNT:]
+    remaining_slots = TOP_GLOBAL_SIGNALS_COUNT - CORE_HEADLINE_COUNT  # e.g. 20-12 = 8
+
+    # Count axis representation already present in the headline block
+    axis_counts = {axis: 0 for axis in PRESSURE_AXES}
+    for s in headline_block:
+        # Use existing pressure_type if tagged; otherwise infer
+        axis = s.get('pressure_type') or _infer_pressure_type(s)
+        if axis in axis_counts:
+            axis_counts[axis] += 1
+
+    # Build the rebalanced tail: prefer candidates from axes currently below MIN_SIGNALS_PER_AXIS
+    tail_block = []
+    candidates_by_axis = {axis: [] for axis in PRESSURE_AXES}
+    for s in candidate_pool:
+        axis = s.get('pressure_type') or _infer_pressure_type(s)
+        if axis in candidates_by_axis:
+            candidates_by_axis[axis].append(s)
+
+    # Phase A: try to bring each axis up to MIN_SIGNALS_PER_AXIS
+    for axis in PRESSURE_AXES:
+        while (axis_counts[axis] < MIN_SIGNALS_PER_AXIS
+               and candidates_by_axis[axis]
+               and len(tail_block) < remaining_slots):
+            picked = candidates_by_axis[axis].pop(0)
+            tail_block.append(picked)
+            axis_counts[axis] += 1
+
+    # Phase B: fill any remaining slots from highest-priority leftover candidates
+    if len(tail_block) < remaining_slots:
+        leftovers = []
+        for axis in PRESSURE_AXES:
+            leftovers.extend(candidates_by_axis[axis])
+        leftovers.sort(key=lambda x: x.get('_sort_key', 0), reverse=True)
+        for s in leftovers:
+            if len(tail_block) >= remaining_slots:
+                break
+            tail_block.append(s)
+
+    # Combine + strip internal fields
+    final = headline_block + tail_block
+    for s in final:
+        s.pop('_tier_boost', None)
+        s.pop('_sort_key', None)
+    return final[:TOP_GLOBAL_SIGNALS_COUNT]
 
 
 # ============================================================
