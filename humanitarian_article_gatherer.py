@@ -1,7 +1,8 @@
 """
 humanitarian_article_gatherer.py
 Asifah Analytics -- ME Backend Module
-v1.0.0 -- May 19, 2026
+v1.4.0 -- May 23, 2026 (Health/Pandemic + Africa Expansion)
+(prior: v1.0.0 May 19 2026 baseline)
 
 GLOBAL HUMANITARIAN ARTICLE GATHERER
 
@@ -20,9 +21,10 @@ SOURCES:
     - The New Humanitarian (formerly IRIN -- niche humanitarian beat)
     - Al Jazeera (Africa + Asia humanitarian beats)
     - Reuters Africa
-    - World Vision
-    - Feed the Children
-    - Google News humanitarian queries (broad fallback)
+    - WHO Disease Outbreak News (v1.4.0) -- official PHEIC + outbreak feed
+    - WHO Regional Office for Africa (v1.4.0) -- DRC Ebola, Marburg, cholera
+    - CIDRAP News (v1.4.0) -- academic-tier outbreak surveillance
+    - Google News humanitarian + health queries (broad fallback)
 
   GDELT (medium cost, broad reach):
     - Targeted queries for known crisis countries
@@ -177,6 +179,25 @@ HUMANITARIAN_RSS_FEEDS = [
     #  worldvision/feedthechildren RSS feeds may not exist or may be limited)
     ("https://news.google.com/rss/search?q=%22World+Vision%22+humanitarian&hl=en&gl=US&ceid=US:en", 0.85),
     ("https://news.google.com/rss/search?q=%22Feed+the+Children%22+OR+%22Mercy+Corps%22+OR+%22IRC+International%22&hl=en&gl=US&ceid=US:en", 0.85),
+    # ─── v1.4.0 (May 23, 2026) HEALTH/PANDEMIC FEEDS ───
+    # WHO official outbreak surveillance — canonical health emergency source
+    # Note: WHO does not publish a /feed.xml route; we use Google News queries
+    # targeted at WHO Disease Outbreak News content + WHO press releases.
+    ("https://news.google.com/rss/search?q=site%3Awho.int+%22Disease+Outbreak+News%22&hl=en&gl=US&ceid=US:en", 1.15),  # WHO DON
+    ("https://news.google.com/rss/search?q=%22WHO+Africa%22+OR+%22WHO+AFRO%22+outbreak&hl=en&gl=US&ceid=US:en", 1.1),   # WHO Africa Region
+    ("https://news.google.com/rss/search?q=%22Public+Health+Emergency+of+International+Concern%22+OR+PHEIC&hl=en&gl=US&ceid=US:en", 1.1),
+    # CIDRAP -- academic-tier outbreak surveillance (Univ of Minnesota)
+    ("https://www.cidrap.umn.edu/news/feed", 1.05),
+    # Named-disease watchlist queries — Africa-heavy outbreak coverage
+    ("https://news.google.com/rss/search?q=Ebola+outbreak+DRC+OR+Uganda+OR+Sudan+2026&hl=en&gl=US&ceid=US:en", 1.05),
+    ("https://news.google.com/rss/search?q=Marburg+outbreak+Rwanda+OR+Tanzania+OR+Kenya+2026&hl=en&gl=US&ceid=US:en", 1.05),
+    ("https://news.google.com/rss/search?q=cholera+outbreak+Sudan+OR+Yemen+OR+Haiti+OR+Lebanon+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=mpox+outbreak+clade+DRC+OR+Burundi+OR+Uganda+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=%22H5N1%22+OR+%22avian+flu%22+human+cases+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    # Pandemic-prep + "disease X" + spillover watch
+    ("https://news.google.com/rss/search?q=%22disease+X%22+OR+%22pandemic+preparedness%22+OR+%22zoonotic+spillover%22&hl=en&gl=US&ceid=US:en", 0.95),
+    # Africa health system + vaccine cold-chain (Phase 2 readiness)
+    ("https://news.google.com/rss/search?q=%22health+system%22+collapse+Africa+OR+%22vaccine+shortage%22+Africa&hl=en&gl=US&ceid=US:en", 0.95),
 ]
 
 
@@ -213,6 +234,21 @@ GDELT_HUMANITARIAN_QUERIES = [
     ("السودان دارفور أزمة إنسانية 2026",        'ara'),
     ("اليمن أزمة إنسانية 2026",                 'ara'),
     ("غزة أزمة إنسانية 2026",                   'ara'),
+    # ─── v1.4.0 (May 23, 2026) HEALTH/PANDEMIC GDELT QUERIES ───
+    # Disease-specific watchlist with Africa concentration. Kept short
+    # to avoid GDELT query-length errors. English-only — most outbreak
+    # journalism is English-dominant via WHO + CIDRAP + Reuters.
+    ("Ebola outbreak DRC Uganda 2026",           'eng'),
+    ("Marburg outbreak Rwanda Tanzania 2026",    'eng'),
+    ("cholera outbreak Sudan Yemen 2026",        'eng'),
+    ("mpox outbreak Africa 2026",                'eng'),
+    ("H5N1 human cases outbreak 2026",           'eng'),
+    ("WHO PHEIC declared 2026",                  'eng'),
+    ("disease outbreak Africa 2026",             'eng'),
+    ("vaccine shortage Africa cholera 2026",     'eng'),
+    # Pandemic-prep + spillover watch
+    ("disease X pandemic preparedness 2026",     'eng'),
+    ("zoonotic spillover outbreak 2026",         'eng'),
 ]
 
 
@@ -228,6 +264,17 @@ BRAVE_SUBREGION_QUERIES = [
     "Cap-Haitien gang violence",
     "Khan Younis Rafah Gaza humanitarian",
     "Hodeidah Sanaa Yemen aid",
+    # ─── v1.4.0 (May 23, 2026) Africa outbreak + crisis hotspots ───
+    "Beni Butembo DRC Ebola",                # DRC Ebola epicenters
+    "Kampala Uganda Ebola Sudan strain",     # Uganda Ebola history
+    "Kigali Rwanda Marburg outbreak",        # Rwanda Marburg 2024
+    "Kasai DRC mpox clade",                   # Mpox clade Ib origin
+    "Lake Chad basin Boko Haram displacement", # Lake Chad humanitarian
+    "Sahel coup belt displacement",           # Mali/Burkina/Niger
+    "Bangui CAR humanitarian",                # Central African Republic
+    "Cabo Delgado Mozambique insurgency",    # Cabo Delgado crisis
+    "Sudan cholera vaccine shortage",         # Sudan cholera crisis
+    "Cox's Bazar Rohingya health",            # Bangladesh Rohingya health
 ]
 
 
