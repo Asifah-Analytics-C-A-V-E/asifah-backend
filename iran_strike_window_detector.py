@@ -1,11 +1,19 @@
 """
 iran_strike_window_detector.py
 ================================================================
-ASIFAH ANALYTICS — Iran Strike Window Detector v1.0.0
+ASIFAH ANALYTICS — Iran Strike Window Detector v1.1.0
 ================================================================
 
 Built May 22 2026.
-
+Updated May 24 2026 (v1.1.0): Added DIPLOMATIC SUPPRESSION FACTOR —
+a negative multiplier that reduces composite score when active Iran-US
+diplomatic-track signals are detected. Reads Iran rhetoric ceasefire_level
+and Pakistan rhetoric proxy_mediation_level fingerprints from Redis, plus
+scans article pool for Trump 'largely negotiated' / Munir mediation /
+14-clause MOU language. Cap: max -25% suppression. Does NOT drive
+composite to zero — kept honest per convergence-not-prediction discipline
+(strikes have happened during active diplomacy historically, e.g. 1973
+Yom Kippur). Architectural mirror of diplomatic_modifier in Iran tracker.
 PURPOSE
 -------
 Detects "operational window" conditions for potential US/Israel kinetic
@@ -106,7 +114,7 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('U
 STRIKE_WINDOW_CACHE_KEY  = 'iran_strike_window:current'
 STRIKE_WINDOW_CACHE_TTL  = 6 * 3600   # 6h
 
-DETECTOR_VERSION = '1.0.0'
+DETECTOR_VERSION = '1.1.0'
 DEFAULT_HOURS_BACK = 48   # 2-day look-back for environmental signals
 
 OSINT_SIGNAL_WEIGHT  = 1.0
@@ -238,6 +246,58 @@ PRINCIPAL_FRICTION_KEYWORDS = [
     'gallant emergency meeting',
     # Intelligence
     'cia director iran briefing', 'dni iran briefing',
+]
+
+
+# ════════════════════════════════════════════════════════════════════════
+# DIPLOMATIC SUPPRESSION KEYWORDS (v1.1.0 — May 24 2026)
+# ────────────────────────────────────────────────────────────────────────
+# These keywords are scanned in the article pool to detect ACTIVE Iran-US
+# diplomatic-track signals. When 2+ fire, they trigger a negative
+# multiplier capped at -25% on the composite score.
+#
+# IMPORTANT: This is NOT a prediction of no strike. It is HONEST
+# acknowledgment that operational windows narrow when diplomatic windows
+# widen. Strikes have occurred during active diplomacy historically
+# (e.g. 1973 Yom Kippur). The suppression is capped at -25% so the
+# composite is never driven to zero by diplomacy alone.
+#
+# Reads from THREE sources:
+#   1. Article-pool keyword scan (this list)
+#   2. Iran rhetoric tracker fingerprint: ceasefire_level >= 3
+#   3. Pakistan rhetoric tracker fingerprint: proxy_mediation_level >= 3
+# ════════════════════════════════════════════════════════════════════════
+DIPLOMATIC_SUPPRESSION_KEYWORDS = [
+    # Trump Truth Social deal framing (May 22-24 2026)
+    'largely negotiated', 'iran deal largely negotiated',
+    'iran us deal largely negotiated', 'iran us peace deal',
+    'iran us peace agreement', 'iran agreement reached',
+    'iran us framework agreed', 'iran deal announced',
+    'iran us final agreement', 'iran us framework agreement',
+    'iran us memorandum of understanding', 'iran us mou',
+    'iran 14-clause framework', 'iran 14 clause mou',
+    'iran us draft agreement', 'iran formal response',
+    'us formal response iran',
+    # Munir mediation specific
+    'munir tehran', 'munir iran', 'asim munir tehran',
+    'field marshal munir', 'pakistan army chief tehran',
+    'pakistan delivers iran proposal', 'pakistan iran us mediation',
+    'munir mediates iran', 'munir shuttle iran',
+    # Witkoff envoy activity
+    'witkoff islamabad', 'witkoff tehran', 'witkoff iran shuttle',
+    'witkoff envoy iran', 'witkoff mediation iran',
+    # Iran-side framing (positive signals)
+    'trend toward rapprochement', 'rapprochement iran us',
+    'iran us encouraging progress', 'final understanding iran',
+    'iran nuclear talks resume', 'iran nuclear talks restart',
+    'iran ceasefire extension', 'trump extends iran ceasefire',
+    # Hormuz reopening agreement language
+    'hormuz reopening agreement', 'iran hormuz deal',
+    'iran agrees hormuz', 'iran us hormuz agreement',
+    # Nuclear concession framing
+    'iran dismantles natanz', 'iran dismantles fordow',
+    'iran dismantles isfahan', 'iran surrenders heu',
+    'iran heu stockpile surrendered',
 ]
 
 
@@ -790,6 +850,166 @@ def detect_rumored_signals(articles):
 
 
 # ════════════════════════════════════════════════════════════════════════
+# DIPLOMATIC SUPPRESSION DETECTOR (v1.1.0 — May 24 2026)
+# ────────────────────────────────────────────────────────────────────────
+# Reads three sources to detect active diplomatic-track signals:
+#   1. Iran rhetoric tracker fingerprint (ceasefire_level >= 3)
+#   2. Pakistan rhetoric tracker fingerprint (proxy_mediation_level >= 3)
+#   3. Article-pool keyword scan (DIPLOMATIC_SUPPRESSION_KEYWORDS)
+#
+# Returns suppression_factor in range [0.0, 0.25].
+# Multiplier total in run_strike_window_detection is reduced by this
+# factor (multiplier_total -= suppression_factor, with hard floor at 1.0
+# so composite cannot go below base_score regardless).
+#
+# Convergence-not-prediction discipline preserved: the factor is capped
+# and transparent in output. Reader sees both the kinetic signals AND
+# the diplomatic context, draws their own conclusion.
+# ════════════════════════════════════════════════════════════════════════
+
+def _read_iran_ceasefire_fingerprint():
+    """Read Iran tracker's ceasefire_level + diplomatic_modifier.
+
+    Returns dict with: ceasefire_level (int 0-5), diplomatic_active (bool),
+    diplomatic_modifier (int), diplomatic_label (str), source (str).
+    Graceful fallback on Redis miss.
+    """
+    fp = _redis_get('rhetoric:iran:latest') or {}
+    if not isinstance(fp, dict):
+        return {'ceasefire_level': 0, 'diplomatic_active': False,
+                'diplomatic_modifier': 0, 'diplomatic_label': 'baseline',
+                'source': 'iran_fingerprint_missing'}
+    return {
+        'ceasefire_level':     int(fp.get('ceasefire_level', 0) or 0),
+        'diplomatic_active':   bool(fp.get('diplomatic_active', False)),
+        'diplomatic_modifier': int(fp.get('diplomatic_modifier', 0) or 0),
+        'diplomatic_label':    str(fp.get('ceasefire_label', 'baseline') or 'baseline'),
+        'source':              'iran_fingerprint',
+    }
+
+
+def _read_pakistan_mediation_fingerprint():
+    """Read Pakistan tracker's proxy_mediation_level.
+
+    Returns dict with: proxy_mediation_level (int 0-5),
+    pakistan_mediating_iran_us (bool), source (str).
+    """
+    fp = _redis_get('rhetoric:pakistan:latest') or {}
+    if not isinstance(fp, dict):
+        return {'proxy_mediation_level': 0,
+                'pakistan_mediating_iran_us': False,
+                'source': 'pakistan_fingerprint_missing'}
+    return {
+        'proxy_mediation_level':       int(fp.get('proxy_mediation_level', 0) or 0),
+        'pakistan_mediating_iran_us':  bool(fp.get('pakistan_mediating_iran_us', False)),
+        'source':                      'pakistan_fingerprint',
+    }
+
+
+def detect_diplomatic_suppression(articles):
+    """Detect active Iran-US diplomatic track and compute suppression factor.
+
+    Returns dict:
+      active:              bool — True if 2+ component signals fire
+      factor:              float — multiplier reduction in [0.0, 0.25]
+      component_count:     int — how many components fired
+      components:          dict — per-source signal state
+      keyword_matches:     int — article-pool keyword match count
+      rationale:           str — explanation for output
+    """
+    iran_dip      = _read_iran_ceasefire_fingerprint()
+    pakistan_dip  = _read_pakistan_mediation_fingerprint()
+    keyword_hits  = _scan_keywords(articles, DIPLOMATIC_SUPPRESSION_KEYWORDS,
+                                   max_matches=20)
+    keyword_count = len(keyword_hits)
+
+    # Component 1: Iran ceasefire_level >= 3 (mediator activity or higher)
+    iran_active = iran_dip['ceasefire_level'] >= 3
+
+    # Component 2: Pakistan proxy_mediation_level >= 3
+    pak_active = pakistan_dip['proxy_mediation_level'] >= 3
+
+    # Component 3: Article-pool keyword scan >= 3 hits (multiple sources)
+    kw_active = keyword_count >= 3
+
+    component_count = sum([iran_active, pak_active, kw_active])
+
+    # Scoring ladder:
+    #   0 components: 0.00 suppression
+    #   1 component:  0.00 suppression (single weak signal not enough)
+    #   2 components: 0.15 suppression (clear diplomatic track)
+    #   3 components: 0.25 suppression (cap — full diplomatic-track active)
+    if component_count >= 3:
+        factor = 0.25
+    elif component_count >= 2:
+        factor = 0.15
+    else:
+        factor = 0.0
+
+    active = factor > 0.0
+
+    if active:
+        parts = []
+        if iran_active:
+            parts.append(f"Iran ceasefire L{iran_dip['ceasefire_level']} ({iran_dip['diplomatic_label']})")
+        if pak_active:
+            parts.append(f"Pakistan mediation L{pakistan_dip['proxy_mediation_level']}")
+        if kw_active:
+            parts.append(f"{keyword_count} diplomatic keywords in article pool")
+        rationale = (
+            f"Active diplomatic-track suppression "
+            f"({component_count}/3 components, -{int(factor*100)}% to multiplier): "
+            f"{'; '.join(parts)}. "
+            f"NOTE: This factor does NOT predict no strike — it honestly reflects "
+            f"that operational windows narrow when diplomatic windows widen. "
+            f"Cap -25%; composite never driven to zero by diplomacy alone."
+        )
+    else:
+        rationale = (
+            f"No diplomatic-track suppression "
+            f"({component_count}/3 components active). "
+            f"Iran ceasefire L{iran_dip['ceasefire_level']}, "
+            f"Pakistan mediation L{pakistan_dip['proxy_mediation_level']}, "
+            f"keyword matches: {keyword_count}."
+        )
+
+    return {
+        'active':           active,
+        'factor':           factor,
+        'component_count':  component_count,
+        'components': {
+            'iran_ceasefire': {
+                'active':              iran_active,
+                'ceasefire_level':     iran_dip['ceasefire_level'],
+                'diplomatic_active':   iran_dip['diplomatic_active'],
+                'diplomatic_modifier': iran_dip['diplomatic_modifier'],
+                'diplomatic_label':    iran_dip['diplomatic_label'],
+            },
+            'pakistan_mediation': {
+                'active':                       pak_active,
+                'proxy_mediation_level':        pakistan_dip['proxy_mediation_level'],
+                'pakistan_mediating_iran_us':   pakistan_dip['pakistan_mediating_iran_us'],
+            },
+            'keyword_scan': {
+                'active':       kw_active,
+                'match_count':  keyword_count,
+                'top_matches': [
+                    {
+                        'title':   (m['article'].get('title') or '')[:140],
+                        'url':     m['article'].get('url', ''),
+                        'source':  _article_source(m['article']),
+                        'keyword': m['keyword'],
+                    }
+                    for m in keyword_hits[:5]
+                ],
+            },
+        },
+        'keyword_matches':  keyword_count,
+        'rationale':        rationale,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
 # ARTICLE INGESTION
 # ════════════════════════════════════════════════════════════════════════
 
@@ -867,6 +1087,11 @@ def run_strike_window_detection(hours_back=DEFAULT_HOURS_BACK, extra_articles=No
         'potus_anomaly':     _detect_potus_location_anomaly(articles),
     }
 
+    # v1.1.0 (May 24 2026) — Detect diplomatic-track suppression
+    # Reads Iran rhetoric ceasefire_level + Pakistan rhetoric mediation_level
+    # + article-pool keyword scan. Returns suppression factor in [0.0, 0.25].
+    diplomatic_suppression = detect_diplomatic_suppression(articles)
+
     base_score = sum(
         s.get('weight', 0) for s in signals.values() if s.get('active')
     )
@@ -881,6 +1106,13 @@ def run_strike_window_detection(hours_back=DEFAULT_HOURS_BACK, extra_articles=No
     for k, m in calendar_multipliers.items():
         if m.get('active'):
             multiplier_total += multiplier_weights.get(k, 0.0)
+
+    # v1.1.0 (May 24 2026) — Apply diplomatic suppression
+    # Reduces multiplier_total by up to 0.25, but never drives below 1.0
+    # (so composite cannot go below base_score regardless of diplomacy).
+    pre_suppression_multiplier = multiplier_total
+    if diplomatic_suppression['active']:
+        multiplier_total = max(1.0, multiplier_total - diplomatic_suppression['factor'])
 
     composite_score = round(base_score * multiplier_total, 2)
 
@@ -926,12 +1158,22 @@ def run_strike_window_detection(hours_back=DEFAULT_HOURS_BACK, extra_articles=No
         "will occur. Reader should form independent judgment from underlying signals."
     )
 
+    # v1.1.0: Append diplomatic suppression context to rationale when active
+    if diplomatic_suppression['active']:
+        rationale = (
+            f"{rationale} | DIPLOMATIC CONTEXT: "
+            f"{diplomatic_suppression['rationale']}"
+        )
+
     result = {
         'timestamp': now.isoformat(),
         'version': DETECTOR_VERSION,
         'signals': signals,
         'calendar_multipliers': calendar_multipliers,
+        # v1.1.0 — diplomatic suppression transparency
+        'diplomatic_suppression': diplomatic_suppression,
         'base_score': round(base_score, 2),
+        'pre_suppression_multiplier': round(pre_suppression_multiplier, 2),
         'multiplier_total': round(multiplier_total, 2),
         'composite_score': composite_score,
         'severity': severity,
