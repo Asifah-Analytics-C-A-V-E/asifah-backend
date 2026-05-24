@@ -92,14 +92,22 @@ REGIONAL_BASELINE_TEMPLATES = {
     'africa': {
         'display': 'Africa / AFRICOM',
         'baseline': (
-            'AFRICOM AOR baseline. Routine US-Africa Command counter-terrorism posture '
-            'across the Sahel, Horn of Africa, and Lake Chad Basin, with Wagner/Africa '
-            'Corps footprint stable across Mali, Burkina Faso, Libya, CAR, and Sudan. '
-            'Sudan civil war (SAF vs RSF) at established conflict tempo. No theatre-wide '
-            'escalation signal beyond ongoing baseline humanitarian and security pressures.'
+            'AFRICOM AOR baseline. Sudan civil war (SAF vs RSF) at sustained high-intensity '
+            'tempo with IPC Phase 5 famine localized in El Fasher and Zamzam. Sahel jihadist '
+            'pressure (JNIM, ISGS) elevated across Mali, Burkina Faso, and Niger, with AES '
+            'confederation consolidating against ECOWAS. Eastern DRC under M23/AFC pressure '
+            'following Goma fall (Jan 2025); Romanian and Wagner/Africa Corps mercenary '
+            'presence widespread. Russia Africa Corps formalized under GRU Unit 29155 / '
+            'Yevkurov command; Wagner footprint stable across Mali, Burkina Faso, Libya, CAR, '
+            'Sudan, and now Niger. Al-Shabaab and ISIS-Somalia operations sustained; AUSSOM '
+            'transition from ATMIS underway. Ebola Bundibugyo PHEIC (May 2026, DRC origin) '
+            'creates cross-border military quarantine zones. No theatre-wide escalation '
+            'signal beyond ongoing baseline humanitarian and security pressures.'
         ),
         'context_actors': ['nigeria', 'somalia', 'sudan', 'libya', 'mali',
-                           'djibouti', 'drc', 'wagner_africa'],
+                           'djibouti', 'drc', 'wagner_africa', 'niger',
+                           'burkina_faso', 'ethiopia', 'kenya',
+                           'central_african_republic'],
     },
 }
 
