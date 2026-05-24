@@ -577,6 +577,20 @@ ACTORS = {
             'us iran deal', 'us iran nuclear deal', 'us iran talks',
             'us iran negotiations', 'us iran agreement',
             'us iran sanctions', 'snapback iran',
+            # ── v1.5.0 (May 24, 2026) Trump Truth Social deal framing ──
+            'trump truth social iran', 'trump truth iran deal',
+            'trump post iran deal', 'trump iran deal truth social',
+            'trump iran largely negotiated', 'largely negotiated iran',
+            'trump iran final details', 'trump iran final agreement',
+            'trump iran peace deal', 'trump iran peace agreement',
+            'trump iran framework', 'trump iran hormuz reopen',
+            'trump iran hormuz', 'trump iran heu',
+            'us demands iran heu', 'us demands iran dismantle',
+            'us iran natanz fordow', 'us iran nuclear sites dismantle',
+            'witkoff iran shuttle', 'witkoff iran mediation',
+            'us formal response iran', 'us response iran proposal',
+            'us iran 14-clause framework', 'us iran mou',
+            'us iran memorandum understanding',
             # Arabic
             'القوات الأمريكية في إيران', 'سنتكوم إيران',
             'الضربات الأمريكية على إيران', 'ترامب إيران',
@@ -735,16 +749,31 @@ DOMESTIC_TRIGGERS = {
 # Vector 6: Diplomatic Track (de-escalation signals — REDUCES pressure)
 # Catches Araghchi shuttles, Pakistan/Oman/Russia mediation, Trump waivers,
 # Witkoff envoy activity, JCPOA / nuclear deal language.
+# v1.5.0 (May 24, 2026): Expanded for the May 22-24 "largely negotiated"
+# weekend — Munir mediation shuttle, Trump Truth Social deal framing,
+# 14-clause MOU framework, Hormuz reopening language, Natanz/Fordow/
+# Isfahan dismantle demands, 440kg HEU stockpile concession framing.
 DIPLOMATIC_TRIGGERS = {
     5: [
-        # Active deal / agreement
+        # Active deal / agreement / FINAL framework
         'iran us deal signed', 'iran nuclear deal signed',
         'iran ceasefire signed', 'jcpoa restored',
         'iran agreement reached', 'iran us framework agreed',
+        # ── v1.5.0 May 24 2026 — "largely negotiated" cycle ──
+        'iran deal announced', 'iran us peace deal',
+        'iran us peace agreement', 'iran peace agreement reached',
+        'final understanding iran', 'iran us final agreement',
+        'iran us deal finalized', 'iran nuclear agreement signed',
+        'iran hormuz deal signed', 'hormuz reopening agreement',
+        'iran dismantles natanz', 'iran dismantles fordow',
+        'iran dismantles isfahan', 'iran surrenders heu',
+        'iran heu stockpile surrendered', 'iran 440kg surrendered',
+        'iran enrichment halted permanently',
         'توافق ایران آمریکا', 'اتفاق نووي إيران أمريكا',
+        'توافق نهایی ایران', 'اتفاق نهائي إيران أمريكا',
     ],
     4: [
-        # Active negotiations / direct talks
+        # Active negotiations / direct talks / framework momentum
         'araghchi pakistan', 'araghchi oman', 'araghchi russia',
         'iran second round talks', 'iran direct talks us',
         'iran nuclear deal talks', 'iran us negotiations',
@@ -752,7 +781,37 @@ DIPLOMATIC_TRIGGERS = {
         'iran ceasefire negotiations', 'iran us second round',
         'us iran ceasefire talks', 'iran us framework',
         'pakistan iran us mediator', 'oman iran us mediator',
+        # ── v1.5.0 May 24 2026 — Munir mediation + Trump framing ──
+        'largely negotiated', 'iran deal largely negotiated',
+        'iran us deal largely negotiated', 'final details iran deal',
+        'iran us memorandum of understanding', 'iran 14-clause framework',
+        'iran 14 clause mou', 'iran us framework agreement',
+        'iran us framework progress', 'iran us draft agreement',
+        'iran us draft proposal', 'iran formal response',
+        'us formal response iran', 'iran proposal trump',
+        'iran handed proposal pakistan', 'iran mou pakistan',
+        'pakistan delivers iran proposal', 'pakistan delivered iran proposal',
+        # Munir-specific (Pakistan army chief, lead mediator)
+        'munir tehran', 'munir iran', 'munir pezeshkian',
+        'asim munir iran', 'asim munir tehran',
+        'field marshal munir iran', 'munir mediates iran',
+        'munir mediation iran', 'munir shuttle iran',
+        'munir departs tehran', 'munir leaves tehran',
+        'pakistan army chief tehran', 'pakistan army chief iran',
+        # Pezeshkian + Qalibaf negotiation roles
+        'pezeshkian munir', 'qalibaf munir', 'qalibaf negotiations',
+        'qalibaf mediates iran', 'pezeshkian negotiations',
+        'iran pakistan diplomatic breakthrough',
+        'encouraging progress iran', 'final understanding talks',
+        'trend toward rapprochement', 'rapprochement iran us',
+        # Trump Truth Social framing (key source per Coco)
+        'trump truth social iran deal', 'trump truth social iran',
+        'trump iran deal post', 'trump announces iran deal',
+        'trump iran deal close', 'trump iran deal imminent',
+        'trump iran agreement near',
         'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
+        'توافق چارچوبی ایران', 'اتفاق إطار إيران',
+        'پیشرفت چشمگیر', 'تقدم مشجع',
     ],
     3: [
         # Mediator activity
@@ -765,7 +824,20 @@ DIPLOMATIC_TRIGGERS = {
         'trump iran ceasefire extension', 'jones act waiver',
         'us extends iran ceasefire', 'iran ceasefire extension',
         'iran nuclear envoy', 'special envoy iran',
+        # ── v1.5.0 May 24 2026 — sustained mediation tempo ──
+        'pakistan iran us shuttle', 'pakistan iran us channel',
+        'qatar iran us mediator', 'qatar mediates iran',
+        'pakistan multination iran us', 'pakistan facilitates iran us',
+        'pakistan iran us facilitation',
+        'pakistan iran us channel open', 'islamabad iran us shuttle',
+        'iran us back channel', 'iran us backchannel active',
+        'witkoff envoy iran', 'witkoff mediation iran',
+        'us envoy iran mediation', 'iran sticking points',
+        'iran us sticking points', 'iran us negotiating progress',
+        'iran us framework draft', 'iran nuclear framework discussion',
+        'iran hormuz negotiations', 'hormuz reopening talks',
         'پاکستان وساطت', 'وساطة باكستانية',
+        'قناة دبلوماسية إيرانية أمريكية',
     ],
     2: [
         # Diplomatic push
@@ -774,12 +846,20 @@ DIPLOMATIC_TRIGGERS = {
         'iran diplomatic outreach', 'iran ceasefire offer',
         'pakistan iran diplomacy', 'oman iran diplomacy',
         'tehran offers talks', 'iran open to talks',
+        # ── v1.5.0 May 24 2026 — softer signaling ──
+        'iran us trend rapprochement', 'iran nuclear program negotiations',
+        'iran multinational diplomatic effort',
+        'iran us message exchange', 'iran us proposal exchange',
+        'iran us draft proposal exchange', 'iran us interlocutor',
         'مذاکرات هسته‌ای ایران', 'دبلوماسية إيرانية',
     ],
     1: [
         # Background diplomatic mentions
         'iran diplomacy', 'jcpoa', 'iran deal',
         'iran nuclear program negotiation',
+        # ── v1.5.0 May 24 2026 ──
+        'iran us talks ongoing', 'iran proposal ongoing',
+        'iran mediator', 'iran us channel',
         'دیپلماسی ایران', 'دبلوماسية إيران',
     ],
 }
