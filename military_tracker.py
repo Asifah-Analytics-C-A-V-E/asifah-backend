@@ -2280,9 +2280,43 @@ MILITARY_ACTORS = {
             'nigeria christian persecution', 'nigeria genocide',
             # Niger Delta militancy
             'niger delta avengers', 'niger delta militants', 'nigerian oil region military',
+            # Lakurawa (new group, 2024-2025 emergence in NW)
+            'lakurawa', 'lakurawa nigeria', 'lakurawa kebbi',
+            'lakurawa sokoto', 'lakurawa borno',
+            'lakurawa group operations',
+            # ISWAP / Boko Haram specifics
+            'iswap nigeria', 'iswap lake chad', 'iswap commander',
+            'sambisa forest', 'boko haram sambisa',
+            'baga nigeria attack', 'monguno', 'damasak nigeria',
+            'rann nigeria military',
+            'shekau successor', 'abu musab al-barnawi',
+            # Bandit groups (NW Nigeria)
+            'zamfara bandits', 'sokoto bandits', 'kaduna bandits',
+            'katsina bandits', 'kebbi bandits',
+            'turji nigeria', 'ado aleru', 'bello turji',
+            'kachalla nigeria', 'bandit kingpin',
+            # Plateau State / Middle Belt attacks
+            'plateau attack', 'plateau state military', 'plateau massacre',
+            'mangu plateau', 'jos military', 'bokkos attack',
+            'middle belt nigeria', 'kaduna attack',
+            'southern kaduna attacks',
+            # Other groups
+            'ipob nigeria', 'eastern security network', 'esn nigeria',
+            'unknown gunmen biafra',
+            'amotekun southwest',
+            # Border ops with Niger
+            'nigeria niger border closed military',
+            'nigeria niger ecowas standoff',
+            # ECOWAS standby force
+            'ecowas standby force', 'ecowas military intervention',
+            'tinubu military', 'ecowas chairmanship military',
+            # JTF North-East / North-West
+            'jtf north east', 'jtf north west', 'operation fasan yamma',
+            'operation whirl punch', 'operation hadarin daji',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=nigeria+military+OR+nigerian+army+OR+nigeria+boko+haram&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=lakurawa+OR+iswap+OR+plateau+attack+nigeria&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2305,9 +2339,41 @@ MILITARY_ACTORS = {
             'somalia federal forces', 'danab somalia',
             'puntland military', 'somaliland military',
             'al-shabaab attack', 'shabab car bomb',
+            # AUSSOM replaces ATMIS (Jan 2025 transition)
+            'aussom', 'aussom somalia', 'au transition mission somalia',
+            'african union somalia mission',
+            # ISIS-Somalia / Puntland operations
+            'isis somalia', 'islamic state somalia', 'is somalia',
+            'puntland isis offensive', 'almiskaad mountains',
+            'cal-miskaad', 'cal miskaad', 'bari region operations',
+            # Specific al-Shabaab cells / commanders
+            'al-shabaab amniyat', 'amniyat somalia',
+            'mahad karate', 'fuad shongole',
+            'shabaab finance network', 'shabaab tax collection',
+            # Major recent attack zones
+            'mogadishu hotel attack', 'beach hotel mogadishu',
+            'somalia ied', 'shabaab ied', 'mogadishu vbied',
+            'baidoa attack', 'lower shabelle military',
+            'middle shabelle ops', 'galmudug military',
+            'hirshabelle military', 'jubaland military',
+            # Turkish + Egyptian + UAE ties (regional power competition)
+            'turkey somalia military', 'turkish drones somalia',
+            'turkey somalia base', 'tika somalia',
+            'egypt somalia military', 'egypt deploy somalia',
+            'uae somalia military', 'gulf states somalia',
+            # Maritime / piracy resurgence
+            'somalia piracy', 'somalia maritime attack',
+            'somali pirates 2024', 'somali pirates 2025', 'somali pirates 2026',
+            'gulf of aden somalia', 'eunavfor atalanta',
+            # Ethiopia-Somaliland MoU spillover
+            'ethiopia somaliland mou military',
+            'somalia ethiopia tension', 'somalia turkey mediation',
+            # Hassan Sheikh Mohamud government posture
+            'hassan sheikh mohamud military', 'somalia president military',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=somalia+military+OR+al+shabaab+OR+us+strike+somalia&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=aussom+OR+puntland+isis+OR+somalia+drone+strike&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2331,9 +2397,38 @@ MILITARY_ACTORS = {
             'gao mali', 'kidal mali', 'menaka mali',
             'mali iswap', 'mali isgs',
             'aes alliance sahel', 'alliance sahel states military',
+            # Tinzaouaten — July 2024 Wagner+FAMa catastrophe
+            'tinzaouaten', 'tinzaouaten ambush', 'tinzaouaten battle',
+            'wagner tinzaouaten losses', 'cma tinzaouaten',
+            'azawad tinzaouaten', 'fla tinzaouaten',
+            # JNIM Bamako Sept 2024 attack
+            'jnim bamako attack', 'bamako airport attack',
+            'modibo keita airport', 'bamako presidential helicopter',
+            'sept 2024 mali attack', 'september 17 bamako',
+            # CMA / Azawad movement
+            'cma azawad', 'coordination azawad movements',
+            'fla azawad', 'permanent strategic framework',
+            'tuareg insurgency mali', 'tuareg rebels',
+            # JNIM leadership / structure
+            'iyad ag ghaly', 'jnim emir', 'iyad ghaly',
+            'amadou kouffa', 'kouffa katiba',
+            'macina katiba', 'macina liberation front',
+            # Specific Wagner / Africa Corps figures in Mali
+            'wagner mali commander', 'wagner mali deaths',
+            'andrey averyanov mali', 'african legion mali',
+            'russia training mali', 'russia mali instructors',
+            # ECOWAS exit + AES military pact
+            'mali ecowas exit', 'aes military pact',
+            'aes confederation military', 'sahel states military',
+            'mali burkina niger military pact',
+            # Specific cities / regions under JNIM pressure
+            'mopti mali', 'segou mali military', 'sikasso mali',
+            'koulikoro military', 'kayes military', 'timbuktu military',
+            'farabougou', 'boni mali', 'bandiagara military',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=mali+military+OR+wagner+mali+OR+mali+sahel&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=tinzaouaten+OR+jnim+bamako+OR+mali+jihadist&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2359,9 +2454,33 @@ MILITARY_ACTORS = {
             'niger wagner', 'wagner niger', 'africa corps niger',
             'niger uranium military', 'orano niger',
             'aes alliance niger',
+            # Russian airbase deployment specifics
+            'russian airbase niamey', 'russia airbase niger',
+            'niger russia military deployment',
+            'russia takes over base 201', 'russia base 201',
+            'russia troops niger arrival',
+            # JNIM Tillaberi + ISGS specific zones
+            'tillaberi niger', 'tillaberi military',
+            'tahoua niger military', 'maradi military',
+            'diffa niger military', 'dosso military',
+            'tongo tongo niger', 'inates niger', 'chinegodar',
+            'niger boko haram', 'niger lake chad',
+            'niger isgs', 'isgs niger', 'islamic state sahel niger',
+            'three borders niger', 'three border area sahel',
+            # AES + Mali/Burkina coordination
+            'aes confederation niger', 'aes military summit',
+            'niger mali burkina pact', 'aes joint force niger',
+            # Coup leaders / military council
+            'salifou mody', 'general mody niger',
+            'cnsp leadership', 'niger council state',
+            'niger junta consolidation',
+            # CFA franc exit / French withdrawal aftermath
+            'niger cfa franc exit', 'niger french withdrawal complete',
+            'niger eu sanctions', 'niger usaid suspension military',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=niger+military+OR+niger+coup+OR+niger+sahel&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=niger+russia+OR+aes+niger+OR+tillaberi&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2382,9 +2501,34 @@ MILITARY_ACTORS = {
             'burkina ecowas military', 'burkina sahel',
             'ouagadougou military', 'aes burkina',
             'vdp burkina faso', 'volontaires defense patrie',
+            # JNIM specific attack zones
+            'djibo burkina', 'djibo siege', 'djibo military',
+            'inata burkina', 'inata attack',
+            'arbinda burkina', 'mansila burkina',
+            'barsalogho', 'barsalogho massacre',
+            'kongoussi', 'kaya burkina military',
+            'fada n gourma', 'fada ngourma military',
+            'gourma burkina', 'sahel region burkina',
+            'soum province military', 'oudalan military',
+            'seno province', 'yagha province',
+            # Major massacres / events 2024-2026
+            'solhan massacre', 'yirgou massacre', 'nouna massacre',
+            'karma massacre', 'mansila massacre',
+            # Russia partnership specifics
+            'burkina faso africa corps deployment',
+            'burkina russia military instructors',
+            'burkina drone purchase', 'turkish drones burkina',
+            'bayraktar burkina', 'tb2 burkina',
+            # Traore government / coup defense
+            'traore coup attempt', 'burkina coup plot',
+            'burkina faso assassination plot', 'sankarist movement',
+            # AES + regional integration
+            'aes burkina deployment', 'aes joint force',
+            'burkina mali joint operations',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=burkina+faso+military+OR+burkina+junta&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=djibo+OR+jnim+burkina+OR+vdp+burkina&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2410,9 +2554,55 @@ MILITARY_ACTORS = {
             'sadc mission drc', 'samidrc',
             'drc wagner', 'wagner drc', 'romanian mercenaries drc',
             'drc cobalt military',
+            # Goma fall Jan 2025 (major)
+            'goma fall m23', 'goma captured', 'm23 enters goma',
+            'goma takeover', 'rdf goma', 'goma rwanda forces',
+            'bukavu fall', 'm23 bukavu', 'south kivu offensive',
+            # AFC (Alliance Fleuve Congo) — Corneille Nangaa political wing
+            'afc alliance fleuve congo', 'corneille nangaa',
+            'nangaa m23 alliance', 'afc m23 political',
+            'afc/m23', 'congo river alliance',
+            # Romanian mercenaries (RALF)
+            'romanian mercenaries drc', 'horatiu potra',
+            'ralf romania', 'asociatia ralf',
+            'romanian special forces drc', 'romanian contractors goma',
+            'romanian fighters surrender goma',
+            # SADC withdrawal (Dec 2024 announcement)
+            'samidrc withdrawal', 'sadc mission drc end',
+            'south africa drc casualties', 'mozambique drc casualties',
+            'tanzania drc mission', 'malawi drc mission end',
+            # Specific FARDC operations / defeats
+            'fardc desertions', 'fardc surrender', 'fardc defection',
+            'sukola operations', 'sukola i', 'sukola ii',
+            'rumangabo military camp', 'kibumba',
+            'sake drc military', 'masisi territory',
+            'rutshuru territory military', 'nyiragongo military',
+            # Wazalendo militias (FARDC-allied)
+            'wazalendo', 'wazalendo drc', 'patriotic resistance forces',
+            'apcls', 'maï-maï drc', 'mai mai drc',
+            # Mineral war / cobalt / coltan dimension
+            'rubaya coltan', 'rubaya mines', 'm23 coltan',
+            'm23 minerals tax', 'rwanda smuggling minerals',
+            'cobalt drc military', 'coltan drc rebels',
+            'drc supply chain conflict minerals',
+            # M23 / RDF leadership
+            'sultani makenga', 'm23 sultani',
+            'rdf rwanda defence force', 'james kabarebe drc',
+            'kagame drc military', 'rwanda denies drc',
+            # Tshisekedi government posture
+            'tshisekedi military', 'felix tshisekedi war',
+            'drc emergency military', 'drc state of siege',
+            # ADF + ISIS-CAP (Central Africa Province)
+            'iscap drc', 'isis central africa province',
+            'adf ituri', 'adf nord kivu attack', 'adf mwalika',
+            'adf erengeti', 'adf oicha',
+            # Ebola Bundibugyo PHEIC (May 15 2026) military context
+            'drc ebola military', 'ebola quarantine drc military',
+            'ituri ebola response military',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=drc+military+OR+m23+congo+OR+goma+military&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=afc+m23+OR+wazalendo+OR+drc+rwanda+war&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2439,9 +2629,56 @@ MILITARY_ACTORS = {
             'sudan red sea military',
             'sudan mass killing', 'sudan ethnic cleansing',
             'sudan famine', 'sudan humanitarian crisis',
+            # 2024-2026 specific RSF/SAF cities + offensives
+            'sennar offensive', 'sennar rsf', 'sennar saf',
+            'wad madani', 'wad madani rsf', 'gezira state military',
+            'sinja sudan', 'singa offensive',
+            'gedaref military', 'kassala military',
+            'al-jazira state', 'al jazira sudan',
+            'nuba mountains sudan', 'south kordofan military',
+            'blue nile state military', 'damazin sudan',
+            'al-fashir siege', 'el fasher siege', 'zamzam camp attack',
+            'kadugli sudan', 'merowe dam military',
+            'jebel moya', 'singa rsf',
+            'tine sudan', 'kabkabiya', 'malha darfur',
+            # RSF leadership / structure
+            'abdul rahim dagalo', 'rsf advance', 'rsf paramilitary',
+            'janjaweed', 'janjaweed sudan', 'rsf masalit',
+            'masalit genocide', 'el geneina', 'el-geneina',
+            'al-malit sudan', 'al malit',
+            # SAF leadership / structure
+            'malik agar', 'taqaddum sudan',
+            'sudan armed forces general command',
+            'shams al-din kabbashi', 'yasir al-atta',
+            # Iran-Sudan-Houthi triangle (May 2026)
+            'sudan houthi weapons', 'houthi sudan ties',
+            'iran sudan iras', 'iran shahed sudan',
+            'sudan iranian drones', 'mohajer-6 sudan',
+            'irgc sudan', 'sudan iran proxy',
+            # Russia naval base Port Sudan talks
+            'russia port sudan base', 'russia naval base sudan',
+            'russia red sea base', 'russia sudan logistics base',
+            'putin sudan base', 'lavrov sudan',
+            # UAE / Emirati support to RSF
+            'uae chad sudan corridor', 'amdjarass chad',
+            'uae rsf airlift', 'uae sudan weapons flights',
+            'emirati drones rsf', 'uae shipped weapons sudan',
+            # Egypt support to SAF
+            'egypt saf', 'egypt sudan military aid',
+            'egyptian air support sudan', 'egypt jet sudan',
+            'egypt training sudan armed forces',
+            # Ukraine drone operators rumored
+            'ukraine drones sudan', 'gur sudan',
+            'ukrainian special forces sudan',
+            # Atrocities + war crimes
+            'sudan war crimes', 'sudan icc',
+            'darfur ethnic cleansing 2024', 'darfur masalit massacre',
+            'sudan starvation weapon', 'ipc phase 5 sudan',
+            'famine declared sudan', 'zamzam famine',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=sudan+military+OR+sudan+civil+war+OR+rsf+sudan&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=el+fasher+OR+wad+madani+OR+darfur+rsf&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2467,9 +2704,47 @@ MILITARY_ACTORS = {
             'al-watiya air base', 'al watiya libya',
             'libya gaddafi', 'libya militias',
             'libya oil military', 'libya nlc military',
+            # 2024 Tripoli clashes (Aug 2024)
+            'tripoli clashes 2024', 'tripoli militia clashes',
+            'gnu militia clashes', 'libyan capital fighting',
+            'rada force tripoli', '444 brigade tripoli',
+            'stability support apparatus libya', 'ssa libya',
+            'dbeibeh tripoli', 'abdul hamid dbeibah',
+            # Eastern Libya / Haftar family
+            'saddam haftar', 'khaled haftar', 'belqasem haftar',
+            'haftar family', 'haftar succession',
+            'tobruk hor libya', 'house of representatives libya',
+            'aguila saleh', 'libyan supreme court military',
+            # Russia naval base / port access
+            'russia libya port', 'russia tobruk port',
+            'russia libya naval base', 'russia benghazi port',
+            'russia libya logistics base',
+            'russian ships libya', 'russian aircraft libya',
+            'russia africa corps libya deployment',
+            # Mediterranean migration / military dimension
+            'libya migrant pushback', 'libyan coast guard',
+            'frontex libya', 'libya migrant detention military',
+            'libyan navy mediterranean',
+            # Bashagha + competing PMs
+            'fathi bashagha', 'bashagha libya military',
+            'libya parallel government military',
+            # Air strike events
+            'haftar airstrike', 'libyan air strikes',
+            'turkish drones libya 2024',
+            # CIA Cooperation / U.S. interests
+            'cia libya', 'us libya military cooperation',
+            'us drone libya', 'us special operations libya',
+            # Tribal / militia specifics
+            'zintan brigade', 'misrata brigade',
+            'awlad sulayman tribe', 'tuareg libya',
+            'tebu libya', 'libya south military',
+            # Mercenary withdrawal (or non-withdrawal)
+            'wagner libya withdrawal', 'wagner libya remains',
+            'syrian mercenaries libya',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=libya+military+OR+haftar+OR+libya+wagner&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=tripoli+clashes+OR+haftar+russia+OR+libya+migrant&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2491,9 +2766,45 @@ MILITARY_ACTORS = {
             'ethiopia red sea', 'ethiopia somaliland port',
             'ethiopia drone strike',
             'ethiopia eritrea border', 'ethiopia sudan border',
+            # Pretoria Agreement (Nov 2022) — status & implementation
+            'pretoria agreement', 'pretoria agreement implementation',
+            'cessation hostilities ethiopia', 'cohi ethiopia',
+            'tigray disarmament', 'tplf disarmament',
+            'tigray interim administration',
+            # Amhara conflict (Fano vs ENDF, 2023-2026)
+            'amhara conflict', 'amhara region war',
+            'fano amhara military', 'fano militia attack',
+            'gondar military', 'bahir dar military',
+            'amhara federal forces', 'amhara crackdown',
+            'amhara state of emergency',
+            # Eritrea war risk
+            'eritrea ethiopia war', 'eritrea ethiopia tension',
+            'isaias afwerki ethiopia', 'eritrea military buildup',
+            'eritrea border closure', 'eritrea war preparation',
+            'tigray eritrea border',
+            # Sea access ambitions / Red Sea / Somaliland MoU
+            'ethiopia sea access', 'ethiopia red sea ambition',
+            'ethiopia somaliland mou', 'berbera ethiopia',
+            'ethiopia assab port', 'ethiopia eritrea assab',
+            'ethiopia djibouti tension',
+            # Oromia conflict (OLA / Shene)
+            'ola ethiopia', 'oromo liberation army',
+            'shene ola', 'ola shene', 'oromia conflict',
+            'wollega military', 'east wollega military',
+            'horro guduru', 'oromia crackdown',
+            # GERD (Grand Ethiopian Renaissance Dam) military dimension
+            'gerd military', 'gerd egypt military', 'gerd sudan',
+            'nile dam military', 'blue nile military',
+            # Abiy government posture / Ankober defense doctrine
+            'abiy military doctrine', 'ethiopia naval force',
+            'ethiopia state defence policy', 'ankober',
+            # Drone strikes (TB2, etc.)
+            'tb2 ethiopia', 'bayraktar ethiopia',
+            'iranian drones ethiopia', 'mohajer ethiopia',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=ethiopia+military+OR+endf+OR+ethiopia+tigray&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=amhara+fano+OR+eritrea+ethiopia+OR+oromia+ola&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2513,9 +2824,35 @@ MILITARY_ACTORS = {
             'kenya us military', 'lamu kenya military',
             'kenya somalia border military',
             'kenya haiti deployment', 'kenya haiti mission',
+            # KDF in DRC EACRF (East African Community Regional Force)
+            'kdf drc', 'kenya drc deployment', 'kenya eacrf',
+            'kenya goma deployment', 'kenya east africa force',
+            'kdf eastern congo',
+            # Haiti MSS (Multinational Security Support)
+            'kenya mss haiti', 'kenya haiti police',
+            'haiti mission kenya', 'mss mission haiti',
+            'kenya haiti casualties', 'kenya haiti expansion',
+            # KDF Somalia operations (cross-border)
+            'kdf somalia raid', 'kenya cross border somalia',
+            'kdf jubaland operations', 'kdf gedo region',
+            'kenya kismayo military', 'kdf badhadhe',
+            # Garissa / NE Kenya security
+            'garissa attack', 'mandera attack', 'wajir attack',
+            'lamu attack kenya', 'boni forest operations',
+            'operation amani', 'operation linda boni',
+            # US military ties (cooperation level)
+            'kenya us defense agreement', 'kenya us cooperation',
+            'us drone kenya', 'manda bay strike',
+            # Internal political-military stress
+            'gen-z protests military', 'ruto military deployment',
+            'kenya gen z military response',
+            # Ebola / health security military deployment
+            'kenya ebola border military',
+            'kenya screening drc border',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=kenya+military+OR+kdf+OR+manda+bay&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=kdf+drc+OR+kenya+haiti+OR+kdf+somalia&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2537,9 +2874,33 @@ MILITARY_ACTORS = {
             'french base djibouti', 'japanese base djibouti',
             'doraleh port djibouti',
             'bab el-mandeb djibouti',
+            # China PLAN base expansion (2024-2026)
+            'china djibouti base expansion', 'plan djibouti expansion',
+            'china carrier djibouti', 'china naval base africa',
+            'doraleh china', 'china djibouti pier',
+            # US Camp Lemonnier expansion / drone ops
+            'camp lemonnier expansion', 'us drone djibouti operations',
+            'reaper djibouti', 'mq-9 djibouti',
+            'special operations djibouti horn africa',
+            # Bab el-Mandeb / Houthi response
+            'djibouti red sea security', 'djibouti yemen response',
+            'djibouti suez', 'djibouti shipping corridor',
+            'djibouti naval coalition', 'djibouti operation prosperity',
+            'djibouti aspides eu', 'eu aspides djibouti',
+            # French Forces in Djibouti (FFDJ) — withdrawal posture
+            'ffdj djibouti', 'french forces djibouti',
+            'france djibouti reduction', 'france djibouti withdrawal',
+            # Italian + Japanese + Indian rotation
+            'italian base djibouti', 'jmsdf djibouti',
+            'india djibouti deployment', 'india naval djibouti',
+            # Strategic competition framing
+            'china us competition djibouti',
+            'doraleh container terminal', 'djibouti port debt',
+            'djibouti china debt',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=djibouti+military+OR+camp+lemonnier+OR+horn+of+africa+us&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=china+djibouti+base+OR+bab+el+mandeb+djibouti&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -2594,9 +2955,43 @@ MILITARY_ACTORS = {
             # Specific commanders / leaders
             'andrey averyanov', 'gru general africa',
             'yevkurov africa', 'russia deputy defense africa',
+            # Post-Prigozhin leadership transition
+            'yunus-bek yevkurov', 'yevkurov africa tour',
+            'pavel popov africa', 'russia africa envoy',
+            'sergei surovikin africa',
+            # Africa Corps formal command structure
+            'gru unit 29155 africa', 'unit 29155',
+            'gru direct command africa', 'russia mod africa corps',
+            'russian regular military africa', 'russia regular troops africa',
+            # 2024-2026 events
+            'wagner tinzaouaten losses 2024',
+            'wagner cme mali ambush', 'wagner mali casualties',
+            'africa corps niger arrival',
+            'africa corps burkina arrival',
+            'africa corps niger 100 troops',
+            'africa corps niger 1000 troops',
+            # Russia State Duma rebrand statements
+            'putin africa corps statement',
+            'shoigu africa visit', 'belousov africa',
+            'lavrov africa tour military',
+            # Gold trafficking + finance network
+            'wagner gold smuggling', 'sudan gold russia',
+            'wagner uae gold', 'russia gold africa sanctions',
+            'wagner finance africa',
+            # AFRICOM counter-Wagner
+            'africom counter wagner', 'us state department wagner',
+            'us treasury wagner africa sanctions',
+            'wagner sdgt designation',
+            # Maghreb expansion (Algeria/Morocco tension)
+            'wagner algeria', 'wagner morocco',
+            'wagner sahara', 'wagner western sahara',
+            # Equatorial Guinea / new theater rumors
+            'wagner equatorial guinea', 'wagner gabon',
+            'wagner togo', 'wagner ivory coast tension',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=wagner+africa+OR+africa+corps+OR+russia+mercenaries+africa&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=yevkurov+africa+OR+africa+corps+deployment&hl=en&gl=US&ceid=US:en',
         ]
     },
 
