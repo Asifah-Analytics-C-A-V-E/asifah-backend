@@ -72,6 +72,37 @@ except ImportError:
     print("[Commodity Tracker] ⚠️ yfinance not available — sparklines disabled")
 
 
+# ── v1.2.0 (May 24 2026) — Analytical prose layer wiring ───────
+# The commodity_signal_interpreter wraps scan_result into an
+# 'interpretation' block (executive summary + butterfly convergences
+# + regional prose) consumed by commodities.html. The interpreter is
+# a soft dependency — if absent, the rest of the tracker still works.
+try:
+    from commodity_signal_interpreter import build_full_commodity_interpretation
+    COMM_INTERPRETER_AVAILABLE = True
+    print("[Commodity Tracker] ✅ Commodity signal interpreter available")
+except ImportError as e:
+    COMM_INTERPRETER_AVAILABLE = False
+    print(f"[Commodity Tracker] ⚠️ Commodity interpreter not available: {e}")
+
+# The convergence_registry is needed to walk the registry and surface
+# which convergences are currently ACTIVE (commodity above threshold).
+# Soft dependency — if registry is missing, we emit empty list.
+try:
+    from convergence_registry import (
+        CONVERGENCE_REGISTRY,
+        alert_meets_threshold,
+        format_headline,
+    )
+    CONVERGENCE_REGISTRY_AVAILABLE = True
+    print(f"[Commodity Tracker] ✅ Convergence registry available "
+          f"({len(CONVERGENCE_REGISTRY)} entries)")
+except ImportError as e:
+    CONVERGENCE_REGISTRY_AVAILABLE = False
+    CONVERGENCE_REGISTRY = []
+    print(f"[Commodity Tracker] ⚠️ Convergence registry not available: {e}")
+
+
 # ========================================
 # CONFIGURATION
 # ========================================
@@ -3814,8 +3845,74 @@ def _run_full_scan(days=7):
         },
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.1.0',
+        'version':                '1.2.0',
     }
+
+    # ── v1.2.0 (May 24 2026) — Active convergence detection ─────
+    # Walk the convergence_registry. For each entry, check whether the
+    # anchor commodity's alert_level meets the entry's threshold. If so,
+    # this convergence is "active" and gets surfaced in the interpreter.
+    active_convergences = []
+    if CONVERGENCE_REGISTRY_AVAILABLE:
+        try:
+            for entry in CONVERGENCE_REGISTRY:
+                anchor_commodity = entry.get('commodity')
+                threshold = entry.get('commodity_threshold', 'elevated')
+
+                # Skip non-commodity-driven convergences (commodity=None) —
+                # these are regime/diplomatic-axis entries that don't fire
+                # off commodity pressure. Future work: wire those via the
+                # rhetoric trackers' regime signals.
+                if not anchor_commodity:
+                    continue
+
+                summary = commodity_summaries.get(anchor_commodity, {})
+                actual_level = summary.get('alert_level', 'normal')
+
+                if alert_meets_threshold(actual_level, threshold):
+                    # Build a flattened entry the interpreter expects
+                    headline = format_headline(entry, actual_level) \
+                        if entry.get('headline_template') else ''
+                    active_convergences.append({
+                        'id':          entry.get('id'),
+                        'commodity':   anchor_commodity,
+                        'country':     entry.get('country'),
+                        'priority':    entry.get('priority', 0),
+                        'icon':        entry.get('icon', '\u26a1'),
+                        'color':       entry.get('color', '#f59e0b'),
+                        'headline':    headline,
+                        'detail':      entry.get('detail', ''),
+                        'regions':     entry.get('regions', []),
+                        'alert_level': actual_level,
+                        'signals':     summary.get('signal_count', 0),
+                    })
+            print(f"[Commodity Tracker] ✅ {len(active_convergences)} active "
+                  f"convergence(s) detected from {len(CONVERGENCE_REGISTRY)} "
+                  f"registry entries")
+        except Exception as conv_err:
+            print(f"[Commodity Tracker] Convergence walk error "
+                  f"(non-critical): {str(conv_err)[:200]}")
+            active_convergences = []
+    result['active_convergences'] = active_convergences
+
+    # ── v1.2.0 (May 24 2026) — Analytical prose interpreter ────
+    # Mirror of military_tracker.py line 6537 pattern. Builds the
+    # executive summary + butterfly + regional prose blocks. Soft-fails
+    # so per-commodity / country-exposure data remains authoritative
+    # even if interpreter throws.
+    if COMM_INTERPRETER_AVAILABLE:
+        try:
+            interpretation = build_full_commodity_interpretation(result)
+            result['interpretation'] = interpretation
+            print(f"[Commodity Tracker] ✅ Interpreter generated "
+                  f"{len(interpretation.get('butterfly_prose', {}))} butterfly "
+                  f"+ {len(interpretation.get('regional_prose', {}))} regional prose blocks")
+        except Exception as interp_err:
+            print(f"[Commodity Tracker] Interpreter error "
+                  f"(non-critical): {str(interp_err)[:200]}")
+            result['interpretation'] = None
+    else:
+        result['interpretation'] = None
 
     save_commodity_cache(result)
     print(f"[Commodity Tracker] ✅ Scan complete in {scan_time}s")
