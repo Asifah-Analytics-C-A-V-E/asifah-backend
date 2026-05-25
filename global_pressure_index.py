@@ -1503,7 +1503,7 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
     pooled_signals = []
     seen_short_texts = set()
 
-    # Step 1: Pool ALL signals from ALL regional BLUFs (incl. pseudo-regions)
+    # Step 1a: Pool ALL signals from ALL regional BLUFs (incl. pseudo-regions)
     for region_key, bluf in (blufs or {}).items():
         if not isinstance(bluf, dict):
             continue
@@ -1523,6 +1523,7 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             seen_short_texts.add(stext)
             pooled_signals.append({
                 'region':        region_key,
+                'theatre':       sig.get('theatre', region_key),
                 'level':         level,
                 'priority':      int(sig.get('priority', 0) or 0),
                 'pressure_type': sig.get('pressure_type') or _infer_pressure_type(sig),
@@ -1530,33 +1531,74 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
                 'short_text':    stext,
             })
 
+    # Step 1b: ALSO pool cross-theater narratives (v3.7 May 25 2026)
+    # Without this, narratives like 'Russia-Iran axis', 'China-Taiwan takeover',
+    # 'Nuclear signaling' never surface in Driving Signals because they live in
+    # the narratives list, not in any regional BLUF's top_signals. Result: the
+    # BLUF prose felt static even when cross-theater convergences fired.
+    # We promote each narrative into the pool with level derived from priority
+    # (priority>=13 → L5, else L4) so they sort fairly against regional signals.
+    for n in (narratives or []):
+        if not isinstance(n, dict):
+            continue
+        cat = n.get('category', '')
+        # Skip baseline/warning narratives (analytic filler, not real headlines)
+        if cat in ('global_baseline', 'global_warning'):
+            continue
+        stext = n.get('headline', '')[:140]
+        if not stext or stext in seen_short_texts:
+            continue
+        priority = int(n.get('priority', 0) or 0)
+        level = 5 if priority >= 13 else 4
+        seen_short_texts.add(stext)
+        pooled_signals.append({
+            'region':        '+'.join(n.get('regions') or ['global']),
+            'theatre':       'global',                       # narratives are cross-theater
+            'level':         level,
+            'priority':      priority + 10,                  # +10 boost (narrative tier ≈ Tier 3)
+            'pressure_type': n.get('pressure_type') or _infer_pressure_type(n),
+            'icon':          n.get('icon') or '',
+            'short_text':    stext,
+            'is_narrative':  True,
+        })
+
     # Step 2: Sort globally by level DESC, priority DESC (highest-impact first)
     pooled_signals.sort(
         key=lambda s: (s['level'], s['priority']),
         reverse=True,
     )
 
-    # Step 3: Take top 5 with axis-diversity preference — ensure we surface
-    # at least one signal per active pressure axis when available, so the
-    # BLUF reflects the multi-axis pressure landscape rather than just
-    # the loudest single axis.
+    # Step 3: Pick up to 5 Driving Signals with STRICT axis + theatre diversity.
+    # v3.7 (May 25 2026): Lebanon used to eat 2-3 slots because it dominated
+    # both Kinetic AND Humanitarian. New rule: max 1 signal per axis AND
+    # max 1 signal per theatre, except the lead signal which is unconstrained.
+    # This forces the prose to surface a wider range of the actual world state.
     live_signal_lines = []
     axes_represented = set()
+    theatres_represented = set()
     deferred = []
     for sig in pooled_signals:
         axis = sig.get('pressure_type', 'kinetic')
-        # First pass: prefer one signal per axis (up to 4 unique axes)
-        if axis not in axes_represented and len(live_signal_lines) < 4:
-            axes_represented.add(axis)
-            live_signal_lines.append(f"{sig['icon']} {sig['short_text']}".strip())
-        else:
+        theatre = sig.get('theatre', '')
+        # First pass: max 1 per axis AND max 1 per theatre
+        if axis in axes_represented or theatre in theatres_represented:
             deferred.append(sig)
+            continue
+        axes_represented.add(axis)
+        theatres_represented.add(theatre)
+        live_signal_lines.append(f"{sig['icon']} {sig['short_text']}".strip())
         if len(live_signal_lines) >= 5:
             break
     # Second pass: fill remaining slots from deferred pool by global rank
+    # (still avoiding exact theatre duplication, but axis can repeat)
     for sig in deferred:
         if len(live_signal_lines) >= 5:
             break
+        theatre = sig.get('theatre', '')
+        # Allow theatre repeat only if we'd otherwise have <3 signals (defensive)
+        if theatre in theatres_represented and len(live_signal_lines) >= 3:
+            continue
+        theatres_represented.add(theatre)
         live_signal_lines.append(f"{sig['icon']} {sig['short_text']}".strip())
 
     # Add the live-signals sentence if any surfaced
