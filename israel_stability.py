@@ -27,6 +27,16 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
 import json
+
+# curl_cffi: TLS/JA3 fingerprint impersonation for RSS feeds blocked by Cloudflare
+# at the network layer. v1.5.0 (May 29 2026 — cascaded from us_stability.py).
+try:
+    from curl_cffi import requests as curl_requests
+    CURL_CFFI_AVAILABLE = True
+except ImportError:
+    curl_requests = None
+    CURL_CFFI_AVAILABLE = False
+    print("[Israel Stability] WARNING: curl_cffi not installed — TLS impersonation unavailable")
 import os
 import time
 import re
@@ -418,6 +428,256 @@ def fetch_tase_index():
         'sparkline': [],
         'timestamp': datetime.now(timezone.utc).isoformat()
     }
+
+
+def fetch_eis_etf():
+    """
+    Fetch iShares MSCI Israel ETF (EIS) — proxy for foreign institutional
+    confidence in Israeli equity markets. Trades on NYSE (so it tracks US
+    investor sentiment toward Israel risk, NOT local TASE prices).
+
+    Polarity: standard (rising EIS = global confidence; falling = stress).
+    Source: Yahoo Finance v8 chart endpoint (free, no key).
+    Returns same shape as fetch_tase_index() / fetch_nis_usd().
+
+    v1.0.0 — added May 29 2026 for Financial Pulse Card spec.
+    """
+    print("[Israel Econ] Fetching EIS ETF (foreign institutional confidence)...")
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/EIS"
+        r = requests.get(url, params={'interval': '1d', 'range': '1mo'},
+                         timeout=10,
+                         headers={'User-Agent': 'Mozilla/5.0 (AsifahAnalytics/1.0)'})
+        if r.status_code != 200:
+            print(f"[Israel Econ] EIS HTTP {r.status_code} — returning unavailable")
+            return {
+                'index': 'EIS',
+                'value': None,
+                'change_pct_24h': 0,
+                'trend': 'unknown',
+                'source': 'Yahoo Finance (unavailable)',
+                'sparkline': [],
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+            }
+        data = r.json()
+        result = (data.get('chart', {}).get('result') or [{}])[0]
+        meta = result.get('meta', {})
+        price = meta.get('regularMarketPrice')
+        prev_close = meta.get('chartPreviousClose') or meta.get('previousClose')
+        if price is None or prev_close in (None, 0):
+            print("[Israel Econ] EIS: empty price field")
+            return {
+                'index': 'EIS',
+                'value': None,
+                'change_pct_24h': 0,
+                'trend': 'unknown',
+                'source': 'Yahoo Finance (no data)',
+                'sparkline': [],
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+            }
+        change_pct = ((price - prev_close) / prev_close) * 100
+
+        # ── 30-day sparkline from same response ──
+        sparkline = []
+        try:
+            timestamps = result.get('timestamp', []) or []
+            closes = (result.get('indicators', {}).get('quote') or [{}])[0].get('close', []) or []
+            for i, ts in enumerate(timestamps):
+                if i < len(closes) and closes[i] is not None:
+                    sparkline.append({
+                        'time':  datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat(),
+                        'value': round(float(closes[i]), 2),
+                    })
+            print(f"[Israel Econ] ✅ EIS sparkline: {len(sparkline)} datapoints")
+        except Exception as e:
+            print(f"[Israel Econ] EIS sparkline parse error: {str(e)[:80]}")
+
+        print(f"[Israel Econ] ✅ EIS: ${price:.2f} ({change_pct:+.2f}%)")
+        return {
+            'index': 'EIS',
+            'value': round(float(price), 2),
+            'change_pct_24h': round(change_pct, 2),
+            'trend': 'rising' if change_pct > 0.3 else ('falling' if change_pct < -0.3 else 'flat'),
+            'source': 'Yahoo Finance',
+            'sparkline': sparkline,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        print(f"[Israel Econ] EIS fetch error: {str(e)[:120]}")
+        return {
+            'index': 'EIS',
+            'value': None,
+            'change_pct_24h': 0,
+            'trend': 'unknown',
+            'source': 'Error',
+            'sparkline': [],
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+        }
+
+
+def _compute_market_status_tase():
+    """Compute TASE market status: 'open' / 'closed' / 'pre-market' / 'after-hours'.
+
+    TASE hours: Sunday–Thursday, 09:30–17:24 Israel time (IST = UTC+3,
+    DST UTC+3, simplification OK for status display).
+    Friday/Saturday: closed (Shabbat).
+    Pre-market: 08:30–09:30
+    After-hours: 17:24–19:00
+    """
+    israel_tz = timezone(timedelta(hours=3))
+    now_israel = datetime.now(israel_tz)
+    weekday = now_israel.weekday()  # Mon=0 ... Sun=6
+    hour = now_israel.hour
+    minute = now_israel.minute
+    minutes_since_midnight = hour * 60 + minute
+
+    # Friday=4, Saturday=5: Shabbat, market closed
+    if weekday in (4, 5):
+        return 'closed'
+
+    # Normal trading day windows (Sun-Thu = weekday 6,0,1,2,3)
+    if 510 <= minutes_since_midnight <= 570:        # 08:30–09:30
+        return 'pre-market'
+    if 570 < minutes_since_midnight <= 1044:        # 09:30–17:24
+        return 'open'
+    if 1044 < minutes_since_midnight <= 1140:       # 17:24–19:00
+        return 'after-hours'
+    return 'closed'
+
+
+def _compute_market_status_us():
+    """Compute US market status for EIS (NYSE-listed): same logic as us_stability.
+
+    US market: Mon–Fri, 09:30–16:00 ET (approximated as UTC-4).
+    """
+    now_utc = datetime.now(timezone.utc)
+    et_hour = (now_utc.hour - 4) % 24
+    weekday = now_utc.weekday()
+    if weekday >= 5:    # Sat/Sun
+        return 'closed'
+    if 9 <= et_hour < 16:
+        return 'open'
+    if 4 <= et_hour < 9:
+        return 'pre-market'
+    if 16 <= et_hour < 20:
+        return 'after-hours'
+    return 'closed'
+
+
+def _compute_market_status_aggregate(statuses):
+    """Compute card-header aggregate status from a list of per-tile statuses.
+
+    Rules:
+      - All 'open' → 'open'
+      - All 'closed' → 'closed'
+      - Mixed open/closed (or open/pre-market/after-hours) → 'partial'
+      - Mixed pre-market or after-hours when none open → use most-trading state
+    """
+    if not statuses:
+        return 'closed'
+    unique = set(statuses)
+    if unique == {'open'}:
+        return 'open'
+    if unique == {'closed'}:
+        return 'closed'
+    if 'open' in unique:
+        return 'partial'    # any market open while others aren't
+    if 'pre-market' in unique:
+        return 'pre-market'
+    if 'after-hours' in unique:
+        return 'after-hours'
+    return 'closed'
+
+
+def build_israel_financial_pulse(nis_data, tase_data, eis_data):
+    """Assemble the canonical Financial Pulse Card payload for Israel.
+
+    Three tiles: TASE TA-35, NIS/USD, EIS ETF.
+    Per-tile market_status + aggregate card-level status.
+    Polarity-aware tier coloring (NIS inverted: rising USD/ILS = weakening shekel = stress).
+
+    v1.0.0 — Financial Pulse Card spec (May 29 2026).
+    """
+    tase_status = _compute_market_status_tase()
+    nis_status  = 'open'   # FX trades 24/5 globally; treat as always open during weekdays
+    now_utc     = datetime.now(timezone.utc)
+    if now_utc.weekday() >= 5:    # Sat/Sun: FX effectively closed
+        nis_status = 'closed'
+    eis_status  = _compute_market_status_us()
+
+    aggregate = _compute_market_status_aggregate([tase_status, nis_status, eis_status])
+
+    def _tier(chg, inverted=False):
+        """Polarity-aware tier. Inverted=True for NIS (higher rate = bad)."""
+        if inverted:
+            chg = -chg
+        if chg <= -2:  return 'stress'
+        if chg <= -1:  return 'warning'
+        if chg >= 2:   return 'rally'
+        return 'stable'
+
+    # TASE tile
+    tase_value = tase_data.get('value')
+    tase_chg = tase_data.get('change_pct_24h', 0) or 0
+    tase_tile = {
+        'name':           'TASE TA-35',
+        'ticker':         'TA35',
+        'value':          tase_value,
+        'change_pct_24h': tase_chg,
+        'trend':          tase_data.get('trend', 'flat'),
+        'tier':           _tier(tase_chg),
+        'source':         tase_data.get('source', 'TASE'),
+        'market_status':  tase_status,
+        'timestamp':      tase_data.get('timestamp'),
+        'sparkline':      tase_data.get('sparkline', []),
+    }
+
+    # NIS/USD tile — inverted polarity (high rate = weak shekel = stress)
+    # The NIS field is usd_to_ils (so value of 3.7 means 1 USD = 3.7 ILS, i.e. weak shekel)
+    nis_value = nis_data.get('usd_to_ils')
+    nis_chg = nis_data.get('change_pct_24h', 0) or 0
+    nis_tile = {
+        'name':           'NIS / USD',
+        'ticker':         'ILS',
+        'value':          nis_value,
+        'change_pct_24h': nis_chg,
+        'trend':          nis_data.get('trend', 'flat'),
+        'tier':           _tier(nis_chg, inverted=True),
+        'source':         nis_data.get('source', 'Yahoo Finance'),
+        'market_status':  nis_status,
+        'timestamp':      nis_data.get('timestamp'),
+        'sparkline':      nis_data.get('sparkline', []),
+    }
+
+    # EIS tile — standard polarity (high price = global confidence)
+    eis_value = eis_data.get('value')
+    eis_chg = eis_data.get('change_pct_24h', 0) or 0
+    eis_tile = {
+        'name':           'iShares MSCI Israel',
+        'ticker':         'EIS',
+        'value':          eis_value,
+        'change_pct_24h': eis_chg,
+        'trend':          eis_data.get('trend', 'flat'),
+        'tier':           _tier(eis_chg),
+        'source':         eis_data.get('source', 'Yahoo Finance'),
+        'market_status':  eis_status,
+        'timestamp':      eis_data.get('timestamp'),
+        'sparkline':      eis_data.get('sparkline', []),
+    }
+
+    return {
+        'country':        'IL',
+        'card_label':     'Israel Financial Pulse',
+        'market_status':  aggregate,
+        'last_refreshed': datetime.now(timezone.utc).isoformat(),
+        'tiles': {
+            'TASE':    tase_tile,
+            'NIS_USD': nis_tile,
+            'EIS':     eis_tile,
+        },
+    }
+
+
 # ========================================
 # CONFLICT & NEWS SCANNING
 # ========================================
@@ -541,22 +801,97 @@ RSS_SOURCES = [
 
 
 def _parse_rss_articles(url, source_name, days=7):
-    """Fetch and parse RSS feed, returning articles within date window."""
+    """Fetch and parse RSS feed, returning articles within date window.
+
+    v1.5.2 (May 29 2026 — cascaded from us_stability.py):
+      - Chrome 130 + Client Hints fingerprint (defeats most bot detection)
+      - Firefox UA fallback on 403 (defeats Chrome-specific blocks)
+      - curl_cffi TLS impersonation on persistent 403 (defeats Cloudflare network layer)
+      - {*} namespace wildcard XML parser (handles RSS 2.0, RSS 1.0/RDF, Atom uniformly)
+    """
     articles = []
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/130.0.0.0 Safari/537.36'
+        ),
+        'Accept': ('text/html,application/xhtml+xml,application/xml;q=0.9,'
+                   'application/rss+xml;q=0.9,image/avif,image/webp,*/*;q=0.8'),
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate',
+        'Cache-Control': 'max-age=0',
+        'Sec-Ch-Ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'Referer': 'https://www.google.com/',
+        'DNT': '1',
+    }
     try:
-        r = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        r = requests.get(url, timeout=10, headers=headers, allow_redirects=True)
+        # Tier 2: Firefox UA on 403
+        if r.status_code == 403:
+            print(f"[RSS] {source_name}: HTTP 403 — retrying with Firefox UA")
+            firefox_headers = {
+                'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) '
+                               'Gecko/20100101 Firefox/130.0'),
+                'Accept': ('text/html,application/xhtml+xml,application/xml;q=0.9,'
+                           'image/avif,image/webp,*/*;q=0.8'),
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Referer': 'https://duckduckgo.com/',
+            }
+            time.sleep(1.2)
+            r = requests.get(url, timeout=10, headers=firefox_headers, allow_redirects=True)
+        # Tier 3: curl_cffi TLS impersonation on persistent 403
+        if r.status_code == 403 and CURL_CFFI_AVAILABLE:
+            print(f"[RSS] {source_name}: HTTP 403 — retrying with curl_cffi TLS impersonation")
+            try:
+                time.sleep(0.8)
+                cc_resp = curl_requests.get(url, impersonate='chrome',
+                                            timeout=10, allow_redirects=True)
+                if cc_resp.status_code == 200:
+                    class _CCWrapper:
+                        def __init__(self, cc):
+                            self.status_code = cc.status_code
+                            self.content = cc.content
+                            self.text = cc.text
+                    r = _CCWrapper(cc_resp)
+                    print(f"[RSS] {source_name}: ✅ curl_cffi rescued (TLS impersonation)")
+                else:
+                    print(f"[RSS] {source_name}: curl_cffi also got HTTP {cc_resp.status_code}")
+            except Exception as cc_err:
+                print(f"[RSS] {source_name}: curl_cffi error {str(cc_err)[:100]}")
         if r.status_code != 200:
             return articles
+
+        # {*} wildcard namespace parser — handles RSS 2.0, RSS 1.0/RDF, Atom uniformly
         root = ET.fromstring(r.content)
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        for item in root.findall('.//item'):
-            title_el = item.find('title')
-            link_el  = item.find('link')
-            pub_el   = item.find('pubDate')
-            desc_el  = item.find('description')
+        all_items = (root.findall('.//{*}item') or
+                     root.findall('.//{*}entry'))
+        for item in all_items:
+            title_el = item.find('{*}title')
+            link_el  = item.find('{*}link')
+            pub_el   = (item.find('{*}pubDate') or
+                        item.find('{*}published') or
+                        item.find('{*}updated'))
+            desc_el  = (item.find('{*}description') or
+                        item.find('{*}summary'))
             if title_el is None:
                 continue
-            pub_str = pub_el.text if pub_el is not None else ''
+            pub_str = pub_el.text if (pub_el is not None and pub_el.text) else ''
             # Date filter
             if pub_str:
                 try:
@@ -565,13 +900,33 @@ def _parse_rss_articles(url, source_name, days=7):
                         continue
                 except Exception:
                     pass
+            # Link handling — Atom <link href="..."/> vs RSS <link>...</link>
+            link_text = ''
+            if link_el is not None:
+                link_text = (link_el.text or link_el.get('href') or '').strip()
             articles.append({
-                'title': title_el.text or '',
-                'url': link_el.text if link_el is not None else '',
+                'title': (title_el.text or '').strip(),
+                'url': link_text,
                 'published': pub_str,
                 'source': source_name,
-                'description': (desc_el.text or '')[:200] if desc_el is not None else ''
+                'description': (desc_el.text or '')[:200] if (desc_el is not None and desc_el.text) else ''
             })
+        # Diagnostic (May 29 2026 — cascaded from us_stability.py): log success/empty
+        # so we can verify which feeds are populating cleanly after hardening.
+        if articles:
+            print(f"[RSS] {source_name}: ✅ {len(articles)} items")
+        else:
+            # Only log "0 items" if we actually got a 200 — otherwise the HTTP error
+            # already logged. all_items count tells us whether parse succeeded.
+            try:
+                if r.status_code == 200:
+                    raw_count = len(all_items) if 'all_items' in locals() else 0
+                    if raw_count == 0:
+                        print(f"[RSS] {source_name}: ⚠️ 200 OK but 0 items parsed (check feed format)")
+                    else:
+                        print(f"[RSS] {source_name}: ⚠️ {raw_count} items parsed but all filtered out (date window)")
+            except Exception:
+                pass
     except Exception as e:
         print(f"[RSS] {source_name} error: {str(e)[:80]}")
     return articles
@@ -1316,17 +1671,22 @@ def scan_israel_stability():
         # Run all modules
         economic  = fetch_nis_usd()
         tase      = fetch_tase_index()
+        eis       = fetch_eis_etf()   # v1.0.0 — Financial Pulse Card (May 29 2026)
         conflict  = scan_israel_conflict(days=7)
         knesset   = scan_knesset_news()
         strikes   = fetch_acled_strikes()
         leadership = build_leadership_status(conflict, knesset)
         stability = calculate_israel_stability(economic, tase, conflict, knesset, strikes)
 
+        # Build canonical Financial Pulse Card payload (3 tiles + market_status)
+        financial_pulse = build_israel_financial_pulse(economic, tase, eis)
+
         # Build today's history snapshot
         snapshot = {
             'stability_score': stability['score'],
             'nis_usd': economic.get('usd_to_ils', 0),
             'tase_value': tase.get('value', 0),
+            'eis_value': eis.get('value', 0),    # v1.0.0 — Financial Pulse
             'conflict_score': conflict.get('conflict_score', 0),
             'coalition_score': conflict.get('coalition_score', 0),
             'hostage_articles': conflict.get('hostage_article_count', 0),
@@ -1343,8 +1703,10 @@ def scan_israel_stability():
             'commodity_pressure': commodity_pressure_for_response,
             'economic': {
                 'nis': economic,
-                'tase': tase
+                'tase': tase,
+                'eis': eis,                          # v1.0.0 — Financial Pulse
             },
+            'financial_pulse': financial_pulse,      # v1.0.0 canonical 3-tile card payload
             'conflict': {
                 'score': conflict.get('conflict_score', 0),
                 'coalition_score': conflict.get('coalition_score', 0),
