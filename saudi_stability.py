@@ -129,16 +129,6 @@ def _redis_lpush_trim(key, value, max_len=168):
 # ============================================
 
 def _fetch_tadawul_index():
-    """
-    Fetch Tadawul TASI index (^TASI) from Yahoo Finance.
-    The TASI is the main equity benchmark of Saudi Arabia, tracking ~200+ stocks.
-    Returns Financial Pulse-shaped dict.
-    v0.5.0 — Saudi Financial Pulse (May 29 2026).
-    """
-    print("[Saudi Stability] Fetching Tadawul TASI (^TASI)...")
-    TASI_LAST_KNOWN_KEY = 'tasi_last_known'
-    try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETASI"
         r = requests.get(url, params={'interval': '1d', 'range': '1mo'},
                          timeout=10,
                          headers={'User-Agent': 'Mozilla/5.0 (AsifahAnalytics/1.0)'})
@@ -147,7 +137,9 @@ def _fetch_tadawul_index():
             result = (data.get('chart', {}).get('result') or [{}])[0]
             meta = result.get('meta', {})
             price = meta.get('regularMarketPrice')
-            prev_close = meta.get('chartPreviousClose') or meta.get('previousClose')
+            # v0.5.1 fix (May 30 2026): previousClose = yesterday's close (correct for 24h%);
+            # chartPreviousClose = first datapoint in chart range (gives MONTHLY% not 24h%)
+            prev_close = meta.get('previousClose') or meta.get('chartPreviousClose')
             if price is not None and prev_close not in (None, 0):
                 change_pct = ((price - prev_close) / prev_close) * 100
                 sparkline = []
