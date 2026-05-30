@@ -234,7 +234,9 @@ def _fetch_aramco_stock():
             result = (data.get('chart', {}).get('result') or [{}])[0]
             meta = result.get('meta', {})
             price = meta.get('regularMarketPrice')
-            prev_close = meta.get('chartPreviousClose') or meta.get('previousClose')
+            # v0.5.1 fix (May 30 2026): previousClose = yesterday's close (correct for 24h%);
+            # chartPreviousClose = first datapoint in chart range (gives MONTHLY% not 24h%)
+            prev_close = meta.get('previousClose') or meta.get('chartPreviousClose')
             if price is not None and prev_close not in (None, 0):
                 change_pct = ((price - prev_close) / prev_close) * 100
                 sparkline = []
@@ -318,7 +320,9 @@ def _fetch_brent_full():
             result = (data.get('chart', {}).get('result') or [{}])[0]
             meta = result.get('meta', {})
             price = meta.get('regularMarketPrice')
-            prev_close = meta.get('chartPreviousClose') or meta.get('previousClose')
+            # v0.5.1 fix (May 30 2026): previousClose = yesterday's close (correct for 24h%);
+            # chartPreviousClose = first datapoint in chart range (gives MONTHLY% not 24h%)
+            prev_close = meta.get('previousClose') or meta.get('chartPreviousClose')
             if price is not None and prev_close not in (None, 0):
                 change_pct = ((price - prev_close) / prev_close) * 100
                 sparkline = []
