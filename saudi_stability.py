@@ -129,6 +129,16 @@ def _redis_lpush_trim(key, value, max_len=168):
 # ============================================
 
 def _fetch_tadawul_index():
+    """
+    Fetch Tadawul TASI index (^TASI.SR) from Yahoo Finance.
+    The TASI is the main equity benchmark of Saudi Arabia, tracking ~200+ stocks.
+    Returns Financial Pulse-shaped dict.
+    v0.5.1 — Saudi Financial Pulse (May 30 2026) — corrected ticker to ^TASI.SR.
+    """
+    print("[Saudi Stability] Fetching Tadawul TASI (^TASI.SR)...")
+    TASI_LAST_KNOWN_KEY = 'tasi_last_known'
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETASI.SR"
         r = requests.get(url, params={'interval': '1d', 'range': '1mo'},
                          timeout=10,
                          headers={'User-Agent': 'Mozilla/5.0 (AsifahAnalytics/1.0)'})
@@ -708,7 +718,7 @@ def run_saudi_stability_scan():
         'articles':          deduped[:60],
         'total_articles':    len(deduped),
 
-        'version': '0.5.0-saudi-stability',
+        'version': '0.5.1-saudi-stability',
     }
 
     # Cache to Redis
