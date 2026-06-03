@@ -1537,6 +1537,219 @@ def _compute_proxy_activation_index():
 
 
 # ============================================
+# UNITY OF FRONTS VECTOR  (وحدة الساحات)
+# v1.0 — June 2026
+# ============================================
+# The proxy-activation index above answers "HOW MANY proxies are elevated."
+# The Unity of Fronts vector answers the deeper question: "are they elevated
+# for the SAME CAUSE." This is the wahdat al-saahaat / وحدة الساحات doctrine
+# made measurable — cross-theater GRIEVANCE convergence, not just co-elevation.
+#
+# CONVERGENCE indicator, NOT a prediction of coordinated action. When 3 fronts
+# invoke "support for Lebanon" simultaneously, that is a true and useful
+# analytical claim about narrative convergence — it does NOT forecast whether
+# or when any kinetic action will occur.
+#
+# Grievance taxonomy: each cause → keyword patterns (EN + AR). A proxy is
+# considered to be invoking a grievance if ANY pattern appears in its
+# fingerprint's top_phrases / named_targets, OR if the proxy wrote an explicit
+# grievance_tags field (write-time tagging — more precise, rolling out per proxy).
+#
+# Each grievance may declare a subject_theater that is EXCLUDED from its own
+# supporter count (Lebanon defending itself is not "solidarity for Lebanon").
+
+GRIEVANCE_TAGS = {
+    'lebanon_solidarity': {
+        'label':          'Lebanon Solidarity Front',
+        'subject_theater': 'lebanon',   # Lebanon itself excluded from supporter count
+        'icon':           '🇱🇧',
+        'patterns': [
+            'lebanon', 'hezbollah', 'nasrallah', 'beirut', 'dahiyeh',
+            'unity of fronts', 'unity of arenas',
+            'إسناد لبنان', 'نصرة لبنان', 'نصرة للبنان', 'دعم لبنان',
+            'وحدة الساحات', 'العدوان على لبنان', 'حزب الله',
+        ],
+    },
+    'gaza_solidarity': {
+        'label':          'Gaza Solidarity Front',
+        'subject_theater': None,        # No Gaza proxy tracker — no exclusion
+        'icon':           '🇵🇸',
+        'patterns': [
+            'gaza', 'palestine', 'palestinian', 'rafah', 'al-aqsa', 'aqsa',
+            'إسناد غزة', 'نصرة غزة', 'دعم غزة', 'فلسطين', 'القدس',
+            'support gaza', 'solidarity with gaza', 'for gaza',
+        ],
+    },
+    'iran_defense': {
+        'label':          'Iran Defense Front',
+        'subject_theater': 'iran',      # handled separately (Iran is command node)
+        'icon':           '🇮🇷',
+        'patterns': [
+            'defend iran', 'avenge iran', 'retaliate for iran',
+            'response to aggression on iran', 'strike on iran',
+            'الرد على العدوان على إيران', 'نصرة إيران', 'دفاعا عن إيران',
+            'attack on iran will', 'any strike on iran',
+        ],
+    },
+}
+
+
+def _infer_proxy_grievances(fp):
+    """
+    Given a single proxy fingerprint, return the set of grievance tags it is
+    invoking. Prefers explicit write-time `grievance_tags` (precise); falls
+    back to scanning `top_phrases` + `named_targets` for grievance keywords
+    (resilient — works for proxies not yet upgraded to write-time tagging).
+    """
+    grievances = set()
+
+    # ① Write-time tags (precise) — proxy declared its own grievances
+    explicit = fp.get('grievance_tags') or []
+    for tag in explicit:
+        if tag in GRIEVANCE_TAGS:
+            grievances.add(tag)
+
+    # ② Read-time inference (resilient fallback)
+    haystack_parts = []
+    haystack_parts.extend(fp.get('top_phrases', []) or [])
+    haystack_parts.extend(fp.get('named_targets', []) or [])
+    haystack = ' '.join(str(p) for p in haystack_parts).lower()
+    if haystack:
+        for tag, spec in GRIEVANCE_TAGS.items():
+            if tag in grievances:
+                continue  # already tagged explicitly
+            for pat in spec['patterns']:
+                # Arabic patterns are case-preserved; English already lowered
+                needle = pat if any('\u0600' <= c <= '\u06ff' for c in pat) else pat.lower()
+                if needle in haystack:
+                    grievances.add(tag)
+                    break
+    return grievances
+
+
+def _compute_unity_of_fronts(fingerprints=None, iran_result=None):
+    """
+    Unity of Fronts detector — cross-theater GRIEVANCE convergence.
+
+    Reads all fresh proxy fingerprints, determines which grievance each proxy
+    is invoking, and detects when 2+ proxies converge on the SAME grievance.
+
+    Scoring (per converging grievance):
+        2 supporters  = L2 (Warning)    — convergence emerging
+        3 supporters  = L4 (High)       — significant multi-front convergence
+        4+ supporters = L5 (Critical)   — full unity-of-fronts activation
+        +1 if Iran command node also invoking the same grievance (directing)
+
+    Returns (level, detail_dict). CONVERGENCE indicator — never a forecast.
+    """
+    try:
+        if fingerprints is None:
+            fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
+        if not fingerprints:
+            return 0, {'reason': 'No cross-theater data available', 'fronts': {}}
+
+        now = datetime.now(timezone.utc)
+        proxy_theaters = ['yemen', 'lebanon', 'iraq', 'syria']
+
+        # Collect fresh proxies (within 24h) and their invoked grievances
+        proxy_grievances = {}   # theater -> set(grievance tags)
+        for name in proxy_theaters:
+            fp = fingerprints.get(name, {})
+            if not fp:
+                continue
+            try:
+                age = (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600
+                if age > 24:
+                    continue
+            except Exception:
+                continue
+            # Only count proxies that are at least somewhat elevated (L2+) —
+            # a baseline-quiet theater mentioning "lebanon" in passing is noise.
+            if fp.get('level', 0) < 2:
+                continue
+            g = _infer_proxy_grievances(fp)
+            if g:
+                proxy_grievances[name] = g
+
+        # Does Iran (command node) itself invoke each grievance?
+        iran_fp = fingerprints.get('iran', {})
+        iran_grievances = set()
+        if iran_result is not None:
+            # Prefer live result if provided
+            iran_fp_like = {
+                'top_phrases':   iran_result.get('_uof_top_phrases', []),
+                'named_targets': iran_result.get('_uof_named_targets', []),
+                'grievance_tags': [],
+            }
+            iran_grievances = _infer_proxy_grievances(iran_fp_like)
+        elif iran_fp:
+            iran_grievances = _infer_proxy_grievances(iran_fp)
+
+        # Group supporters by grievance (excluding each grievance's subject theater)
+        fronts = {}
+        for tag, spec in GRIEVANCE_TAGS.items():
+            subject = spec.get('subject_theater')
+            supporters = [
+                t for t, gs in proxy_grievances.items()
+                if tag in gs and t != subject
+            ]
+            if len(supporters) >= 2:
+                n = len(supporters)
+                if n == 2:
+                    lvl = 2
+                elif n == 3:
+                    lvl = 4
+                else:
+                    lvl = 5
+                iran_directing = tag in iran_grievances
+                if iran_directing and lvl < 5:
+                    lvl += 1
+                fronts[tag] = {
+                    'label':          spec['label'],
+                    'icon':           spec['icon'],
+                    'supporters':     supporters,
+                    'supporter_count': n,
+                    'iran_directing': iran_directing,
+                    'level':          lvl,
+                }
+
+        if not fronts:
+            return 0, {
+                'reason': 'No grievance convergence (need 2+ fronts on same cause)',
+                'fronts': {},
+                'proxy_grievances': {k: sorted(v) for k, v in proxy_grievances.items()},
+            }
+
+        # Headline grievance = highest level, then most supporters
+        headline_tag = max(fronts, key=lambda t: (fronts[t]['level'], fronts[t]['supporter_count']))
+        headline = fronts[headline_tag]
+        level = headline['level']
+
+        detail = {
+            'headline_grievance':       headline_tag,
+            'headline_label':           headline['label'],
+            'headline_icon':            headline['icon'],
+            'headline_supporters':      headline['supporters'],
+            'headline_supporter_count': headline['supporter_count'],
+            'iran_directing':           headline['iran_directing'],
+            'fronts':                   fronts,
+            'proxy_grievances':         {k: sorted(v) for k, v in proxy_grievances.items()},
+            'disclaimer': ('CONVERGENCE indicator, NOT a probability of action. '
+                           'Multiple fronts invoking the same grievance indicate '
+                           'narrative convergence; this does not predict whether or '
+                           'when kinetic action will occur.'),
+        }
+        print(f"[Iran Rhetoric] 🤝 Unity of Fronts: L{level} — "
+              f"{headline['label']} ({headline['supporter_count']} fronts: "
+              f"{headline['supporters']}{', Iran directing' if headline['iran_directing'] else ''})")
+        return level, detail
+
+    except Exception as e:
+        print(f"[Iran Rhetoric] Unity of Fronts error: {e}")
+        return 0, {'reason': str(e), 'fronts': {}}
+
+
+# ============================================
 # DELTA CALCULATION
 # ============================================
 def _compute_delta():
@@ -1709,6 +1922,11 @@ def _write_crosstheater_signal(result):
             'theatre_score': result.get('theatre_score', 0),
             'irgc_level': result.get('irgc_direct_level', 0),
             'proxy_activation_level': result.get('proxy_activation_level', 0),
+            # ── Unity of Fronts fingerprint (وحدة الساحات) ──
+            'unity_of_fronts_level':     result.get('unity_of_fronts_level', 0),
+            'unity_of_fronts_grievance': result.get('unity_of_fronts_detail', {}).get('headline_grievance'),
+            'unity_of_fronts_supporters': result.get('unity_of_fronts_detail', {}).get('headline_supporters', []),
+            'unity_of_fronts_active':    result.get('unity_of_fronts_level', 0) >= 2,
             'nuclear_level': result.get('nuclear_level', 0),
             'operation_true_promise_active': result.get('operation_true_promise_count', 0) > 0,
             'top_phrases': top_phrases[:5],
@@ -2604,6 +2822,9 @@ def run_iran_rhetoric_scan(days=3):
     proxy_activation_level, proxy_detail = _compute_proxy_activation_index()
     print(f"[Iran Rhetoric] 🔗 Proxy Activation Index: L{proxy_activation_level}")
 
+    # ── Step 1b: Unity of Fronts — grievance convergence (وحدة الساحات) ──
+    unity_level, unity_detail = _compute_unity_of_fronts()
+
     # ── Step 2: Fetch and classify articles ──
     articles = fetch_rhetoric_articles(days)
     actor_results, theatre_summary = classify_articles(articles, proxy_activation_level)
@@ -2678,6 +2899,10 @@ def run_iran_rhetoric_scan(days=3):
         'proxy_activation_level': proxy_activation_level,
         'proxy_activation_label': ESCALATION_LEVELS.get(proxy_activation_level, {}).get('label', 'Baseline'),
         'proxy_activation_detail': proxy_detail,
+        # ── Unity of Fronts vector (وحدة الساحات) — grievance convergence ──
+        'unity_of_fronts_level':  unity_level,
+        'unity_of_fronts_label':  ESCALATION_LEVELS.get(unity_level, {}).get('label', 'Baseline'),
+        'unity_of_fronts_detail': unity_detail,
         'nuclear_level':          max_nuclear,
         'nuclear_label':          ESCALATION_LEVELS.get(max_nuclear, {}).get('label', 'Baseline'),
         'domestic_level':         max_domestic,
