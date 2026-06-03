@@ -93,8 +93,15 @@ YEMEN_CHANNELS = [
     'ManarNewsEN',          # Al-Manar EN — Houthi operations
     'IranIntl_En',          # Iran International EN — Iran-Houthi nexus
     'rodast_omiddana',      # Omid Dana — Farsi political commentary
+    # ── Houthi PRIMARY Arabic sources (June 2026) ──
+    # CRITICAL for catching "support for Lebanon" framing at the source, in Arabic,
+    # before English coverage. ⚠️ VERIFY HANDLES — Houthi channels are deplatformed
+    # frequently and migrate; dead handles fail gracefully (per-channel try/except).
+    'almasirah',            # Al-Masirah TV — Houthi flagship (candidate; also try almasirahtv)
+    'almasirahnet',         # Al-Masirah web mirror (candidate)
+    'ansarollah_ye',        # Ansar Allah media (candidate — Yahya Saree operation statements)
+    'sabayemen',            # SABA — Houthi-controlled Yemeni news agency (candidate)
 ]
-
 
 SYRIA_CHANNELS = [
     # Palestinian / Resistance axis breaking news
