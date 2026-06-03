@@ -99,6 +99,16 @@ RED_LINES = [
         'source':   'CSIS / INSS -- simultaneous proxy activation is Iranian command node signal',
     },
     {
+        'id':       'unity_of_fronts_convergence',
+        'label':    'Unity of Fronts -- Grievance Convergence',
+        'detail':   'Multiple Axis fronts invoke the SAME grievance (e.g. Lebanon solidarity) simultaneously -- wahdat al-saahaat / وحدة الساحات doctrine active. Distinct from raw proxy count: measures whether fronts are converging on a shared cause.',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🤝',
+        'category': 'coordination_trigger',
+        'source':   'Asifah Analytics cross-theater grievance convergence. CONVERGENCE indicator -- does NOT forecast kinetic action.',
+    },
+    {
         'id':       'khamenei_direct_statement',
         'label':    'Khamenei Direct Threat Statement',
         'detail':   'Supreme Leader issues direct public threat (not IRGC spokesperson) -- elevated authorization signal',
@@ -437,6 +447,26 @@ def _score_red_lines(scan_data):
             'trigger': f'Proxy activation level L{proxy_level} -- multiple theater coordination detected',
         })
 
+    # ── Unity of Fronts: grievance convergence (وحدة الساحات) ──
+    # Distinct from proxy COUNT above — this fires when 2+ fronts invoke the
+    # SAME cause. APPROACHING at L2-3 (convergence emerging), BREACHED at L4+
+    # (3+ fronts on one grievance). CONVERGENCE indicator, not a forecast.
+    unity_level  = fp.get('unity_of_fronts_level', 0)
+    unity_detail = fp.get('unity_of_fronts_detail', {}) or {}
+    if unity_level >= 2:
+        grievance_label = unity_detail.get('headline_label', 'shared grievance')
+        supporters      = unity_detail.get('headline_supporters', [])
+        n_sup           = unity_detail.get('headline_supporter_count', len(supporters))
+        iran_directing  = unity_detail.get('iran_directing', False)
+        sup_str = ', '.join(supporters) if supporters else 'multiple fronts'
+        trigger = (f'{n_sup} fronts converging on {grievance_label} ({sup_str})'
+                   + (' -- Iran command node also invoking same grievance' if iran_directing else ''))
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'unity_of_fronts_convergence'),
+            'status':  'BREACHED' if unity_level >= 4 else 'APPROACHING',
+            'trigger': trigger,
+        })
+
     # ── Khamenei direct statement ──
     if khamenei_lv >= 3 and khamenei_cnt >= 2:
         triggered.append({
@@ -768,6 +798,8 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     theatre_score = fp.get('theatre_score', 0)
     theatre_level = fp.get('theatre_level', 0)
     proxy_level   = fp.get('proxy_activation_level', 0)
+    unity_level   = fp.get('unity_of_fronts_level', 0)
+    unity_detail  = fp.get('unity_of_fronts_detail', {}) or {}
     otp_signals   = fp.get('operation_true_promise_count', fp.get('otp_signal_count', 0))
     delta         = fp.get('delta', {}) or {}
     delta_dir     = delta.get('direction', 'stable')
@@ -807,6 +839,20 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         situation_parts.append(
             f'Proxy activation level L{proxy_level} -- Iran is coordinating simultaneous '
             f'operations across multiple theaters (Hezbollah, Houthi, PMF Iraq).'
+        )
+
+    if unity_level >= 2:
+        grievance_label = unity_detail.get('headline_label', 'a shared grievance')
+        supporters      = unity_detail.get('headline_supporters', [])
+        n_sup           = unity_detail.get('headline_supporter_count', len(supporters))
+        sup_str         = ', '.join(supporters) if supporters else 'multiple fronts'
+        iran_directing  = unity_detail.get('iran_directing', False)
+        direct_txt = (' Iran\'s own command-node rhetoric is invoking the same grievance, '
+                      'consistent with a directed convergence.') if iran_directing else ''
+        situation_parts.append(
+            f'Unity of Fronts L{unity_level} -- {n_sup} fronts ({sup_str}) are converging on '
+            f'{grievance_label} (وحدة الساحات pattern).{direct_txt} This is a CONVERGENCE '
+            f'indicator of shared-grievance framing, NOT a forecast of coordinated kinetic action.'
         )
 
     if khamenei_lv >= 3:
@@ -1423,6 +1469,32 @@ def build_top_signals(scan_data):
                            f'Hezbollah (Hizbullah), Houthis, Iraqi militias, '
                            f'PMF coordinated directive language detected. '
                            f'Command node tempo elevated.'),
+        })
+
+    # ── 4b. Unity of Fronts: grievance convergence (وحدة الساحات) ────
+    # Surfaces at L3+ even without a full proxy-count breach — measures
+    # whether fronts share a CAUSE, not just whether they are co-elevated.
+    unity_lvl = int(scan_data.get('unity_of_fronts_level', 0) or 0)
+    if unity_lvl >= 3:
+        u_detail   = scan_data.get('unity_of_fronts_detail', {}) or {}
+        g_label    = u_detail.get('headline_label', 'shared grievance')
+        g_sup      = u_detail.get('headline_supporters', []) or []
+        g_n        = u_detail.get('headline_supporter_count', len(g_sup))
+        g_icon     = u_detail.get('headline_icon', '🤝')
+        sup_str    = ', '.join(g_sup) if g_sup else 'multiple fronts'
+        signals.append({
+            'priority':   11 + (unity_lvl - 3),  # L3=11, L4=12, L5=13
+            'category':   'crosstheater_unity_of_fronts',
+            'theatre':    'iran',
+            'level':      unity_lvl,
+            'icon':       g_icon,
+            'color':      lvl_color(unity_lvl),
+            'short_text': (f'{IRAN_FLAG} IRAN: Unity of Fronts L{unity_lvl} — '
+                           f'{g_n} fronts on {g_label[:28]}'),
+            'long_text':  (f'{IRAN_FLAG} Unity of Fronts L{unity_lvl} (وحدة الساحات): '
+                           f'{g_n} fronts ({sup_str}) converging on {g_label}. '
+                           f'CONVERGENCE indicator of shared-grievance framing — '
+                           f'does NOT forecast kinetic action.'),
         })
 
     # ── 5. Cross-theater axis: Russia-Iran ───────────────────────────
