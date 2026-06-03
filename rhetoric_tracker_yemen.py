@@ -1181,6 +1181,38 @@ def _write_crosstheater_signal(result):
                 if geo in title_lower and geo not in named_targets:
                     named_targets.append(geo)
 
+        # ── Unity of Fronts: write-time grievance tagging (June 2026) ──
+        # Tag which cross-theater grievance(s) Yemen/Houthi rhetoric is invoking,
+        # so the Iran command node can detect multi-front convergence precisely
+        # (rather than inferring from phrases). Scans the same text the classifier
+        # saw (titles + descriptions of Houthi articles).
+        grievance_tags = []
+        _g_text = ' '.join(
+            f"{a.get('title','')} {a.get('description','')}".lower()
+            for a in houthi_articles[:8]
+        )
+        _GRIEVANCE_PATTERNS = {
+            'lebanon_solidarity': [
+                'lebanon', 'hezbollah', 'unity of fronts', 'unity of arenas',
+                'إسناد لبنان', 'نصرة لبنان', 'نصرة للبنان', 'دعم لبنان',
+                'وحدة الساحات', 'العدوان على لبنان', 'حزب الله',
+            ],
+            'gaza_solidarity': [
+                'gaza', 'palestine', 'palestinian', 'support gaza',
+                'إسناد غزة', 'نصرة غزة', 'دعم غزة', 'فلسطين',
+            ],
+            'iran_defense': [
+                'defend iran', 'avenge iran', 'retaliate for iran',
+                'نصرة إيران', 'دفاعا عن إيران', 'الرد على العدوان على إيران',
+            ],
+        }
+        for _tag, _pats in _GRIEVANCE_PATTERNS.items():
+            for _p in _pats:
+                _needle = _p if any('\u0600' <= c <= '\u06ff' for c in _p) else _p.lower()
+                if _needle in _g_text:
+                    grievance_tags.append(_tag)
+                    break
+
         existing['yemen'] = {
             'ts': datetime.now(timezone.utc).isoformat(),
             'theatre': 'Yemen / Red Sea',
@@ -1193,6 +1225,7 @@ def _write_crosstheater_signal(result):
             'direct_strike_level': result.get('direct_strike_level', 0),
             'top_phrases': top_phrases[:5],
             'named_targets': named_targets[:8],
+            'grievance_tags': grievance_tags,   # Unity of Fronts — cross-theater convergence input
             'actor_levels': {
                 aid: max(
                     actors.get(aid, {}).get('maritime_score', 0),
