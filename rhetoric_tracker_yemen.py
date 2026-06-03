@@ -204,15 +204,30 @@ DIRECT_STRIKE_TRIGGERS = {
         'will strike israel', 'threatens tel aviv', 'target eilat',
         'target riyadh', 'threaten abu dhabi', 'us bases in range',
         'carrier in crosshairs', 'attack is coming',
+        # Cross-theater: retaliation on Israel framed as response for Lebanon (operational intent)
+        'retaliate for lebanon', 'avenge lebanon', 'strike israel for lebanon',
+        'attack israel over lebanon', 'respond to aggression on lebanon',
+        'support operations lebanon', 'isnad lebanon',
+        'إسناد لبنان',  # "support operations for Lebanon" (military support framing)
+        'نصرة للبنان',  # "in support of / coming to the aid of Lebanon"
+        'رداً على العدوان على لبنان',  # "in response to the aggression on Lebanon"
+        'ردا على العدوان على لبنان',  # variant without hamza diacritic
     ],
     2: [  # Warning
         'ready to strike', 'on standby', 'prepared to attack',
         'military option', 'escalation warning', 'final warning',
         'houthi ultimatum',
+        # Cross-theater: unity-of-fronts doctrine invoked (escalation framework active)
+        'unity of fronts', 'unity of arenas', 'unity of the fronts',
+        'وحدة الساحات',  # "unity of the fronts/arenas" — the doctrine itself
     ],
     1: [  # Rhetoric
         'resistance', 'axis of resistance', 'solidarity with iran',
         'support palestine', 'down with america', 'death to israel',
+        # Cross-theater: generic solidarity sentiment for Lebanon
+        'solidarity with lebanon', 'support lebanon', 'stand with lebanon',
+        'دعم لبنان',  # "support Lebanon"
+        'التضامن مع لبنان',  # "solidarity with Lebanon"
     ],
 }
 
@@ -353,6 +368,10 @@ CONDITIONAL_TRIGGERS = {
         'should the aggression', 'any attack on iran will', 'if the blockade',
         'we will respond if', 'in the event of', 'if they dare',
         'should they attempt', 'if hodeida is struck', 'if yemen is targeted',
+        # Cross-theater conditional: Israel action in Lebanon as the tripwire
+        'if israel attacks lebanon', 'if israel strikes lebanon',
+        'should israel continue in lebanon', 'any attack on lebanon will',
+        'إذا هاجمت إسرائيل لبنان',  # "if Israel attacks Lebanon"
     ],
     2: [
         'we reserve the right', 'all options on the table',
@@ -537,6 +556,11 @@ RHETORIC_RSS_FEEDS = [
     # Arabic
     ("https://news.google.com/rss/search?q=الحوثيون+صواريخ&hl=ar&gl=SA&ceid=SA:ar", 0.9),
     ("https://news.google.com/rss/search?q=البحر+الأحمر+الحوثيون&hl=ar&gl=SA&ceid=SA:ar", 0.9),
+    # Cross-theater solidarity: Houthi retaliation on Israel framed as support for Lebanon
+    # (unity-of-fronts / وحدة الساحات doctrine). Added June 2026.
+    ("https://news.google.com/rss/search?q=Houthi+Israel+Lebanon+retaliation&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=الحوثيون+لبنان+إسرائيل&hl=ar&gl=SA&ceid=SA:ar", 0.95),
+    ("https://news.google.com/rss/search?q=وحدة+الساحات+الحوثيون&hl=ar&gl=SA&ceid=SA:ar", 0.9),
 ]
 
 
