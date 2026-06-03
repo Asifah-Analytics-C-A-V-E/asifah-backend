@@ -2004,6 +2004,13 @@ COMMODITY_RSS_FEEDS = {
     # Agriculture
     'USDA Wheat Reports': 'https://news.google.com/rss/search?q=USDA+wheat+OR+WASDE+OR+grain+stocks&hl=en&gl=US&ceid=US:en',
     'AgriCensus': 'https://news.google.com/rss/search?q=wheat+exports+OR+corn+exports+OR+soybean+exports&hl=en&gl=US&ceid=US:en',
+    # Food security / FAO (Stage 1a — June 2026)
+    # FAO is the canonical food-commodity authority. These feed BOTH the commodity
+    # news layer AND the cascade detector's article scan (fertilizer->food chain).
+    # Pattern mirrors mining.com (Google News RSS, site: + keyword targeting).
+    'FAO Food Price Index': 'https://news.google.com/rss/search?q=site:fao.org+food+price+index+OR+FFPI&hl=en&gl=US&ceid=US:en',
+    'FAO GIEWS Early Warning': 'https://news.google.com/rss/search?q=FAO+GIEWS+OR+food+price+anomaly+OR+%22food+security%22+early+warning&hl=en&gl=US&ceid=US:en',
+    'Global Food Security': 'https://news.google.com/rss/search?q=food+security+crisis+OR+IPC+phase+OR+famine+OR+food+access+OR+crop+yield+forecast&hl=en&gl=US&ceid=US:en',
     # Strategic minerals
     'USGS Mineral News': 'https://news.google.com/rss/search?q=USGS+mineral+OR+rare+earth+OR+lithium+OR+uranium&hl=en&gl=US&ceid=US:en',
     'Mining.com': 'https://news.google.com/rss/search?q=site:mining.com+OR+mining+production&hl=en&gl=US&ceid=US:en',
