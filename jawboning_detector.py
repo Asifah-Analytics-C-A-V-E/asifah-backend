@@ -534,10 +534,11 @@ def detect_jawboning(leader_id,
         print(f"[Jawboning Detector] Failed to load catalog: {e} — returning empty dict")
         return results
 
-    # Walk both directional buckets — a leader could in principle have BOTH
-    # command-mode and absorber-mode signatures (no current leader does, but
-    # the architecture supports it cleanly).
-    for direction in ('command', 'absorber'):
+    # Walk EVERY directional bucket the catalog defines (command, absorber,
+    # mediator, and any future class). A leader could in principle have
+    # signatures in more than one bucket; we don't hardcode the set so new
+    # pressure modes work the moment they're added to the catalog.
+    for direction in catalog:
         signatures = catalog.get(direction, {}) or {}
         for sig_id, sig in signatures.items():
             # Filter by leader_id — only evaluate signatures for this leader
