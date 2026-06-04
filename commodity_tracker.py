@@ -844,6 +844,9 @@ COMMODITY_KEYWORDS = {
         'mosaic potash', 'k+s potash', 'potash corp',
         'potash sanctions', 'potash export', 'potash production',
         'fertilizer prices', 'fertilizer sanctions',
+        'fertilizer', 'fertiliser', 'urea',
+        'fertilizer crisis', 'fertiliser crisis', 'fertilizer supply',
+        'fertilizer exports', 'fertiliser exports', 'fertilizer access',
         'potassium chloride', 'mop fertilizer',
         'potash klaipeda', 'belarusian potash',
         'canpotex', 'soligorsk', 'jansen project',
@@ -1858,6 +1861,8 @@ KNOWN_SPEAKERS = {
     'andrew bailey':        {'role': 'central_bank_governor', 'country': 'uk',        'weight': 1.2, 'aliases': ['boe governor bailey']},
     # Japan
     'kazuo ueda':           {'role': 'central_bank_governor', 'country': 'japan',     'weight': 1.2, 'aliases': ['boj governor ueda']},
+    # United Nations (mediator-class -- normative/brokering voice on food, grain, fertilizer)
+    'antonio guterres':     {'role': 'un_secretary_general',  'country': 'un',        'weight': 1.2, 'aliases': ['guterres', 'un secretary-general', 'un secretary general', 'secretary-general guterres', 'un chief']},
 }
 
 # ── LEADER_INTERVENTION_KEYWORDS ─────────────────────────────────────────────
@@ -1924,6 +1929,12 @@ INTERVENTION_DIRECTION_LEXICON = {
     'boost_supply':     [
         'release reserves', 'tap reserves', 'release from spr', 'draw down reserves',
         'increase production', 'lift export ban', 'lift restriction',
+        # Mediator / corridor language (keep supply flowing) -- only ever reached
+        # after a KNOWN_SPEAKER gate, e.g. the UN Secretary-General on grain.
+        'keep grain flowing', 'let the grain flow', 'grain corridor', 'grain deal',
+        'grain initiative', 'safe passage', 'resume exports', 'restore exports',
+        'allow exports', 'keep exports flowing', 'unblock exports',
+        'fertilizer must reach', 'keep fertilizer flowing',
         'भंडार जारी', 'ذخائر جاری',
     ],
     'build_reserves':   [
@@ -1958,6 +1969,8 @@ INTERVENTION_RATIONALE_LEXICON = {
     ],
     'food_security':      [
         'food security', 'food prices', 'food inflation', 'grain stocks', 'wheat shortage',
+        'food crisis', 'global food crisis', 'famine', 'hunger', 'starvation',
+        'acute food insecurity', 'food insecurity',
         'खाद्य सुरक्षा',
     ],
     'energy_security':    [
