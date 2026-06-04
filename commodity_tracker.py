@@ -3517,6 +3517,74 @@ def determine_alert_level(score):
 
 
 # ========================================
+# CONVERGENCE TRIGGER GATE (v1.3.0 -- Jun 2026)
+# A convergence's anchor commodity being globally hot is NOT enough to fire
+# it. The registry also declares a coupled trigger signal that must be live
+# in its regional BLUF (e.g. 'humanitarian_lebanon' in the ME BLUF). These
+# helpers read the BLUF's published top_signals[] to confirm that trigger.
+# ========================================
+
+# trigger_region -> regional BLUF Redis cache key.
+# ME confirmed ('rhetoric:me:regional_bluf'); others follow the same convention.
+_BLUF_CACHE_KEYS = {
+    'me':     'rhetoric:me:regional_bluf',
+    'asia':   'rhetoric:asia:regional_bluf',
+    'europe': 'rhetoric:europe:regional_bluf',
+    'wha':    'rhetoric:wha:regional_bluf',
+    'africa': 'rhetoric:africa:regional_bluf',
+}
+
+
+def _load_bluf_top_signals(region):
+    """Fetch a regional BLUF's published top_signals[] from Redis.
+    Returns a list, or None if Redis is unreachable / key missing (so callers
+    can tell 'no signals' apart from 'could not check')."""
+    key = _BLUF_CACHE_KEYS.get(region)
+    if not key or not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return None
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5,
+        )
+        raw = resp.json().get('result')
+        if not raw:
+            return None
+        data = json.loads(raw)
+        return data.get('top_signals', []) if isinstance(data, dict) else None
+    except Exception as e:
+        print(f"[Commodity Tracker] BLUF read error ({region}): {str(e)[:120]}")
+        return None
+
+
+def _level_at_least(actual, minimum):
+    """Numeric level comparison, tolerant of None / non-numeric inputs.
+    If we cannot compare, do not block on level."""
+    try:
+        return float(actual) >= float(minimum)
+    except (TypeError, ValueError):
+        return True
+
+
+def _trigger_signal_state(category, min_level, region_signals):
+    """Three-state gate for a convergence's coupled trigger signal:
+        'present' -- category found in the BLUF (and >= min_level if given)
+        'absent'  -- BLUF readable, category not present at the required level
+        'unknown' -- BLUF unreadable (Redis miss/cold); don't fake, don't hide
+    region_signals is the prefetched top_signals[] list (or None)."""
+    if not category:
+        return 'present'                  # entry declares no trigger
+    if region_signals is None:
+        return 'unknown'                  # could not read the BLUF
+    for s in region_signals:
+        if isinstance(s, dict) and s.get('category') == category:
+            if min_level in (None, '') or _level_at_least(s.get('level'), min_level):
+                return 'present'
+            return 'absent'               # found, but below required level
+    return 'absent'
+
+# ========================================
 # SCAN ORCHESTRATOR
 # ========================================
 
@@ -3863,6 +3931,16 @@ def _run_full_scan(days=7):
     active_convergences = []
     if CONVERGENCE_REGISTRY_AVAILABLE:
         try:
+            # Pre-fetch each regional BLUF's published signals ONCE (a walk may
+            # reference several regions; avoid a Redis hit per registry entry).
+            _trigger_regions = {
+                e.get('trigger_region') for e in CONVERGENCE_REGISTRY
+                if e.get('commodity') and e.get('trigger_signal_category')
+            }
+            bluf_signals_by_region = {
+                r: _load_bluf_top_signals(r) for r in _trigger_regions if r
+            }
+
             for entry in CONVERGENCE_REGISTRY:
                 anchor_commodity = entry.get('commodity')
                 threshold = entry.get('commodity_threshold', 'elevated')
@@ -3877,23 +3955,46 @@ def _run_full_scan(days=7):
                 summary = commodity_summaries.get(anchor_commodity, {})
                 actual_level = summary.get('alert_level', 'normal')
 
-                if alert_meets_threshold(actual_level, threshold):
-                    # Build a flattened entry the interpreter expects
-                    headline = format_headline(entry, actual_level) \
-                        if entry.get('headline_template') else ''
-                    active_convergences.append({
-                        'id':          entry.get('id'),
-                        'commodity':   anchor_commodity,
-                        'country':     entry.get('country'),
-                        'priority':    entry.get('priority', 0),
-                        'icon':        entry.get('icon', '\u26a1'),
-                        'color':       entry.get('color', '#f59e0b'),
-                        'headline':    headline,
-                        'detail':      entry.get('detail', ''),
-                        'regions':     entry.get('regions', []),
-                        'alert_level': actual_level,
-                        'signals':     summary.get('signal_count', 0),
-                    })
+                # Gate 1: the anchor commodity must meet the entry's threshold.
+                if not alert_meets_threshold(actual_level, threshold):
+                    continue
+
+                # Gate 2 (v1.3.0): the coupled trigger signal must actually be
+                # live in its regional BLUF. A globally-hot commodity is NOT
+                # enough — global wheat at 'elevated' does not by itself mean
+                # Lebanon's humanitarian crisis is active. We confirm the
+                # trigger ('humanitarian_lebanon' in the ME BLUF) before firing.
+                trig_cat = entry.get('trigger_signal_category')
+                trig_status = _trigger_signal_state(
+                    trig_cat,
+                    entry.get('trigger_signal_min_level'),
+                    bluf_signals_by_region.get(entry.get('trigger_region')),
+                )
+                # Commodity hot but coupled trigger confirmed ABSENT -> skip.
+                if trig_cat and trig_status == 'absent':
+                    continue
+                # 'present' -> confirmed firing. 'unknown' (BLUF unreadable) ->
+                # surface but flag, so prose can hedge instead of overclaiming.
+                trigger_confirmed = (not trig_cat) or (trig_status == 'present')
+
+                # Build a flattened entry the interpreter expects
+                headline = format_headline(entry, actual_level) \
+                    if entry.get('headline_template') else ''
+                active_convergences.append({
+                    'id':          entry.get('id'),
+                    'commodity':   anchor_commodity,
+                    'country':     entry.get('country'),
+                    'priority':    entry.get('priority', 0),
+                    'icon':        entry.get('icon', '\u26a1'),
+                    'color':       entry.get('color', '#f59e0b'),
+                    'headline':    headline,
+                    'detail':      entry.get('detail', ''),
+                    'regions':     entry.get('regions', []),
+                    'alert_level': actual_level,
+                    'signals':     summary.get('signal_count', 0),
+                    'trigger_category':  trig_cat,
+                    'trigger_confirmed': trigger_confirmed,
+                })
             print(f"[Commodity Tracker] ✅ {len(active_convergences)} active "
                   f"convergence(s) detected from {len(CONVERGENCE_REGISTRY)} "
                   f"registry entries")
