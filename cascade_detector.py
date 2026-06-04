@@ -236,6 +236,22 @@ CASCADE_CHAINS = {
         'downstream_threshold_watch':    1,
         'downstream_threshold_active':   3,
         'downstream_threshold_compound': 4,
+        # ── Time-lag (Stage 2b) — the seasonal clock ──────────────────
+        # NH main grain season: plant Mar-May, harvest Aug-Oct.
+        # SH main grain season: plant Sep-Nov, harvest Mar-May (next year).
+        # A disruption during planting/pre-harvest pre-positions harvest risk.
+        'time_lag': {
+            'hemispheres': {
+                'northern': {'planting': [3, 4, 5],    'harvest': [8, 9, 10]},
+                'southern': {'planting': [9, 10, 11],  'harvest': [3, 4, 5]},
+            },
+            'lag_months': 5,
+            'note': (
+                'Fertilizer applied (or withheld) during the planting window does '
+                'not surface in food prices until the harvest months later. A quiet '
+                'FFPI today therefore does not mean the setup is benign.'
+            ),
+        },
         'so_what': (
             'When Hormuz closure is paired with fertilizer stress plus staple-crop '
             'and food-security signals, the fertilizer→food cascade is operational. '
@@ -388,6 +404,100 @@ def _detect_downstream_signals(chain_cfg, articles):
     return results
 
 
+# ============================================================
+# TIME-LAG LAYER (Stage 2b — June 2026)
+# ============================================================
+# Gives seasonal chains a calendar. A fertilizer/chokepoint disruption during a
+# PLANTING window (or the pre-harvest gap after it) pre-positions harvest-period
+# food-supply risk MONTHS forward — even when present-state food prices are calm.
+# Discipline: time conditions are MULTIPLIERS on an existing chokepoint+fertilizer
+# signal, never standalone (mirrors the Black Swan calendar-multiplier rule).
+
+_MONTH_ABBR = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+# Level -> (tier, label). Level 3 is the time-lag "seasonally loaded" band.
+_TIER_BY_LEVEL = {
+    0: ('baseline',   'BASELINE'),
+    1: ('monitoring', 'MONITORING'),
+    2: ('watch',      'CASCADE WATCH'),
+    3: ('watch',      'CASCADE WATCH \u23f1 SEASONALLY LOADED'),
+    4: ('active',     'CASCADE ACTIVE'),
+    5: ('compound',   'COMPOUND CASCADE'),
+}
+
+
+def _months_label(months):
+    """[8,9,10] -> 'Aug-Oct'; [3] -> 'Mar'."""
+    if not months:
+        return ''
+    if len(months) == 1:
+        return _MONTH_ABBR[months[0]]
+    return f"{_MONTH_ABBR[months[0]]}-{_MONTH_ABBR[months[-1]]}"
+
+
+def _cyclic_gap(after_month, before_month):
+    """Months strictly between after_month and before_month, walking forward
+    cyclically. _cyclic_gap(5, 8) -> [6,7];  _cyclic_gap(11, 3) -> [12,1,2]."""
+    gap = []
+    m = after_month % 12 + 1
+    guard = 0
+    while m != before_month and guard < 12:
+        gap.append(m)
+        m = m % 12 + 1
+        guard += 1
+    return gap
+
+
+def _seasonal_phase(month, planting, harvest):
+    """Classify the current month for one hemisphere."""
+    if planting and month in planting:
+        return 'planting'
+    if harvest and month in harvest:
+        return 'harvest'
+    if planting and harvest and month in _cyclic_gap(planting[-1], harvest[0]):
+        return 'pre-harvest'
+    return 'off-season'
+
+
+def _compute_time_lag(tl_cfg, now=None):
+    """
+    Determine whether any hemisphere is 'loaded' (disruption hitting/just-past its
+    planting window, before harvest) and project the harvest-risk window forward.
+    Returns a dict; 'active' True if >=1 hemisphere is loaded.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    month, year = now.month, now.year
+    hemis = tl_cfg.get('hemispheres', {}) or {}
+
+    loaded, risk_windows = [], []
+    phases = {}
+    for hemi, win in hemis.items():
+        planting = win.get('planting', []) or []
+        harvest  = win.get('harvest', []) or []
+        phase = _seasonal_phase(month, planting, harvest)
+        phases[hemi] = phase
+        if phase in ('planting', 'pre-harvest'):
+            loaded.append(hemi)
+            hw_year = year if (harvest and harvest[0] >= month) else year + 1
+            risk_windows.append(f"{_months_label(harvest)} {hw_year}")
+
+    return {
+        'active':                len(loaded) > 0,
+        'hemispheres_loaded':    loaded,
+        'phase_by_hemisphere':   phases,
+        'harvest_risk_windows':  risk_windows,
+        'lag_months':            tl_cfg.get('lag_months'),
+        'note':                  tl_cfg.get('note', ''),
+        'disclaimer': (
+            'CONVERGENCE reading, not a prediction: operational-window conditions '
+            'for a harvest-period food shock are present; this does not forecast '
+            'whether or when a food crisis will occur.'
+        ),
+    }
+
+
 def detect_cascade(chain_key, chain_cfg, articles):
     """
     Run full cascade detection for a single chain.
@@ -428,6 +538,18 @@ def detect_cascade(chain_key, chain_cfg, articles):
         level = 0
         tier_label = 'BASELINE'
 
+    # ── Time-lag layer (Stage 2b) — opt-in per chain via 'time_lag' block ──
+    # Multiplier discipline: only fires when chokepoint AND intermediate are
+    # already active (never standalone). Elevates a present-state WATCH into a
+    # "seasonally loaded" reading and projects the harvest-risk window forward.
+    time_lag_out = None
+    tl_cfg = chain_cfg.get('time_lag')
+    if tl_cfg and chokepoint_active and intermediate_active:
+        time_lag_out = _compute_time_lag(tl_cfg)
+        if time_lag_out.get('active') and level < 4:
+            level = min(4, max(level, 2) + 1)   # WATCH(2) -> loaded(3); cap below COMPOUND
+            tier, tier_label = _TIER_BY_LEVEL.get(level, (tier, tier_label))
+
     return {
         'chain_key':       chain_key,
         'chain_label':     chain_cfg.get('label', chain_key),
@@ -440,6 +562,7 @@ def detect_cascade(chain_key, chain_cfg, articles):
         'tier':            tier,
         'tier_label':      tier_label,
         'level':           level,
+        'time_lag':        time_lag_out,
         'so_what':         chain_cfg.get('so_what', '') if level >= 2 else '',
         'amplified_countries': chain_cfg.get('amplified_countries', {}) if level >= 2 else {},
     }
@@ -791,7 +914,47 @@ def register_cascade_detector_routes(app, redis_client=None, json_module=None):
                 print(f'[cascade_detector] Skipping {key}: {str(e)[:80]}')
                 continue
 
-        print(f'[cascade_detector] Gathered {len(articles)} articles from {len(rhetoric_keys)} tracker caches')
+        # ── Commodity-tracker pool (Stage 2a fix, June 2026) ──────────
+        # The chains' chokepoint/fertilizer/food keywords live in COMMODITY
+        # news (Fertilizer News, AgriCensus, FAO, Mining.com), not rhetoric
+        # actor articles. Pull the commodity bundle's signals too, or the food
+        # cascade can never fire. Type-guarded; strictly additive.
+        try:
+            commodity_cache = _upstash_get('commodity_tracker_cache')
+            if isinstance(commodity_cache, dict):
+                pools = []
+                # Top-level curated cross-commodity signals
+                pools.append(commodity_cache.get('top_signals', []) or [])
+                # Per-commodity signals (commodity_summaries may be list or dict)
+                summaries = commodity_cache.get('commodity_summaries', [])
+                summ_iter = summaries.values() if isinstance(summaries, dict) else summaries
+                for cs in (summ_iter or []):
+                    if not isinstance(cs, dict):
+                        continue
+                    if isinstance(cs.get('top_signal'), dict):
+                        pools.append([cs['top_signal']])
+                    pools.append(cs.get('top_signals_brief', []) or [])
+                for pool in pools:
+                    for sig in pool:
+                        if not isinstance(sig, dict):
+                            continue
+                        url = sig.get('url') or sig.get('link') or ''
+                        if url and url in seen_urls:
+                            continue
+                        if url:
+                            seen_urls.add(url)
+                        title = sig.get('title') or ''
+                        articles.append({
+                            'title':       title,
+                            # title doubles as description so keyword scan still works
+                            'description': sig.get('description') or sig.get('snippet') or title,
+                            'url':         url,
+                            'source':      sig.get('source') or 'commodity_tracker',
+                        })
+        except Exception as e:
+            print(f'[cascade_detector] Commodity pool skip: {str(e)[:80]}')
+
+        print(f'[cascade_detector] Gathered {len(articles)} articles (rhetoric caches + commodity pool)')
         return articles
 
     # ────────────────────────────────────────────────────────────
