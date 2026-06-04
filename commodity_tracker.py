@@ -2010,6 +2010,7 @@ COMMODITY_RSS_FEEDS = {
     # Pattern mirrors mining.com (Google News RSS, site: + keyword targeting).
     'FAO Food Price Index': 'https://news.google.com/rss/search?q=site:fao.org+food+price+index+OR+FFPI&hl=en&gl=US&ceid=US:en',
     'FAO GIEWS Early Warning': 'https://news.google.com/rss/search?q=FAO+GIEWS+OR+food+price+anomaly+OR+%22food+security%22+early+warning&hl=en&gl=US&ceid=US:en',
+    'FAO Newsroom': 'https://news.google.com/rss/search?q=site:fao.org%2Fnewsroom+OR+FAO+warns+OR+FAO+food+prices&hl=en&gl=US&ceid=US:en',
     'Global Food Security': 'https://news.google.com/rss/search?q=food+security+crisis+OR+IPC+phase+OR+famine+OR+food+access+OR+crop+yield+forecast&hl=en&gl=US&ceid=US:en',
     # Strategic minerals
     'USGS Mineral News': 'https://news.google.com/rss/search?q=USGS+mineral+OR+rare+earth+OR+lithium+OR+uranium&hl=en&gl=US&ceid=US:en',
@@ -4220,6 +4221,190 @@ def get_commodity_pressure(target):
 
 
 # ========================================
+# FAO FOOD PRICE INDEX (FFPI) — Stage 1b
+# ========================================
+# Real, dynamically-fetched FAO Food Price Index (current 2014-2016=100 base).
+# Source: https://www.fao.org/worldfoodsituation/foodpricesindex/en
+# Layered fetch (mirrors Nigeria NGX pattern):
+#   (1) Parse live FAO page  ->  (2) Redis last-known-good  ->  (3) Unavailable
+# NEVER returns a hardcoded placeholder number. FFPI is monthly (1st Thursday),
+# so a 12h Redis TTL is comfortably fresh and survives FAO outages.
+#
+# NOTE: We deliberately do NOT use fileadmin/.../Food_price_indices_data.csv —
+# that legacy file is still on the OLD 2002-2004=100 base and would not match
+# the published current-base values.
+
+FFPI_REDIS_KEY      = 'ffpi_cache'
+FFPI_CACHE_TTL_HOURS = 12
+FFPI_SOURCE_URL     = 'https://www.fao.org/worldfoodsituation/foodpricesindex/en'
+
+# Sub-index display metadata (canonical order + icons)
+FFPI_SUBINDICES = [
+    ('cereal',        'Cereals',        '🌾'),
+    ('vegetable_oil', 'Vegetable Oils', '🫒'),
+    ('dairy',         'Dairy',          '🥛'),
+    ('meat',          'Meat',           '🥩'),
+    ('sugar',         'Sugar',          '🍬'),
+]
+
+
+def _ffpi_strip_html(html):
+    """Strip tags + collapse whitespace so prose regexes match cleanly."""
+    text = re.sub(r'<[^>]+>', ' ', html or '')
+    text = re.sub(r'\s+', ' ', text)
+    return text
+
+
+def _parse_ffpi_page(html):
+    """
+    Parse the FAO FFPI page prose into a structured dict.
+    Returns None if the headline FFPI value can't be found (treat as fetch miss).
+    Validated against live FAO text (Feb 2026 release).
+    """
+    text = _ffpi_strip_html(html)
+    if not text:
+        return None
+
+    # Headline FFPI value + month, e.g. "FFPI) averaged 125.3 points in February 2026"
+    m = re.search(r'FFPI\)\s*averaged\s+([\d.]+)\s+points\s+in\s+([A-Z][a-z]+\s+\d{4})', text)
+    if not m:
+        return None
+
+    out = {
+        'ffpi':   float(m.group(1)),
+        'month':  m.group(2),
+        'base':   '2014-2016=100',
+        'subindices': {},
+    }
+
+    # Month-on-month change immediately following the headline value
+    tail = text[m.end():m.end() + 90]
+    mom = re.search(r'(up|down)\s+([\d.]+)\s+points\s+\(([\d.]+)\s+percent\)', tail)
+    if mom:
+        sign = 1.0 if mom.group(1) == 'up' else -1.0
+        out['mom_points']  = round(sign * float(mom.group(2)), 1)
+        out['mom_percent'] = round(sign * float(mom.group(3)), 1)
+        out['direction']   = mom.group(1)
+
+    # Five sub-indices, e.g. "FAO Cereal Price Index averaged 108.6 points in February"
+    for key, label, _icon in FFPI_SUBINDICES:
+        # 'cereal' -> 'Cereal', 'vegetable_oil' -> 'Vegetable Oil'
+        grp = ' '.join(w.capitalize() for w in key.split('_'))
+        sm = re.search(rf'FAO\s+{re.escape(grp)}\s+Price\s+Index\s*averaged\s+([\d.]+)\s+points', text)
+        if sm:
+            out['subindices'][key] = float(sm.group(1))
+
+    # Release date, e.g. "Release date: 06/03/2026"
+    rd = re.search(r'Release date:\s*(\d{2}/\d{2}/\d{4})', text)
+    if rd:
+        out['release_date'] = rd.group(1)
+
+    return out
+
+
+def _ffpi_redis_get():
+    """Read last-known-good FFPI bundle from Redis (with freshness flag)."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return None
+    try:
+        resp = requests.get(
+            f"{UPSTASH_REDIS_URL}/get/{FFPI_REDIS_KEY}",
+            headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+            timeout=5,
+        )
+        data = resp.json()
+        if data.get('result'):
+            return json.loads(data['result'])
+    except Exception as e:
+        print(f"[FFPI] Redis load error: {e}")
+    return None
+
+
+def _ffpi_redis_set(bundle):
+    """Persist FFPI bundle to Redis as last-known-good."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return
+    try:
+        requests.post(
+            f"{UPSTASH_REDIS_URL}/set/{FFPI_REDIS_KEY}",
+            headers={
+                "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(bundle, default=str),
+            timeout=10,
+        )
+        print("[FFPI] ✅ Saved to Redis")
+    except Exception as e:
+        print(f"[FFPI] Redis save error: {e}")
+
+
+def _ffpi_is_fresh(bundle):
+    """True if a cached bundle is within TTL."""
+    try:
+        ts = datetime.fromisoformat(bundle['fetched_at'])
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - ts).total_seconds()
+        return age < (FFPI_CACHE_TTL_HOURS * 3600)
+    except Exception:
+        return False
+
+
+def get_ffpi(force=False):
+    """
+    Layered FFPI fetch:
+      (1) Redis fresh-cache hit (unless force)
+      (2) Live FAO page parse  -> cache + return
+      (3) Redis stale last-known-good (flagged stale)
+      (4) Unavailable honest state (status='unavailable', value=None)
+    """
+    # (1) Fresh cache
+    cached = _ffpi_redis_get()
+    if cached and not force and _ffpi_is_fresh(cached):
+        cached['status'] = 'cached'
+        return cached
+
+    # (2) Live fetch + parse
+    try:
+        resp = requests.get(
+            FFPI_SOURCE_URL,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            parsed = _parse_ffpi_page(resp.text)
+            if parsed and parsed.get('ffpi'):
+                parsed['status']      = 'live'
+                parsed['source']      = 'FAO Food Price Index'
+                parsed['source_url']  = FFPI_SOURCE_URL
+                parsed['fetched_at']  = datetime.now(timezone.utc).isoformat()
+                _ffpi_redis_set(parsed)
+                print(f"[FFPI] ✅ Live: {parsed['ffpi']} ({parsed.get('month')})")
+                return parsed
+            print("[FFPI] Live fetch parsed no headline value — falling back")
+        else:
+            print(f"[FFPI] Live fetch HTTP {resp.status_code} — falling back")
+    except Exception as e:
+        print(f"[FFPI] Live fetch error: {e} — falling back")
+
+    # (3) Stale last-known-good
+    if cached and cached.get('ffpi'):
+        cached['status'] = 'stale'
+        print(f"[FFPI] Serving STALE cache ({cached.get('month')})")
+        return cached
+
+    # (4) Honest unavailable
+    return {
+        'status':     'unavailable',
+        'ffpi':       None,
+        'source':     'FAO Food Price Index',
+        'source_url': FFPI_SOURCE_URL,
+        'fetched_at': datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ========================================
 # FLASK ENDPOINT REGISTRATION
 # ========================================
 
@@ -4317,6 +4502,34 @@ def register_commodity_endpoints(app, start_background=True):
                 },
                 'last_updated':  datetime.now(timezone.utc).isoformat(),
             }
+            return app.response_class(
+                response=json.dumps(payload, default=str),
+                status=200,
+                mimetype='application/json',
+            )
+        except Exception as e:
+            return app.response_class(
+                response=json.dumps({'success': False, 'error': str(e)[:200]}),
+                status=500,
+                mimetype='application/json',
+            )
+
+    @app.route('/api/food-price-index', methods=['GET', 'OPTIONS'])
+    def api_food_price_index():
+        """FAO Food Price Index (FFPI) — headline + 5 sub-indices. Stage 1b."""
+        from flask import request as flask_request
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            force = flask_request.args.get('force', 'false').lower() == 'true'
+            ffpi = get_ffpi(force=force)
+            # Attach display metadata for the sub-indices (icons + labels + order)
+            ffpi['subindex_meta'] = [
+                {'key': k, 'label': lbl, 'icon': ic} for k, lbl, ic in FFPI_SUBINDICES
+            ]
+            payload = {'success': True, 'ffpi': ffpi}
             return app.response_class(
                 response=json.dumps(payload, default=str),
                 status=200,
