@@ -4249,8 +4249,17 @@ FFPI_SUBINDICES = [
 
 
 def _ffpi_strip_html(html):
-    """Strip tags + collapse whitespace so prose regexes match cleanly."""
+    """Strip tags + decode entities + collapse whitespace so prose regexes match cleanly.
+
+    FAO's markup is inconsistent: the Cereal line sometimes separates 'Index' and
+    'averaged' with a &nbsp; entity, which is literal text (not whitespace) and was
+    silently breaking the cereal sub-index parse. Decoding entities + normalizing the
+    non-breaking space char fixes it for all five sub-indices.
+    """
+    import html as _htmlmod  # aliased — the 'html' parameter shadows the module name
     text = re.sub(r'<[^>]+>', ' ', html or '')
+    text = _htmlmod.unescape(text)     # &nbsp; &amp; &#160; -> real characters
+    text = text.replace('\xa0', ' ')   # non-breaking space -> normal space
     text = re.sub(r'\s+', ' ', text)
     return text
 
