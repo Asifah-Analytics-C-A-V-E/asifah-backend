@@ -1279,6 +1279,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Khoemacau Mining (Northwest Copper Belt) acquired by MMG (China Minmetals) 2023 for $1.88B — meaningful but secondary to diamonds in Botswana's economic picture. Cupric Canyon ZF site also developing. Adds Chinese SOE footprint to Botswana otherwise dominated by Western-aligned mining capital."},
     },
     'brazil': {
+        'nitrogen':     {'role': 'consumer', 'weight': 1.4, 'rank': 2,
+                         'note': "Among the world's largest fertilizer importers -- buys the bulk of its nitrogen (urea + ammonia) abroad to feed soy / corn / sugarcane. Heavy reliance on Russian + Middle East + North African supply makes Brazil acutely exposed to nitrogen export disruptions. Watch: Brazilian urea import volumes / origins, port arrivals (Paranagua / Santos), planting-season demand."},
         'soybeans':     {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 soybean producer (~40% global, ~155 Mt/yr 2024-25); Mato Grosso + Paraná dominant; CONAB official forecasts; safrinha (second-crop) Mato Grosso corn rotated with soy. Single largest agri-supply story of the past decade — Brazil overtook USA in 2013. Dominant China supplier (~75% of Brazilian soy exports go to China); Paranaguá + Santos ports; US-China trade war beneficiary structurally."},
         'corn':         {'role': 'producer',          'weight': 1.2, 'rank': 3,
@@ -1321,6 +1323,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Chile imports ~20-30% of sulfur for copper-oxide processing (solvent extraction-electrowinning, SX-EW). China sulfur export ban (May 2026) + Hormuz closure trapped Gulf supply; Chilean sulfur import prices doubled. CASCADE EXPOSURE: this is the FIRST visible cascade-transmission belt — Hormuz disruption -> sulfur scarcity -> Chilean copper output risk. Ivanhoe Mines founder warned >3 week disruption would close copper oxide operations. Watch: Chilean copper-oxide vs. concentrate output mix, ENAP sulfur import data, Cochilco sector reports.'},
     },
     'china': {
+        'nitrogen':     {'role': 'producer_consumer', 'weight': 1.5, 'rank': 1,
+                         'note': "World's #1 nitrogen fertilizer producer AND consumer (urea + ammonia). Coal-based ammonia (unlike the gas-based West) insulates China from gas-price shocks but is emissions-heavy. Periodic urea EXPORT QUOTAS / customs-inspection holds (2021, 2023-24) to protect domestic supply are a top global price signal -- when China holds back urea, world prices spike. Watch: customs urea-export inspection policy, domestic urea price controls, coal feedstock cost."},
         'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 rare earth producer + processor (~60% mining, ~85% refining of magnetic + heavy rare earths). Bayan Obo (Inner Mongolia) is the largest single REE deposit globally; Sichuan ionic clay heavy-REE mines. Export controls (Dec 2023 onward, expanded April 2025) on gallium + germanium + graphite + dysprosium + terbium are the canonical 'critical minerals weaponization' case study. Watch: MOFCOM export-license announcements, China REE quota adjustments."},
         'potash':       {'role': 'consumer',          'weight': 1.4, 'rank': 1,
@@ -1388,6 +1392,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "DRC is a meaningful diamond producer (~15-20 Mcarats/yr) but historically conflict-adjacent supply (Kasai region); Kimberley Process participant. Société Anonyme MIBA + small-scale artisanal sector. Less material than DRC's cobalt/copper/coltan story but adds to the Africa-diamonds picture and the broader conflict-minerals frame. Watch: MIBA production data, Kimberley Process annual statistics."},
     },
     'egypt': {
+        'nitrogen':     {'role': 'producer', 'weight': 1.3,
+                         'note': "Major urea / ammonia EXPORTER (gas-based; MOPCO, EBIC, Abu Qir) and a Mediterranean swing supplier to Europe. GAS-CASCADE EXPOSURE: when domestic gas is diverted to power / cooling in summer, Egyptian nitrogen plants curtail -- tightening European urea supply. Watch: Egyptian gas allocation to fertilizer plants, summer curtailment notices, EGAS pricing."},
         'wheat':        {'role': 'consumer',          'weight': 1.4, 'rank': 1,
                          'note': "World's #1 wheat importer (~12.7 Mt 2025-26, ahead of Indonesia + Algeria). Population ~108M (projected 124M by 2030); ~50% of wheat needs imported. Bread subsidy program (`baladi` bread for ~70M citizens) is the central political stability lever — Mubarak fell in part over bread prices. Russia (~66%) + Ukraine (~17%) + EU/France (~14%) primary suppliers. Mostakbal Misr (military-linked) replaced GASC as state buyer in late 2024 — adds opacity to global wheat tender pricing. Watch: GASC/Mostakbal tender results, Russian wheat export taxes, Black Sea grain corridor status, Egyptian pound USD reserve adequacy."},
         'corn':         {'role': 'consumer',          'weight': 1.0,
@@ -1469,6 +1475,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Paks Nuclear Power Plant (Russian VVER reactors) supplies ~45% of Hungarian electricity. Rosatom contracted to build Paks II expansion (2014 deal under Orban). Post-Tisza election, Paks II Rosatom contract status under review. Watch: Paks II construction milestones, Rosatom financing arrangements, EU nuclear-sector sanctions exposure."},
     },
     'india': {
+        'nitrogen':     {'role': 'consumer', 'weight': 1.5, 'rank': 1,
+                         'note': "World's #1 urea importer and a top consumer (~700M farmers; heavily subsidized via Nutrient Based Subsidy + urea price control). India's periodic urea import TENDERS (IPL/RCF/MMTC) set the global benchmark price. STRATEGIC EXPOSURE: heavy reliance on imported finished urea + feedstock means gas-driven price spikes flow straight into the fertilizer subsidy bill. Watch: India urea tender results + volumes, NBS subsidy adjustments, domestic plant gas allocation."},
         'wheat': {
             'producer': {'weight': 1.3, 'rank': 2,
                          'note': "World's #2 wheat producer (~115 Mt/yr); Punjab + Haryana + Uttar Pradesh dominant; FCI (Food Corporation of India) state procurement at MSP (Minimum Support Price). India is structurally export-restricted — May 2022 + 2023 export bans (in response to Ukraine war disruption) directly tightened global Black Sea-replacement supply. Watch: FCI procurement levels, MSP announcements, export-ban policy."},
@@ -1530,6 +1538,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "🥇 RAMAT GAN — one of the world's four major diamond hubs (alongside Antwerp, Mumbai/Surat, Dubai). Israel Diamond Exchange (IDE/Bursa, Ramat Gan) operates the world's largest single diamond trading floor. Israel imports ~$5B/yr rough diamonds, exports ~$7-10B/yr polished — making it one of the top global polished-diamond exporters despite zero domestic production. ~50% of polished diamonds purchased in the USA (the world's largest diamond consumer market) come from Israel. ~20,000 directly employed; diamond exports have historically been ~12-30% of Israeli goods exports. UAE-Israel diamond trade ~tripled post-2020 Abraham Accords (Dubai Diamond Exchange synergy). STRATEGIC: Israeli polishing industry is G7-sanctions-aware (zero Russian-origin rough since March 2024). Watch: IDE monthly trading reports, MID House of Diamond exports, GJEPC India-Israel rough-polish flow, US Customs precious-stones import data from Israel."},
     },
     'iran': {
+        'nitrogen':     {'role': 'producer', 'weight': 1.3,
+                         'note': "Significant urea / ammonia exporter on the back of cheap subsidized gas (Pardis, Kermanshah, Lordegan petrochemical complexes). Sanctioned but flows continue via discounted regional + Asian buyers. HORMUZ / GAS LINK: Iranian nitrogen exports transit the Gulf; South Pars gas (shared with Qatar) is the feedstock. Watch: Iranian petrochemical urea export volumes, sanctions-evasion routing, South Pars output."},
         'sulfur':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'regime_flags': ['cascade_exposure_active'],
                          'note': "Iran is a major Gulf sulfur producer (sulfur is a refining + sour-gas-processing by-product); production trapped onshore by Hormuz closure + sanctions evasion complications. The Iran 2026 war + Hormuz closure is the upstream chokepoint for the global sulfur cascade. Watch: Iranian refinery + South Pars sour-gas output, Bandar Abbas + Imam Khomeini Port sulfur stockpiles."},
@@ -1656,6 +1666,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #2 nickel producer (~12% global); Nickel Asia + Global Ferronickel + Dinapigue Mining. Surigao + Palawan mines. Philippines-Indonesia together = ~60% global nickel. Marcos Jr. administration considering Indonesian-style export ban for downstream processing investment. Watch: DENR mining-policy announcements, Nickel Asia (NAC.PS) earnings, Marcos Jr. industry plans."},
     },
     'russia': {
+        'nitrogen':     {'role': 'producer', 'weight': 1.5, 'rank': 1,
+                         'note': "World's #1 nitrogen-fertilizer exporter (urea, ammonia, ammonium nitrate); cheap domestic gas = structural cost advantage. EuroChem, Acron, Uralchem, Togliattiazot. CHOKEPOINT: the Togliatti-Odesa ammonia pipeline + Yuzhny / Black Sea terminals (war-disrupted) are a recurring grain-deal bargaining chip. Sanctions carve-outs explicitly protect food + fertilizer flows. Watch: Black Sea ammonia corridor status, EU sanctions-exemption debates, export tax / quota changes."},
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 2,
                          'note': "World's #2 oil producer (~10-11M bpd); Urals crude (medium sour) historic European staple. Post-2022 sanctions + G7 price cap ($60/bbl Russian crude): exports redirected to China + India + Türkiye via shadow fleet (~600+ tankers). Discount-to-Brent (Urals-Brent spread) is the live measure of sanctions effectiveness. Rosneft + Lukoil + Gazprom Neft majors. Druzhba pipeline transit to EU (Hungary/Slovakia carve-outs). Watch: Urals-Brent spread, shadow fleet tracking (S&P Platts, Kpler), refinery utilization in India/China for Russian crude."},
         'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1683,7 +1695,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Russia produces ~5-6 Mt/yr bauxite (Severouralsk + North Onega operations, Rusal-controlled) — domestic aluminum smelter feed plus partial export. Insufficient for Rusal's needs; complement with Guinea + Jamaica imports. Sanctions complicate Rusal's Guinean operations financing. Watch: Rusal (MCX:RUAL) production, Guinea bauxite-to-Russia flow."},
     },
     'qatar': {
-        'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
+        'nitrogen':     {'role': 'producer', 'weight': 1.2,
+                         'note': "Gulf ammonia / urea producer (QAFCO at Mesaieed -- among the world's largest single urea sites), gas-based off the North Field. Hormuz transit exposure on exports. Watch: QAFCO output + expansion, North Field gas allocation, Asia / India urea contract flows."},
+        'natural_gas':  {'role': 'producer',         'weight': 1.5, 'rank': 1,
                          'note': "World's #2 LNG exporter (~80 MMT/yr, behind USA briefly); North Field (shared with Iran's South Pars) is the world's largest single gas field. QatarEnergy state operator; ConocoPhillips + ExxonMobil + Shell + TotalEnergies + Eni JV partners. North Field Expansion (NFE) program brings capacity to 142 MMTPA by 2027. Strategic supplier to EU (post-Ukraine) + Asia. Watch: NFE construction milestones, Qatar-EU long-term contract signings, North Field operational status."},
         'sulfur':       {'role': 'producer',          'weight': 1.4,
                          'regime_flags': ['cascade_exposure_active'],
@@ -1794,6 +1808,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #1 sunflower oil producer + exporter (~50% global pre-war); war degraded but partially restored. India + EU primary buyers. Major global cooking oil market mover."},
     },
     'usa': {
+        'nitrogen':     {'role': 'producer_consumer', 'weight': 1.3, 'rank': 3,
+                         'note': "Major nitrogen producer AND consumer -- cheap shale gas underpins large domestic urea / ammonia / UAN output (CF Industries, Nutrien, Koch), yet the Corn Belt still imports to balance. Gulf Coast ammonia capacity is gas-price sensitive. Watch: CF Industries guidance, Henry Hub gas, Corn Belt application-season demand, tariff actions on imported UAN."},
         'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 5,
                          'note': "US semiconductor sector ~10% global manufacturing but dominates leading-edge design (Nvidia, AMD, Qualcomm, Intel, Apple Silicon) + equipment (Applied Materials, Lam Research, KLA). CHIPS and Science Act ($52B, 2022) funds Intel Ohio + TSMC Arizona + Samsung Texas + Micron NY fab builds. Trump 2024-2026 administration tariff + national-security framework reshapes export-controls + tariffs on Chinese semi imports. Watch: CHIPS Act funding milestones, BIS Entity List Chinese chip-design firm additions, Intel Foundry + TSMC Arizona ramp."},
         'natural_gas':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
