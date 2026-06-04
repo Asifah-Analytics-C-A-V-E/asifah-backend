@@ -1101,6 +1101,14 @@ COMMODITY_KEYWORDS = {
         # French (DRC, francophone Africa)
         'diamants', 'diamants bruts',
     ],
+    'sulfur': [
+        'sulfur', 'sulphur', 'sulfur prices', 'sulphur prices',
+        'sulfuric acid', 'sulphuric acid', 'molten sulfur', 'molten sulphur',
+        'recovered sulfur', 'frasch sulfur', 'sour gas sulfur',
+        'sulfur supply', 'sulphur supply', 'sulfur export', 'sulphur export',
+        'sulfur production', 'sulphur production', 'sulfur output', 'sulphur output',
+        'sulfur fertilizer', 'sulphur fertiliser',
+    ],
     'bauxite': [
         'bauxite', 'alumina', 'aluminum ore', 'aluminium ore',
         'bauxite prices', 'alumina prices',
@@ -2053,6 +2061,20 @@ COMMODITY_RSS_FEEDS = {
     # Silver (NEW)
     'Silver News': 'https://news.google.com/rss/search?q=silver+OR+silver+prices+OR+fresnillo+OR+pan+american+silver&hl=en&gl=US&ceid=US:en',
     'Precious Metals': 'https://news.google.com/rss/search?q=precious+metals+OR+gold+silver+OR+silver+demand+OR+silver+solar&hl=en&gl=US&ceid=US:en',
+
+    # ---- Broad multi-commodity sources (scan ALL commodities; each article is
+    #      attributed to a commodity downstream by _match_commodity_in_text) ----
+    'Yahoo Finance Commodities': 'https://news.google.com/rss/search?q=site:finance.yahoo.com+sugar+OR+commodity+OR+futures+OR+manganese+OR+platinum+OR+nickel&hl=en&gl=US&ceid=US:en',
+    'Barchart Commodities': 'https://news.google.com/rss/search?q=site:barchart.com+sugar+OR+commodity+OR+futures+OR+prices+OR+grain+OR+metals&hl=en&gl=US&ceid=US:en',
+
+    # ---- Dedicated feeds for previously-uncovered commodities ----
+    'Sugar Markets': 'https://news.google.com/rss/search?q=sugar+prices+OR+raw+sugar+OR+sugar+futures+OR+ICE+sugar+OR+brazil+sugar+OR+india+sugar&hl=en&gl=US&ceid=US:en',
+    'Manganese News': 'https://news.google.com/rss/search?q=manganese+OR+ferromanganese+OR+manganese+ore+OR+silicomanganese+OR+south32+manganese+OR+eramet+manganese&hl=en&gl=US&ceid=US:en',
+    'Semiconductor Supply': 'https://news.google.com/rss/search?q=semiconductor+OR+chip+shortage+OR+TSMC+OR+foundry+OR+wafer+OR+chip+export&hl=en&gl=US&ceid=US:en',
+    'Chromium & Ferrochrome': 'https://news.google.com/rss/search?q=chromium+OR+ferrochrome+OR+chrome+ore+OR+chromite+OR+ferrochrome+prices&hl=en&gl=US&ceid=US:en',
+    'Diamond Markets': 'https://news.google.com/rss/search?q=diamond+prices+OR+de+beers+OR+alrosa+OR+rough+diamond+OR+kimberley+process&hl=en&gl=US&ceid=US:en',
+    'Bauxite & Alumina': 'https://news.google.com/rss/search?q=bauxite+OR+alumina+OR+guinea+bauxite+OR+bauxite+prices+OR+alumina+prices&hl=en&gl=US&ceid=US:en',
+    'Sulfur Markets': 'https://news.google.com/rss/search?q=sulfur+OR+sulphur+OR+sulfuric+acid+OR+molten+sulphur+OR+sulphur+prices&hl=en&gl=US&ceid=US:en',
 }
 # ========================================
 # REDDIT SUBREDDITS
