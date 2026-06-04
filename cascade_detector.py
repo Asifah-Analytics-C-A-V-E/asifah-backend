@@ -180,11 +180,19 @@ CASCADE_CHAINS = {
             'key':           'strait_of_hormuz',
             'label':         'Strait of Hormuz',
             'flag':          '🇮🇷',
+            # Headlines phrase Hormuz disruption many ways and in either word
+            # order ("hormuz closure" vs "closure of the strait of hormuz"), so we
+            # cover the real phrasings. Each keyword still pairs Hormuz with a
+            # stress word -- a benign "Hormuz traffic normal" article won't match.
             'active_keywords': [
-                'strait of hormuz closed', 'hormuz closure', 'hormuz blockade',
-                'hormuz shut', 'hormuz traffic restricted', 'hormuz transit halted',
-                'iranian mining hormuz', 'hormuz mining', 'gulf shipping disrupted',
-                'persian gulf shipping halt', 'gulf tanker traffic',
+                'strait of hormuz closed', 'hormuz closure', 'closure of the strait of hormuz',
+                'hormuz blockade', 'hormuz blocked', 'hormuz shut', 'hormuz shutdown',
+                'hormuz traffic restricted', 'hormuz transit halted', 'hormuz transit suspended',
+                'iranian mining hormuz', 'hormuz mining', 'mining the strait of hormuz',
+                'hormuz conflict', 'strait of hormuz conflict', 'conflict in the strait of hormuz',
+                'hormuz crisis', 'hormuz attack', 'hormuz war', 'hormuz tensions',
+                'hormuz disruption', 'hormuz disrupted', 'strait of hormuz threat',
+                'gulf shipping disrupted', 'persian gulf shipping halt', 'gulf tanker traffic disrupted',
             ],
         },
         'intermediate': {
@@ -198,6 +206,13 @@ CASCADE_CHAINS = {
                 'ammonia shortage', 'ammonium sulfate shortage', 'nitrogen fertilizer shortage',
                 'fertilizer affordability', 'fertilizer rationing', 'DAP prices surge',
                 'MOP fertilizer', 'planting season fertilizer crisis', 'fertilizer supply shock',
+                # Looser real-headline phrasings + the chain's own input context
+                'fertilizer prices', 'fertilizer crisis', 'fertilizer crunch',
+                'fertilizer costs rise', 'fertilizer supply disruption', 'fertilizer access',
+                'potash prices', 'urea prices', 'phosphate prices',
+                # British spelling -- FAO, UK, and much of the global press use it
+                'fertiliser shortage', 'fertiliser prices', 'fertiliser crisis',
+                'fertiliser crunch', 'fertiliser export ban',
             ],
             'high_intensity_markers': [
                 'fertilizer export ban', 'planting season fertilizer crisis',
@@ -230,6 +245,11 @@ CASCADE_CHAINS = {
                 'food insecurity', 'ipc phase', 'famine', 'food access crisis',
                 'global food crisis', 'hunger crisis', 'food import dependency',
                 'staple food shortage',
+                # Real-headline food-price phrasings (directional, not benign)
+                'food prices', 'food price crisis', 'global food price crisis',
+                'food prices rise', 'rising food prices', 'food prices surge',
+                'food price shock', 'food price spike', 'agrifood shock',
+                'food supply shock',
             ],
         },
         # Food has 5 downstream sectors; compound at 4 (allows one to lag)
