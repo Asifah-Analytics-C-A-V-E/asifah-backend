@@ -156,6 +156,106 @@ CASCADE_CHAINS = {
         },
     },
     # ============================================================
+    # FERTILIZER -> FOOD SECURITY CASCADE  (Stage 2a — June 2026)
+    # ============================================================
+    # Coco's thesis: Hormuz closure traps Gulf sulfur/fertilizer feedstock ->
+    # fertilizer scarcity hits BEFORE spring planting -> reduced yields ->
+    # food price rise -> food-access crisis (Global South first). This is the
+    # PRESENT-STATE chain; the seasonal time-lag layer (planting/harvest windows)
+    # arrives in Stage 2b. Convergence framing only — we report that the setup
+    # is present, NOT that a food crisis is predicted.
+    'fertilizer_food_security_cascade': {
+        'label':         'Fertilizer → Food Security Cascade',
+        'icon':          '🌾',
+        'description':   (
+            'Strait of Hormuz closure traps Gulf sulfur/fertilizer feedstock, '
+            'driving potash/phosphate/urea scarcity. Fertilizer disruption ahead '
+            'of the planting window propagates into staple-crop yields (wheat, '
+            'maize, rice) and edible oils, surfacing as FAO Food Price Index rises '
+            'and IPC food-access stress — Global South import-dependent states most '
+            'exposed. CONVERGENCE indicator: reports that the fertilizer→food setup '
+            'is present, not that a food crisis is predicted.'
+        ),
+        'chokepoint': {
+            'key':           'strait_of_hormuz',
+            'label':         'Strait of Hormuz',
+            'flag':          '🇮🇷',
+            'active_keywords': [
+                'strait of hormuz closed', 'hormuz closure', 'hormuz blockade',
+                'hormuz shut', 'hormuz traffic restricted', 'hormuz transit halted',
+                'iranian mining hormuz', 'hormuz mining', 'gulf shipping disrupted',
+                'persian gulf shipping halt', 'gulf tanker traffic',
+            ],
+        },
+        'intermediate': {
+            'key':           'fertilizer',
+            'label':         'Fertilizer (Potash / Phosphate / Urea / Ammonia)',
+            'icon':          '🧪',
+            'stress_keywords': [
+                'fertilizer shortage', 'fertilizer prices surge', 'fertilizer export ban',
+                'potash shortage', 'potash prices surge', 'phosphate fertilizer crunch',
+                'phosphate prices surge', 'urea cost surge', 'urea prices rise',
+                'ammonia shortage', 'ammonium sulfate shortage', 'nitrogen fertilizer shortage',
+                'fertilizer affordability', 'fertilizer rationing', 'DAP prices surge',
+                'MOP fertilizer', 'planting season fertilizer crisis', 'fertilizer supply shock',
+            ],
+            'high_intensity_markers': [
+                'fertilizer export ban', 'planting season fertilizer crisis',
+                'farmers cannot afford fertilizer', 'fertilizer rationing',
+                'fertilizer prices double',
+            ],
+        },
+        'downstream_commodities': [
+            'wheat', 'maize', 'rice', 'vegetable_oils', 'food_security',
+        ],
+        'downstream_signal_keywords': {
+            'wheat': [
+                'wheat prices rise', 'wheat shortage', 'wheat export ban',
+                'global wheat supply', 'wheat yield decline', 'wheat crop forecast cut',
+            ],
+            'maize': [
+                'maize prices surge', 'corn prices surge', 'maize shortage',
+                'corn yield decline', 'maize crop forecast',
+            ],
+            'rice': [
+                'rice prices surge', 'rice export ban', 'rice shortage',
+                'rice crop forecast cut',
+            ],
+            'vegetable_oils': [
+                'vegetable oil prices rise', 'palm oil prices surge', 'edible oil shortage',
+                'soybean oil prices', 'sunflower oil shortage',
+            ],
+            'food_security': [
+                'food price index rise', 'ffpi rise', 'food inflation',
+                'food insecurity', 'ipc phase', 'famine', 'food access crisis',
+                'global food crisis', 'hunger crisis', 'food import dependency',
+                'staple food shortage',
+            ],
+        },
+        # Food has 5 downstream sectors; compound at 4 (allows one to lag)
+        'downstream_threshold_watch':    1,
+        'downstream_threshold_active':   3,
+        'downstream_threshold_compound': 4,
+        'so_what': (
+            'When Hormuz closure is paired with fertilizer stress plus staple-crop '
+            'and food-security signals, the fertilizer→food cascade is operational. '
+            'Fertilizer applied (or withheld) during the planting window does not '
+            'show up in food prices until the harvest months later — so a quiet FFPI '
+            'today does not mean the setup is benign. Import-dependent Global South '
+            'states (Egypt, Nigeria, Bangladesh, Yemen, sub-Saharan Africa) absorb '
+            'the shock first; buffered producers (US, EU) absorb it last. The Stage 2b '
+            'time-lag layer makes this planting→harvest delay explicit.'
+        ),
+        'amplified_countries': {
+            'egypt':       {'commodity': 'wheat',         'rank': 1, 'reason': "World's largest wheat importer; bread subsidy system structurally exposed to wheat price + supply shocks"},
+            'nigeria':     {'commodity': 'food_security', 'rank': 1, 'reason': 'High food-import dependency + domestic fertilizer-access constraints; large population at IPC stress margin'},
+            'india':       {'commodity': 'fertilizer',    'rank': 1, 'reason': "Massive fertilizer importer + subsidizer; planting-season fertilizer availability directly drives kharif/rabi yields"},
+            'bangladesh':  {'commodity': 'rice',          'rank': 2, 'reason': 'Dense population + rice-staple dependency + fertilizer-import reliance; thin buffer against yield shortfalls'},
+            'yemen':       {'commodity': 'food_security', 'rank': 1, 'reason': 'Already acute IPC food insecurity; near-total food-import dependency amplifies any global price shock'},
+            'africa':      {'commodity': 'multi',         'rank': 1, 'reason': 'Broad fertilizer-import + food-import dependency across sub-Saharan states; lowest buffer capacity globally'},
+        },
+    },
+    # ============================================================
     # Future cascade chains (placeholders for v1.1+)
     # ============================================================
     # 'tungsten_military_cascade': { ... },
