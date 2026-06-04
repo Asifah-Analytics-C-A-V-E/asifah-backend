@@ -299,6 +299,29 @@ COMMODITY_TYPES = {
         'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan', 'kazakhstan'],
         'top_consumers':  ['china', 'usa', 'india', 'eu'],
     },
+    'nitrogen': {
+        'name': 'Nitrogen (Urea / Ammonia)',
+        'icon': '💨',
+        # Nitrogen fertilizer (urea, ammonia, ammonium nitrate, UAN) is made via
+        # Haber-Bosch from natural gas -- so nitrogen prices track gas. European
+        # ammonia plants idle when gas spikes (2022 precedent); Russia/China/Gulf
+        # dominate export supply. Largest fertilizer nutrient by global volume.
+        'cascade_via': ['natural_gas'],
+        'cascade_upstream_chokepoints': ['strait_of_hormuz'],
+        'tier': 1,
+        'category': 'agricultural',
+        'has_spot_price': False,    # no clean public spot; tracked via urea/ammonia benchmarks + stocks
+        'yahoo_ticker': None,
+        'yahoo_proxies': ['CF', 'NTR', 'YARIY'],   # CF Industries + Nutrien + Yara as soft proxies
+        'unit': 'production volume + gas-cost cycle',
+        'description': 'No single public spot price. Tracked via urea/ammonia benchmark reporting, gas-driven European plant idling, and export-policy events (Russia/China quotas, Egypt/Qatar/Trinidad flows). CF Industries/Yara/Nutrien equity as soft sentiment proxy.',
+        'chokepoints': [
+            'black sea ammonia', 'togliatti-odesa pipeline', 'yuzhny port',
+            'baltic urea', 'egypt urea', 'qatar ammonia', 'trinidad ammonia',
+        ],
+        'top_producers':  ['china', 'russia', 'india', 'usa', 'egypt', 'qatar', 'trinidad', 'indonesia'],
+        'top_consumers':  ['india', 'china', 'usa', 'brazil'],
+    },
     'potash': {
         'name': 'Potash',
         'icon': '🌱',
@@ -839,12 +862,23 @@ COMMODITY_KEYWORDS = {
         # Chinese
         '原油', '石油价格', '石油进口',
     ],
+    'nitrogen': [
+        'nitrogen fertilizer', 'nitrogen fertiliser', 'nitrogenous fertilizer',
+        'urea', 'urea prices', 'urea exports', 'granular urea', 'prilled urea',
+        'urea tender', 'india urea', 'urea subsidy', 'egyptian urea', 'iran urea',
+        'ammonia', 'ammonia prices', 'anhydrous ammonia', 'green ammonia', 'ammonia exports',
+        'ammonium nitrate', 'calcium ammonium nitrate', 'ammonium sulphate',
+        'uan fertilizer', 'uan solution', 'nitrate fertilizer',
+        'haber-bosch', 'haber bosch',
+        'cf industries', 'yara', 'nutrien nitrogen', 'oci nitrogen', 'eurochem nitrogen',
+        'togliattiazot', 'qafco', 'phosagro nitrogen',
+    ],
     'potash': [
         'potash', 'belaruskali', 'uralkali', 'nutrien',
         'mosaic potash', 'k+s potash', 'potash corp',
         'potash sanctions', 'potash export', 'potash production',
         'fertilizer prices', 'fertilizer sanctions',
-        'fertilizer', 'fertiliser', 'urea',
+        'fertilizer', 'fertiliser',
         'fertilizer crisis', 'fertiliser crisis', 'fertilizer supply',
         'fertilizer exports', 'fertiliser exports', 'fertilizer access',
         'potassium chloride', 'mop fertilizer',
@@ -2075,6 +2109,8 @@ COMMODITY_RSS_FEEDS = {
     'Diamond Markets': 'https://news.google.com/rss/search?q=diamond+prices+OR+de+beers+OR+alrosa+OR+rough+diamond+OR+kimberley+process&hl=en&gl=US&ceid=US:en',
     'Bauxite & Alumina': 'https://news.google.com/rss/search?q=bauxite+OR+alumina+OR+guinea+bauxite+OR+bauxite+prices+OR+alumina+prices&hl=en&gl=US&ceid=US:en',
     'Sulfur Markets': 'https://news.google.com/rss/search?q=sulfur+OR+sulphur+OR+sulfuric+acid+OR+molten+sulphur+OR+sulphur+prices&hl=en&gl=US&ceid=US:en',
+    'Nitrogen Fertilizer': 'https://news.google.com/rss/search?q=urea+prices+OR+ammonia+prices+OR+nitrogen+fertilizer+OR+ammonium+nitrate+OR+CF+industries+OR+yara+nitrogen&hl=en&gl=US&ceid=US:en',
+    'Phosphate News': 'https://news.google.com/rss/search?q=phosphate+OR+DAP+fertilizer+OR+MAP+fertilizer+OR+phosphate+rock+OR+OCP+morocco+OR+phosphoric+acid&hl=en&gl=US&ceid=US:en',
 }
 # ========================================
 # REDDIT SUBREDDITS
