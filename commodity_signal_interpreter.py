@@ -250,6 +250,20 @@ def _commodity_display_name(commodity_summary):
     return commodity_summary.get('name') or commodity_summary.get('id') or ''
 
 
+def _top_signal_title(commodity_summary, max_len=90):
+    """Return a short, cleaned headline for the loudest signal on a commodity,
+    so prose can say WHY it is hot (not just the level word). '' if none."""
+    if not isinstance(commodity_summary, dict):
+        return ''
+    sigs = commodity_summary.get('top_signals') or []
+    if not sigs or not isinstance(sigs[0], dict):
+        return ''
+    title = ' '.join((sigs[0].get('title') or '').split())
+    if len(title) > max_len:
+        title = title[:max_len].rstrip() + '\u2026'
+    return title
+
+
 def _natural_join(items):
     """Build a comma-separated list with 'and' before the last item."""
     items = [i for i in items if i]
@@ -360,8 +374,14 @@ def build_executive_summary(scan_result):
                 disp = _commodity_display_name(summary) or cid
                 lvl = summary.get('alert_level', '')
                 phrases.append(f"{disp} at {_alert_display(lvl).lower()}")
+            # Name the single loudest driver so the reader sees WHY, then
+            # define what "pressure" measures (news-signal intensity, not price).
+            driver = _top_signal_title(top_three[0][2])
+            driver_clause = f" Loudest driver: \u201c{driver}.\u201d" if driver else ""
             parts.append(
-                f"Commodity pressure: {_natural_join(phrases)}."
+                f"News-signal pressure: {_natural_join(phrases)} \u2014 "
+                f"weighted volume and severity of matched reporting this scan, "
+                f"not spot price.{driver_clause}"
             )
 
     # ── If nothing above threshold ────────────────────────────────
@@ -609,8 +629,9 @@ def build_regional_prose(scan_result):
     frontend can render the full alphabetical-canon list.
     """
     region_state = _aggregate_region_pressure(scan_result)
+    commodity_summaries = _safe_dict(_safe_dict(scan_result).get('commodity_summaries'))
     out = {}
-
+  
     for region_key in REGION_SORT_ORDER:
         rdisp = REGIONAL_DISPLAY[region_key]
         state = region_state.get(region_key, {})
@@ -637,7 +658,7 @@ def build_regional_prose(scan_result):
                 if _alert_rank(lvl) >= 2:
                     hot_comm_phrases.append(
                         f"{commodity_id.replace('_', ' ')} at "
-                        f"{_alert_display(lvl).lower()} pressure"
+                        f"{_alert_display(lvl).lower()}"
                     )
             hot_country_phrases = []
             for cid, lvl, _ in countries[:3]:
@@ -647,15 +668,21 @@ def build_regional_prose(scan_result):
                         f"{_alert_display(lvl).lower()}"
                     )
 
-            lead = f"{rdisp['display']} at {_alert_display(max_alert).lower()}-level commodity pressure"
+            lead = f"{rdisp['display']} at {_alert_display(max_alert).lower()}-level news-signal pressure"
             if hot_comm_phrases:
                 lead += " \u2014 " + _natural_join(hot_comm_phrases) + "."
             else:
                 lead += "."
+            # Surface the headline driving the hottest commodity so the reader
+            # sees WHY, not just the level word.
+            driver = _top_signal_title(commodity_summaries.get(commodities[0][0], {})) \
+                if commodities else ''
+            if driver:
+                lead += f" Driven by: \u201c{driver}.\u201d"
             if hot_country_phrases:
                 lead += " Country exposure: " + _natural_join(hot_country_phrases) + "."
             prose = lead + (
-                " Multi-commodity pressure concentrated in the AOR; "
+                " Multi-commodity news-signal pressure concentrated in the AOR; "
                 "watch for cascade into adjacent regions."
             )
 
