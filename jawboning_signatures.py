@@ -222,7 +222,7 @@ def _redis_set(key, value, ttl_seconds=None):
 # Per-entry schema (every entry has all of these fields):
 #   leader_id              str   — canonical leader identifier
 #   country_id             str   — ISO-style country code (us, india, etc.)
-#   direction              str   — 'command' or 'absorber' (mirrors parent key)
+#   direction              str   — 'command' | 'absorber' | 'mediator' (mirrors parent key)
 #   target_sector          str   — short label for the thing being jawboned
 #   target_key             str   — short snake_case key used in the Redis
 #                                  fingerprint (jawboning:{dir}:{country}:{target_key})
@@ -1045,7 +1045,163 @@ JAWBONING_SIGNATURES_STATIC = {
         },
 
     },
+
+    # ════════════════════════════════════════════════════════════════════
+    # MEDIATOR / NORMATIVE JAWBONING (Jun 2026)
+    #   A third pressure mode. The leader has NO formal policy lever and no
+    #   domestic base to absorb pressure into -- they move actors through
+    #   normative/moral suasion and multilateral brokering. Pressure flow:
+    #     LEADER -> MULTIPLE PARTIES (appeal, not coercion).
+    #   Cross-theater meaning: the rhetoric is a BAROMETER of a multilateral
+    #   channel's health (e.g. the Black Sea grain corridor), not coercive
+    #   force. When a mediator gets loud, watch the channel's actual status.
+    #   UN Secretary-General Guterres is the founding mediator-class actor;
+    #   food / grain / fertilizer is his lane.
+    # NOTE: these define WHAT to detect. Guterres will not FIRE until some
+    #   source feeds his rhetoric into detect_jawboning('guterres', ...). No
+    #   tracker scans a UN actor cluster yet -- the natural home is the
+    #   commodity tracker, which already ingests FAO/grain news. actor_gate
+    #   cluster id below is a placeholder to wire at that time.
+    # ════════════════════════════════════════════════════════════════════
+    'mediator': {
+
+        'guterres_on_grain': {
+            'leader_id':       'guterres',
+            'country_id':      'un',
+            'direction':       'mediator',
+            'target_sector':   'grain_exports',
+            'target_key':      'on_grain',
+            'target_actors':   ['russia', 'ukraine', 'turkey', 'global_grain_markets', 'un_security_council'],
+            'trigger_keywords': [
+                'black sea grain', 'grain initiative', 'grain deal', 'grain corridor',
+                'black sea initiative', 'let the grain flow', 'ukrainian grain',
+                'grain exports', 'wheat exports', 'safe passage', 'istanbul agreement',
+                'food must not be weaponized', 'weaponizing food', 'weaponize food',
+                'global food crisis',
+            ],
+            'trigger_keywords_native': [],
+            'mechanism': 'multilateral_brokering_normative_suasion',
+            'upstream_stressors': [],
+            'cross_theater_writes': [
+                'jawboning:mediator:un:on_grain',
+            ],
+            'actor_gate':      {'un_secretary_general': 2},
+            'pattern_basis':   'analyst_curated',
+            'confidence':      'high',
+            'historical_anchors': [
+                'Black Sea Grain Initiative signed July 22 2022 (Istanbul)',
+                'Russia withdrawal July 17 2023; repeated Guterres appeals to restore the corridor',
+            ],
+            'analyst_summary_template': (
+                "The UN Secretary-General is publicly pressing the parties to keep Black "
+                "Sea grain moving. He holds no lever of his own -- this is moral and "
+                "diplomatic pressure, not coercion -- so the signal value is as a "
+                "barometer: loud, repeated grain appeals usually track a corridor that is "
+                "fraying or already broken. Read it alongside the actual corridor status, "
+                "not as force on its own. Watch for: {forward_indicators_joined}."
+            ),
+            'forward_indicators': [
+                'Russian participation or withdrawal signals',
+                'Black Sea shipping insurance / war-risk premiums',
+                'Ukrainian port throughput (Odesa, Pivdennyi, Chornomorsk)',
+                'FAO Food Price Index cereals sub-index',
+                'Turkish shuttle mediation activity',
+            ],
+        },
+
+        'guterres_on_fertilizer': {
+            'leader_id':       'guterres',
+            'country_id':      'un',
+            'direction':       'mediator',
+            'target_sector':   'fertilizer_access',
+            'target_key':      'on_fertilizer',
+            'target_actors':   ['russia', 'global_fertilizer_markets', 'eu_sanctions_regime', 'developing_country_farmers'],
+            'trigger_keywords': [
+                'fertilizer', 'fertiliser', 'fertilizer access', 'fertiliser access',
+                'russian fertilizer', 'russian fertiliser', 'ammonia', 'ammonia pipeline',
+                'togliatti', 'nutrient crisis', 'next harvest', 'next planting season',
+                'fertilizer affordability', 'fertilizer crisis', 'fertiliser crisis',
+            ],
+            'trigger_keywords_native': [],
+            'mechanism': 'sanctions_carveout_advocacy_normative_suasion',
+            'upstream_stressors': [],
+            'cross_theater_writes': [
+                'jawboning:mediator:un:on_fertilizer',
+            ],
+            'actor_gate':      {'un_secretary_general': 2},
+            'pattern_basis':   'analyst_curated',
+            'confidence':      'high',
+            'historical_anchors': [
+                'Guterres push for Russian fertilizer + ammonia exports as the second half of the 2022-2023 grain-deal package',
+                'Togliatti-Odesa ammonia pipeline diplomacy',
+            ],
+            'analyst_summary_template': (
+                "The UN Secretary-General is pressing for Russian fertilizer and ammonia "
+                "to reach world markets, framing today's input shortfall as next year's "
+                "food crisis. Again this is suasion, not leverage. Its real importance is "
+                "timing: fertilizer denied during a planting window becomes a harvest "
+                "shortfall months later -- this pairs directly with the fertilizer-food "
+                "security cascade. Watch for: {forward_indicators_joined}."
+            ),
+            'forward_indicators': [
+                'Russian fertilizer / ammonia export volumes',
+                'Togliatti-Odesa ammonia pipeline status',
+                'Potash and urea benchmark prices',
+                'Northern-hemisphere planting-window timing',
+                'Sanctions carve-out or payment-channel announcements',
+            ],
+        },
+
+        'guterres_on_food_security': {
+            'leader_id':       'guterres',
+            'country_id':      'un',
+            'direction':       'mediator',
+            'target_sector':   'food_security',
+            'target_key':      'on_food_security',
+            'target_actors':   ['un_security_council', 'donor_states', 'parties_to_conflict'],
+            'trigger_keywords': [
+                'famine', 'starvation', 'man-made famine', 'food as a weapon',
+                'using starvation', 'acute food insecurity', 'on the brink of famine',
+                'humanitarian catastrophe', 'flash appeal', 'aid access', 'ipc phase 5',
+            ],
+            'trigger_keywords_native': [],
+            'mechanism': 'moral_pressure_funding_appeal',
+            'upstream_stressors': [],
+            'cross_theater_writes': [
+                'jawboning:mediator:un:on_food_security',
+            ],
+            'actor_gate':      {'un_secretary_general': 2},
+            'pattern_basis':   'analyst_curated',
+            'confidence':      'medium',
+            'historical_anchors': [
+                'Repeated Security Council briefings linking conflict to famine risk (Gaza, Sudan, Horn of Africa)',
+                'Resolution 2417 framing -- conflict-driven food insecurity',
+            ],
+            'analyst_summary_template': (
+                "The UN Secretary-General is invoking famine risk and the use of "
+                "starvation as a method of war to pressure donors and parties to a "
+                "conflict. This is the humanitarian edge of his food lane -- broader and "
+                "more diffuse than the grain or fertilizer tracks, and weaker as a "
+                "market signal -- but a useful flag that a food-security crisis is "
+                "escalating toward the agenda's top. Watch for: {forward_indicators_joined}."
+            ),
+            'forward_indicators': [
+                'IPC Phase 4/5 declarations',
+                'Flash appeal funding levels',
+                'Security Council action or stalemate on aid access',
+                'Major donor pledging conferences',
+                'Cross-border / cross-line aid corridor status',
+            ],
+        },
+
+    },
 }
+
+
+# Valid direction buckets. Readers iterate the catalog directly (so they pick
+# up whatever buckets exist); this allowlist is the single source of truth for
+# validation paths.
+JAWBONING_DIRECTIONS = ('command', 'absorber', 'mediator')
 
 
 # ============================================================================
@@ -1110,7 +1266,7 @@ def read_jawboning_signature(signature_id):
         return cached
 
     # Fallback: scan static catalog
-    for direction in ('command', 'absorber'):
+    for direction in JAWBONING_SIGNATURES_STATIC:
         if signature_id in JAWBONING_SIGNATURES_STATIC.get(direction, {}):
             return JAWBONING_SIGNATURES_STATIC[direction][signature_id]
 
@@ -1135,7 +1291,7 @@ def get_signatures_by_leader(leader_id):
     """
     catalog = list_jawboning_signatures()
     results = []
-    for direction in ('command', 'absorber'):
+    for direction in catalog:
         for sig_id, sig_data in catalog.get(direction, {}).items():
             if sig_data.get('leader_id') == leader_id:
                 results.append({'signature_id': sig_id, **sig_data})
@@ -1150,7 +1306,7 @@ def get_signatures_by_country(country_id):
     """
     catalog = list_jawboning_signatures()
     results = []
-    for direction in ('command', 'absorber'):
+    for direction in catalog:
         for sig_id, sig_data in catalog.get(direction, {}).items():
             if sig_data.get('country_id') == country_id:
                 results.append({'signature_id': sig_id, **sig_data})
@@ -1204,7 +1360,7 @@ def write_jawboning_signature(signature_id, signature_data):
         print(f"[Jawboning Signatures] write rejected for {signature_id}: missing {missing}")
         return False
 
-    if signature_data['direction'] not in ('command', 'absorber'):
+    if signature_data['direction'] not in JAWBONING_DIRECTIONS:
         print(f"[Jawboning Signatures] write rejected for {signature_id}: bad direction")
         return False
 
@@ -1255,10 +1411,10 @@ def register_jawboning_signatures_endpoints(app):
                     'results':  get_signatures_by_country(country),
                 })
             if direction:
-                if direction not in ('command', 'absorber'):
+                if direction not in JAWBONING_DIRECTIONS:
                     return jsonify({
                         'success': False,
-                        'error':   "direction must be 'command' or 'absorber'",
+                        'error':   "direction must be 'command', 'absorber', or 'mediator'",
                     }), 400
                 return jsonify({
                     'success':  True,
