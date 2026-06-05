@@ -175,6 +175,8 @@ FIPS_TO_COUNTRY = {
 }
 
 # GDELT 2.0 Events column indices (0-based, fixed 61-column schema).
+COL_ACTOR1_TYPE  = 12   # Actor1Type1Code: MIL/GOV/REB/INS/... (state vs civilian)
+COL_ACTOR2_TYPE  = 22   # Actor2Type1Code
 COL_EVENT_ROOT   = 28
 COL_QUADCLASS    = 29
 COL_GOLDSTEIN    = 30
@@ -186,6 +188,39 @@ COL_GEO_LONG     = 57
 COL_SOURCEURL    = 60
 MIN_COLS         = 61
 
+# ------------------------------------------------------------
+# RELEVANCE GATE  [Jun 2026]  -- the lever that makes this a GEOPOLITICAL
+# kinetic radar instead of the global crime-and-entertainment blotter.
+# GDELT actor-type codes flag WHO is acting. A conflict event only counts
+# toward the kinetic axis if at least one actor is a state / organized-armed
+# actor. "IDF strikes Beirut" (MIL/GOV) passes; "man shot in his RV" (two
+# civilians / blank codes) drops out. Applied to the CONFLICT track ONLY --
+# cooperation and statement events pass regardless.
+# AGGRESSIVE setting: a blank/unknown actor code does NOT satisfy the gate,
+# so thinly-coded conflict events drop too. If first-redeploy data shows real
+# conflict zones over-pruned, loosen by widening this set (e.g. add COP) or by
+# letting blank-vs-blank pass. One-line tunable, fully reversible.
+# ------------------------------------------------------------
+STATE_ARMED_ACTORS = frozenset({
+    'MIL',   # military
+    'GOV',   # government
+    'REB',   # rebels
+    'INS',   # insurgents
+    'SEP',   # separatist rebels
+    'UAF',   # unaligned armed forces / militias
+    'SPY',   # state intelligence
+})
+
+# The comma-tail fallback in _parse_event_row turns GDELT's reversed long-names
+# and non-country features into phantom "countries" ("Korea, Republic Of" ->
+# "Republic Of", "Bahamas, The" -> "The", oceanic features -> "Oceans"). The
+# country is unrecoverable from the tail alone, so we DROP the event rather than
+# fabricate a bucket that pollutes the ranking. (Recovering South Korea et al.
+# is a later name-normalization pass, not a Slice-1 concern.)
+JUNK_COUNTRY_NAMES = frozenset({
+    'Republic Of', 'The', 'Oceans', 'Of', 'Democratic Republic Of The',
+    'Republic', 'Federation', 'Islands',
+})
 # ============================================================
 # GDELT FETCH
 # ============================================================
@@ -229,6 +264,15 @@ def _parse_event_row(row):
     if not mapping:
         return None
     track, level, label = mapping
+    # Relevance gate (conflict track only): require >=1 state/armed actor so the
+    # kinetic axis reflects geopolitical force, not the domestic crime blotter.
+    # Blank/unknown actor codes do NOT pass (aggressive setting -- see notes by
+    # STATE_ARMED_ACTORS). Cooperation/statement events are unaffected.
+    if track == 'conflict':
+        a1 = (row[COL_ACTOR1_TYPE] or '').strip().upper()
+        a2 = (row[COL_ACTOR2_TYPE] or '').strip().upper()
+        if a1 not in STATE_ARMED_ACTORS and a2 not in STATE_ARMED_ACTORS:
+            return None
     try:
         articles = int(row[COL_NUM_ARTICLES] or 0)
     except ValueError:
@@ -244,6 +288,11 @@ def _parse_event_row(row):
         # FullName is "City, ADM1, Country" -- take the country tail if present.
         country = full.split(',')[-1].strip() if full else None
     if not country:
+        return None
+    # Drop phantom buckets produced by the comma-tail fallback on GDELT's
+    # reversed long-names / non-country features ("Korea, Republic Of" ->
+    # "Republic Of", "Bahamas, The" -> "The", oceanic features -> "Oceans").
+    if country in JUNK_COUNTRY_NAMES:
         return None
     return {
         'country':   country,
