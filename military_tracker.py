@@ -191,6 +191,45 @@ MILITARY_CACHE_TTL_HOURS = 4
 _background_scan_running = False
 _background_scan_lock = threading.Lock()
 
+# ------------------------------------------------------------
+# CROSS-WORKER SCHEDULER LOCK  [Jun 2026]
+# gunicorn runs --workers 2; each worker imports this module and starts its own
+# periodic scan thread. The _background_scan_running flag above is per-process,
+# so it only stops a worker from overlapping ITSELF -- not a second worker from
+# scanning in parallel. Without this lock both workers scan and every GDELT /
+# Brave / RSS call fires twice (doubles quota burn + trips GDELT 429s faster).
+# Atomic Upstash "SET ... NX EX" makes exactly ONE worker own the scan; the
+# owner renews each cycle (TTL > cycle so ownership never lapses while alive);
+# if the owner dies, the lock expires and another worker takes over.
+# Fail-open: if Redis is unreachable we proceed (no worse than today).
+# ------------------------------------------------------------
+_SCHED_WORKER_ID = f"w{os.getpid()}"
+
+def _acquire_scheduler_lock(name, ttl_seconds):
+    """Return True if THIS worker owns the scheduler lock for `name`.
+    Atomic claim via SET NX EX; renews the TTL if we already own it."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return True
+    key = f"sched_lock:{name}"
+    hdr = {"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"}
+    try:
+        r = requests.post(UPSTASH_REDIS_URL, headers=hdr,
+                          json=["SET", key, _SCHED_WORKER_ID, "NX", "EX", str(ttl_seconds)],
+                          timeout=8)
+        if r.ok and (r.json() or {}).get('result') == 'OK':
+            return True
+        g = requests.get(f"{UPSTASH_REDIS_URL}/get/{key}", headers=hdr, timeout=8)
+        owner = (g.json() or {}).get('result') if g.ok else None
+        if owner == _SCHED_WORKER_ID:
+            requests.post(UPSTASH_REDIS_URL, headers=hdr,
+                         json=["SET", key, _SCHED_WORKER_ID, "EX", str(ttl_seconds)],
+                         timeout=8)
+            return True
+        return False
+    except Exception as e:
+        print(f"[SchedLock] {name}: lock check failed ({e}); proceeding (fail-open)")
+        return True
+
 # ========================================
 # REGIONAL THEATRE GROUPINGS (for frontend)
 # ========================================
@@ -7420,7 +7459,13 @@ def register_military_endpoints(app, start_background=True):
         time.sleep(10)
         while True:
             try:
-                print("[Military Tracker] Periodic scan starting...")
+                # Cross-worker guard: only the lock-owning worker scans. TTL (13h)
+                # outlasts the 12h sleep so ownership persists between cycles; a
+                # non-owner re-checks hourly so it can take over if the owner dies.
+                if not _acquire_scheduler_lock('military', 46800):
+                    time.sleep(3600)
+                    continue
+                print("[Military Tracker] Periodic scan starting (lock owner)...")
                 _trigger_background_scan(days=7)
                 time.sleep(60)
                 while _background_scan_running:
