@@ -4605,6 +4605,135 @@ def get_ffpi(force=False):
 # FLASK ENDPOINT REGISTRATION
 # ========================================
 
+# ============================================================
+# COMMODITY -> GPI ECONOMIC AXIS (BLUF emitter)  [Jun 2026]
+# ------------------------------------------------------------
+# Emits a BLUF-shaped payload at /api/commodity-pressure/bluf that GPI
+# consumes via REGIONAL_BLUF_ENDPOINTS as the 'global_commodity' pseudo-
+# region. Signals are tagged pressure_type='economic' so GPI routes them
+# into the economic axis with ZERO GPI-side changes (same pattern as the
+# cascade + humanitarian pseudo-regions).
+#
+# Two gates keep the axis meaningful, not just loud:
+#   1. THRESHOLD  -- only 'high'/'surge' commodities surface.
+#   2. RELEVANCE  -- a surge must be corroborated by >=1 commodity-SPECIFIC
+#      signal: a multi-word matched phrase ('sugar futures', 'crude oil') or
+#      a non-contamination-prone single token ('bauxite', 'urea'). A surge
+#      driven ONLY by a bare common word ('sugar' -> a celebrity, 'gold' -> a
+#      medal) is treated as keyword contamination and dropped. This gate lives
+#      at the BLUF layer only; raw commodity scores/cards are untouched.
+# ============================================================
+
+# Bare single-word commodity names that collide with everyday English / names.
+# A surge driven ONLY by these (no specific phrase) is likely contamination.
+_CONTAMINATION_PRONE_BARE = {
+    'sugar', 'gold', 'silver', 'copper', 'diamond', 'diamonds',
+    'nickel', 'oil', 'corn', 'tin', 'lead', 'platinum',
+}
+
+def _is_hard_commodity_signal(sig):
+    """True if the signal is genuinely about the commodity: matched keyword is
+    a multi-word phrase (inherently specific) OR a single jargon token that is
+    not a contamination-prone common word."""
+    kw = (sig.get('matched_keyword') or '').strip().lower()
+    if not kw:
+        return False
+    if ' ' in kw:
+        return True
+    return kw not in _CONTAMINATION_PRONE_BARE
+
+_COMMODITY_BLUF_LEVEL = {'surge': 5, 'high': 4, 'elevated': 3, 'normal': 0}
+_COMMODITY_BLUF_COLOR = {5: '#dc2626', 4: '#f97316', 3: '#f59e0b', 0: '#6b7280'}
+
+_COUNTRY_LABEL_OVERRIDES = {'usa': 'USA', 'uae': 'UAE', 'eu': 'EU', 'uk': 'UK', 'drc': 'DRC'}
+def _commodity_country_label(cid):
+    c = str(cid).strip().lower()
+    return _COUNTRY_LABEL_OVERRIDES.get(c, c.replace('_', ' ').title())
+
+def build_commodity_economic_bluf(bundle=None):
+    """Build a GPI-consumable BLUF from current commodity pressure.
+
+    Surfaces only high/surge commodities whose surge passes the relevance gate,
+    each anchored with a plain-language So-What naming the exposed importers.
+    All signals tagged pressure_type='economic'.
+    """
+    if bundle is None:
+        bundle = scan_commodity_pressure(days=7, force_refresh=False)
+    summaries = (bundle or {}).get('commodity_summaries', {}) or {}
+
+    signals = []
+    for cid, summ in summaries.items():
+        alert = summ.get('alert_level', 'normal')
+        if alert not in ('high', 'surge'):
+            continue                                   # gate 1: threshold
+        top_sigs = summ.get('top_signals', []) or []
+        hard = [s for s in top_sigs if _is_hard_commodity_signal(s)]
+        if not hard:
+            continue                                   # gate 2: relevance (drop contamination)
+
+        level = _COMMODITY_BLUF_LEVEL.get(alert, 0)
+        color = _COMMODITY_BLUF_COLOR.get(level, '#6b7280')
+        name  = summ.get('name', cid)
+        icon  = summ.get('icon', '\U0001F4C8')
+        driver = (hard[0].get('article_title') or '').strip()
+        consumers = [_commodity_country_label(c) for c in (summ.get('top_consumers') or [])[:3]]
+        cons_txt = ', '.join(consumers) if consumers else 'import-dependent economies'
+
+        short_text = (f"{icon} {name} news-signal pressure {alert.upper()} "
+                      f"-- exposed importers: {cons_txt}")[:150]
+        long_parts = []
+        if driver:
+            long_parts.append(f"Driver: {driver}.")
+        long_parts.append(
+            f"{name} news-signal pressure ({alert}) reflects weighted volume/severity "
+            f"of matched commodity reporting -- not price.")
+        long_parts.append(
+            "SO WHAT: supply stress here transmits to import-dependent economies"
+            + (f" -- most exposed: {cons_txt}." if consumers else "."))
+        long_text = ' '.join(long_parts)
+
+        signals.append({
+            'category':          f'commodity_{cid}',
+            'commodity':         cid,
+            'theatre':           'global_commodity',
+            'region':            'global_commodity',
+            'level':             level,
+            'pressure_type':     'economic',           # routes into GPI economic axis
+            'icon':              icon,
+            'color':             color,
+            'short_text':        short_text,
+            'long_text':         long_text,
+            'priority':          level * 3,
+            'exposed_consumers': consumers,
+            'score':             summ.get('total_score'),
+        })
+
+    signals.sort(key=lambda s: -s['level'])
+    max_level = signals[0]['level'] if signals else 0
+    posture_label = {5: 'Surge', 4: 'High'}.get(max_level, 'Monitoring')
+    posture_color = _COMMODITY_BLUF_COLOR.get(max_level, '#6b7280')
+
+    return {
+        'region':        'global_commodity',
+        'max_level':     max_level,
+        'peak_level':    max_level,
+        'posture_label': posture_label,
+        'posture_color': posture_color,
+        'top_signals':   signals[:5],
+        'signals':       signals,
+        'updated_at':    datetime.now(timezone.utc).isoformat(),
+        'disclaimer':    ('Economic CONVERGENCE/EXPOSURE indicator built from news-signal '
+                          'pressure (weighted reporting volume/severity), NOT a price forecast. '
+                          'Surfaces only commodities with a supply-relevant driver and '
+                          'import-dependent exposure.'),
+        'meta': {
+            'commodities_surfaced': [s['commodity'] for s in signals],
+            'emitter_version':      'commodity_economic_bluf v1.0.0',
+            'gate':                 'high/surge + specific-phrase relevance',
+        },
+    }
+
+
 def register_commodity_endpoints(app, start_background=True):
     """
     Register commodity tracker endpoints with the Flask app.
@@ -4672,6 +4801,29 @@ def register_commodity_endpoints(app, start_background=True):
                 status=500,
                 mimetype='application/json',
             )
+
+    @app.route('/api/commodity-pressure/bluf', methods=['GET', 'OPTIONS'])
+    def api_commodity_pressure_bluf():
+        """BLUF-shaped payload consumed by GPI as the 'global_commodity'
+        economic pseudo-region. Built from cached commodity pressure; gated to
+        high/surge commodities with a real supply-relevant driver + exposure."""
+        from flask import request as flask_request
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+        try:
+            bluf = build_commodity_economic_bluf()
+            return app.response_class(
+                response=json.dumps(bluf, default=str),
+                status=200, mimetype='application/json')
+        except Exception as e:
+            print(f"[Commodity BLUF] Error: {str(e)}")
+            return app.response_class(
+                response=json.dumps({
+                    'region': 'global_commodity', 'max_level': 0,
+                    'posture_label': 'Monitoring', 'top_signals': [], 'signals': [],
+                    'error': str(e)[:200],
+                }),
+                status=200, mimetype='application/json')   # 200 so GPI treats as baseline
 
     @app.route('/api/commodity-prices', methods=['GET', 'OPTIONS'])
     def api_commodity_prices():
