@@ -72,6 +72,12 @@ REGIONAL_BLUF_ENDPOINTS = {
     # 'economic' so they flow into the GPI economic axis. Same architectural
     # pattern as humanitarian convergence.
     'global_cascade': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/cascade-convergence/bluf',
+    # v3.7 (Jun 2026) -- Commodity Pressure Detector
+    # Pseudo-region: surfaces high/surge per-commodity news-signal pressure,
+    # gated to a real supply-relevant driver + import-dependent exposure.
+    # Signals tagged pressure_type='economic'. Same architectural pattern as
+    # the cascade + humanitarian pseudo-regions; GPI needs no logic changes.
+    'global_commodity': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/commodity-pressure/bluf',
 }
 
 # Display config
