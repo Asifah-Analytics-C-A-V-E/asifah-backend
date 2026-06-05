@@ -130,6 +130,14 @@ except ImportError:
     HUMANITARIAN_GATHERER_AVAILABLE = False
     print("[ME Backend] ⚠️ Humanitarian Article Gatherer not available")
 
+try:
+    from kinetic_activity_gatherer import register_kinetic_endpoints
+    KINETIC_GATHERER_AVAILABLE = True
+    print("[ME Backend] Kinetic Activity Gatherer loaded")
+except ImportError:
+    KINETIC_GATHERER_AVAILABLE = False
+    print("[ME Backend] Kinetic Activity Gatherer not available")
+
 # ------------------------------------------------------------
 # CASCADE COMMODITY DETECTOR (v2.4 -- May 17, 2026)
 # Detects chokepoint -> intermediate -> downstream commodity cascades.
@@ -1104,6 +1112,14 @@ if CASCADE_DETECTOR_AVAILABLE:
 if HUMANITARIAN_GATHERER_AVAILABLE:
     register_humanitarian_gatherer_routes(app, start_scheduler=True)
     print("[ME Backend] ✅ Humanitarian Gatherer routes registered: /api/humanitarian-gatherer/scan, /health, /articles")
+
+# Kinetic Activity Gatherer -- gap-filling CAMEO-coded conflict/cooperation
+# tracker for the uncovered world. Registered BEFORE GPI so the Slice-2 BLUF
+# (/api/kinetic-convergence/bluf) is visible when GPI iterates its endpoints.
+# start_scheduler=True starts the 12h daemon (cross-worker lock built in).
+if KINETIC_GATHERER_AVAILABLE:
+    register_kinetic_endpoints(app, start_scheduler=True)
+    print("[ME Backend] Kinetic Activity Gatherer routes registered: /api/kinetic-activity, /debug")
 
 # Global Pressure Index -- register after all regional BLUFs/rhetoric so it can read them
 if GPI_AVAILABLE:
