@@ -115,6 +115,46 @@ BRAVE_API_KEY = os.environ.get('BRAVE_API_KEY')
 UPSTASH_REDIS_URL = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
 
+# ------------------------------------------------------------
+# CROSS-WORKER SCHEDULER LOCK  [Jun 2026]
+# gunicorn runs --workers 2, and each worker imports this module and starts
+# its own periodic-scan thread. The in-process running-flags do NOT cross
+# processes, so without this guard BOTH workers scan -- every GDELT / NewsAPI /
+# Brave / RSS call fires twice (doubles quota burn + trips GDELT 429s faster).
+# This atomic Upstash "SET ... NX EX" makes exactly ONE worker own the scan;
+# the owner renews each cycle (TTL > cycle so ownership never lapses while it
+# is alive); if the owner dies, the lock expires and another worker takes over.
+# Fail-open: if Redis is unreachable we proceed (no worse than today).
+# ------------------------------------------------------------
+_SCHED_WORKER_ID = f"w{os.getpid()}"
+
+def _acquire_scheduler_lock(name, ttl_seconds):
+    """Return True if THIS worker owns the scheduler lock for `name`.
+    Atomic claim via SET NX EX; renews the TTL if we already own it."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return True  # no Redis -> assume single process, run normally
+    key = f"sched_lock:{name}"
+    hdr = {"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"}
+    try:
+        # Atomic claim: succeeds only if the key is absent (NX); auto-expires (EX).
+        r = requests.post(UPSTASH_REDIS_URL, headers=hdr,
+                          json=["SET", key, _SCHED_WORKER_ID, "NX", "EX", str(ttl_seconds)],
+                          timeout=8)
+        if r.ok and (r.json() or {}).get('result') == 'OK':
+            return True  # we just claimed it
+        # Claim failed -> someone holds it. If it's us, renew; otherwise stand down.
+        g = requests.get(f"{UPSTASH_REDIS_URL}/get/{key}", headers=hdr, timeout=8)
+        owner = (g.json() or {}).get('result') if g.ok else None
+        if owner == _SCHED_WORKER_ID:
+            requests.post(UPSTASH_REDIS_URL, headers=hdr,
+                         json=["SET", key, _SCHED_WORKER_ID, "EX", str(ttl_seconds)],
+                         timeout=8)  # renew our TTL
+            return True
+        return False  # another worker owns the scan
+    except Exception as e:
+        print(f"[SchedLock] {name}: lock check failed ({e}); proceeding (fail-open)")
+        return True
+
 # Local fallback cache
 COMMODITY_CACHE_FILE = '/tmp/commodity_tracker_cache.json'
 COMMODITY_CACHE_TTL_HOURS = 4
@@ -5104,7 +5144,13 @@ def register_commodity_endpoints(app, start_background=True):
         time.sleep(15)  # initial delay so app finishes booting
         while True:
             try:
-                print("[Commodity Tracker] Periodic scan starting...")
+                # Cross-worker guard: only the lock-owning worker scans. TTL (13h)
+                # outlasts the 12h sleep so ownership persists between cycles; a
+                # non-owner re-checks hourly so it can take over if the owner dies.
+                if not _acquire_scheduler_lock('commodity', 46800):
+                    time.sleep(3600)
+                    continue
+                print("[Commodity Tracker] Periodic scan starting (lock owner)...")
                 _trigger_background_scan(days=7)
                 time.sleep(60)
                 while _background_scan_running:
