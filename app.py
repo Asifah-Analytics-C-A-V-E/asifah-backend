@@ -274,6 +274,15 @@ try:
 except Exception as e:
     CONVERGENCE_ENDPOINTS_AVAILABLE = False
     print(f"[ME Backend] ⚠️ Convergence endpoints not available: {e}")
+
+# Convergence Detector (multi-axis live) -- /api/cax/* (distinct from the convergence_endpoints registry)
+try:
+    from convergence_detector import register_convergence_detector_endpoints
+    CONVERGENCE_DETECTOR_AVAILABLE = True
+    print("[ME Backend] Convergence detector module loaded")
+except Exception as e:
+    CONVERGENCE_DETECTOR_AVAILABLE = False
+    print(f"[ME Backend] Convergence detector not available: {e}")
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -1177,6 +1186,11 @@ if IRAQ_STABILITY_AVAILABLE:
 if CONVERGENCE_ENDPOINTS_AVAILABLE:
     register_convergence_endpoints(app)
     print("[ME Backend] ✅ Convergence endpoints registered: /api/convergence/all, /<id>, /by-country/<c>, /by-region/<r>")
+
+# Convergence Detector (multi-axis live) -- read-probe in v0.1.0
+if CONVERGENCE_DETECTOR_AVAILABLE:
+    register_convergence_detector_endpoints(app)
+    print("[ME Backend] Convergence detector registered: /api/cax/probe")
 
 
 # ──────────────────────────────────────────────────────────────
