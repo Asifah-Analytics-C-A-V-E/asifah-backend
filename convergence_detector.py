@@ -1,7 +1,7 @@
 """
 =======================================================================
   ASIFAH ANALYTICS -- CONVERGENCE DETECTOR (multi-axis, live)
-  v0.2.0 (Jun 6 2026) -- STEP 2: THREE-AXIS JOIN + TIERING
+  v0.3.0 (Jun 6 2026) -- STEP 3: FOUR-AXIS JOIN (+ HUMANITARIAN)
 =======================================================================
 
 WHAT THIS IS
@@ -15,6 +15,11 @@ WHAT THIS IS
                            country_summaries[id].alert_level (same band scale)
     Axis 3 -- RHETORIC   : regional BLUFs             (Redis: rhetoric:<region>:regional_bluf)
                            theatre_summary[id].level  (L0-L5 escalation)
+    Axis 4 -- HUMANITARIAN: humanitarian_convergence    (Redis: humanitarian_convergence:bluf:latest)
+                           per-country MAX of signals[].level (3-5). Covers
+                           countries WITHOUT rhetoric trackers -- this is the
+                           axis that lets Africa (e.g. an Ebola outbreak) read
+                           as convergence even with no rhetoric page.
 
   NOTE: no Africa regional BLUF exists yet, so African countries carry no
   rhetoric axis until that hole is filled. The join treats a missing axis
@@ -23,10 +28,12 @@ WHAT THIS IS
 NORMALIZATION (common 0-3 intensity ladder)
     kinetic / commodity band : normal=0 elevated=1 high=2 surge=3
     rhetoric level L0-L5     : L0/L1=0  L2=1  L3=2  L4/L5=3
+    humanitarian level 3-5   : L3=1     L4=2  L5=3   (any signal => active)
   An axis is "active" for a country at intensity >= 1. (Tunable.)
 
 TIERING (the analytic claim -- count of co-active axes)
-    3 active -> triple convergence    (headline tier)
+    4 active -> QUAD convergence       (maximally rare -- all streams agree)
+    3 active -> triple convergence     (headline tier)
     2 active -> dual convergence
     1 active -> single-axis
     0 active -> quiet (omitted from the scan list)
@@ -70,6 +77,7 @@ RHETORIC_BLUF_KEYS  = {
     'asia':   'rhetoric:asia:regional_bluf',
     # 'africa': 'rhetoric:africa:regional_bluf',   # FUTURE -- BLUF not built yet
 }
+HUMANITARIAN_CACHE_KEY = 'humanitarian_convergence:bluf:latest'
 
 DISCLAIMER = ("This is a CONVERGENCE indicator, NOT a probability of action. "
               "Co-active signal streams indicate that independent reporting axes "
@@ -99,8 +107,27 @@ def _redis_get(key):
 # ----------------------------------------------------------------------
 BAND_INTENSITY = {'normal': 0, 'elevated': 1, 'high': 2, 'surge': 3}
 RHETORIC_LEVEL_INTENSITY = {0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 3}
-TIER_BY_COUNT = {0: 'quiet', 1: 'single', 2: 'dual', 3: 'triple'}
-TIER_RANK = {'triple': 3, 'dual': 2, 'single': 1, 'quiet': 0}
+HUMANITARIAN_LEVEL_INTENSITY = {3: 1, 4: 2, 5: 3}   # any humanitarian signal => active
+TIER_BY_COUNT = {0: 'quiet', 1: 'single', 2: 'dual', 3: 'triple', 4: 'quad'}
+TIER_RANK = {'quad': 4, 'triple': 3, 'dual': 2, 'single': 1, 'quiet': 0}
+
+# Humanitarian detector emits sub-national ids; roll the high-value ones up to
+# the parent country so a sub-region signal reinforces the parent's other axes.
+SUBREGION_TO_COUNTRY = {
+    'borno_state': 'nigeria',
+    'north_kivu': 'drc', 'south_kivu': 'drc', 'ituri': 'drc',
+    'tigray': 'ethiopia', 'amhara': 'ethiopia', 'afar_region': 'ethiopia',
+    'darfur': 'sudan', 'khartoum': 'sudan', 'el_fasher': 'sudan',
+    'aleppo': 'syria', 'idlib': 'syria',
+    'saada': 'yemen', 'hodeidah': 'yemen', 'sanaa': 'yemen', 'aden': 'yemen',
+    'kabul': 'afghanistan', 'kandahar': 'afghanistan',
+    'mogadishu': 'somalia', 'bangui': 'car',
+    'kampala': 'uganda', 'kigali': 'rwanda',
+    'cap_haitien': 'haiti', 'port_au_prince': 'haiti',
+    'cabo_delgado': 'mozambique', 'coxs_bazar': 'bangladesh',
+    'bekaa_valley': 'lebanon',
+    'gaza_north': 'gaza', 'khan_younis': 'gaza', 'rafah': 'gaza',
+}
 
 # ----------------------------------------------------------------------
 # Country-id canonicalization. Commodity + rhetoric already use lowercase
@@ -196,6 +223,36 @@ def _read_rhetoric():
     return out, availability
 
 
+def _read_humanitarian():
+    """Aggregate the flat humanitarian signals list into a per-country reading.
+
+    The humanitarian convergence detector emits one record per (country, crisis
+    category). We collapse to one reading per country: the MAX-severity signal,
+    rolling sub-national ids up to their parent country.
+    """
+    hum = _redis_get(HUMANITARIAN_CACHE_KEY)
+    if not hum:
+        return {}, False
+    out = {}
+    for s in (hum.get('signals', []) or []):
+        raw = s.get('country')
+        if not raw:
+            continue
+        cid = SUBREGION_TO_COUNTRY.get(raw, raw)
+        level = s.get('level', 0) or 0
+        intensity = HUMANITARIAN_LEVEL_INTENSITY.get(level, 0)
+        prev = out.get(cid)
+        if prev is None or intensity > prev['intensity']:
+            out[cid] = {
+                'intensity': intensity, 'label': s.get('category', ''),
+                'level': level, 'score': s.get('priority'),
+                'driver': {'label': s.get('short_text'),
+                           'category': s.get('category'),
+                           'source': s.get('source')},
+            }
+    return out, True
+
+
 # ----------------------------------------------------------------------
 # The join
 # ----------------------------------------------------------------------
@@ -203,14 +260,16 @@ def build_convergence():
     kinetic,   kin_ok  = _read_kinetic()
     commodity, com_ok  = _read_commodity()
     rhetoric,  rhe_avail = _read_rhetoric()
+    humanitarian, hum_ok = _read_humanitarian()
 
-    all_ids = set(kinetic) | set(commodity) | set(rhetoric)
+    all_ids = set(kinetic) | set(commodity) | set(rhetoric) | set(humanitarian)
     records = []
     for cid in all_ids:
         axes = {
-            'kinetic':   kinetic.get(cid),
-            'commodity': commodity.get(cid),
-            'rhetoric':  rhetoric.get(cid),
+            'kinetic':      kinetic.get(cid),
+            'commodity':    commodity.get(cid),
+            'rhetoric':     rhetoric.get(cid),
+            'humanitarian': humanitarian.get(cid),
         }
         active = [name for name, a in axes.items() if a and a.get('intensity', 0) >= 1]
         count = len(active)
@@ -219,7 +278,7 @@ def build_convergence():
         records.append({
             'country':          cid,
             'display':          _id_to_display(cid),
-            'tier':             TIER_BY_COUNT[min(count, 3)],
+            'tier':             TIER_BY_COUNT[min(count, 4)],
             'active_count':     count,
             'active_axes':      active,
             'summed_intensity': sum(axes[a]['intensity'] for a in active),
@@ -228,14 +287,15 @@ def build_convergence():
 
     records.sort(key=lambda r: (TIER_RANK[r['tier']], r['summed_intensity']), reverse=True)
 
-    tier_counts = {'triple': 0, 'dual': 0, 'single': 0}
+    tier_counts = {'quad': 0, 'triple': 0, 'dual': 0, 'single': 0}
     for r in records:
         tier_counts[r['tier']] += 1
 
     return {
         'records':       records,
         'tier_counts':   tier_counts,
-        'availability':  {'kinetic': kin_ok, 'commodity': com_ok, 'rhetoric': rhe_avail},
+        'availability':  {'kinetic': kin_ok, 'commodity': com_ok,
+                          'rhetoric': rhe_avail, 'humanitarian': hum_ok},
     }
 
 
@@ -250,8 +310,8 @@ def register_convergence_detector_endpoints(app):
             result = build_convergence()
             return jsonify({
                 'success':      True,
-                'version':      '0.2.0',
-                'step':         '2 (three-axis join + tiering, no prose)',
+                'version':      '0.3.0',
+                'step':         '3 (four-axis join + tiering, no prose)',
                 'generated_at': datetime.now(timezone.utc).isoformat(),
                 'tier_counts':  result['tier_counts'],
                 'availability': result['availability'],
@@ -269,13 +329,15 @@ def register_convergence_detector_endpoints(app):
         kin = _redis_get(KINETIC_CACHE_KEY)
         com = _redis_get(COMMODITY_CACHE_KEY)
         rhe = {r: bool(_redis_get(k)) for r, k in RHETORIC_BLUF_KEYS.items()}
+        hum = _redis_get(HUMANITARIAN_CACHE_KEY)
         return jsonify({
-            'success': True, 'version': '0.2.0',
+            'success': True, 'version': '0.3.0',
             'redis_configured': bool(_REDIS_URL and _REDIS_TOKEN),
-            'kinetic_warm':   bool(kin),
-            'commodity_warm': bool(com),
-            'rhetoric_warm':  rhe,
+            'kinetic_warm':      bool(kin),
+            'commodity_warm':    bool(com),
+            'rhetoric_warm':     rhe,
+            'humanitarian_warm': bool(hum),
             'probed_at': datetime.now(timezone.utc).isoformat(),
         })
 
-    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/probe  (v0.2.0)")
+    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/probe  (v0.3.0)")
