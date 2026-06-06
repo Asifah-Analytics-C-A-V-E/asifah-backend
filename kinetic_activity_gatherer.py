@@ -489,4 +489,4 @@ def register_kinetic_endpoints(app, start_scheduler=True):
         start_background_scheduler()
     print("[kinetic_gatherer] Routes registered: /api/kinetic-activity, /api/kinetic-activity/debug")
 
-print("[kinetic_gatherer] Module loaded -- Slice 1 (engine) v0.1.0")
+print("[kinetic_gatherer] Module loaded -- Slice 1 (engine) v0.2.0 (actor-gate)")
