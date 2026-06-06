@@ -156,6 +156,14 @@ BAND_SURGE    = 40
 BAND_HIGH     = 20
 BAND_ELEVATED = 8
 
+# Breadth floors: a band requires not just a high score but enough DISTINCT
+# conflict events. Stops one tall L5 headline (a vehicle fire, a gang funeral,
+# a stray miscode) from masquerading as a whole theater. Real zones run 19-64
+# conflict events; single-headline phantoms run 1-5.
+SURGE_MIN_EVENTS    = 12
+HIGH_MIN_EVENTS     = 5
+ELEVATED_MIN_EVENTS = 2
+
 # GDELT ActionGeo uses FIPS 10-4 country codes (NOT ISO!). These are the
 # non-intuitive ones that matter most for the uncovered/active-conflict world.
 # Anything not here falls back to the event's human-readable location name, so
@@ -348,10 +356,10 @@ def _level_weight(level):
     # L1..L5 -> escalating weight; kinetic (L5) dominates.
     return {1: 1, 2: 3, 3: 6, 4: 12, 5: 25}.get(level, 0)
 
-def _band_for_score(score):
-    if score >= BAND_SURGE:    return 'surge'
-    if score >= BAND_HIGH:     return 'high'
-    if score >= BAND_ELEVATED: return 'elevated'
+def _band_for_score(score, conflict_events=0):
+    if score >= BAND_SURGE    and conflict_events >= SURGE_MIN_EVENTS:    return 'surge'
+    if score >= BAND_HIGH     and conflict_events >= HIGH_MIN_EVENTS:     return 'high'
+    if score >= BAND_ELEVATED and conflict_events >= ELEVATED_MIN_EVENTS: return 'elevated'
     return 'normal'
 
 def _aggregate_by_country(events):
@@ -393,7 +401,7 @@ def _aggregate_by_country(events):
         b['sources'] = list(dict.fromkeys(b['sources']))[:5]   # dedup, cap
         b['conflict_score'] = round(b['conflict_score'], 1)
         b['cooperation_score'] = round(b['cooperation_score'], 1)
-        b['band'] = _band_for_score(b['conflict_score'])
+        b['band'] = _band_for_score(b['conflict_score'], b['conflict_events'])
         out[country] = b
     return out
 
@@ -489,4 +497,4 @@ def register_kinetic_endpoints(app, start_scheduler=True):
         start_background_scheduler()
     print("[kinetic_gatherer] Routes registered: /api/kinetic-activity, /api/kinetic-activity/debug")
 
-print("[kinetic_gatherer] Module loaded -- Slice 1 (engine) v0.2.0 (actor-gate)")
+print("[kinetic_gatherer] Module loaded -- Slice 1 (engine) v0.3.0 (breadth-bands)")
