@@ -407,15 +407,23 @@ def _maybe_snapshot(records, now_epoch, now_iso):
 # Prose: plain-language "so what" per country
 # ----------------------------------------------------------------------
 def _driver_text(reading):
-    """Best human string out of an axis driver dict."""
+    """Best human string out of an axis driver dict (never dumps a raw dict)."""
     d = (reading or {}).get('driver')
     if not d:
         return None
     if isinstance(d, dict):
+        # commodity driver shape: {commodity_name, article_title, ...}
+        if d.get('article_title') or d.get('commodity_name'):
+            name = d.get('commodity_name')
+            head = d.get('article_title')
+            if name and head:
+                return f"{name}: {head}"
+            return name or head
         for k in ('label', 'short_text', 'title', 'headline', 'text'):
             if d.get(k):
                 return str(d[k])
-    return str(d)[:120] if d else None
+        return None   # known dict, no usable field -- never dump the repr
+    return str(d)[:140]
 
 
 def _so_what(record, hist):
