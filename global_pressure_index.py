@@ -1167,6 +1167,81 @@ def _narrative_global_baseline(blufs):
     }
 
 
+def _narrative_multiaxis_convergence(blufs):
+    """Cross-theater convergence from the multi-axis detector (convergence_detector.py).
+
+    Surfaces two things the per-region BLUFs cannot see on their own:
+      1. GLOBAL COMMODITY CONDITIONS -- a single commodity headline registering across
+         many exposed countries at once (a broad market condition, not a country-specific
+         shock; relocated here from per-country scoring so it stops inflating tiers).
+      2. The strongest genuine per-country MULTI-AXIS convergences -- countries where
+         several independent reporting streams are elevated at the same time.
+
+    Convergence framing only: reports co-active streams, never predicts action.
+    Imports build_convergence directly (same backend) -- pure read, no side effects.
+    """
+    try:
+        from convergence_detector import build_convergence
+        cax = build_convergence()
+    except Exception as e:
+        print(f"[GPI] multi-axis convergence detector unavailable: {str(e)[:120]}")
+        return None
+
+    AXIS_WORD = {
+        'kinetic':      'armed-conflict reporting',
+        'commodity':    'commodity-news pressure',
+        'rhetoric':     'escalatory official rhetoric',
+        'humanitarian': 'humanitarian distress reporting',
+    }
+    cards = []
+
+    # (1) Global commodity conditions -- broad and cross-theater by nature
+    for g in (cax.get('global_conditions') or [])[:2]:
+        n = g.get('country_count', 0)
+        nm = (g.get('commodity_name') or g.get('commodity') or 'commodity')
+        sample = ', '.join((g.get('countries') or [])[:6])
+        cards.append({
+            'priority': 9,
+            'category': 'global_commodity_' + str(g.get('commodity', 'x')),
+            'regions':  ['global_commodity'],
+            'icon':     '\U0001f6e2\ufe0f',  # oil drum
+            'color':    '#f59e0b',
+            'headline': f'Global {nm.lower()} pressure -- {n} exposed countries off one shared headline',
+            'detail':   (f'A single {nm.lower()} story is registering as commodity-news pressure across '
+                         f'roughly {n} exposed countries at once ({sample}{" and others" if n > 6 else ""}). '
+                         f'"Commodity-news pressure" here means the weighted volume and severity of matched '
+                         f'reporting -- it is NOT a price move and NOT a country-specific supply shock. It '
+                         f'surfaces at the global altitude precisely because it is broad: a market-wide '
+                         f'condition rather than convergence on any one country. Driving headline: '
+                         f'"{(g.get("headline") or "")[:140]}".'),
+        })
+
+    # (2) Strongest genuine per-country multi-axis convergences
+    strong = [r for r in cax.get('records', []) if r.get('active_count', 0) >= 3][:5]
+    if strong:
+        def _desc(r):
+            streams = ', '.join(AXIS_WORD.get(a, a) for a in r.get('active_axes', []))
+            return f"{r['display']} ({r['tier']}: {streams})"
+        regions = sorted({(rr['axes'].get('rhetoric') or {}).get('region')
+                          for rr in strong if rr['axes'].get('rhetoric')})
+        regions = [r for r in regions if r] or ['me']
+        cards.append({
+            'priority': 10,
+            'category': 'multiaxis_convergence',
+            'regions':  regions,
+            'icon':     '\U0001f500',  # twisted arrows
+            'color':    '#38bdf8',
+            'headline': f"Multi-axis convergence -- {strong[0]['display']} leads at {strong[0]['tier']}",
+            'detail':   ('Countries where several INDEPENDENT reporting streams are elevated at the same '
+                         'time -- the more streams that agree, the less likely the reading is noise in any '
+                         'single feed. Active now: ' + '; '.join(_desc(r) for r in strong[:4]) + '. '
+                         '(Tiers: quad = all four streams, triple = three, dual = two.) This is a convergence '
+                         'reading -- independent streams agreeing -- not a forecast of action.'),
+        })
+
+    return cards or None
+
+
 # Registry of detectors. Order doesn't matter -- sorting is by priority.
 NARRATIVE_DETECTORS = [
     _narrative_nuclear_signaling_global,
@@ -1180,6 +1255,7 @@ NARRATIVE_DETECTORS = [
     _narrative_dprk_russia_axis,
     _narrative_wha_cascade,
     _narrative_houthi_fragility,
+    _narrative_multiaxis_convergence,                    # multi-axis + global-commodity (Jun 6 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
