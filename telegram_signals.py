@@ -187,6 +187,7 @@ ISRAEL_CHANNELS = [
     # West Bank / Palestinian civil signals
     'AJEnglish',            # Al Jazeera — West Bank, settler violence coverage
     'IranIntl_En',          # Iran International — Iran-Israel nexus
+    'rageintel',            # RAGE Intel -- high-volume ME kinetic OSINT (Iran/Israel strikes, US naval movements)
 ]
 
 IRAN_CHANNELS = [
@@ -241,6 +242,7 @@ IRAN_CHANNELS = [
     'nour_news',            # Nour News — SNSC mouthpiece, highest-level regime signaling
     # ── NEW: OSINT ──
     'GeoPWatch',            # Geopolitics Watch — OSINT, Iran regional operations tracking
+    'rageintel',            # RAGE Intel -- high-volume ME kinetic OSINT (Iran/Israel strikes, US naval movements)
 ]
 
 EXTENDED_CHANNELS = [
@@ -264,6 +266,7 @@ EXTENDED_CHANNELS = [
     'nayaforiraq',
     # CENTCOM
     'CentcomOfficial',
+    'rageintel',            # RAGE Intel -- high-volume ME kinetic OSINT (Iran/Israel strikes, US naval movements)
 ]
 
 
