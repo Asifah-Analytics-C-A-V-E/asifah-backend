@@ -1389,6 +1389,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Khoemacau Mining (Northwest Copper Belt) acquired by MMG (China Minmetals) 2023 for $1.88B — meaningful but secondary to diamonds in Botswana's economic picture. Cupric Canyon ZF site also developing. Adds Chinese SOE footprint to Botswana otherwise dominated by Western-aligned mining capital."},
     },
     'brazil': {
+        'coffee':       {'role': 'producer',          'weight': 1.4, 'rank': 1,
+                         'note': "World's #1 coffee producer and exporter (Arabica-dominant; Minas Gerais, Sao Paulo, Espirito Santo). Brazilian frost and drought are the single biggest global coffee price drivers - the 2021 frost and subsequent droughts drove multi-year price spikes. Watch: Minas Gerais frost/drought, CONAB crop estimates, ICE arabica certified stocks, real (BRL) moves affecting export economics."},
         'nitrogen':     {'role': 'consumer', 'weight': 1.4, 'rank': 2,
                          'note': "Among the world's largest fertilizer importers -- buys the bulk of its nitrogen (urea + ammonia) abroad to feed soy / corn / sugarcane. Heavy reliance on Russian + Middle East + North African supply makes Brazil acutely exposed to nitrogen export disruptions. Watch: Brazilian urea import volumes / origins, port arrivals (Paranagua / Santos), planting-season demand."},
         'soybeans':     {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1433,6 +1435,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Chile imports ~20-30% of sulfur for copper-oxide processing (solvent extraction-electrowinning, SX-EW). China sulfur export ban (May 2026) + Hormuz closure trapped Gulf supply; Chilean sulfur import prices doubled. CASCADE EXPOSURE: this is the FIRST visible cascade-transmission belt — Hormuz disruption -> sulfur scarcity -> Chilean copper output risk. Ivanhoe Mines founder warned >3 week disruption would close copper oxide operations. Watch: Chilean copper-oxide vs. concentrate output mix, ENAP sulfur import data, Cochilco sector reports.'},
     },
     'china': {
+        'rice':         {'role': 'producer',          'weight': 1.5, 'rank': 1,
+                         'note': "World's #1 rice producer and consumer; broadly self-sufficient via hybrid-rice yields and large Sinograin state reserves, so China acts as a price-stabilizer more than an import-dependency story - but stockpiling policy and occasional large import/export swings still move regional flows. Watch: Sinograin reserve actions, hybrid-rice acreage, customs import data (periodic buys from Vietnam/Thailand), domestic minimum purchase prices."},
         'nitrogen':     {'role': 'producer_consumer', 'weight': 1.5, 'rank': 1,
                          'note': "World's #1 nitrogen fertilizer producer AND consumer (urea + ammonia). Coal-based ammonia (unlike the gas-based West) insulates China from gas-price shocks but is emissions-heavy. Periodic urea EXPORT QUOTAS / customs-inspection holds (2021, 2023-24) to protect domestic supply are a top global price signal -- when China holds back urea, world prices spike. Watch: customs urea-export inspection policy, domestic urea price controls, coal feedstock cost."},
         'rare_earths':  {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1502,6 +1506,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "DRC is a meaningful diamond producer (~15-20 Mcarats/yr) but historically conflict-adjacent supply (Kasai region); Kimberley Process participant. Société Anonyme MIBA + small-scale artisanal sector. Less material than DRC's cobalt/copper/coltan story but adds to the Africa-diamonds picture and the broader conflict-minerals frame. Watch: MIBA production data, Kimberley Process annual statistics."},
     },
     'egypt': {
+        'rice':         {'role': 'producer',          'weight': 0.9,
+                         'note': "Nile Delta producer that also imports in drought years; rice shares the politically charged subsidized-staple space with baladi bread. Water scarcity (GERD/Nile constraints) periodically forces cultivation-area restrictions, tightening domestic supply and occasionally banning exports. Watch: cultivation-area decrees, GASC tenders, Nile water-allocation news, subsidy-reform signals."},
         'nitrogen':     {'role': 'producer', 'weight': 1.3,
                          'note': "Major urea / ammonia EXPORTER (gas-based; MOPCO, EBIC, Abu Qir) and a Mediterranean swing supplier to Europe. GAS-CASCADE EXPOSURE: when domestic gas is diverted to power / cooling in summer, Egyptian nitrogen plants curtail -- tightening European urea supply. Watch: Egyptian gas allocation to fertilizer plants, summer curtailment notices, EGAS pricing."},
         'wheat':        {'role': 'consumer',          'weight': 1.4, 'rank': 1,
@@ -1585,6 +1591,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Paks Nuclear Power Plant (Russian VVER reactors) supplies ~45% of Hungarian electricity. Rosatom contracted to build Paks II expansion (2014 deal under Orban). Post-Tisza election, Paks II Rosatom contract status under review. Watch: Paks II construction milestones, Rosatom financing arrangements, EU nuclear-sector sanctions exposure."},
     },
     'india': {
+        'rice':         {'role': 'producer',          'weight': 1.4, 'rank': 1,
+                         'note': "World's #1 rice exporter (~40% of global trade). India's export-policy toggles are the single biggest swing factor in world rice prices - the mid-2023 non-basmati white-rice export ban (eased in stages through 2024) sent global prices to multi-year highs and rerouted flows to Africa and Southeast Asia. Basmati (premium, Gulf/Iran-bound) and non-basmati (bulk, Africa/Asia) are distinct markets. Watch: DGFT export notifications, minimum export prices, monsoon performance, FCI buffer-stock levels."},
         'nitrogen':     {'role': 'consumer', 'weight': 1.5, 'rank': 1,
                          'note': "World's #1 urea importer and a top consumer (~700M farmers; heavily subsidized via Nutrient Based Subsidy + urea price control). India's periodic urea import TENDERS (IPL/RCF/MMTC) set the global benchmark price. STRATEGIC EXPOSURE: heavy reliance on imported finished urea + feedstock means gas-driven price spikes flow straight into the fertilizer subsidy bill. Watch: India urea tender results + volumes, NBS subsidy adjustments, domestic plant gas allocation."},
         'wheat': {
@@ -1622,6 +1630,10 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Growing uranium consumer (~22 reactors, target 70+ by 2032). NPCIL + Indian Atomic Energy Commission operate. Domestic uranium (UCIL Jaduguda) insufficient; imports from Kazakhstan + Russia + France + Canada (under bilateral safeguards agreements). Civil nuclear cooperation with US (123 Agreement 2008) + France + Russia. Watch: NPCIL reactor commissioning, IAEA safeguards inspections, US-India 123 Agreement reauthorization."},
     },
     'indonesia': {
+        'rice':         {'role': 'consumer',          'weight': 1.2,
+                         'note': "One of the world's largest rice consumers and a recurring major importer; rice prices are directly politically sensitive. Bulog (state logistics agency) manages reserves and import tenders; El Nino harvest shortfalls trigger large import programs. Watch: Bulog import tenders, domestic retail rice prices, El Nino/harvest outlook, Bapanas food-agency policy."},
+        'coffee':       {'role': 'producer',          'weight': 0.9, 'rank': 4,
+                         'note': "Major coffee producer - robusta from Sumatra (Lampung) plus specialty arabica (Gayo, Java); a meaningful export-earner though smaller than Brazil/Vietnam. Rising domestic consumption is tightening the exportable surplus. Watch: Sumatra harvest/weather, robusta export volumes, domestic-consumption growth."},
         'nickel':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 nickel producer (~50% global mine + smelter). Sulawesi (Morowali + Weda Bay) integrated nickel parks operated primarily by Chinese capital (Tsingshan + Huayou + GEM Co). Class-1 battery-grade nickel via HPAL (high-pressure acid leach) — environmentally controversial + sulfur-acid intensive. STRATEGIC: 2020 nickel ore export ban forced downstream processing onshore — successful resource-leverage playbook (Jokowi-Prabowo). Indonesia + Philippines = ~60% global supply. Watch: Indonesian Ministry of Energy + Mineral Resources statements, IMIP/IWIP output, Tsingshan production."},
         'cobalt':       {'role': 'producer',          'weight': 1.0,
@@ -1648,6 +1660,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "🥇 RAMAT GAN — one of the world's four major diamond hubs (alongside Antwerp, Mumbai/Surat, Dubai). Israel Diamond Exchange (IDE/Bursa, Ramat Gan) operates the world's largest single diamond trading floor. Israel imports ~$5B/yr rough diamonds, exports ~$7-10B/yr polished — making it one of the top global polished-diamond exporters despite zero domestic production. ~50% of polished diamonds purchased in the USA (the world's largest diamond consumer market) come from Israel. ~20,000 directly employed; diamond exports have historically been ~12-30% of Israeli goods exports. UAE-Israel diamond trade ~tripled post-2020 Abraham Accords (Dubai Diamond Exchange synergy). STRATEGIC: Israeli polishing industry is G7-sanctions-aware (zero Russian-origin rough since March 2024). Watch: IDE monthly trading reports, MID House of Diamond exports, GJEPC India-Israel rough-polish flow, US Customs precious-stones import data from Israel."},
     },
     'iran': {
+        'rice':         {'role': 'consumer',          'weight': 0.9,
+                         'note': "Significant importer (domestic Caspian-province output covers part of demand); procurement is complicated by sanctions and FX access, with India (basmati) the historic key supplier paid partly via rupee/barter mechanisms. Rice sits with wheat in the subsidized, stability-sensitive staple basket. Watch: India-Iran basmati payment mechanisms, FX allocation for staple imports, Caspian harvest, subsidy policy."},
         'nitrogen':     {'role': 'producer', 'weight': 1.3,
                          'note': "Significant urea / ammonia exporter on the back of cheap subsidized gas (Pardis, Kermanshah, Lordegan petrochemical complexes). Sanctioned but flows continue via discounted regional + Asian buyers. HORMUZ / GAS LINK: Iranian nitrogen exports transit the Gulf; South Pars gas (shared with Qatar) is the feedstock. Watch: Iranian petrochemical urea export volumes, sanctions-evasion routing, South Pars output."},
         'sulfur':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
@@ -1746,6 +1760,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Holds the single most concentrated leverage point in semiconductor manufacturing: ASML's EUV lithography monopoly. ASML (Veldhoven) is the only company in the world that produces extreme ultraviolet lithography systems required for sub-7nm chip manufacturing — meaning every leading-edge fab on Earth (TSMC, Samsung, Intel, SK Hynix) depends on ASML. Dutch government export-control decisions on EUV (and increasingly DUV) shipments to China constitute the most consequential single-country technology policy in the world. Also home to NXP (automotive chips). Watch: ASML quarterly bookings, Dutch trade ministry export-license announcements, EU Chips Act milestones."},
     },
     'nigeria': {
+        'rice':         {'role': 'consumer',          'weight': 1.0,
+                         'note': "Large consumer and importer pursuing an aggressive (and porous) domestic self-sufficiency push; the 2019-2020 land-border closure aimed at curbing smuggled rice spiked domestic prices. Food security is a live stability variable. Watch: CBN FX-access policy for rice imports, border-policy shifts, paddy output (Kebbi/Anchor Borrowers Programme), local milled-rice prices."},
         'oil':          {'role': 'producer',          'weight': 1.3, 'rank': 9,
                          'note': "Africa's #1 oil producer (~1.4-1.7M bpd, well below ~2.5M bpd capacity due to theft + pipeline sabotage). OPEC member; Bonny Light + Forcados light sweet grades historically competitive with Brent. NNPC (Nigerian National Petroleum Co) state operator + Shell + Chevron + ExxonMobil + TotalEnergies + Eni majors. STRUCTURAL LOSSES: ~250-400k bpd lost to oil theft/illegal bunkering in Niger Delta — among highest theft rates globally. Tinubu administration (2023-) fuel subsidy removal + naira devaluation reshaped domestic oil economics. Dangote Refinery (Lekki, 650k bpd, world's largest single-train) operational from 2024 — transforms West Africa from gasoline-importer to potential exporter. Watch: NNPC monthly stats, Dangote utilization rates, Niger Delta militia activity, Tinubu fuel-subsidy politics."},
         'natural_gas':  {'role': 'producer',          'weight': 1.1,
@@ -1772,6 +1788,10 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #2 copper producer (~12% global, ~2.4M tonnes/yr); Antamina (BHP+Glencore+Teck+Mitsubishi), Cerro Verde (Freeport), Las Bambas (MMG/Chinese), Antapaccay (Glencore). Political risk: Castillo impeachment (Dec 2022) + Boluarte unrest + ongoing community protests vs Chinese-operated Las Bambas. Strategic alternative to Chilean copper concentration."},
     },
     'philippines': {
+        'semiconductors': {'role': 'component_producer', 'weight': 1.1,
+                         'note': "Long-established assembly, test, and packaging (OSAT) hub - semiconductors and electronics are the country's top merchandise export (Laguna, Cavite, Clark corridors). Like Vietnam, exposure is downstream component/assembly rather than leading-edge fabrication, and it is a beneficiary of China+1 diversification. Watch: SEIPI export figures, US/Japan/Taiwan OSAT capacity additions, CHIPS-adjacent investment announcements."},
+        'rice':         {'role': 'consumer',          'weight': 1.2,
+                         'note': "Among the world's largest rice importers; food security is acutely political. The 2019 Rice Tariffication Law shifted from an NFA import monopoly to private tariff-based imports, with Vietnam the dominant supplier; the Marcos administration imposed retail price ceilings in 2023 amid spikes. Watch: import volumes from Vietnam/Thailand, retail price ceilings, NFA buffer stock, tariff-rate adjustments."},
         'nickel':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 nickel producer (~12% global); Nickel Asia + Global Ferronickel + Dinapigue Mining. Surigao + Palawan mines. Philippines-Indonesia together = ~60% global nickel. Marcos Jr. administration considering Indonesian-style export ban for downstream processing investment. Watch: DENR mining-policy announcements, Nickel Asia (NAC.PS) earnings, Marcos Jr. industry plans."},
     },
@@ -1814,6 +1834,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Qatar is a major Gulf sulfur producer (sour-gas processing by-product at North Field + Ras Laffan); ~5 Mt/yr exports. Hormuz closure exposure: Qatar's gas + sulfur exports transit the Strait. Cascade chain: Hormuz closure → Gulf sulfur trapped → Chinese + Indonesian + Chilean copper/nickel/phosphate processing disruption."},
     },
     'saudi_arabia': {
+        'rice':         {'role': 'consumer',          'weight': 0.9,
+                         'note': "Near-100% import-dependent (negligible domestic production); rice is a dietary staple sourced heavily as Indian/Pakistani basmati, with strategic food reserves held via SAGO/GFSA. Highly exposed to any Indian export restriction. Watch: SAGO procurement tenders, India basmati export-policy, strategic reserve levels, Red Sea shipping disruptions affecting import routes."},
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 oil exporter, #2 producer (~10M bpd). Saudi Aramco (largest IPO in history, 2019) is the world's most profitable company. Ghawar field + Khurais + Safaniya operations. OPEC+ swing producer — Saudi Aramco production decisions + voluntary cut announcements move global oil prices materially. Strategic Saudi-Russia coordination via OPEC+ central. Watch: Saudi Aramco production guidance, OPEC+ ministerial meetings, voluntary-cut extension announcements."},
         'natural_gas':  {'role': 'producer',          'weight': 0.9,
@@ -1870,6 +1892,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Critical for TSMC + UMC semiconductor manufacturing chain; permanent magnets + EV demand'},
     },
     'thailand': {
+        'rice':         {'role': 'producer',          'weight': 1.2, 'rank': 2,
+                         'note': "Perennial top-three rice exporter; Hom Mali jasmine is the premium signature grade. Competitiveness is sensitive to baht strength (vs India/Vietnam) and to central-plains drought/El Nino. Like Vietnam, gains share whenever India restricts exports. Watch: Thai Rice Exporters Association quotes, baht moves, reservoir/drought levels, jasmine premium vs Vietnamese fragrant rice."},
         'sugar':        {'role': 'producer',          'weight': 1.3, 'rank': 2,
                          'note': "🌾 World #2 sugar exporter (~7-8 MMT/yr export, ~10 MMT total production 2024/25). Central + Northeast Thailand cane regions. Mitr Phol + Thai Roong Ruang Sugar + Khon Kaen Sugar major mill operators. Indonesia + China + South Korea + Japan + Philippines + Bangladesh primary import customers. Thailand's sugar exports are the structural marginal global supply variable alongside Brazil — when Indian exports tighten (sub-consumer-floor regime), Thai availability becomes the global supply backstop. CANE-WATER REGIME: ~70% of Thai cane is rain-fed; El Niño + La Niña cycles directly affect annual output volatility. Watch: Office of the Cane and Sugar Board (OCSB) reports, monsoon rainfall, Mitr Phol export quotas, USDA FAS Thailand sugar reports."},
         'natural_gas':  {'role': 'consumer',          'weight': 0.9,
@@ -1958,6 +1982,20 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Venezuela imports ~90% of wheat consumption (~1.5-2 MMT/yr). Pre-crisis: Canada + US dominant; under Maduro-era sanctions, Russia + Argentina backfilled. Bread is subsidized + politically sensitive (food riots 2017-2019). Rodriguez interim govt has signaled openness to US food imports as part of broader normalization — watch USDA FAS Venezuela post for shifts in supplier mix."},
         'corn':         {'role': 'consumer',          'weight': 0.7,
                          'note': "Venezuela imports ~70% of corn consumption (white maize is national staple for arepas). Brazil + Argentina + Mexico primary suppliers. Local production collapsed alongside broader agricultural sector. Stability variable: arepas-without-corn is the canonical Caracas-protest-trigger pattern."},
+    },
+    'vietnam': {
+        'semiconductors': {'role': 'component_producer', 'weight': 1.2, 'rank': 3,
+                         'note': "Fast-rising assembly, test, and packaging (OSAT) hub - the leading 'China+1' beneficiary as electronics supply chains diversify out of China. Samsung's largest global smartphone-manufacturing base (Bac Ninh, Thai Nguyen); Intel's largest assembly-test site (Ho Chi Minh City); Amkor packaging (Bac Ninh); ongoing Apple-supplier migration. Vietnam fabricates little leading-edge silicon itself - its exposure is downstream component/assembly, structurally different from a Taiwan or Korea fab shock. National semiconductor strategy (2024) targets design + packaging scale-up. Watch: Samsung + Intel + Amkor capex, US-Vietnam semiconductor cooperation announcements, FDI inflow data, power-supply reliability (a real constraint on OSAT expansion)."},
+        'rare_earths':  {'role': 'producer',          'weight': 1.3, 'rank': 2,
+                         'note': "Holds among the world's largest rare-earth reserves (US Geological Survey has ranked Vietnam #2 globally, ~22 million tonnes), but current mined output is tiny - the gap between reserves and production is the whole story. Positioned as the leading hoped-for non-China REE alternative; Vietnam-US, Vietnam-Japan (JOGMEC), and Vietnam-Korea processing/offtake deals are the signals to watch. Nui Phao (Masan) is the flagship mine-to-processing complex. Watch: REE processing-plant announcements, Western offtake/financing deals, export-policy signaling, China export-control moves (which raise Vietnam's strategic value)."},
+        'oil':          {'role': 'producer',          'weight': 0.9,
+                         'note': "Modest offshore producer via PetroVietnam (~200-300k bpd). Strategic salience is less volume than location: several producing and prospective blocks sit in or near waters contested by China's nine-dash-line claim. The Vanguard Bank area (Block 06-1, Nam Con Son basin) has seen repeated China Coast Guard / survey-vessel standoffs that pressured Vietnam to suspend operations. Watch: Vanguard Bank / Block 06-1 standoff reports, PetroVietnam partner activity (Rosneft, Zarubezhneft, legacy ExxonMobil), China survey-vessel incursions near Vietnamese blocks."},
+        'natural_gas':  {'role': 'producer',          'weight': 0.8,
+                         'note': "Offshore gas producer; the Block B - O Mon project (Phu Quoc basin) and the long-stalled Blue Whale / Ca Voi Xanh field (originally ExxonMobil) are the major developments. As with oil, some gas acreage sits in South China Sea waters subject to Chinese pressure, tying energy development directly to the maritime-sovereignty dispute. Watch: Block B - O Mon final-investment / first-gas milestones, Ca Voi Xanh operator status, China interference near gas blocks."},
+        'rice':         {'role': 'producer',          'weight': 1.2, 'rank': 3,
+                         'note': "Among the world's top-three rice exporters (~7-8 MMT/yr), centered on the Mekong Delta. A direct beneficiary when India restricts exports - Vietnamese export prices spiked to multi-year highs during the 2023-24 India ban. Structural vulnerability: Mekong Delta salinity intrusion, upstream Chinese and Lao dam operations, and climate stress on the delta. Watch: Vietnam Food Association export-price quotes, Mekong Delta salinity/drought reports, India export-policy spillover, Philippines import tenders (Vietnam's largest customer)."},
+        'coffee':       {'role': 'producer',          'weight': 1.1, 'rank': 2,
+                         'note': "World's #2 coffee producer overall and the #1 robusta producer, concentrated in the Central Highlands (Dak Lak). A major export-earnings driver. Robusta prices hit record highs in 2024 on Vietnamese drought - Vietnamese weather is now a top global robusta price signal. Watch: Central Highlands rainfall/drought, VICOFA export figures, robusta-arabica spread, aging-tree replanting and productivity trends."},
     },
 }
 # ============================================================================
@@ -4008,7 +4046,7 @@ def _run_full_scan(days=7):
         # wins over sanctions_target wins over mediator (descending strategic
         # weight). Highest individual weight breaks ties.
         commodity_breakdown = {}
-        ROLE_PRIORITY = {'producer': 5, 'consumer': 4, 'transit': 3,
+        ROLE_PRIORITY = {'producer': 5, 'component_producer': 4.5, 'consumer': 4, 'transit': 3,
                          'sanctions_target': 2, 'mediator': 1}
         for commodity_id in COUNTRY_COMMODITY_EXPOSURE[cid].keys():
             commodity_sigs = [s for s in sigs if s['commodity'] == commodity_id]
@@ -4273,15 +4311,18 @@ def _build_country_prose(target):
     # multi-role entries (e.g. China wheat as both producer + consumer)
     # appear in both buckets.
     producer_items = []
+    component_items = []
     consumer_items = []
     transit_items  = []
     for cid, role_name, role_data in _iter_country_exposures(target):
         rank = role_data.get('rank')
         label = cid.replace('_', ' ')
-        if rank and role_name == 'producer':
+        if rank and role_name in ('producer', 'component_producer'):
             label = f"{label} (#{rank} globally)"
         if role_name == 'producer':
             producer_items.append(label)
+        elif role_name == 'component_producer':
+            component_items.append(label)
         elif role_name == 'consumer':
             consumer_items.append(label)
         elif role_name == 'transit':
@@ -4297,16 +4338,21 @@ def _build_country_prose(target):
         else:
             parts.append(f"{target_name} is a producer of {_natural_join(producer_items)}.")
 
+    # Component-producer sentence (assembly / test / packaging nodes)
+    if component_items:
+        connector = "It is also" if producer_items else f"{target_name} is"
+        parts.append(f"{connector} a component / assembly producer of {_natural_join(component_items)}.")
+
     # Consumer sentence
     if consumer_items:
-        if not producer_items:
+        if not (producer_items or component_items):
             parts.append(f"{target_name} is a major consumer of {_natural_join(consumer_items)}.")
         else:
             parts.append(f"It is also a major consumer of {_natural_join(consumer_items)}.")
 
     # Transit sentence
     if transit_items:
-        connector = "It is also" if (producer_items or consumer_items) else f"{target_name} is"
+        connector = "It is also" if (producer_items or component_items or consumer_items) else f"{target_name} is"
         parts.append(f"{connector} a critical transit point for {_natural_join(transit_items)}.")
 
     # Country-specific strategic appendix (the "why this matters" sentence)
