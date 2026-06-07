@@ -1,11 +1,11 @@
 """
 =======================================================================
   ASIFAH ANALYTICS -- CONVERGENCE DETECTOR (multi-axis, live)
-  v0.3.0 (Jun 6 2026) -- STEP 3: FOUR-AXIS JOIN (+ HUMANITARIAN)
+  v0.4.0 (Jun 6 2026) -- STEP 4: HISTORY + SO-WHAT PROSE
 =======================================================================
 
 WHAT THIS IS
-  A transversal layer that reads the three live signal axes already on
+  A transversal layer that reads the four live signal axes already on
   the ME backend and asks, per country: how many INDEPENDENT axes are
   lit at the same time? Agreement across axes beats one loud headline.
 
@@ -15,35 +15,36 @@ WHAT THIS IS
                            country_summaries[id].alert_level (same band scale)
     Axis 3 -- RHETORIC   : regional BLUFs             (Redis: rhetoric:<region>:regional_bluf)
                            theatre_summary[id].level  (L0-L5 escalation)
-    Axis 4 -- HUMANITARIAN: humanitarian_convergence    (Redis: humanitarian_convergence:bluf:latest)
+    Axis 4 -- HUMANITARIAN: humanitarian_convergence  (Redis: humanitarian_convergence:bluf:latest)
                            per-country MAX of signals[].level (3-5). Covers
-                           countries WITHOUT rhetoric trackers -- this is the
-                           axis that lets Africa (e.g. an Ebola outbreak) read
-                           as convergence even with no rhetoric page.
-
-  NOTE: no Africa regional BLUF exists yet, so African countries carry no
-  rhetoric axis until that hole is filled. The join treats a missing axis
-  as simply absent -- such a country can still register on the other two.
+                           countries WITHOUT rhetoric trackers -- the axis
+                           that lets Africa (e.g. an Ebola outbreak) read as
+                           convergence even with no rhetoric page.
 
 NORMALIZATION (common 0-3 intensity ladder)
     kinetic / commodity band : normal=0 elevated=1 high=2 surge=3
     rhetoric level L0-L5     : L0/L1=0  L2=1  L3=2  L4/L5=3
     humanitarian level 3-5   : L3=1     L4=2  L5=3   (any signal => active)
-  An axis is "active" for a country at intensity >= 1. (Tunable.)
+  An axis is "active" for a country at intensity >= 1.
 
 TIERING (the analytic claim -- count of co-active axes)
-    4 active -> QUAD convergence       (maximally rare -- all streams agree)
-    3 active -> triple convergence     (headline tier)
-    2 active -> dual convergence
-    1 active -> single-axis
-    0 active -> quiet (omitted from the scan list)
+    4 active -> QUAD       3 active -> TRIPLE
+    2 active -> DUAL       1 active -> SINGLE       0 -> quiet (omitted)
   Ranked by tier, then by summed intensity within tier.
 
-WHAT THIS STEP DOES NOT DO YET
-    - no "so what" prose            (Step: prose)
-    - no historical baseline/delta  (Step: history)
-  Output is structured data so the joins can be eyeballed against the
-  caches before we build narrative on top.
+HISTORY (v0.4.0)
+  Each scan, on a guarded 6h cadence, snapshots every active country's
+  four-axis profile to a rolling Redis list (cax:hist:<country>, last 120,
+  90d TTL). On every scan we read the series back (one pipeline call) and
+  attach a `history` block per country: persistence (consecutive readings
+  at this tier), novelty (first time at/above this tier in the window),
+  direction (rising/steady/easing by summed intensity), peak, first_seen.
+
+PROSE (v0.4.0)
+  Each record gets a plain-language `so_what`: what is co-active, what is
+  driving it, how it compares to the country's own recent history, and the
+  convergence-not-prediction framing. Axis jargon is translated to what
+  each stream actually MEASURES.
 
 NAMESPACE
   Routes under /api/cax/* -- the /api/convergence/* namespace belongs to
@@ -59,11 +60,12 @@ CONVERGENCE-NOT-PREDICTION
 
 import os
 import json
+import time
 import requests
 from datetime import datetime, timezone
 
 # ----------------------------------------------------------------------
-# Redis (Upstash REST) -- READ-ONLY. Never triggers a scan.
+# Redis (Upstash REST). Reads + a guarded, low-frequency snapshot write.
 # ----------------------------------------------------------------------
 _REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL')   or os.environ.get('UPSTASH_REDIS_REST_URL')
 _REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
@@ -78,6 +80,13 @@ RHETORIC_BLUF_KEYS  = {
     # 'africa': 'rhetoric:africa:regional_bluf',   # FUTURE -- BLUF not built yet
 }
 HUMANITARIAN_CACHE_KEY = 'humanitarian_convergence:bluf:latest'
+
+# History config
+HIST_KEY_PREFIX       = 'cax:hist:'
+HIST_GUARD_KEY        = 'cax:hist:last_snapshot_ts'
+HIST_MAXLEN           = 120                 # ~30 days at a 6h cadence
+HIST_TTL_SEC          = 90 * 24 * 3600      # dead countries self-expire
+SNAPSHOT_INTERVAL_SEC = 6 * 3600            # write at most once per 6h bucket
 
 DISCLAIMER = ("This is a CONVERGENCE indicator, NOT a probability of action. "
               "Co-active signal streams indicate that independent reporting axes "
@@ -95,11 +104,36 @@ def _redis_get(key):
             timeout=6,
         )
         data = resp.json()
-        if data.get("result"):
+        if data.get("result") is not None:
             return json.loads(data["result"])
     except Exception as e:
         print(f"[ConvergenceDetector] Redis GET {key} error: {e}")
     return None
+
+
+def _redis_pipeline(commands):
+    """Run a batch of Redis commands in ONE Upstash REST /pipeline call.
+    `commands` is a list of arg-arrays, e.g. [["LRANGE","k","0","119"], ...].
+    Returns a list of raw results (same order), or [] on any failure.
+    Degrades gracefully -- callers must tolerate [] (history simply won't
+    accrue / read), so a Redis hiccup never breaks /scan.
+    """
+    if not (_REDIS_URL and _REDIS_TOKEN) or not commands:
+        return []
+    try:
+        resp = requests.post(
+            f"{_REDIS_URL}/pipeline",
+            headers={"Authorization": f"Bearer {_REDIS_TOKEN}",
+                     "Content-Type": "application/json"},
+            data=json.dumps(commands),
+            timeout=8,
+        )
+        out = resp.json()
+        if isinstance(out, list):
+            return [item.get('result') if isinstance(item, dict) else item for item in out]
+    except Exception as e:
+        print(f"[ConvergenceDetector] Redis pipeline error: {e}")
+    return []
 
 
 # ----------------------------------------------------------------------
@@ -110,6 +144,15 @@ RHETORIC_LEVEL_INTENSITY = {0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 3}
 HUMANITARIAN_LEVEL_INTENSITY = {3: 1, 4: 2, 5: 3}   # any humanitarian signal => active
 TIER_BY_COUNT = {0: 'quiet', 1: 'single', 2: 'dual', 3: 'triple', 4: 'quad'}
 TIER_RANK = {'quad': 4, 'triple': 3, 'dual': 2, 'single': 1, 'quiet': 0}
+TIER_WORD = {'quad': 'quadruple', 'triple': 'triple', 'dual': 'dual', 'single': 'single-axis'}
+
+# Plain-language description of what each axis MEASURES (no jargon).
+AXIS_PHRASE = {
+    'kinetic':      'armed-conflict event reporting',
+    'commodity':    'commodity-supply pressure in news flow',
+    'rhetoric':     'escalatory official rhetoric',
+    'humanitarian': 'humanitarian distress reporting (displacement, disease, food)',
+}
 
 # Humanitarian detector emits sub-national ids; roll the high-value ones up to
 # the parent country so a sub-region signal reinforces the parent's other axes.
@@ -130,9 +173,8 @@ SUBREGION_TO_COUNTRY = {
 }
 
 # ----------------------------------------------------------------------
-# Country-id canonicalization. Commodity + rhetoric already use lowercase
-# ids; kinetic uses GDELT display names. We canonicalize everything to id.
-# Explicit cases where lower+underscore would NOT match the commodity ids.
+# Country-id canonicalization. Commodity + rhetoric + humanitarian use
+# lowercase ids; kinetic uses GDELT display names. Canonicalize to id.
 # ----------------------------------------------------------------------
 ID_TO_DISPLAY = {
     'usa':          'United States',
@@ -142,11 +184,14 @@ ID_TO_DISPLAY = {
     'south_africa': 'South Africa',
     'saudi_arabia': 'Saudi Arabia',
     'eu':           'EU',
+    'car':          'Central African Republic',
+    'drc':          'DR Congo',
 }
 _NAME_TO_ID = {
     'United States':         'usa',
     'United Arab Emirates':  'uae',
     'DR Congo':              'drc',
+    'Gaza Strip':            'gaza',
 }
 
 
@@ -165,6 +210,8 @@ def _id_to_display(cid):
 # ----------------------------------------------------------------------
 # Per-axis readers. Each returns {country_id: {intensity, label, score, driver}}
 # plus an availability flag so a cold cache is visible, never silent.
+# A country present with intensity 0 means "covered but quiet"; ABSENT means
+# "no coverage for that axis" -- the prose layer uses this distinction.
 # ----------------------------------------------------------------------
 def _read_kinetic():
     kin = _redis_get(KINETIC_CACHE_KEY)
@@ -173,8 +220,6 @@ def _read_kinetic():
     out = {}
     for name, c in (kin.get('countries', {}) or {}).items():
         band = c.get('band', 'normal')
-        intensity = BAND_INTENSITY.get(band, 0)
-        # driver = first conflict-track top event, else first event
         events = c.get('top_events', []) or []
         drv = next((e for e in events if e.get('track') == 'conflict'), events[0] if events else None)
         driver = None
@@ -182,7 +227,7 @@ def _read_kinetic():
             driver = {'label': drv.get('label'), 'articles': drv.get('articles'),
                       'source': drv.get('source')}
         out[_kinetic_name_to_id(name)] = {
-            'intensity': intensity, 'label': band,
+            'intensity': BAND_INTENSITY.get(band, 0), 'label': band,
             'score': c.get('conflict_score'), 'driver': driver,
         }
     return out, True
@@ -198,8 +243,7 @@ def _read_commodity():
         sigs = c.get('top_signals', []) or []
         out[cid] = {
             'intensity': BAND_INTENSITY.get(level, 0), 'label': level,
-            'score': c.get('total_score'),
-            'driver': sigs[0] if sigs else None,
+            'score': c.get('total_score'), 'driver': sigs[0] if sigs else None,
         }
     return out, True
 
@@ -224,12 +268,8 @@ def _read_rhetoric():
 
 
 def _read_humanitarian():
-    """Aggregate the flat humanitarian signals list into a per-country reading.
-
-    The humanitarian convergence detector emits one record per (country, crisis
-    category). We collapse to one reading per country: the MAX-severity signal,
-    rolling sub-national ids up to their parent country.
-    """
+    """Collapse the flat humanitarian signals list to one reading per country
+    (MAX-severity signal), rolling sub-national ids up to the parent country."""
     hum = _redis_get(HUMANITARIAN_CACHE_KEY)
     if not hum:
         return {}, False
@@ -247,16 +287,197 @@ def _read_humanitarian():
                 'intensity': intensity, 'label': s.get('category', ''),
                 'level': level, 'score': s.get('priority'),
                 'driver': {'label': s.get('short_text'),
-                           'category': s.get('category'),
-                           'source': s.get('source')},
+                           'category': s.get('category'), 'source': s.get('source')},
             }
     return out, True
+
+
+# ----------------------------------------------------------------------
+# History: read the rolling series for a set of countries (one pipeline call)
+# ----------------------------------------------------------------------
+def _read_history(country_ids):
+    """Return {country_id: [snapshot, ...newest-first]} via a single pipeline."""
+    ids = list(country_ids)
+    if not ids:
+        return {}
+    cmds = [["LRANGE", f"{HIST_KEY_PREFIX}{cid}", "0", str(HIST_MAXLEN - 1)] for cid in ids]
+    results = _redis_pipeline(cmds)
+    series_by_id = {}
+    for cid, raw_list in zip(ids, results or []):
+        parsed = []
+        for entry in (raw_list or []):
+            try:
+                parsed.append(json.loads(entry) if isinstance(entry, str) else entry)
+            except Exception:
+                continue
+        series_by_id[cid] = parsed
+    return series_by_id
+
+
+def _history_metrics(current_tier, current_summed, series, now_iso):
+    """Compute persistence / novelty / direction from a country's series.
+    `series` is newest-first and does NOT include the current reading."""
+    cur_rank = TIER_RANK.get(current_tier, 0)
+    if not series:
+        return {
+            'readings': 0, 'persistence': 1, 'streak_hours': None,
+            'first_in_window': True, 'days_since_prior_at_tier': None,
+            'direction': 'new', 'prev_summed': None, 'delta_summed': None,
+            'peak_summed': current_summed, 'first_seen': now_iso,
+        }
+
+    # persistence: consecutive newest snapshots at the SAME tier as now
+    streak = 0
+    for e in series:
+        if e.get('tier') == current_tier:
+            streak += 1
+        else:
+            break
+    persistence = 1 + streak
+    streak_hours = None
+    if streak > 0:
+        try:
+            oldest_ts = series[streak - 1].get('ts')
+            dt = datetime.fromisoformat(oldest_ts)
+            now = datetime.fromisoformat(now_iso)
+            streak_hours = round((now - dt).total_seconds() / 3600.0, 1)
+        except Exception:
+            streak_hours = None
+
+    # novelty: most recent prior snapshot at rank >= current rank
+    days_since = None
+    for e in series:
+        if TIER_RANK.get(e.get('tier'), 0) >= cur_rank:
+            try:
+                dt = datetime.fromisoformat(e.get('ts'))
+                now = datetime.fromisoformat(now_iso)
+                days_since = round((now - dt).total_seconds() / 86400.0, 1)
+            except Exception:
+                days_since = None
+            break
+    first_in_window = days_since is None
+
+    # direction: current summed vs previous snapshot's summed
+    prev_summed = series[0].get('summed_intensity')
+    delta = None
+    direction = 'steady'
+    if isinstance(prev_summed, (int, float)):
+        delta = current_summed - prev_summed
+        direction = 'rising' if delta >= 1 else ('easing' if delta <= -1 else 'steady')
+
+    peak = max([current_summed] + [e.get('summed_intensity', 0) for e in series])
+    first_seen = series[-1].get('ts', now_iso)
+
+    return {
+        'readings': len(series), 'persistence': persistence, 'streak_hours': streak_hours,
+        'first_in_window': first_in_window, 'days_since_prior_at_tier': days_since,
+        'direction': direction, 'prev_summed': prev_summed, 'delta_summed': delta,
+        'peak_summed': peak, 'first_seen': first_seen,
+    }
+
+
+def _maybe_snapshot(records, now_epoch, now_iso):
+    """Guarded write: at most once per SNAPSHOT_INTERVAL_SEC, append every
+    active country's profile to its rolling list (one pipeline call)."""
+    last = _redis_get(HIST_GUARD_KEY) or 0
+    try:
+        last = float(last)
+    except Exception:
+        last = 0
+    if now_epoch - last < SNAPSHOT_INTERVAL_SEC:
+        return False
+    cmds = []
+    for r in records:
+        snap = {
+            'ts': now_iso, 'tier': r['tier'], 'active_count': r['active_count'],
+            'summed_intensity': r['summed_intensity'],
+            'axes': {a: (r['axes'][a]['intensity'] if r['axes'].get(a) else 0)
+                     for a in ('kinetic', 'commodity', 'rhetoric', 'humanitarian')},
+        }
+        key = f"{HIST_KEY_PREFIX}{r['country']}"
+        cmds.append(["LPUSH", key, json.dumps(snap)])
+        cmds.append(["LTRIM", key, "0", str(HIST_MAXLEN - 1)])
+        cmds.append(["EXPIRE", key, str(HIST_TTL_SEC)])
+    cmds.append(["SET", HIST_GUARD_KEY, str(int(now_epoch))])
+    _redis_pipeline(cmds)
+    return True
+
+
+# ----------------------------------------------------------------------
+# Prose: plain-language "so what" per country
+# ----------------------------------------------------------------------
+def _driver_text(reading):
+    """Best human string out of an axis driver dict."""
+    d = (reading or {}).get('driver')
+    if not d:
+        return None
+    if isinstance(d, dict):
+        for k in ('label', 'short_text', 'title', 'headline', 'text'):
+            if d.get(k):
+                return str(d[k])
+    return str(d)[:120] if d else None
+
+
+def _so_what(record, hist):
+    cid_axes = record['axes']
+    active = record['active_axes']
+    tier = record['tier']
+    disp = record['display']
+
+    # 1) lead
+    n = record['active_count']
+    lead = f"{disp}: {TIER_WORD.get(tier, tier)} convergence -- {n} independent signal stream{'s' if n != 1 else ''} active at once."
+
+    # 2) what is co-active (plain language)
+    phrases = [AXIS_PHRASE[a] for a in ('kinetic', 'commodity', 'rhetoric', 'humanitarian') if a in active]
+    if len(phrases) == 1:
+        whatline = f" Active stream: {phrases[0]}."
+    else:
+        whatline = f" Co-active: {', '.join(phrases[:-1])} and {phrases[-1]}."
+
+    # honest coverage note: rhetoric absent because no tracker exists yet
+    if 'rhetoric' not in active and cid_axes.get('rhetoric') is None:
+        whatline += " (No rhetoric tracker for this country yet, so that axis can't weigh in.)"
+
+    # 3) drivers from the active axes
+    drv_bits = []
+    for a in active:
+        t = _driver_text(cid_axes.get(a))
+        if t:
+            short = 'conflict' if a == 'kinetic' else ('commodity' if a == 'commodity'
+                    else ('rhetoric' if a == 'rhetoric' else 'humanitarian'))
+            drv_bits.append(f"'{t}' ({short})")
+    driverline = f" Leading drivers: {'; '.join(drv_bits[:2])}." if drv_bits else ""
+
+    # 4) history comparison
+    if hist['readings'] == 0:
+        histline = " No prior convergence history recorded yet."
+    elif hist['first_in_window']:
+        histline = f" First time {disp} has reached {TIER_WORD.get(tier, tier)} convergence in the recorded window."
+    else:
+        parts = []
+        if hist['persistence'] > 1:
+            hrs = f" (~{hist['streak_hours']}h)" if hist['streak_hours'] else ""
+            parts.append(f"held at this level across the last {hist['persistence']} readings{hrs}")
+        if hist['direction'] in ('rising', 'easing'):
+            parts.append(f"the combined signal is {hist['direction']}")
+        elif hist['direction'] == 'steady' and hist['persistence'] > 1:
+            parts.append("the combined signal is steady")
+        if hist.get('days_since_prior_at_tier') is not None and hist['persistence'] == 1:
+            parts.append(f"last at this level {hist['days_since_prior_at_tier']}d ago")
+        histline = (" " + disp + " has " + "; ".join(parts) + ".") if parts else ""
+
+    tail = " This is a convergence reading -- independent streams agreeing -- not a forecast of action."
+    return (lead + whatline + driverline + histline + tail).strip()
 
 
 # ----------------------------------------------------------------------
 # The join
 # ----------------------------------------------------------------------
 def build_convergence():
+    now_epoch = int(time.time())
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     kinetic,   kin_ok  = _read_kinetic()
     commodity, com_ok  = _read_commodity()
     rhetoric,  rhe_avail = _read_rhetoric()
@@ -287,15 +508,32 @@ def build_convergence():
 
     records.sort(key=lambda r: (TIER_RANK[r['tier']], r['summed_intensity']), reverse=True)
 
+    # History: read each active country's series in one pipeline call, attach metrics + prose
+    series_by_id = _read_history([r['country'] for r in records])
+    for r in records:
+        hist = _history_metrics(r['tier'], r['summed_intensity'],
+                                series_by_id.get(r['country'], []), now_iso)
+        r['history'] = hist
+        r['so_what'] = _so_what(r, hist)
+
     tier_counts = {'quad': 0, 'triple': 0, 'dual': 0, 'single': 0}
     for r in records:
         tier_counts[r['tier']] += 1
 
+    # Payload-level summary prose
+    top = records[0]['display'] if records else None
+    summary = (f"{tier_counts['quad']} quad / {tier_counts['triple']} triple / "
+               f"{tier_counts['dual']} dual / {tier_counts['single']} single-axis countries active"
+               + (f"; strongest: {top}." if top else "."))
+
     return {
         'records':       records,
         'tier_counts':   tier_counts,
+        'summary':       summary,
         'availability':  {'kinetic': kin_ok, 'commodity': com_ok,
                           'rhetoric': rhe_avail, 'humanitarian': hum_ok},
+        'now_epoch':     now_epoch,
+        'now_iso':       now_iso,
     }
 
 
@@ -305,23 +543,42 @@ def register_convergence_detector_endpoints(app):
 
     @app.route('/api/cax/scan', methods=['GET'])
     def cax_scan():
-        """STEP 2: three-axis join + tiering. Structured output, no prose yet."""
+        """Four-axis join + tiering + history + prose. Guarded snapshot on 6h cadence."""
         try:
             result = build_convergence()
+            # guarded history write (at most once per 6h, one pipeline call)
+            try:
+                wrote = _maybe_snapshot(result['records'], result['now_epoch'], result['now_iso'])
+            except Exception as e:
+                print(f"[ConvergenceDetector] snapshot error: {e}")
+                wrote = False
             return jsonify({
-                'success':      True,
-                'version':      '0.3.0',
-                'step':         '3 (four-axis join + tiering, no prose)',
-                'generated_at': datetime.now(timezone.utc).isoformat(),
-                'tier_counts':  result['tier_counts'],
-                'availability': result['availability'],
-                'count':        len(result['records']),
-                'records':      result['records'],
-                'disclaimer':   DISCLAIMER,
+                'success':         True,
+                'version':         '0.4.0',
+                'step':            '4 (four-axis join + history + prose)',
+                'generated_at':    result['now_iso'],
+                'tier_counts':     result['tier_counts'],
+                'summary':         result['summary'],
+                'availability':    result['availability'],
+                'snapshot_written': wrote,
+                'count':           len(result['records']),
+                'records':         result['records'],
+                'disclaimer':      DISCLAIMER,
             })
         except Exception as e:
             print(f"[ConvergenceDetector] /scan error: {e}")
             return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+    @app.route('/api/cax/history/<country>', methods=['GET'])
+    def cax_history(country):
+        """Raw rolling history series for one country (newest-first)."""
+        cid = country.strip().lower()
+        series = _read_history([cid]).get(cid, [])
+        return jsonify({
+            'success': True, 'version': '0.4.0', 'country': cid,
+            'display': _id_to_display(cid), 'readings': len(series),
+            'series': series,
+        })
 
     @app.route('/api/cax/probe', methods=['GET'])
     def cax_probe():
@@ -331,7 +588,7 @@ def register_convergence_detector_endpoints(app):
         rhe = {r: bool(_redis_get(k)) for r, k in RHETORIC_BLUF_KEYS.items()}
         hum = _redis_get(HUMANITARIAN_CACHE_KEY)
         return jsonify({
-            'success': True, 'version': '0.3.0',
+            'success': True, 'version': '0.4.0',
             'redis_configured': bool(_REDIS_URL and _REDIS_TOKEN),
             'kinetic_warm':      bool(kin),
             'commodity_warm':    bool(com),
@@ -340,4 +597,4 @@ def register_convergence_detector_endpoints(app):
             'probed_at': datetime.now(timezone.utc).isoformat(),
         })
 
-    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/probe  (v0.3.0)")
+    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/history/<c>, /api/cax/probe  (v0.4.0)")
