@@ -540,6 +540,43 @@ COMMODITY_TYPES = {
         'top_producers':  ['brazil', 'india', 'thailand', 'china', 'eu', 'usa', 'mexico', 'australia'],
         'top_consumers':  ['india', 'china', 'eu', 'usa', 'brazil', 'indonesia'],
     },
+    'rice': {
+        'name': 'Rice',
+        'icon': '🍚',
+        'tier': 2,
+        'category': 'agricultural',
+        'has_spot_price': True,
+        'yahoo_ticker': 'ZR=F',         # CBOT rough rice futures (global benchmark)
+        'yahoo_proxies': [],
+        'unit': 'USD/cwt',
+        'description': 'CBOT rough rice futures. Staple calorie for roughly half the world, concentrated in Asia. India is the leading exporter and the dominant policy price-setter (its mid-2023 non-basmati export ban pushed global prices to multi-year highs); Thailand and Vietnam are the next-largest exporters; China is the largest producer and consumer. Top importers - Philippines, Indonesia, Nigeria, West Africa, the Gulf - are highly exposed to export-ban shocks, which makes rice a recurring food-security and political-stability trigger. Watch: India export-policy toggles, monsoon and El Nino effects on Asian harvests, Philippines and Indonesia import tenders, FAO rice price index.',
+        'chokepoints': [
+            'kandla port', 'kakinada port', 'mundra port',
+            'bangkok port', 'laem chabang',
+            'ho chi minh port', 'cai mep',
+            'manila port', 'tanjung priok',
+        ],
+        'top_producers':  ['china', 'india', 'indonesia', 'vietnam', 'thailand', 'bangladesh', 'usa'],
+        'top_consumers':  ['china', 'india', 'indonesia', 'philippines', 'nigeria', 'iran', 'iraq', 'saudi_arabia'],
+    },
+    'coffee': {
+        'name': 'Coffee',
+        'icon': '☕',
+        'tier': 2,
+        'category': 'agricultural',
+        'has_spot_price': True,
+        'yahoo_ticker': 'KC=F',         # ICE Arabica coffee futures (global benchmark)
+        'yahoo_proxies': ['JO'],         # iPath Coffee ETN
+        'unit': 'USD/lb',
+        'description': 'ICE Arabica coffee futures. Brazil is the largest producer (Arabica); Vietnam is the next-largest overall and the leading robusta producer; Indonesia is a major producer. This is an export-earnings and climate-shock commodity rather than an instability signal - prices swing hard on Brazilian frost and drought and on Vietnamese Central Highlands dry spells, and coffee is a major export-revenue driver for producer economies. Watch: Brazil weather (frost and drought), Vietnam Central Highlands rainfall, ICE certified-stock levels, robusta-to-arabica spread.',
+        'chokepoints': [
+            'santos port', 'port of santos',
+            'ho chi minh port', 'cai mep',
+            'panama canal',
+        ],
+        'top_producers':  ['brazil', 'vietnam', 'colombia', 'indonesia', 'ethiopia', 'honduras'],
+        'top_consumers':  ['eu', 'usa', 'brazil', 'japan'],
+    },
     # ============================================================
     # SULFUR (commodity #17 -- May 17, 2026)
     # The "king of chemicals" -- byproduct of Gulf oil+gas refining
@@ -1022,6 +1059,39 @@ COMMODITY_KEYWORDS = {
         'soja', 'safra de soja',
         # Chinese
         '大豆', '中美大豆',
+    ],
+    'rice': [
+        # Core market terms
+        'rice', 'rice prices', 'rice futures', 'rough rice', 'milled rice',
+        'white rice', 'paddy rice', 'rice exports', 'rice imports',
+        'rice harvest', 'global rice stocks', 'rice shortage', 'rice surplus',
+        # Producer / exporter specific
+        'india rice', 'indian rice', 'basmati', 'non-basmati rice',
+        'thailand rice', 'thai rice', 'vietnam rice', 'vietnamese rice',
+        'china rice', 'pakistan rice', 'myanmar rice', 'cambodia rice',
+        # Importer / food security
+        'philippines rice', 'indonesia rice', 'bulog rice', 'nigeria rice',
+        'rice import tender', 'rice food security',
+        # Policy + trade
+        'india rice export ban', 'rice export ban', 'rice export restriction',
+        'india rice export', 'rice tariff', 'usda rice',
+        'fao rice price', 'el nino rice',
+    ],
+    'coffee': [
+        # Core market terms
+        'coffee', 'coffee prices', 'coffee futures', 'arabica', 'robusta',
+        'arabica coffee', 'robusta coffee', 'ice coffee futures',
+        'coffee exports', 'coffee harvest', 'coffee stocks', 'coffee shortage',
+        # Producer specific
+        'brazil coffee', 'brazilian coffee', 'minas gerais coffee',
+        'vietnam coffee', 'vietnamese coffee', 'central highlands coffee',
+        'colombia coffee', 'colombian coffee', 'indonesia coffee',
+        'ethiopia coffee', 'honduras coffee', 'uganda coffee',
+        # Weather / climate drivers
+        'brazil frost', 'brazil coffee frost', 'brazil coffee drought',
+        'vietnam coffee drought', 'coffee crop damage',
+        # Trade
+        'coffee export', 'ice certified stocks coffee', 'robusta arabica spread',
     ],
     'sugar': [
         # Core market terms
@@ -2115,6 +2185,8 @@ COMMODITY_RSS_FEEDS = {
     # Agriculture
     'USDA Wheat Reports': 'https://news.google.com/rss/search?q=USDA+wheat+OR+WASDE+OR+grain+stocks&hl=en&gl=US&ceid=US:en',
     'AgriCensus': 'https://news.google.com/rss/search?q=wheat+exports+OR+corn+exports+OR+soybean+exports&hl=en&gl=US&ceid=US:en',
+    'Rice (USDA/Reuters)': 'https://news.google.com/rss/search?q=rice+export+OR+rice+prices+OR+basmati+OR+india+rice+ban&hl=en&gl=US&ceid=US:en',
+    'Coffee (ICE/Reuters)': 'https://news.google.com/rss/search?q=coffee+prices+OR+arabica+OR+robusta+OR+brazil+coffee+OR+vietnam+coffee&hl=en&gl=US&ceid=US:en',
     # Food security / FAO (Stage 1a — June 2026)
     # FAO is the canonical food-commodity authority. These feed BOTH the commodity
     # news layer AND the cascade detector's article scan (fertilizer->food chain).
