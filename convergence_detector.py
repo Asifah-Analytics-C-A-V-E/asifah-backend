@@ -146,6 +146,17 @@ TIER_BY_COUNT = {0: 'quiet', 1: 'single', 2: 'dual', 3: 'triple', 4: 'quad'}
 TIER_RANK = {'quad': 4, 'triple': 3, 'dual': 2, 'single': 1, 'quiet': 0}
 TIER_WORD = {'quad': 'quadruple', 'triple': 'triple', 'dual': 'dual', 'single': 'single-axis'}
 
+# A commodity headline shared across this many countries is a GLOBAL commodity
+# condition (one macro story stamped onto every exposed country), not per-country
+# corroboration. v0.5.0 detects + EXPOSES these; tier-demotion is a later flip.
+GLOBAL_COMMODITY_MIN = 6
+_NAME_TOKENS = {
+    'usa': ['united states', 'u.s.', 'us-', '-us', 'us '],
+    'uae': ['uae', 'emirates'], 'drc': ['dr congo', 'congo', 'drc'],
+    'united_kingdom': ['united kingdom', 'britain', 'uk'],
+    'south_korea': ['south korea', 'korea'], 'saudi_arabia': ['saudi'],
+}
+
 # Plain-language description of what each axis MEASURES (no jargon).
 AXIS_PHRASE = {
     'kinetic':      'armed-conflict event reporting',
@@ -457,6 +468,16 @@ def _so_what(record, hist):
             drv_bits.append(f"'{t}' ({short})")
     driverline = f" Leading drivers: {'; '.join(drv_bits[:2])}." if drv_bits else ""
 
+    # honesty: a shared_global commodity is elevated here but reflects a broad market-wide
+    # move -- it is excluded from the tier above and surfaced separately as a global condition.
+    com = cid_axes.get('commodity')
+    sharedline = ""
+    if com and com.get('shared_global'):
+        nm = (com.get('driver') or {}).get('commodity_name', 'commodity')
+        sharedline = (f" ({nm} pressure is also elevated here, but it reflects a broad market-wide "
+                      f"move and is surfaced separately as a global condition rather than counted "
+                      f"as {disp}-specific convergence.)")
+
     # 4) history comparison
     if hist['readings'] == 0:
         histline = " No prior convergence history recorded yet."
@@ -476,7 +497,64 @@ def _so_what(record, hist):
         histline = (" " + disp + " has " + "; ".join(parts) + ".") if parts else ""
 
     tail = " This is a convergence reading -- independent streams agreeing -- not a forecast of action."
-    return (lead + whatline + driverline + histline + tail).strip()
+    return (lead + whatline + driverline + sharedline + histline + tail).strip()
+
+
+# ----------------------------------------------------------------------
+# Global commodity conditions: one headline stamped across many countries
+# ----------------------------------------------------------------------
+def _country_named_in(title, cid, display):
+    """Is this country actually named in the commodity headline?"""
+    t = (title or '').lower()
+    if display and display.lower() in t:
+        return True
+    if cid.replace('_', ' ') in t:
+        return True
+    return any(tok in t for tok in _NAME_TOKENS.get(cid, []))
+
+
+def _tag_commodity_clusters(commodity):
+    """Group commodity readings by their driving article. Any article shared
+    across >= GLOBAL_COMMODITY_MIN countries is a GLOBAL condition. Annotate each
+    member's commodity reading with `shared_global` (False if the country is named
+    in the headline -- then it IS country-specific, e.g. Iran in a US-Iran oil story).
+    Returns a list of global_conditions for the GPI cross-theater layer.
+    ADDITIVE: this does NOT change tier counting yet."""
+    clusters = {}
+    for cid, c in commodity.items():
+        d = c.get('driver') or {}
+        key = d.get('article_url') or d.get('article_title')
+        if not key:
+            continue
+        clusters.setdefault(key, []).append(cid)
+
+    global_conditions = []
+    for key, cids in clusters.items():
+        if len(cids) < GLOBAL_COMMODITY_MIN:
+            continue
+        sample = commodity[cids[0]].get('driver') or {}
+        title = sample.get('article_title', '')
+        specific, shared = [], []
+        for cid in cids:
+            disp = _id_to_display(cid)
+            if _country_named_in(title, cid, disp):
+                commodity[cid]['shared_global'] = False
+                specific.append(disp)
+            else:
+                commodity[cid]['shared_global'] = True
+                shared.append(disp)
+        global_conditions.append({
+            'axis':           'commodity',
+            'commodity':      sample.get('commodity'),
+            'commodity_name': sample.get('commodity_name'),
+            'headline':       title,
+            'url':            sample.get('article_url'),
+            'country_count':  len(cids),
+            'countries':      sorted(shared),
+            'named_specific': sorted(specific),
+        })
+    global_conditions.sort(key=lambda g: g['country_count'], reverse=True)
+    return global_conditions
 
 
 # ----------------------------------------------------------------------
@@ -491,6 +569,8 @@ def build_convergence():
     rhetoric,  rhe_avail = _read_rhetoric()
     humanitarian, hum_ok = _read_humanitarian()
 
+    global_conditions = _tag_commodity_clusters(commodity)
+
     all_ids = set(kinetic) | set(commodity) | set(rhetoric) | set(humanitarian)
     records = []
     for cid in all_ids:
@@ -500,7 +580,12 @@ def build_convergence():
             'rhetoric':     rhetoric.get(cid),
             'humanitarian': humanitarian.get(cid),
         }
-        active = [name for name, a in axes.items() if a and a.get('intensity', 0) >= 1]
+        # v0.6.0: a shared_global commodity axis (one headline across many exposed
+        # countries) is relocated to the global-conditions layer -- it no longer
+        # inflates this country's per-country convergence tier.
+        active = [name for name, a in axes.items()
+                  if a and a.get('intensity', 0) >= 1
+                  and not (name == 'commodity' and a.get('shared_global'))]
         count = len(active)
         if count == 0:
             continue
@@ -540,6 +625,7 @@ def build_convergence():
         'summary':       summary,
         'availability':  {'kinetic': kin_ok, 'commodity': com_ok,
                           'rhetoric': rhe_avail, 'humanitarian': hum_ok},
+        'global_conditions': global_conditions,
         'now_epoch':     now_epoch,
         'now_iso':       now_iso,
     }
@@ -562,12 +648,13 @@ def register_convergence_detector_endpoints(app):
                 wrote = False
             return jsonify({
                 'success':         True,
-                'version':         '0.4.0',
-                'step':            '4 (four-axis join + history + prose)',
+                'version':         '0.6.0',
+                'step':            '6 (global-commodity demotion live -- shared headlines relocated)',
                 'generated_at':    result['now_iso'],
                 'tier_counts':     result['tier_counts'],
                 'summary':         result['summary'],
                 'availability':    result['availability'],
+                'global_conditions': result['global_conditions'],
                 'snapshot_written': wrote,
                 'count':           len(result['records']),
                 'records':         result['records'],
@@ -583,7 +670,7 @@ def register_convergence_detector_endpoints(app):
         cid = country.strip().lower()
         series = _read_history([cid]).get(cid, [])
         return jsonify({
-            'success': True, 'version': '0.4.0', 'country': cid,
+            'success': True, 'version': '0.6.0', 'country': cid,
             'display': _id_to_display(cid), 'readings': len(series),
             'series': series,
         })
@@ -596,7 +683,7 @@ def register_convergence_detector_endpoints(app):
         rhe = {r: bool(_redis_get(k)) for r, k in RHETORIC_BLUF_KEYS.items()}
         hum = _redis_get(HUMANITARIAN_CACHE_KEY)
         return jsonify({
-            'success': True, 'version': '0.4.0',
+            'success': True, 'version': '0.6.0',
             'redis_configured': bool(_REDIS_URL and _REDIS_TOKEN),
             'kinetic_warm':      bool(kin),
             'commodity_warm':    bool(com),
@@ -605,4 +692,4 @@ def register_convergence_detector_endpoints(app):
             'probed_at': datetime.now(timezone.utc).isoformat(),
         })
 
-    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/history/<c>, /api/cax/probe  (v0.4.0)")
+    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/history/<c>, /api/cax/probe  (v0.6.0)")
