@@ -246,7 +246,7 @@ REGIONAL_THEATRES = {
         'label': 'Asia & The Pacific Theatre',
         'icon': '🌏',
         'order': 1,
-        'actors': ['china', 'taiwan', 'north_korea', 'pakistan', 'afghanistan'],
+        'actors': ['china', 'taiwan', 'vietnam', 'north_korea', 'pakistan', 'afghanistan'],
         'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, South/Central Asia'
     },
     'europe': {
@@ -824,6 +824,35 @@ MILITARY_ACTORS = {
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=taiwan+strait+OR+pla+OR+china+military+taiwan&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'vietnam': {
+        'name': 'Vietnam',
+        'flag': '🇻🇳',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # South China Sea / maritime sovereignty
+            'south china sea vietnam', 'vietnam south china sea',
+            'vanguard bank', 'vanguard bank standoff',
+            'paracel islands', 'spratly vietnam', 'spratly islands vietnam',
+            'vietnam china standoff', 'china survey vessel vietnam',
+            'china coast guard vietnam', 'vietnam oil rig standoff',
+            'hd-981', 'hd 981', 'haiyang dizhi',
+            # Vietnamese forces / incidents
+            'vietnam coast guard', 'vietnam navy', 'vietnam naval exercise',
+            'vietnam maritime militia', 'vietnam fishing vessel china',
+            'vietnam fishing boat rammed', 'cam ranh bay',
+            # Partnership / external balancing
+            'us vietnam defense', 'vietnam comprehensive strategic partnership',
+            'vietnam philippines coast guard', 'vietnam india defense',
+            'vietnam russia arms',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=vietnam+south+china+sea+OR+vanguard+bank+OR+vietnam+coast+guard&hl=en&gl=US&ceid=US:en',
         ]
     },
 
