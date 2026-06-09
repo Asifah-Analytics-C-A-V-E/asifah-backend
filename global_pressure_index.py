@@ -619,6 +619,86 @@ def _narrative_china_taiwan_takeover(blufs):
     return None
 
 
+def _narrative_scs_first_island_chain_axis(blufs):
+    """South China Sea / first-island-chain convergence (Jun 2026).
+
+    Fires when China pressure draws in the southern SCS claimant (Vietnam)
+    alongside the cross-strait flashpoint (Taiwan). Reads the Asia BLUF's
+    theatre_summary levels PLUS Vietnam's SCS red-line and two-front convergence
+    signal categories, so it catches whichever downstream gate (butterfly
+    two-front pressure or interpreter SCS convergence) surfaces in the Asia
+    rollup -- no dependence on a single gate.
+
+    Convergence framing, NOT prediction: reports that pressure is distributed
+    across the arc, not that any single front will go kinetic.
+    """
+    asia = blufs.get('asia')
+    if not asia:
+        return None
+
+    ts = asia.get('theatre_summary') or {}
+    def _lvl(name):
+        d = ts.get(name) or {}
+        return _safe_level(d.get('threat_level', d.get('level', 0)))
+    cn = _lvl('china')
+    tw = _lvl('taiwan')
+    vn = _lvl('vietnam')
+
+    # Vietnam SCS activity can arrive as a signal even while its headline level is
+    # modest (e.g. the two-front convergence read from Taiwan's fingerprint).
+    vn_scs_signal = _has_signal_category(
+        asia,
+        'china_two_front_convergence',   # Beijing pressuring Taiwan AND Vietnam
+        'sovereignty_erosion',           # CCG / survey / oil-gas incursion
+        'kinetic_threshold',             # ramming / feature militarization
+        'china_direct',                  # nine-dash enforcement, direct coercion
+    )
+    vn_scs_active = (vn >= 3) or vn_scs_signal
+
+    # China is the driver; the axis is fundamentally about Vietnam being drawn in
+    # alongside China pressure, so Vietnam must be genuinely SCS-active.
+    if not (cn >= 3 and vn_scs_active):
+        return None
+    all_three = (tw >= 3)
+
+    named = ['China']
+    if tw >= 3:
+        named.append('Taiwan')
+    named.append('Vietnam')
+    vn_note = ' + active SCS convergence signal' if (vn < 3 and vn_scs_signal) else ''
+
+    if all_three:
+        priority = 13
+        headline = ('South China Sea axis -- simultaneous pressure across China, Taiwan, '
+                    'and Vietnam along the first island chain')
+    else:
+        priority = 11
+        headline = ('South China Sea axis forming -- pressure spans '
+                    + ' + '.join(named) + ' in the same window')
+
+    detail = (
+        'Asia-Pacific maritime theater: pressure is distributed across the South China Sea / '
+        'first-island-chain arc rather than concentrated on the Taiwan Strait alone. China is the '
+        'driver (L' + str(cn) + '); Taiwan is the cross-strait flashpoint (L' + str(tw) + '); '
+        'Vietnam is the southern claimant (L' + str(vn) + vn_note + '). A multi-front maritime '
+        'posture stretches US and allied response capacity across separated theaters at once -- the '
+        'combination is what compounds risk beyond any single chokepoint. Watch China Coast Guard / '
+        'maritime-militia tempo around Vietnamese hydrocarbon blocks, ADIZ activity, and '
+        'US / Japan / Philippines / India coalition signaling. This is a CONVERGENCE indicator, '
+        'NOT a probability of action -- it reports that pressure spans the arc, not that any front '
+        'will go kinetic.'
+    )
+    return {
+        'priority': priority,
+        'category': 'scs_first_island_chain_axis',
+        'regions':  ['asia'],
+        'icon':     '\U0001f30a',  # ocean wave
+        'color':    '#f97316',
+        'headline': headline,
+        'detail':   detail,
+    }
+
+
 def _narrative_russia_iran_axis(blufs):
     """Russia + Iran cross-theater convergence (uranium / weapons / coordination)."""
     europe = blufs.get('europe')
@@ -1247,6 +1327,7 @@ NARRATIVE_DETECTORS = [
     _narrative_nuclear_signaling_global,
     _narrative_iran_strike_window,                       # convergence framing (May 22 2026)
     _narrative_china_taiwan_takeover,
+    _narrative_scs_first_island_chain_axis,             # Jun 2026 -- China+Taiwan+Vietnam SCS arc
     _narrative_dual_chokepoint,
     _narrative_russia_iran_axis,
     _narrative_arctic_convergence,
