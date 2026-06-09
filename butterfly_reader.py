@@ -1040,6 +1040,111 @@ def _india_predicate_commodity_pressure(upstream, acc):
 # Adding a new consumer? Add an entry here + define the predicate functions above.
 # ============================================================================
 
+def _vietnam_predicate_iran_hormuz(upstream, acc):
+    """Hormuz pressure -> Vietnam energy-import / refining exposure."""
+    iran = upstream.get('iran', {})
+    if not iran:
+        return
+    iran_score = int(iran.get('theatre_score', 0) or 0)
+    iran_irgc = int(iran.get('irgc_level', iran.get('irgc_direct_level', 0)) or 0)
+    iran_targets = iran.get('named_targets', []) or []
+    hormuz_named = any(t in iran_targets for t in
+                       ['hormuz', 'strait of hormuz', 'persian gulf'])
+    hormuz_pressure = (
+        bool(iran.get('iran_hormuz_pressure'))
+        or hormuz_named
+        or (iran_score >= 60 and iran_irgc >= 3)
+    )
+    if hormuz_pressure:
+        acc['upstream_stressors'].append('iran_hormuz_oil')
+        acc['context_notes'].append(
+            f"Iran-Hormuz pressure active (theatre_score={iran_score}, "
+            f"IRGC L{iran_irgc}) -- Vietnam net crude-import + refining reliance "
+            f"(Dung Quat, Nghi Son) raises input-cost and SCS oil/gas friction; "
+            f"cpv_state + maritime_posture decision-making amplified."
+        )
+        acc['amplifier_actor_deltas']['cpv_state'] = (
+            acc['amplifier_actor_deltas'].get('cpv_state', 0) + 1
+        )
+        acc['amplifier_actor_deltas']['maritime_posture'] = (
+            acc['amplifier_actor_deltas'].get('maritime_posture', 0) + 1
+        )
+
+
+def _vietnam_predicate_china_scs_posture(upstream, acc):
+    """China PLA / SCS posture -> Vietnam maritime + state response amplified."""
+    china = upstream.get('china', {})
+    if not china:
+        return
+    china_pla = int(china.get('pla_level', 0) or 0)
+    china_mfa = int(china.get('mfa_level', 0) or 0)
+    china_targets = china.get('named_targets', []) or []
+    scs_named = any(t in china_targets for t in
+                    ['south china sea', 'spratly', 'paracel', 'vanguard bank',
+                     'vietnam', 'nine-dash', 'scarborough'])
+    if china_pla >= 3 or scs_named or china_mfa >= 4:
+        acc['upstream_stressors'].append('china_scs_posture')
+        acc['context_notes'].append(
+            f"China posture elevated (PLA L{china_pla}, MFA L{china_mfa}, "
+            f"SCS-named: {scs_named}) -- broad Beijing assertiveness is a leading "
+            f"indicator for SCS coercion against Vietnam; maritime_posture + "
+            f"cpv_state amplified."
+        )
+        acc['amplifier_actor_deltas']['maritime_posture'] = (
+            acc['amplifier_actor_deltas'].get('maritime_posture', 0) + 1
+        )
+        acc['amplifier_actor_deltas']['cpv_state'] = (
+            acc['amplifier_actor_deltas'].get('cpv_state', 0) + 1
+        )
+
+
+def _vietnam_predicate_china_economic_coercion(upstream, acc):
+    """China economic coercion -> Vietnam trade / rare-earth / tourism exposure."""
+    china = upstream.get('china', {})
+    if not china:
+        return
+    econ_level = int(china.get('econ_level', 0) or 0)
+    if econ_level >= 2:
+        acc['upstream_stressors'].append('china_economic_coercion')
+        acc['context_notes'].append(
+            f"China economic coercion at L{econ_level} -- Vietnam's deep trade "
+            f"dependency (inputs, rare earth, tourism, land border) is the "
+            f"principal economic vulnerability; mofa_diplomacy + cpv_state amplified."
+        )
+        acc['amplifier_actor_deltas']['mofa_diplomacy'] = (
+            acc['amplifier_actor_deltas'].get('mofa_diplomacy', 0) + 1
+        )
+        acc['amplifier_actor_deltas']['cpv_state'] = (
+            acc['amplifier_actor_deltas'].get('cpv_state', 0) + 1
+        )
+
+
+def _vietnam_predicate_taiwan_two_front(upstream, acc):
+    """Beijing pressuring Taiwan AND the SCS -> two-front coercion pattern.
+    Convergence indicator only: reports correlated pressure, not coordinated intent."""
+    taiwan = upstream.get('taiwan', {})
+    china = upstream.get('china', {})
+    if not taiwan:
+        return
+    taiwan_level = int(taiwan.get('overall_level', taiwan.get('theatre_level', 0)) or 0)
+    china_pla = int((china or {}).get('pla_level', 0) or 0)
+    if taiwan_level >= 3 and china_pla >= 3:
+        acc['upstream_stressors'].append('china_two_front_pressure')
+        acc['context_notes'].append(
+            f"China two-front pressure -- Taiwan composite L{taiwan_level} AND "
+            f"China PLA posture L{china_pla} simultaneously. Multi-front coercion "
+            f"stretches regional coalition attention; regional_partners + "
+            f"us_partnership coordination amplified. Convergence indicator only -- "
+            f"correlated pressure, not coordinated intent."
+        )
+        acc['amplifier_actor_deltas']['regional_partners'] = (
+            acc['amplifier_actor_deltas'].get('regional_partners', 0) + 1
+        )
+        acc['amplifier_actor_deltas']['us_partnership'] = (
+            acc['amplifier_actor_deltas'].get('us_partnership', 0) + 1
+        )
+
+
 PREDICATE_LIBRARY = {
     'india': [
         _india_predicate_iran_hormuz,
@@ -1070,6 +1175,12 @@ PREDICATE_LIBRARY = {
         _cuba_predicate_china_rare_earths_supply,
         _cuba_predicate_commodity_pressure,  # v1.1 — oil×grid, wheat, sugar historic reversal
         # Future: _cuba_predicate_venezuela_collapse (when venezuela tracker fully wired)
+    ],
+    'vietnam': [
+        _vietnam_predicate_iran_hormuz,
+        _vietnam_predicate_china_scs_posture,
+        _vietnam_predicate_china_economic_coercion,
+        _vietnam_predicate_taiwan_two_front,
     ],
     # Future consumers: 'russia', 'iran', 'china', etc.
 }
