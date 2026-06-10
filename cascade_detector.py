@@ -311,6 +311,93 @@ SEVERITY_HIGH     = 3
 # ============================================================
 # DETECTION FUNCTIONS
 # ============================================================
+# ============================================================
+# FOOD PRICE PULSE GROUND-TRUTH LAYER (Slice 2a -- June 2026)
+# Reads the food_price_pulse_bundle written by food_price_pulse.py
+# (WFP VAM domestic staple prices, ~98 countries). Used to corroborate
+# cascade chains with measured price reality, not just news volume.
+# Enrichment only -- it does NOT change chain level math (deferred
+# until we see real multi-month data, same discipline as tier boosts).
+# ============================================================
+
+FOOD_PULSE_REDIS_KEY = 'food_price_pulse_bundle'
+
+_PULSE_NAME_TO_ISO3 = {
+    'chile': 'CHL', 'indonesia': 'IDN', 'morocco': 'MAR',
+    'egypt': 'EGY', 'nigeria': 'NGA', 'india': 'IND',
+    'bangladesh': 'BGD', 'yemen': 'YEM', 'jordan': 'JOR',
+    'lebanon': 'LBN', 'sudan': 'SDN', 'ethiopia': 'ETH',
+}
+
+# 'africa' is a region-class amplified entry: checked against a basket of
+# high-exposure sub-Saharan states; reported as the worst band found.
+_PULSE_AFRICA_BASKET = ['NGA', 'ETH', 'SOM', 'SDN', 'SSD', 'NER', 'MLI',
+                        'BFA', 'TCD', 'COD', 'MOZ', 'MWI', 'ZWE', 'KEN']
+
+_PULSE_BAND_ORDER = ['normal', 'watch', 'elevated', 'high']
+_pulse_cache = {'bundle': None, 'fetched_at': None}
+_PULSE_CACHE_SECONDS = 900  # 15 min in-process cache
+
+
+def _read_food_price_pulse_bundle():
+    """Fetch the pulse bundle from Redis with a 15-minute in-process cache.
+    Returns dict or None. Never raises."""
+    now = datetime.now(timezone.utc)
+    if (_pulse_cache['bundle'] is not None and _pulse_cache['fetched_at'] is not None
+            and (now - _pulse_cache['fetched_at']).total_seconds() < _PULSE_CACHE_SECONDS):
+        return _pulse_cache['bundle']
+    url = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
+    token = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+    if not (url and token):
+        return None
+    try:
+        import requests
+        r = requests.get("%s/get/%s" % (url, FOOD_PULSE_REDIS_KEY),
+                         headers={"Authorization": "Bearer %s" % token}, timeout=8)
+        if r.ok:
+            raw = (r.json() or {}).get('result')
+            if raw:
+                bundle = json.loads(raw)
+                _pulse_cache['bundle'] = bundle
+                _pulse_cache['fetched_at'] = now
+                return bundle
+    except Exception as e:
+        print("[Cascade] food price pulse read failed: %s" % e)
+    return None
+
+
+def _pulse_ground_truth_for(country_name, bundle):
+    """Ground-truth read for one amplified-country entry. Returns a dict
+    only when measured prices are anomalous (watch+); otherwise None."""
+    if not bundle:
+        return None
+    countries = bundle.get('countries') or {}
+
+    def _entry(iso3):
+        c = countries.get(iso3)
+        if c and c.get('band') in ('watch', 'elevated', 'high'):
+            return {'iso3': iso3, 'band': c['band'],
+                    'anomalous_staples': c.get('anomalous_staples', []),
+                    'data_as_of': c.get('data_as_of')}
+        return None
+
+    name = (country_name or '').lower()
+    if name == 'africa':
+        hits = [e for e in (_entry(i) for i in _PULSE_AFRICA_BASKET) if e]
+        if not hits:
+            return None
+        hits.sort(key=lambda e: _PULSE_BAND_ORDER.index(e['band']), reverse=True)
+        worst = dict(hits[0])
+        worst['basket_anomalous_count'] = len(hits)
+        worst['basket_note'] = '%d of %d basket countries anomalous' % (
+            len(hits), len(_PULSE_AFRICA_BASKET))
+        return worst
+    iso3 = _PULSE_NAME_TO_ISO3.get(name)
+    if not iso3:
+        return None
+    return _entry(iso3)
+
+
 def _scan_text_for_keywords(text, keywords):
     """
     Scan text against a keyword list. Returns (matched_count, matched_keywords).
@@ -628,9 +715,11 @@ def aggregate_cascade_convergence(cascade_results):
     chains_active_count   = len(active_chains)
     chains_at_watch_count = len(watch_chains)
 
-    # Collect amplified countries across active chains
+    # Collect amplified countries across active AND watch chains.
+    # (WATCH-tier surfacing per the June 4 queue: exposure context should
+    # appear as soon as a chain reaches watch, not only when fully active.)
     amplified = {}
-    for r in active_chains:
+    for r in active_chains + watch_chains:
         for country, info in r.get('amplified_countries', {}).items():
             amplified.setdefault(country, []).append({
                 'chain': r['chain_label'],
@@ -638,6 +727,17 @@ def aggregate_cascade_convergence(cascade_results):
                 'rank': info.get('rank', '?'),
                 'reason': info.get('reason', ''),
             })
+
+    # Food Price Pulse ground truth: measured domestic staple prices for
+    # the amplified countries (corroboration layer, no score effect).
+    food_price_ground_truth = {}
+    if amplified:
+        pulse_bundle = _read_food_price_pulse_bundle()
+        if pulse_bundle:
+            for country in amplified:
+                gt = _pulse_ground_truth_for(country, pulse_bundle)
+                if gt:
+                    food_price_ground_truth[country] = gt
 
     # Collect all downstream commodities stressed
     downstream_commodities = set()
@@ -677,6 +777,8 @@ def aggregate_cascade_convergence(cascade_results):
         'chains_at_watch':     chains_at_watch_count,
         'chains_active_list':  [r['chain_label'] for r in active_chains],
         'amplified_countries': amplified,
+        'food_price_ground_truth': food_price_ground_truth,
+        'ground_truth_corroborated': len(food_price_ground_truth),
         'downstream_commodities_stressed': sorted(downstream_commodities),
     }
 
@@ -743,7 +845,24 @@ def build_cascade_bluf(cascade_results, aggregation=None):
         if r.get('so_what'):
             long_text_parts.append(f"SO WHAT: {r['so_what']}")
 
-        long_text = ' '.join(long_text_parts)
+        # Ground-truth corroboration line: measured WFP domestic prices
+        # for this chain's amplified countries (convergence framing).
+        gt_all = aggregation.get('food_price_ground_truth', {}) or {}
+        gt_hits = [(c, gt_all[c]) for c in (r.get('amplified_countries') or {}) if c in gt_all]
+        if gt_hits:
+            gt_bits = []
+            for cname, gt in gt_hits[:4]:
+                staples = ', '.join(gt.get('anomalous_staples', [])[:3]) or 'staples'
+                gt_bits.append(f"{cname.title()} ({staples} {gt.get('band')})")
+            long_text_parts.append(
+                "GROUND TRUTH: WFP-measured domestic staple prices already "
+                f"anomalous in {'; '.join(gt_bits)} -- measured-price corroboration "
+                "of this chain's exposure map, as of "
+                f"{gt_hits[0][1].get('data_as_of', 'latest reporting')}."
+            )
+            long_text = ' '.join(long_text_parts)
+        else:
+            long_text = ' '.join(long_text_parts)
 
         canonical_signals.append({
             'category':      f"cascade_{r['chain_key']}",
@@ -779,8 +898,10 @@ def build_cascade_bluf(cascade_results, aggregation=None):
             'chains_at_watch':     aggregation['chains_at_watch'],
             'chains_active_list':  aggregation['chains_active_list'],
             'amplified_countries': aggregation['amplified_countries'],
+            'food_price_ground_truth': aggregation.get('food_price_ground_truth', {}),
+            'ground_truth_corroborated': aggregation.get('ground_truth_corroborated', 0),
             'downstream_commodities_stressed': aggregation['downstream_commodities_stressed'],
-            'detector_version':    'cascade_detector v1.0.0',
+            'detector_version':    'cascade_detector v' + __version__,
             'chains_registered':   list(CASCADE_CHAINS.keys()),
         },
     }
@@ -1063,6 +1184,6 @@ def register_cascade_detector_routes(app, redis_client=None, json_module=None):
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.0.0'
+__version__ = '1.1.0'  # food price ground truth layer (Slice 2a)
 __module_id__ = 'cascade_detector'
 print(f'[Cascade Detector] Module loaded -- v{__version__}')
