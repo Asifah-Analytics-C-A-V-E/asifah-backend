@@ -138,6 +138,14 @@ except ImportError:
     KINETIC_GATHERER_AVAILABLE = False
     print("[ME Backend] Kinetic Activity Gatherer not available")
 
+try:
+    from food_price_pulse import register_food_price_pulse_endpoints
+    FOOD_PULSE_AVAILABLE = True
+    print("[ME Backend] Food Price Pulse loaded")
+except ImportError:
+    FOOD_PULSE_AVAILABLE = False
+    print("[ME Backend] Food Price Pulse not available")
+
 # ------------------------------------------------------------
 # CASCADE COMMODITY DETECTOR (v2.4 -- May 17, 2026)
 # Detects chokepoint -> intermediate -> downstream commodity cascades.
@@ -1129,6 +1137,12 @@ if HUMANITARIAN_GATHERER_AVAILABLE:
 if KINETIC_GATHERER_AVAILABLE:
     register_kinetic_endpoints(app, start_scheduler=True)
     print("[ME Backend] Kinetic Activity Gatherer routes registered: /api/kinetic-activity, /debug")
+
+# Food Price Pulse -- coverage-first WFP staple price monitor (economic
+# sibling of the kinetic gatherer). Weekly scan, cross-worker lock built in.
+if FOOD_PULSE_AVAILABLE:
+    register_food_price_pulse_endpoints(app, start_scheduler=True)
+    print("[ME Backend] Food Price Pulse routes registered: /api/food-price-pulse, /recon, /debug")
 
 # Global Pressure Index -- register after all regional BLUFs/rhetoric so it can read them
 if GPI_AVAILABLE:
