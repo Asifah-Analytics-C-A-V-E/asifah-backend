@@ -3843,6 +3843,7 @@ def _build_empty_skeleton():
             'sparkline':      None,
             'total_score':    0,
             'signal_count':   0,
+            'domestic_price_stress': None,
             'top_signals':    [],
             'alert_level':    'normal',
         }
@@ -4028,6 +4029,7 @@ def _run_full_scan(days=7):
             'signal_count':   len(sigs),
             'top_signals':    sigs[:8],
             'alert_level':    determine_alert_level(score),
+            'domestic_price_stress': _domestic_price_stress(cid),
         }
 
     # Phase 5: build country summaries
