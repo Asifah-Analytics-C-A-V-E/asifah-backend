@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-FOOD PRICE PULSE v1.0.0 (Slice 1) -- Asifah Analytics
+FOOD PRICE PULSE v1.0.1 (Slice 1) -- Asifah Analytics
 ======================================================
 Coverage-first domestic staple food price monitor. The economic-axis
 sibling of kinetic_activity_gatherer.py: instead of tracking only the
@@ -18,7 +18,10 @@ URL. It discovers the current URL at runtime through the HDX CKAN API:
     https://data.humdata.org/api/3/action/package_show?id=wfp-food-prices-jor
 
 The response JSON carries resources[] with live download_url values.
-Country dataset ids follow the pattern wfp-food-prices-{iso3 lower}.
+Country dataset ids are country-NAME slugs (wfp-food-prices-for-jordan,
+not ISO3), so v1.0.1 reads each country's dataset URL directly from the
+global index CSV instead of constructing ids. The seed fallback carries
+explicit (iso3, slug) pairs.
 
 ANALYTICAL FRAME (convergence, not prediction)
 ----------------------------------------------
@@ -53,7 +56,7 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('U
 
 HDX_PACKAGE_SHOW = "https://data.humdata.org/api/3/action/package_show"
 GLOBAL_DATASET_ID = "global-wfp-food-prices"
-COUNTRY_DATASET_PATTERN = "wfp-food-prices-{iso3}"
+COUNTRY_DATASET_PREFIX = "wfp-food-prices-for-"
 
 # HDX shows bot detection on plain requests; use a real browser UA
 # (same lesson as the Yahoo Finance fix on the US stability page).
@@ -102,17 +105,74 @@ STAPLE_FAMILIES = [
     ('potatoes', ['potatoes', 'potato', 'cassava']),
 ]
 
-# Fallback country list if HDX country-index discovery fails. ISO3 codes
-# of WFP-monitored countries, biased toward Asifah exposure profiles.
-SEED_ISO3 = [
-    'JOR', 'EGY', 'LBN', 'SYR', 'IRQ', 'YEM', 'PSE', 'TUR', 'IRN',
-    'SDN', 'SSD', 'NGA', 'ETH', 'SOM', 'KEN', 'MLI', 'NER', 'BFA',
-    'TCD', 'CMR', 'COD', 'CAF', 'MOZ', 'ZWE', 'MWI', 'ZMB', 'UGA',
-    'TZA', 'RWA', 'BDI', 'SEN', 'GIN', 'LBR', 'SLE', 'MRT', 'LBY',
-    'DZA', 'MAR', 'TUN', 'AFG', 'PAK', 'BGD', 'LKA', 'MMR', 'KHM',
-    'LAO', 'IDN', 'PHL', 'TLS', 'KGZ', 'TJK', 'UKR', 'MDA', 'ARM',
-    'HTI', 'VEN', 'PER', 'BOL', 'COL', 'ECU', 'GTM', 'HND', 'SLV', 'NIC',
+# Fallback (iso3, dataset-slug) pairs if HDX index discovery fails.
+# Slugs are HDX country-NAME slugs (verified pattern: wfp-food-prices-for-jordan).
+# The index CSV is the primary source of truth; this list is belt-and-suspenders
+# and a slug miss simply reports no_dataset for that one country.
+SEED_DATASETS = [
+    ('JOR', 'wfp-food-prices-for-jordan'),
+    ('EGY', 'wfp-food-prices-for-egypt'),
+    ('LBN', 'wfp-food-prices-for-lebanon'),
+    ('SYR', 'wfp-food-prices-for-syrian-arab-republic'),
+    ('IRQ', 'wfp-food-prices-for-iraq'),
+    ('YEM', 'wfp-food-prices-for-yemen'),
+    ('PSE', 'wfp-food-prices-for-state-of-palestine'),
+    ('TUR', 'wfp-food-prices-for-turkiye'),
+    ('SDN', 'wfp-food-prices-for-sudan'),
+    ('SSD', 'wfp-food-prices-for-south-sudan'),
+    ('NGA', 'wfp-food-prices-for-nigeria'),
+    ('ETH', 'wfp-food-prices-for-ethiopia'),
+    ('SOM', 'wfp-food-prices-for-somalia'),
+    ('KEN', 'wfp-food-prices-for-kenya'),
+    ('MLI', 'wfp-food-prices-for-mali'),
+    ('NER', 'wfp-food-prices-for-niger'),
+    ('BFA', 'wfp-food-prices-for-burkina-faso'),
+    ('TCD', 'wfp-food-prices-for-chad'),
+    ('CMR', 'wfp-food-prices-for-cameroon'),
+    ('COD', 'wfp-food-prices-for-democratic-republic-of-the-congo'),
+    ('CAF', 'wfp-food-prices-for-central-african-republic'),
+    ('MOZ', 'wfp-food-prices-for-mozambique'),
+    ('ZWE', 'wfp-food-prices-for-zimbabwe'),
+    ('MWI', 'wfp-food-prices-for-malawi'),
+    ('ZMB', 'wfp-food-prices-for-zambia'),
+    ('UGA', 'wfp-food-prices-for-uganda'),
+    ('TZA', 'wfp-food-prices-for-united-republic-of-tanzania'),
+    ('RWA', 'wfp-food-prices-for-rwanda'),
+    ('BDI', 'wfp-food-prices-for-burundi'),
+    ('SEN', 'wfp-food-prices-for-senegal'),
+    ('GIN', 'wfp-food-prices-for-guinea'),
+    ('LBR', 'wfp-food-prices-for-liberia'),
+    ('SLE', 'wfp-food-prices-for-sierra-leone'),
+    ('MRT', 'wfp-food-prices-for-mauritania'),
+    ('LBY', 'wfp-food-prices-for-libya'),
+    ('DZA', 'wfp-food-prices-for-algeria'),
+    ('AFG', 'wfp-food-prices-for-afghanistan'),
+    ('PAK', 'wfp-food-prices-for-pakistan'),
+    ('BGD', 'wfp-food-prices-for-bangladesh'),
+    ('LKA', 'wfp-food-prices-for-sri-lanka'),
+    ('MMR', 'wfp-food-prices-for-myanmar'),
+    ('KHM', 'wfp-food-prices-for-cambodia'),
+    ('LAO', 'wfp-food-prices-for-lao-peoples-democratic-republic'),
+    ('IDN', 'wfp-food-prices-for-indonesia'),
+    ('PHL', 'wfp-food-prices-for-philippines'),
+    ('TLS', 'wfp-food-prices-for-timor-leste'),
+    ('KGZ', 'wfp-food-prices-for-kyrgyzstan'),
+    ('TJK', 'wfp-food-prices-for-tajikistan'),
+    ('UKR', 'wfp-food-prices-for-ukraine'),
+    ('MDA', 'wfp-food-prices-for-republic-of-moldova'),
+    ('ARM', 'wfp-food-prices-for-armenia'),
+    ('HTI', 'wfp-food-prices-for-haiti'),
+    ('VEN', 'wfp-food-prices-for-venezuela-bolivarian-republic-of'),
+    ('PER', 'wfp-food-prices-for-peru'),
+    ('BOL', 'wfp-food-prices-for-bolivia-plurinational-state-of'),
+    ('COL', 'wfp-food-prices-for-colombia'),
+    ('ECU', 'wfp-food-prices-for-ecuador'),
+    ('GTM', 'wfp-food-prices-for-guatemala'),
+    ('HND', 'wfp-food-prices-for-honduras'),
+    ('SLV', 'wfp-food-prices-for-el-salvador'),
+    ('NIC', 'wfp-food-prices-for-nicaragua'),
 ]
+SEED_SLUG_BY_ISO3 = dict(SEED_DATASETS)
 
 _SCHED_WORKER_ID = "w%d" % os.getpid()
 _scan_lock = threading.Lock()      # in-process guard for force scans
@@ -226,46 +286,59 @@ def _pick_csv_resource(package, name_hint=None):
 
 
 def discover_country_list():
-    """Discover the WFP country list from the global index dataset.
-    Returns list of ISO3 codes (uppercase). Falls back to SEED_ISO3."""
+    """Discover (iso3, dataset_slug) pairs from the WFP global index CSV.
+    The index carries a url column linking each country's HDX dataset, so
+    no slug guessing is needed. Falls back to SEED_DATASETS."""
     package = _hdx_package_show(GLOBAL_DATASET_ID)
     url, name, _mod = _pick_csv_resource(package, name_hint='countries')
     if not url:
-        print("[FoodPulse] country index unavailable; using seed list (%d)" % len(SEED_ISO3))
-        return list(SEED_ISO3)
+        print("[FoodPulse] country index unavailable; using seed list (%d)" % len(SEED_DATASETS))
+        return list(SEED_DATASETS)
     try:
         r = requests.get(url, headers=HTTP_HEADERS, timeout=REQUEST_TIMEOUT)
         if r.status_code != 200:
             print("[FoodPulse] country index HTTP %s; using seed list" % r.status_code)
-            return list(SEED_ISO3)
-        iso3s = []
+            return list(SEED_DATASETS)
+        pairs = []
         reader = csv.reader(r.text.splitlines())
         header = next(reader, [])
         cols = [h.strip().lower() for h in header]
         iso_idx = None
+        url_idx = None
         for candidate in ('countryiso3', 'iso3', 'country_iso3'):
             if candidate in cols:
                 iso_idx = cols.index(candidate)
                 break
-        if iso_idx is None:
-            print("[FoodPulse] country index schema unrecognized; using seed list")
-            return list(SEED_ISO3)
+        if 'url' in cols:
+            url_idx = cols.index('url')
+        if iso_idx is None or url_idx is None:
+            print("[FoodPulse] index schema unrecognized (%s); using seed list" % cols[:6])
+            return list(SEED_DATASETS)
         for row in reader:
             if not row or row[0].startswith('#'):
                 continue  # HXL tag row
-            if iso_idx < len(row):
-                code = row[iso_idx].strip().upper()
-                if len(code) == 3 and code.isalpha():
-                    iso3s.append(code)
-        iso3s = sorted(set(iso3s))
-        if len(iso3s) < 10:
-            print("[FoodPulse] country index suspiciously small (%d); using seed list" % len(iso3s))
-            return list(SEED_ISO3)
-        print("[FoodPulse] discovered %d countries from HDX index" % len(iso3s))
-        return iso3s
+            if max(iso_idx, url_idx) >= len(row):
+                continue
+            code = row[iso_idx].strip().upper()
+            link = row[url_idx].strip()
+            if len(code) == 3 and code.isalpha() and '/dataset/' in link:
+                slug = link.rstrip('/').split('/')[-1]
+                if slug:
+                    pairs.append((code, slug))
+        seen = set()
+        unique = []
+        for code, slug in pairs:
+            if code not in seen:
+                seen.add(code)
+                unique.append((code, slug))
+        if len(unique) < 10:
+            print("[FoodPulse] index suspiciously small (%d); using seed list" % len(unique))
+            return list(SEED_DATASETS)
+        print("[FoodPulse] discovered %d countries from HDX index" % len(unique))
+        return unique
     except Exception as e:
-        print("[FoodPulse] country index parse failed (%s); using seed list" % e)
-        return list(SEED_ISO3)
+        print("[FoodPulse] index parse failed (%s); using seed list" % e)
+        return list(SEED_DATASETS)
 
 
 # ------------------------------------------------------------------
@@ -434,14 +507,17 @@ def _summarize_staple(family, month_buckets, today_str):
     return out
 
 
-def build_country_pulse(iso3, today_str=None):
+def build_country_pulse(iso3, dataset_id=None, today_str=None):
     """Fetch and analyze one country. Returns summary dict or None."""
     today_str = today_str or datetime.utcnow().strftime('%Y-%m-%d')
     cutoff = (datetime.utcnow() - timedelta(days=RETENTION_DAYS)).strftime('%Y-%m-%d')
-    dataset_id = COUNTRY_DATASET_PATTERN.format(iso3=iso3.lower())
+    dataset_id = dataset_id or SEED_SLUG_BY_ISO3.get(iso3.upper())
+    if not dataset_id:
+        return {'iso3': iso3, 'status': 'no_dataset_mapping',
+                'detail': 'iso3 not in seed map; full scan discovers slugs from the HDX index'}
     package = _hdx_package_show(dataset_id)
     if not package:
-        return {'iso3': iso3, 'status': 'no_dataset'}
+        return {'iso3': iso3, 'status': 'no_dataset', 'dataset_id': dataset_id}
     url, res_name, last_modified = _pick_csv_resource(package)
     if not url:
         return {'iso3': iso3, 'status': 'no_csv_resource'}
@@ -488,8 +564,8 @@ def run_full_scan():
     countries = discover_country_list()
     results = {}
     failures = {}
-    for i, iso3 in enumerate(countries):
-        pulse = build_country_pulse(iso3)
+    for i, (iso3, slug) in enumerate(countries):
+        pulse = build_country_pulse(iso3, dataset_id=slug)
         if pulse and pulse.get('status') == 'ok':
             results[iso3] = pulse
         elif pulse:
@@ -631,25 +707,33 @@ def register_food_price_pulse_endpoints(app, start_scheduler=True):
 
     @app.route('/api/food-price-pulse/recon')
     def api_food_price_pulse_recon():
-        """Live source-discovery smoke test. Cheap: two CKAN calls, no scan."""
+        """Live source smoke test with RAW statuses (cheap, no scan)."""
+        def _probe(dataset_id):
+            try:
+                r = requests.get(HDX_PACKAGE_SHOW, params={'id': dataset_id},
+                                 headers=HTTP_HEADERS, timeout=REQUEST_TIMEOUT)
+                body = r.text[:160]
+                ok = False
+                res_name = None
+                res_mod = None
+                if r.status_code == 200:
+                    j = r.json()
+                    ok = bool(j.get('success'))
+                    url, res_name, res_mod = _pick_csv_resource(j.get('result'))
+                return {'http_status': r.status_code, 'ckan_success': ok,
+                        'csv_resource': res_name, 'last_modified': res_mod,
+                        'body_head': None if ok else body}
+            except Exception as e:
+                return {'error': str(e)}
         report = {'checks': {}, 'disclaimer': CONVERGENCE_DISCLAIMER}
-        pkg = _hdx_package_show(GLOBAL_DATASET_ID)
-        url, name, mod = _pick_csv_resource(pkg, name_hint='countries')
-        report['checks']['global_index'] = {
-            'dataset_reachable': bool(pkg),
-            'countries_csv_found': bool(url),
-            'resource_name': name,
-            'last_modified': mod,
-        }
-        pkg_jor = _hdx_package_show(COUNTRY_DATASET_PATTERN.format(iso3='jor'))
-        url_j, name_j, mod_j = _pick_csv_resource(pkg_jor)
-        report['checks']['jordan_dataset'] = {
-            'dataset_reachable': bool(pkg_jor),
-            'csv_found': bool(url_j),
-            'resource_name': name_j,
-            'last_modified': mod_j,
-        }
-        report['verdict'] = ('ok' if (url and url_j) else 'degraded')
+        report['checks']['global_index'] = _probe(GLOBAL_DATASET_ID)
+        report['checks']['jordan'] = _probe('wfp-food-prices-for-jordan')
+        g_ok = report['checks']['global_index'].get('ckan_success')
+        j_ok = report['checks']['jordan'].get('ckan_success')
+        report['verdict'] = 'ok' if (g_ok and j_ok) else 'degraded'
+        if not (g_ok and j_ok):
+            report['hint'] = ('HTTP 403 means HDX bot-blocks Render (curl_cffi fix); '
+                              '404/success=false means dataset id wrong.')
         return jsonify(report)
 
     @app.route('/debug/food-price-pulse')
