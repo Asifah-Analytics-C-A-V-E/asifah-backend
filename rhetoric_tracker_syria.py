@@ -1506,6 +1506,19 @@ def run_syria_rhetoric_scan(days=3):
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
+    # -- Turkey swing-state read (Jun 11 2026): Syria is Turkey's LEAD
+    # INDICATOR vector -- Turkish escalation language about Syria has
+    # historically preceded broader regional ambition. Read in its own lane.
+    try:
+        _tk = (_redis_get(CROSSTHEATER_KEY) or {}).get('turkey', {})
+        result['turkey_syria_escalation'] = _tk.get('syria_escalation', 'normal')
+        result['turkey_nato_divergence']  = _tk.get('nato_divergence', 'anchored')
+        result['turkey_lebanon_vector']   = _tk.get('lebanon_vector', 'dormant')
+    except Exception:
+        result['turkey_syria_escalation'] = 'normal'
+        result['turkey_nato_divergence']  = 'anchored'
+        result['turkey_lebanon_vector']   = 'dormant'
+
     # Signal interpretation -- So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
         try:
