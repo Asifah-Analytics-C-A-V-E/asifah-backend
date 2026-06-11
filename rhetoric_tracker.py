@@ -2194,6 +2194,19 @@ def run_rhetoric_scan(days=3):
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
+    # -- Turkey swing-state read (Jun 11 2026): the Lebanon-vector
+    # playbook ladder, read from Turkey's cross-theater entry. Bands:
+    # dormant/rhetoric/soft_power/economic/security/kinetic_risk.
+    try:
+        _tk = (_redis_get(CROSSTHEATER_KEY) or {}).get('turkey', {})
+        result['turkey_lebanon_vector']       = _tk.get('lebanon_vector', 'dormant')
+        result['turkey_lebanon_vector_stage'] = _tk.get('lebanon_vector_stage', 0)
+        result['turkey_mediation_active']     = _tk.get('mediation_active', False)
+    except Exception:
+        result['turkey_lebanon_vector']       = 'dormant'
+        result['turkey_lebanon_vector_stage'] = 0
+        result['turkey_mediation_active']     = False
+
     # Signal interpretation -- So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
         try:
