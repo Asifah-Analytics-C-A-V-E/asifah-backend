@@ -1012,6 +1012,11 @@ def _compute_inbound_threat_from_fingerprints():
         # ── v1.1: Cross-theater diplomatic tracks ──
         'theaters_in_diplomacy': [],   # list of dicts: {theater, ceasefire_level, modifier, label}
         'inbound_diplomatic_modifier': 0,  # aggregate downward pressure on inbound score
+        # -- Turkey lane (Jun 11 2026): swing-state friction read. Turkey is
+        # NOT an Iran-axis theater and never feeds the convergence index.
+        'turkey_israel_friction': 'normal',   # normal/simmering/elevated/high
+        'turkey_lebanon_vector':  'dormant',  # dormant/rhetoric/soft_power/economic/security/kinetic_risk
+        'turkey_nato_divergence': 'anchored',
     }
     try:
         fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
@@ -1047,6 +1052,19 @@ def _compute_inbound_threat_from_fingerprints():
                             'modifier':        fp.get('diplomatic_modifier', 0),
                             'label':           fp.get('diplomatic_label', 'Quiet'),
                         })
+            except Exception:
+                pass
+
+        # -- Turkey lane: read the swing-state entry in its OWN lane --
+        turkey_fp = fingerprints.get('turkey', {})
+        if turkey_fp:
+            try:
+                age_h = (now - datetime.fromisoformat(turkey_fp['ts'])).total_seconds() / 3600
+                if age_h <= 24:
+                    result['turkey_israel_friction'] = turkey_fp.get('israel_friction', 'normal')
+                    result['turkey_lebanon_vector']  = turkey_fp.get('lebanon_vector', 'dormant')
+                    result['turkey_nato_divergence'] = turkey_fp.get('nato_divergence', 'anchored')
+                    result['fingerprints_age']['turkey'] = round(age_h, 1)
             except Exception:
                 pass
 
@@ -1896,6 +1914,9 @@ def run_israel_rhetoric_scan(days=3):
         'inbound_max_level': scores['inbound_max_level'],
         'threat_convergence_index': inbound_fp['threat_convergence_index'],
         'convergence_signal': inbound_fp['convergence_signal'],
+        'turkey_israel_friction': inbound_fp.get('turkey_israel_friction', 'normal'),
+        'turkey_lebanon_vector':  inbound_fp.get('turkey_lebanon_vector', 'dormant'),
+        'turkey_nato_divergence': inbound_fp.get('turkey_nato_divergence', 'anchored'),
         # Per-source inbound levels
         'iran_threat_level':      inbound_fp['iran_level'],
         'hezbollah_threat_level': inbound_fp['lebanon_level'],
