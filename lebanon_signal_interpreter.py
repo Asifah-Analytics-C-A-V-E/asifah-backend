@@ -1073,6 +1073,34 @@ def build_top_signals(scan_data):
                           scan_data.get('theatre_score', 0)) or 0)
     rockets_level   = int(scan_data.get('rockets_level', 0) or 0)
     ground_ops_lvl  = int(scan_data.get('ground_ops_level', 0) or 0)
+
+    # -- Turkey Levant-vector signal (Jun 11 2026): reads the Turkey
+    # swing-state fingerprint. Reportable from the economic rung upward;
+    # the security rung is the Libya-model tripwire.
+    _tk_band  = str(scan_data.get('turkey_lebanon_vector', 'dormant'))
+    _tk_stage = int(scan_data.get('turkey_lebanon_vector_stage', 0) or 0)
+    if _tk_band in ('economic', 'security', 'kinetic_risk'):
+        _tk_map = {'economic':    (8, 2, '💰'),
+                   'security':    (11, 4, '⚔️'),
+                   'kinetic_risk': (13, 5, '🚨')}
+        _prio, _lvl, _icon = _tk_map[_tk_band]
+        signals.append({
+            'priority':   _prio,
+            'category':   'crosstheater_turkey_lebanon',
+            'theatre':    'lebanon',
+            'level':      _lvl,
+            'icon':       _icon,
+            'color':      '#e11d48',
+            'short_text': (f'🇱🇧 LEBANON: Turkey vector '
+                           f'L{_tk_stage} ({_tk_band})'),
+            'long_text':  (f'LEBANON: Turkey Levant-vector reads '
+                           f'{_tk_band.replace("_", " ")} (stage L{_tk_stage}) on '
+                           f'the documented playbook ladder. On the Libya-model '
+                           f'precedent, security-cooperation class signals have '
+                           f'historically preceded presence by invitation. '
+                           f'Watch items: port concessions, defense MOU language, '
+                           f'buffer-zone framing. Convergence read, not prediction.'),
+        })
     crossborder_lvl = int(scan_data.get('crossborder_level', 0) or 0)
     ceasefire_lvl   = int(scan_data.get('ceasefire_level', 0) or 0)
 
