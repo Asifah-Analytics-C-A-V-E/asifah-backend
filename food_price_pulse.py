@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-FOOD PRICE PULSE v1.0.1 (Slice 1) -- Asifah Analytics
+FOOD PRICE PULSE v1.1.0 (Slices 1+3) -- Asifah Analytics
 ======================================================
 Coverage-first domestic staple food price monitor. The economic-axis
 sibling of kinetic_activity_gatherer.py: instead of tracking only the
@@ -173,6 +173,32 @@ SEED_DATASETS = [
     ('NIC', 'wfp-food-prices-for-nicaragua'),
 ]
 SEED_SLUG_BY_ISO3 = dict(SEED_DATASETS)
+
+# Display names aligned with kinetic_activity_gatherer FIPS naming style
+# (short common names) so cross-layer country matching works at GPI altitude.
+ISO3_DISPLAY_NAMES = {
+    'JOR': 'Jordan', 'EGY': 'Egypt', 'LBN': 'Lebanon', 'SYR': 'Syria',
+    'IRQ': 'Iraq', 'YEM': 'Yemen', 'PSE': 'Palestine', 'TUR': 'Turkey',
+    'SDN': 'Sudan', 'SSD': 'South Sudan', 'NGA': 'Nigeria', 'ETH': 'Ethiopia',
+    'SOM': 'Somalia', 'KEN': 'Kenya', 'MLI': 'Mali', 'NER': 'Niger',
+    'BFA': 'Burkina Faso', 'TCD': 'Chad', 'CMR': 'Cameroon', 'COD': 'DR Congo',
+    'CAF': 'Central African Republic', 'MOZ': 'Mozambique', 'ZWE': 'Zimbabwe',
+    'MWI': 'Malawi', 'ZMB': 'Zambia', 'UGA': 'Uganda', 'TZA': 'Tanzania',
+    'RWA': 'Rwanda', 'BDI': 'Burundi', 'SEN': 'Senegal', 'GIN': 'Guinea',
+    'LBR': 'Liberia', 'SLE': 'Sierra Leone', 'MRT': 'Mauritania',
+    'LBY': 'Libya', 'DZA': 'Algeria', 'AFG': 'Afghanistan', 'PAK': 'Pakistan',
+    'BGD': 'Bangladesh', 'LKA': 'Sri Lanka', 'MMR': 'Myanmar',
+    'KHM': 'Cambodia', 'LAO': 'Laos', 'IDN': 'Indonesia',
+    'PHL': 'Philippines', 'TLS': 'Timor-Leste', 'KGZ': 'Kyrgyzstan',
+    'TJK': 'Tajikistan', 'UKR': 'Ukraine', 'MDA': 'Moldova',
+    'ARM': 'Armenia', 'HTI': 'Haiti', 'VEN': 'Venezuela', 'PER': 'Peru',
+    'BOL': 'Bolivia', 'COL': 'Colombia', 'ECU': 'Ecuador',
+    'GTM': 'Guatemala', 'HND': 'Honduras', 'SLV': 'El Salvador',
+    'NIC': 'Nicaragua',
+}
+
+FOOD_PULSE_FINGERPRINT_KEY = 'food_price_pulse_fingerprint'
+GPI_GATE_MIN_STAPLES = 2   # multi-staple co-movement = broad-basket stress
 
 _SCHED_WORKER_ID = "w%d" % os.getpid()
 _scan_lock = threading.Lock()      # in-process guard for force scans
@@ -592,10 +618,121 @@ def run_full_scan():
         'disclaimer': CONVERGENCE_DISCLAIMER,
     }
     ok = _redis_set_bundle(bundle)
+    _write_pulse_fingerprint(bundle)
     print("[FoodPulse] full scan complete: %d/%d countries, %d anomalous, redis=%s, %ds"
           % (len(results), len(countries), len(anomalous_countries), ok,
              bundle['scan_seconds']))
     return bundle
+
+
+def extract_gated_countries(bundle):
+    """The GPI gate: band 'high' AND >= GPI_GATE_MIN_STAPLES anomalous staples.
+    Multi-staple co-movement distinguishes broad-basket (monetary / supply /
+    political) stress from single-commodity market noise. Returns a list of
+    dicts sorted by staple count desc."""
+    gated = []
+    for iso3, c in ((bundle or {}).get('countries') or {}).items():
+        if c.get('band') != 'high':
+            continue
+        staples = c.get('anomalous_staples') or []
+        if len(staples) < GPI_GATE_MIN_STAPLES:
+            continue
+        gated.append({
+            'iso3': iso3,
+            'country': ISO3_DISPLAY_NAMES.get(iso3, iso3),
+            'staples': staples,
+            'data_as_of': c.get('data_as_of'),
+        })
+    gated.sort(key=lambda g: len(g['staples']), reverse=True)
+    return gated
+
+
+def _write_pulse_fingerprint(bundle):
+    """Compact cross-layer fingerprint (butterfly-reader / tracker hook).
+    Written at the end of every full scan; 14-day TTL like the bundle."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return False
+    gated = extract_gated_countries(bundle)
+    fp = {
+        'gated_countries': gated,
+        'gate': "band high + %d-plus anomalous staples" % GPI_GATE_MIN_STAPLES,
+        'anomalous_countries': bundle.get('anomalous_countries', []),
+        'generated_at': bundle.get('generated_at'),
+        'source': 'food_price_pulse',
+        'disclaimer': CONVERGENCE_DISCLAIMER,
+    }
+    hdr = {"Authorization": "Bearer %s" % UPSTASH_REDIS_TOKEN}
+    try:
+        r = requests.post(UPSTASH_REDIS_URL, headers=hdr,
+                          json=["SET", FOOD_PULSE_FINGERPRINT_KEY, json.dumps(fp),
+                                "EX", str(REDIS_BUNDLE_TTL_SECONDS)],
+                          timeout=10)
+        return bool(r.ok)
+    except Exception as e:
+        print("[FoodPulse] fingerprint write failed: %s" % e)
+        return False
+
+
+def build_food_pulse_bluf():
+    """Canonical pseudo-region BLUF for GPI consumption (same architectural
+    pattern as humanitarian / cascade / commodity pseudo-regions). Signals
+    are gated (high + multi-staple), tagged pressure_type 'economic', and
+    written in estimative language: the pattern and its precedent, never a
+    prediction."""
+    bundle = _redis_get_bundle()
+    gated = extract_gated_countries(bundle)
+    signals = []
+    for g in gated[:6]:
+        n_staples = len(g['staples'])
+        level = 4 if n_staples >= 3 else 3
+        staple_list = ', '.join(g['staples'])
+        signals.append({
+            'category':      'food_price_stress',
+            'country':       g['country'],
+            'theatre':       'global_food',
+            'region':        'global_food',
+            'level':         level,
+            'pressure_type': 'economic',
+            'icon':          '\U0001f33e',
+            'color':         '#ef4444' if n_staples >= 3 else '#f59e0b',
+            'short_text':    ('%s: measured domestic price stress across %d staples (%s)'
+                              % (g['country'], n_staples, staple_list))[:150],
+            'long_text':     ('Multi-staple measured price stress in %s -- %s all anomalous '
+                              'against the country\'s own trailing baseline (WFP measured '
+                              'domestic prices, data as of %s). Broad-basket domestic price '
+                              'stress is the pattern that has historically preceded '
+                              'subsistence-driven unrest and humanitarian deterioration. '
+                              'Convergence indicator, not a prediction.'
+                              % (g['country'], staple_list, g['data_as_of'] or 'latest reporting')),
+            'priority':      level * 3,
+            'data_as_of':    g['data_as_of'],
+        })
+    max_level = max([s['level'] for s in signals], default=0)
+    if not signals:
+        posture = 'BASELINE -- no countries meet the multi-staple stress gate'
+        color = '#6b7280'
+    else:
+        posture = ('FOOD PRICE STRESS -- %d countr%s with high-band multi-staple anomalies'
+                   % (len(gated), 'y' if len(gated) == 1 else 'ies'))
+        color = '#ef4444' if max_level >= 4 else '#f59e0b'
+    return {
+        'region':        'global_food',
+        'max_level':     max_level,
+        'peak_level':    max_level,
+        'posture_label': posture,
+        'posture_color': color,
+        'top_signals':   signals[:5],
+        'signals':       signals,
+        'updated_at':    datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'meta': {
+            'countries_gated': len(gated),
+            'gated_countries': gated,
+            'gate': "band high + %d-plus anomalous staples" % GPI_GATE_MIN_STAPLES,
+            'bundle_generated_at': (bundle or {}).get('generated_at'),
+            'source': SOURCE_ATTRIBUTION,
+            'disclaimer': CONVERGENCE_DISCLAIMER,
+        },
+    }
 
 
 def _bundle_is_fresh(bundle):
@@ -704,6 +841,11 @@ def register_food_price_pulse_endpoints(app, start_scheduler=True):
         pulse['disclaimer'] = CONVERGENCE_DISCLAIMER
         pulse['from_cache'] = False
         return jsonify(pulse)
+
+    @app.route('/api/food-price-pulse/bluf')
+    def api_food_price_pulse_bluf():
+        """Pseudo-region BLUF for GPI (reads cached bundle only -- cheap)."""
+        return jsonify(build_food_pulse_bluf())
 
     @app.route('/api/food-price-pulse/recon')
     def api_food_price_pulse_recon():
