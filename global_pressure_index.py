@@ -78,6 +78,12 @@ REGIONAL_BLUF_ENDPOINTS = {
     # Signals tagged pressure_type='economic'. Same architectural pattern as
     # the cascade + humanitarian pseudo-regions; GPI needs no logic changes.
     'global_commodity': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/commodity-pressure/bluf',
+    # v3.8 (Jun 10 2026) -- Food Price Pulse (Slice 3)
+    # Pseudo-region: WFP-measured domestic staple prices, ~98 countries,
+    # gated to high-band + multi-staple (broad-basket stress pattern).
+    # Signals tagged pressure_type='economic'. Same architectural pattern
+    # as humanitarian / cascade / commodity; GPI needs no axes changes.
+    'global_food': os.environ.get('ME_BACKEND_URL', 'https://asifah-backend.onrender.com') + '/api/food-price-pulse/bluf',
 }
 
 # Display config
@@ -1219,6 +1225,138 @@ def _narrative_nuclear_signaling_global(blufs):
     return None
 
 
+KINETIC_BUNDLE_KEY = 'kinetic:global:latest'
+
+
+_COUNTRY_NAME_ALIASES = {
+    # normalized variant -> canonical short name (pulse/kinetic style).
+    # Exact matching + this table avoids the containment traps
+    # (Sudan vs South Sudan, Niger vs Nigeria).
+    'syrian arab republic': 'syria',
+    'state of palestine': 'palestine',
+    'palestinian territories': 'palestine',
+    'turkiye': 'turkey',
+    'democratic republic of the congo': 'dr congo',
+    'drc': 'dr congo',
+    'republic of moldova': 'moldova',
+    'lao pdr': 'laos',
+    "lao people's democratic republic": 'laos',
+    'united republic of tanzania': 'tanzania',
+    'myanmar (burma)': 'myanmar',
+    'burma': 'myanmar',
+    'venezuela (bolivarian republic of)': 'venezuela',
+    'bolivia (plurinational state of)': 'bolivia',
+    'east timor': 'timor-leste',
+}
+
+
+def _normalize_country_name(name):
+    n = (name or '').strip().lower()
+    return _COUNTRY_NAME_ALIASES.get(n, n)
+
+
+def _names_match(a, b):
+    """Exact country-name matching after normalization + alias mapping.
+    Deliberately NOT containment-based: 'Sudan' must never match
+    'South Sudan', nor 'Niger' match 'Nigeria'."""
+    a = _normalize_country_name(a)
+    b = _normalize_country_name(b)
+    return bool(a) and a == b
+
+
+def _narrative_food_stress_convergence(blufs):
+    """FOOD x KINETIC x HUMANITARIAN compound read (Slice 3b, Jun 10 2026).
+
+    Doctrine: sensors below, analyst above. The food pulse (sensor) reports
+    measured multi-staple price stress; this detector reads it TOGETHER with
+    kinetic activity (GDELT CAMEO gatherer) and the humanitarian convergence
+    layer for the same countries. Co-occurrence across independent layers is
+    the compound pattern consistent with elevated famine / unrest /
+    humanitarian-crisis risk -- stated estimatively, never predictively.
+    """
+    food = blufs.get('global_food')
+    food_signals = _signals_of(food)
+    if not food_signals:
+        return None
+
+    # Layer 2: kinetic gatherer bundle (same Redis; names like 'Afghanistan')
+    kinetic = _redis_get(KINETIC_BUNDLE_KEY) or {}
+    kinetic_hot = {name: c.get('band') for name, c in (kinetic.get('countries') or {}).items()
+                   if c.get('band') in ('elevated', 'high', 'surge')}
+
+    # Layer 3: humanitarian convergence signals carry a 'country' field
+    hum = blufs.get('global_humanitarian')
+    hum_countries = set()
+    for sig in _signals_of(hum):
+        cname = sig.get('country')
+        if cname and _safe_level(sig.get('level', 0)) >= 2:
+            hum_countries.add(cname)
+
+    compound = []
+    food_only = []
+    for sig in food_signals:
+        country = sig.get('country') or ''
+        layers = ['food']
+        kin_band = None
+        for kname, band in kinetic_hot.items():
+            if _names_match(country, kname):
+                layers.append('kinetic')
+                kin_band = band
+                break
+        for hname in hum_countries:
+            if _names_match(country, hname):
+                layers.append('humanitarian')
+                break
+        entry = {'country': country, 'layers': layers, 'kinetic_band': kin_band,
+                 'staples': sig.get('short_text', ''), 'level': _safe_level(sig.get('level', 0))}
+        if len(layers) >= 2:
+            compound.append(entry)
+        else:
+            food_only.append(entry)
+
+    if compound:
+        triple = [e for e in compound if len(e['layers']) == 3]
+        names = ', '.join(e['country'] for e in compound[:5])
+        layer_bits = []
+        for e in compound[:4]:
+            others = '+'.join(l for l in e['layers'] if l != 'food')
+            layer_bits.append('%s (food+%s)' % (e['country'], others))
+        return {
+            'priority': 7 if triple else 8,
+            'category': 'food_stress_convergence',
+            'regions':  ['global_food', 'global_humanitarian'],
+            'icon':     '\U0001f33e',
+            'color':    '#dc2626' if triple else '#ef4444',
+            'headline': ('Food-price stress co-occurring with %s signals in %d countr%s -- %s'
+                         % ('kinetic and humanitarian' if triple else 'independent pressure',
+                            len(compound), 'y' if len(compound) == 1 else 'ies', names)),
+            'detail':   ('WFP-measured multi-staple domestic price stress is co-occurring with '
+                         'independent pressure layers in the same countries: %s. '
+                         'Cross-layer co-occurrence of measured food stress with kinetic or '
+                         'humanitarian signals is the compound pattern that has historically '
+                         'preceded famine conditions and subsistence-driven unrest. This is a '
+                         'convergence read of present conditions, not a prediction of outcome.'
+                         % '; '.join(layer_bits)),
+        }
+    # Food-only: gated multi-staple stress with no cross-layer overlap yet.
+    names = ', '.join(e['country'] for e in food_only[:5])
+    return {
+        'priority': 12,
+        'category': 'food_stress_gated',
+        'regions':  ['global_food'],
+        'icon':     '\U0001f33e',
+        'color':    '#f59e0b',
+        'headline': ('Multi-staple food-price stress measured in %d countr%s -- %s'
+                     % (len(food_only), 'y' if len(food_only) == 1 else 'ies', names)),
+        'detail':   ('WFP-measured domestic prices show high-band anomalies across multiple '
+                     'staples in %s -- broad-basket stress against each country\'s own '
+                     'baseline, the pattern that has historically preceded subsistence-driven '
+                     'unrest. No kinetic or humanitarian co-occurrence detected this cycle; '
+                     'watch for cross-layer convergence. Convergence indicator, not a prediction.'
+                     % names),
+    }
+
+
 def _narrative_global_baseline(blufs):
     """Fallback: when no narratives detected, summarize the elevated regions."""
     elevated = [(r, _level_of(b)) for r, b in blufs.items() if _level_of(b) >= 3]
@@ -1337,6 +1475,7 @@ NARRATIVE_DETECTORS = [
     _narrative_wha_cascade,
     _narrative_houthi_fragility,
     _narrative_multiaxis_convergence,                    # multi-axis + global-commodity (Jun 6 2026)
+    _narrative_food_stress_convergence,                  # food x kinetic x humanitarian (Jun 10 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
