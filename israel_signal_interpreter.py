@@ -1021,6 +1021,29 @@ def build_top_signals(scan_data):
                            f'Hezbollah kinetic / rocket / cross-border activity '
                            f'read from Lebanon fingerprint.'),
         })
+    # -- Turkey mirror-friction lane (Jun 11 2026): read from the Turkey
+    # swing-state fingerprint. Distinct lane from the Iran axis.
+    turkey_friction = str(scan_data.get('turkey_israel_friction', 'normal'))
+    turkey_lb_vector = str(scan_data.get('turkey_lebanon_vector', 'dormant'))
+    if turkey_friction in ('elevated', 'high'):
+        signals.append({
+            'priority':   10 if turkey_friction == 'high' else 8,
+            'category':   'crosstheater_turkey_israel',
+            'theatre':    'israel',
+            'level':      4 if turkey_friction == 'high' else 3,
+            'icon':       '🇹🇷',
+            'color':      '#e11d48',
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: Turkey friction '
+                           f'{turkey_friction.upper()}'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL: Turkey-Israel mirror-friction '
+                           f'reads {turkey_friction} from the Turkey swing-state '
+                           f'fingerprint -- both capitals framing the other as the '
+                           f'Levant expansionist. Turkey Lebanon-vector: '
+                           f'{turkey_lb_vector}. Synchronized escalation of mutual '
+                           f'threat narratives has historically preceded '
+                           f'deconfliction strain in shared Syrian space.'),
+        })
+
     if houthi_lvl >= 4:
         signals.append({
             'priority':   10,
