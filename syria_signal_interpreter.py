@@ -893,6 +893,30 @@ def build_top_signals(result):
         })
 
     # ============================================
+    # CATEGORY 7B: TURKEY VECTOR (swing-state fingerprint, Jun 11 2026)
+    # Syria is Turkey's lead-indicator vector. New-operation language
+    # from Ankara reads here before it reads anywhere else.
+    # ============================================
+    _tk_esc = str(result.get('turkey_syria_escalation', 'normal'))
+    if _tk_esc in ('elevated', 'critical'):
+        signals.append({
+            'priority':   12 if _tk_esc == 'critical' else 10,
+            'category':   'crosstheater_turkey_syria',
+            'theatre':    'syria',
+            'level':      4 if _tk_esc == 'critical' else 3,
+            'icon':       '🇹🇷',
+            'color':      '#e11d48',
+            'short_text': (f'{SYRIA_FLAG} SYRIA: Turkish operation signals '
+                           f'{_tk_esc.upper()}'),
+            'long_text':  (f'SYRIA: Turkey swing-state fingerprint reads Syria '
+                           f'escalation {_tk_esc} -- new-operation class language '
+                           f'(troop massing, SDF ultimatums, buffer-zone framing). '
+                           f'On Turkey\'s documented pattern this language has '
+                           f'historically preceded cross-border operations; Syria '
+                           f'is the lead indicator for broader Levant ambition.'),
+        })
+
+    # ============================================
     # CATEGORY 8: THEATRE COMPOSITE HIGH (catch-all when escalating)
     # ============================================
     if theatre_level >= 4 or theatre_score >= 70:
