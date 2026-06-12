@@ -686,6 +686,7 @@ SUSPENDED_CARRIERS = [
     'Emirates SkyCargo', 'ONE', 'Evergreen'
 ]
 
+
 def get_hormuz_status(all_articles=None):
     """Determine Strait of Hormuz operational status from OSINT articles."""
     articles = all_articles or []
@@ -785,6 +786,7 @@ def get_hormuz_status(all_articles=None):
     if scan_status is None and status != 'open':
         status_detail += (f' (State persisted: no fresh closure or reopening '
                           f'signals this scan -- {reopen_hits} reopening keywords detected.)')
+
     result = {
         'success': True,
         'status': status,
@@ -832,7 +834,20 @@ def get_iran_oil_production_status(all_articles=None):
         halt_news = scan_iran_oil_news(all_articles or [])
         bpd = latest_production["barrels_per_day"]
 
-        if halt_news["halt_detected"]:
+        # Jun 12 2026: export status DERIVES from the Hormuz sticky state --
+        # one source of truth, no second keyword detector to decay.
+        # Hormuz closed => exports cannot read "Normal operations".
+        hormuz_state = _hormuz_state_get().get('status', 'open')
+
+        if hormuz_state in ('closed', 'closed_with_leakage'):
+            status, status_emoji = "throttled", "🔴"
+            status_text = "EXPORTS THROTTLED"
+            status_detail = (f"Nameplate ~{round(bpd/1000000, 2)}M bpd; effective exports "
+                             f"constrained to leakage flows by Hormuz closure and Kharg "
+                             f"Island damage. Export capacity is a central US-Iran "
+                             f"negotiation lever.")
+            news_link = halt_news["url"] if halt_news.get("halt_detected") else None
+        elif halt_news["halt_detected"]:
             status, status_emoji = "halted", "🔴"
             status_text = "EXPORT HALT REPORTED"
             status_detail = halt_news["summary"]
