@@ -89,7 +89,7 @@ import statistics
 import requests
 from datetime import datetime, timezone
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
@@ -223,35 +223,43 @@ TICKERS = {
 
 
 def _fetch_yahoo_monthly(ticker):
-    """Returns {'YYYY-MM': close} or None."""
+    """Returns {'YYYY-MM': close} or None.
+    v1.0.1: fetched in THREE bounded period1/period2 chunks. range=max on
+    century-long series silently coerces 1mo bars to QUARTERLY (caught by
+    the first live backtest, Jun 12 2026: 138 months where ~414 belonged).
+    Bounded chunks of <=25 years each guarantee true monthly granularity."""
     encoded = requests.utils.quote(ticker, safe='')
-    for host in YAHOO_HOSTS:
-        try:
-            url = (f'{host}/v8/finance/chart/{encoded}'
-                   f'?range=max&interval=1mo')
-            r = requests.get(url, headers={'User-Agent': CHROME_UA},
-                             timeout=(6, 25))
-            if r.status_code != 200:
-                continue
-            result = (r.json().get('chart') or {}).get('result')
-            if not result:
-                continue
-            res = result[0]
-            stamps = res.get('timestamp') or []
-            closes = ((res.get('indicators') or {}).get('quote')
-                      or [{}])[0].get('close') or []
-            out = {}
-            for ts, c in zip(stamps, closes):
-                if c is None:
+    now = int(datetime.now(timezone.utc).timestamp())
+    chunks = [(0, 631152000),            # 1970-01 .. 1990-01
+              (631152000, 1104537600),   # 1990-01 .. 2005-01
+              (1104537600, now + 86400)] # 2005-01 .. present
+    merged = {}
+    for p1, p2 in chunks:
+        for host in YAHOO_HOSTS:
+            try:
+                url = (f'{host}/v8/finance/chart/{encoded}'
+                       f'?period1={p1}&period2={p2}&interval=1mo')
+                r = requests.get(url, headers={'User-Agent': CHROME_UA},
+                                 timeout=(6, 25))
+                if r.status_code != 200:
                     continue
-                d = datetime.fromtimestamp(ts, tz=timezone.utc)
-                out[f'{d.year:04d}-{d.month:02d}'] = float(c)
-            if out:
-                return out
-        except Exception as e:
-            print(f'[Market BlackSwan] Yahoo {host} {ticker} failed: {e}')
-            continue
-    return None
+                result = (r.json().get('chart') or {}).get('result')
+                if not result:
+                    continue
+                res = result[0]
+                stamps = res.get('timestamp') or []
+                closes = ((res.get('indicators') or {}).get('quote')
+                          or [{}])[0].get('close') or []
+                for ts, c in zip(stamps, closes):
+                    if c is None:
+                        continue
+                    d = datetime.fromtimestamp(ts, tz=timezone.utc)
+                    merged[f'{d.year:04d}-{d.month:02d}'] = float(c)
+                break  # chunk done; next chunk
+            except Exception as e:
+                print(f'[Market BlackSwan] Yahoo {host} {ticker} failed: {e}')
+                continue
+    return merged or None
 
 
 # ------------------------------------------------------------
@@ -679,23 +687,38 @@ def run_backtest(data, start='1992-01'):
                          'active': _active_set(feats)})
     by_month = {t['month']: t for t in timeline}
 
-    # Computed lead times: walk back from each event month while the
-    # band stays >= elevated; lead = length of that continuous run.
+    # Granularity self-check (v1.0.1): the bug this catches is Yahoo
+    # silently degrading to quarterly bars. Median month-gap must be 1.
+    gaps = []
+    for a, b in zip(months, months[1:]):
+        ya, ma = int(a[:4]), int(a[5:7])
+        yb, mb = int(b[:4]), int(b[5:7])
+        gaps.append((yb * 12 + mb) - (ya * 12 + ma))
+    median_gap = statistics.median(gaps) if gaps else None
+    if median_gap and median_gap > 1:
+        print(f'[Market BlackSwan] WARNING: median month gap {median_gap} '
+              f'-- data is NOT monthly; results unreliable')
+
+    # Computed lead times (v1.0.1: index-based walk over the ACTUAL
+    # timeline -- gap-tolerant): step back through evaluated months while
+    # the band stays >= elevated; lead = months covered by that run.
     BAND_RANK = {'normal': 0, 'elevated': 1, 'high': 2, 'critical': 3}
     episode_reads = []
     for ep in EPISODES:
         ev = ep['event_month']
-        if ev < start or ev not in by_month and _month_shift(ev, -1) not in by_month:
+        prior = [t for t in timeline if t['month'] < ev]
+        if not prior:
             continue
         lead = 0
         peak_band = 'normal'
-        cursor = _month_shift(ev, -1)
-        while cursor in by_month and BAND_RANK[by_month[cursor]['band']] >= 1:
-            lead += 1
-            if BAND_RANK[by_month[cursor]['band']] > BAND_RANK[peak_band]:
-                peak_band = by_month[cursor]['band']
-            cursor = _month_shift(cursor, -1)
-        at_event = by_month.get(ev) or by_month.get(_month_shift(ev, -1)) or {}
+        for t in reversed(prior):
+            if BAND_RANK[t['band']] >= 1:
+                lead += 1
+                if BAND_RANK[t['band']] > BAND_RANK[peak_band]:
+                    peak_band = t['band']
+            else:
+                break
+        at_event = by_month.get(ev) or prior[-1]
         episode_reads.append({
             'id': ep['id'], 'label': ep['label'], 'type': ep['type'],
             'event_month': ev,
@@ -728,6 +751,12 @@ def run_backtest(data, start='1992-01'):
         'version': VERSION,
         'start': start,
         'months_evaluated': len(timeline),
+        'granularity_median_month_gap': median_gap,
+        'granularity_ok': bool(median_gap == 1),
+        'era_note': ('Pre-2000 episodes are scored on fewer available '
+                     'features (RSP/SMH/XLF and VIX/FRED series start '
+                     'later) -- lead times across eras are comparable in '
+                     'direction, not magnitude.'),
         'episode_reads': episode_reads,
         'control_reads': control_reads,
         'band_strip_by_year': band_strip,
