@@ -1096,6 +1096,14 @@ try:
     print('[ME Backend] Iran financial pulse module loaded')
 except Exception as e:
     print(f'[ME Backend] WARNING: Iran financial pulse unavailable ({e})')
+
+# Market Black Swan -- fragility convergence detector (v1.0.0 Jun 2026)
+try:
+    from market_blackswan_detector import register_market_blackswan_endpoints
+    register_market_blackswan_endpoints(app)
+    print('[ME Backend] Market Black Swan detector loaded')
+except Exception as e:
+    print(f'[ME Backend] WARNING: Market Black Swan unavailable ({e})')
 from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
 from israel_stability import register_israel_stability_endpoints
