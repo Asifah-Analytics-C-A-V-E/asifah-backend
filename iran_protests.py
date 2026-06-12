@@ -615,11 +615,76 @@ HORMUZ_RESTRICTED_KEYWORDS = [
     'tanker reroute', 'tanker divert fujairah',
 ]
 
+# Reopening keywords -- ONLY these step the persisted state DOWN.
+# Silence preserves state: closure is a STATE, not a news cycle
+# (Jun 12 2026 fix -- mention-decay was flipping the card back to
+# OPEN while the strait stayed shut).
+HORMUZ_REOPENING_KEYWORDS = [
+    'hormuz reopened', 'strait reopened', 'hormuz reopen',
+    'hormuz traffic resumed', 'hormuz traffic normal',
+    'shipping resumes hormuz', 'shipping resumed strait',
+    'tankers return hormuz', 'tanker traffic resumes',
+    'hormuz open to traffic', 'strait open to shipping',
+    'insurance restored hormuz', 'war risk premiums fall',
+    'reopen strait of hormuz', 'agreement reopen hormuz',
+    'hormuz corridor agreement', 'hormuz deal reached',
+]
+
+# Sticky-state machine (Redis-persisted). Severity ladder:
+HORMUZ_STATE_RANK = {
+    'open': 0, 'restricted': 1, 'severely_restricted': 2,
+    'closed_with_leakage': 3, 'closed': 4,
+}
+HORMUZ_STATE_LADDER = ['open', 'restricted', 'severely_restricted',
+                       'closed_with_leakage', 'closed']
+# Default reflects ground truth as of June 12, 2026: closed with
+# leakage flows only; reopening is an active US-Iran negotiation point.
+HORMUZ_DEFAULT_STATE = 'closed_with_leakage'
+HORMUZ_STATE_KEY = 'hormuz_state'
+
+
+def _hormuz_state_get():
+    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+        try:
+            resp = requests.get(
+                f"{UPSTASH_REDIS_URL}/get/{HORMUZ_STATE_KEY}",
+                headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                timeout=8)
+            if resp.status_code == 200:
+                raw = resp.json().get('result')
+                if raw:
+                    state = json.loads(raw)
+                    if state.get('status') in HORMUZ_STATE_RANK:
+                        return state
+        except Exception as e:
+            print(f"[Hormuz] state GET failed: {e}")
+    return {'status': HORMUZ_DEFAULT_STATE,
+            'set_at': 'default (Jun 12 2026 ground truth)'}
+
+
+def _hormuz_state_set(status, reason):
+    state = {'status': status, 'reason': reason,
+             'set_at': datetime.now(timezone.utc).isoformat()}
+    if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+        try:
+            requests.post(
+                f"{UPSTASH_REDIS_URL}/set/{HORMUZ_STATE_KEY}",
+                headers={
+                    "Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                data=json.dumps(state, default=str),
+                timeout=8)
+            print(f"[Hormuz] state -> {status} ({reason})")
+        except Exception as e:
+            print(f"[Hormuz] state SET failed: {e}")
+    return state
+
+
 SUSPENDED_CARRIERS = [
     'Maersk', 'MSC', 'CMA CGM', 'Hapag-Lloyd', 'COSCO',
     'Emirates SkyCargo', 'ONE', 'Evergreen'
 ]
-
 
 def get_hormuz_status(all_articles=None):
     """Determine Strait of Hormuz operational status from OSINT articles."""
@@ -627,6 +692,7 @@ def get_hormuz_status(all_articles=None):
 
     closure_hits = 0
     restricted_hits = 0
+    reopen_hits = 0
     best_closure_article = None
     best_restricted_article = None
     suspended_carriers_found = []
@@ -658,42 +724,67 @@ def get_hormuz_status(all_articles=None):
                     }
                 break
 
+        # Check reopening keywords (sticky-state step-down signals)
+        for kw in HORMUZ_REOPENING_KEYWORDS:
+            if kw in text:
+                reopen_hits += 1
+                break
+
         # Check carrier suspensions
         for carrier in SUSPENDED_CARRIERS:
             if carrier.lower() in text and any(kw in text for kw in ['suspend', 'halt', 'pause', 'cancel', 'stop']):
                 if carrier not in suspended_carriers_found:
                     suspended_carriers_found.append(carrier)
 
-    # Determine status
+    # ── What does THIS SCAN's article batch suggest? (None = silence) ──
     if closure_hits >= 3:
-        status = 'closed'
-        status_emoji = '🔴'
-        status_text = 'EFFECTIVELY CLOSED'
-        status_detail = f'~90% traffic reduction. IRGC declared strait closed Mar 2. Insurance withdrawn. {closure_hits} closure signals detected.'
-        traffic_level = 10  # ~10% of normal
-        insurance_status = 'P&I coverage withdrawn for Mar 5+'
+        scan_status = 'closed'
     elif closure_hits >= 1 or restricted_hits >= 5:
-        status = 'severely_restricted'
-        status_emoji = '🔴'
-        status_text = 'SEVERELY RESTRICTED'
-        status_detail = f'Major traffic reduction. {closure_hits} closure + {restricted_hits} restriction signals.'
-        traffic_level = 30
-        insurance_status = 'War risk premiums surging'
+        scan_status = 'severely_restricted'
     elif restricted_hits >= 2:
-        status = 'restricted'
-        status_emoji = '🟡'
-        status_text = 'RESTRICTED'
-        status_detail = f'Elevated tensions. {restricted_hits} restriction signals detected.'
-        traffic_level = 60
-        insurance_status = 'Elevated premiums'
+        scan_status = 'restricted'
     else:
-        status = 'open'
-        status_emoji = '🟢'
-        status_text = 'OPEN'
-        status_detail = 'Normal shipping operations'
-        traffic_level = 100
-        insurance_status = 'Normal'
+        scan_status = None
 
+    # ── Sticky-state merge (Jun 12 2026): closure ESCALATES the
+    #    persisted state, reopening keywords (2+) step it DOWN one
+    #    band, and silence PRESERVES it. Status is a state, not a
+    #    news cycle. ──
+    persisted = _hormuz_state_get()
+    current = persisted.get('status', HORMUZ_DEFAULT_STATE)
+
+    if scan_status and HORMUZ_STATE_RANK[scan_status] > HORMUZ_STATE_RANK.get(current, 0):
+        current = scan_status
+        persisted = _hormuz_state_set(
+            current, f'{closure_hits} closure / {restricted_hits} restriction signals')
+    elif reopen_hits >= 2:
+        idx = max(0, HORMUZ_STATE_RANK.get(current, 0) - 1)
+        current = HORMUZ_STATE_LADDER[idx]
+        persisted = _hormuz_state_set(
+            current, f'{reopen_hits} reopening signals -- stepped down one band')
+    # else: silence -> persisted state untouched
+
+    status = current
+    _HORMUZ_PRESENTATION = {
+        'closed': ('🔴', 'EFFECTIVELY CLOSED',
+                   'Strait closed to commercial traffic. Insurance withdrawn.',
+                   10, 'P&I coverage withdrawn'),
+        'closed_with_leakage': ('🔴', 'CLOSED — LEAKAGE FLOWS ONLY',
+                   'Closed to normal commercial traffic; limited leakage flows transiting. Reopening is an active US-Iran negotiation point.',
+                   15, 'Withdrawn; case-by-case war-risk cover only'),
+        'severely_restricted': ('🔴', 'SEVERELY RESTRICTED',
+                   'Major traffic reduction across the strait.',
+                   30, 'War risk premiums surging'),
+        'restricted': ('🟡', 'RESTRICTED',
+                   'Elevated tensions; partial traffic.',
+                   60, 'Elevated premiums'),
+        'open': ('🟢', 'OPEN', 'Normal shipping operations',
+                 100, 'Normal'),
+    }
+    status_emoji, status_text, status_detail, traffic_level, insurance_status = _HORMUZ_PRESENTATION[status]
+    if scan_status is None and status != 'open':
+        status_detail += (f' (State persisted: no fresh closure or reopening '
+                          f'signals this scan -- {reopen_hits} reopening keywords detected.)')
     result = {
         'success': True,
         'status': status,
@@ -704,6 +795,10 @@ def get_hormuz_status(all_articles=None):
         'insurance_status': insurance_status,
         'closure_signals': closure_hits,
         'restriction_signals': restricted_hits,
+        'reopening_signals': reopen_hits,
+        'scan_signal': scan_status or 'silent',
+        'persisted_state': persisted,
+        'state_basis': 'sticky state machine -- closure escalates, reopening steps down, silence preserves',
         'suspended_carriers': suspended_carriers_found if suspended_carriers_found else SUSPENDED_CARRIERS if closure_hits >= 3 else [],
         'key_facts': {
             'global_oil_share': '20% of world daily oil supply',
