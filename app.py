@@ -1089,6 +1089,13 @@ except Exception as e:
 # Iran Stability Module (consolidated from iran_protests.py)
 from iran_protests import register_iran_routes
 register_iran_routes(app)
+# Iran Financial Pulse (v1.0.0 Jun 2026) -- TEDPIX / USD-IRR / Brent
+try:
+    from iran_financial_pulse import register_iran_financial_pulse_endpoints
+    register_iran_financial_pulse_endpoints(app)
+    print('[ME Backend] Iran financial pulse module loaded')
+except Exception as e:
+    print(f'[ME Backend] WARNING: Iran financial pulse unavailable ({e})')
 from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
 from israel_stability import register_israel_stability_endpoints
