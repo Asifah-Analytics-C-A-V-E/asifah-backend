@@ -305,6 +305,44 @@ def _level_of(bluf):
 
 PRESSURE_KINETIC      = 'kinetic'
 PRESSURE_ECONOMIC     = 'economic'
+
+# ── Multi-axis tagging for narratives (Slice 3, Jun 13 2026) ──
+# A narrative is often genuinely multi-axis: the market-fragility x Taiwan read
+# is BOTH economic and kinetic by nature. This central map declares each
+# narrative category's full axis set (primary first). The front-end renders one
+# end-pill per axis. Single-axis or unlisted narratives fall back to their
+# 'pressure_type' (or kinetic default). Keep primary axis first -- it drives the
+# pressure_type used by the economic/kinetic axis aggregation.
+NARRATIVE_AXIS_SETS = {
+    'market_fragility_semis_compound': ['economic', 'kinetic'],
+    'market_fragility':                ['economic'],
+    'dual_chokepoint':                 ['kinetic', 'economic'],   # chokepoint = mil + supply shock
+    'russia_iran_axis':                ['kinetic', 'economic'],   # coordination + sanctions evasion
+    'food_stress_convergence':         ['economic', 'humanitarian'],
+    'food_stress_gated':               ['economic'],
+    'wheat_lebanon':                   ['economic', 'humanitarian'],
+    'belt_and_road_resource_leverage': ['economic', 'diplomatic'],
+    'nuclear_signaling_global':        ['kinetic'],
+    'china_taiwan_takeover':           ['kinetic'],
+    'scs_first_island_chain_axis':     ['kinetic', 'diplomatic'],
+    'iran_strike_window':              ['kinetic'],
+    'dprk_russia_axis':                ['kinetic', 'economic'],
+    'arctic_convergence':              ['kinetic', 'diplomatic'],
+    'wha_cascade':                     ['humanitarian', 'economic'],
+    'houthi_fragility':                ['kinetic', 'economic'],
+    'multiaxis_convergence':           ['kinetic', 'economic'],   # by definition cross-axis
+}
+
+def _axes_for_narrative(n):
+    """Return the ordered axis list for a narrative dict. Priority:
+    explicit category map > explicit pressure_type > kinetic default."""
+    cat = n.get('category', '')
+    if cat in NARRATIVE_AXIS_SETS:
+        return list(NARRATIVE_AXIS_SETS[cat])
+    pt = n.get('pressure_type')
+    if pt and pt in PRESSURE_AXES:
+        return [pt]
+    return ['kinetic']
 PRESSURE_DIPLOMATIC   = 'diplomatic'
 PRESSURE_HUMANITARIAN = 'humanitarian'
 
@@ -1725,6 +1763,12 @@ def _build_global_top_signals(blufs, narratives):
         # inference layer (which has no category hint for narrative-derived signals).
         if n.get('pressure_type'):
             promoted['pressure_type'] = n['pressure_type']
+        # Slice 3: attach full axis set (primary first) + keep pressure_type
+        # aligned to the primary axis so axis aggregation stays correct.
+        _axes = _axes_for_narrative(n)
+        promoted['axes'] = _axes
+        if _axes:
+            promoted['pressure_type'] = _axes[0]
         signals.append(promoted)
 
     # 2. Pull top regional signals (alphabetical, then by priority)
@@ -1954,7 +1998,8 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             'theatre':       'global',                       # narratives are cross-theater
             'level':         level,
             'priority':      priority + 10,                  # +10 boost (narrative tier ≈ Tier 3)
-            'pressure_type': n.get('pressure_type') or _infer_pressure_type(n),
+            'pressure_type': (_axes_for_narrative(n)[0]),
+            'axes':          _axes_for_narrative(n),
             'icon':          n.get('icon') or '',
             'short_text':    stext,
             'is_narrative':  True,
