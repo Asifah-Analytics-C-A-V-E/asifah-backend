@@ -2238,6 +2238,11 @@ def _build_regional_card(region, bluf):
             'posture_color': '#6b7280',
             'bluf_excerpt':  'Regional BLUF unavailable.',
             'top_signals':   [],
+            'trackers_live':    0,
+            'trackers_total':   0,
+            'trackers_stale':   [],
+            'trackers_missing': [],
+            'picture_complete': False,   # region unreachable -> picture incomplete (honesty)
         }
     level = _level_of(bluf)
     bluf_text = bluf.get('bluf', '') or ''
@@ -2269,6 +2274,10 @@ def _build_regional_card(region, bluf):
         'bluf_excerpt':  excerpt,
         'top_signals':   _build_axis_quota_signals(bluf),
         'trackers_live': bluf.get('trackers_live', bluf.get('theatres_live', 0)),
+        'trackers_total':   bluf.get('trackers_total', 0),
+        'trackers_stale':   bluf.get('trackers_stale', []) or [],
+        'trackers_missing': bluf.get('trackers_missing', []) or [],
+        'picture_complete': bluf.get('picture_complete', True),  # default True: pre-A/B/C regions
         'avg_score':     bluf.get('avg_score', 0),
     }
 
@@ -2359,6 +2368,36 @@ def build_gpi(force=False):
         # v3.0 — Per-axis BLUF generation (one focused prose per pressure axis)
         bluf_by_axis = _synthesize_all_axis_blufs(pressure_axes, blufs, global_level)
 
+        # v3.1 -- Data-completeness honesty (Jun 13 2026): roll up each region's
+        # cold-start gaps (trackers_missing / trackers_stale / picture_complete,
+        # emitted by the A/B/C regional BLUFs) so the GPI never silently treats an
+        # incomplete picture as a confident full read. Absence stays honest at GPI
+        # altitude. Card-regions that have a real endpoint are checked (africa joins
+        # automatically once its BLUF ships); the global_* convergence feeds are not.
+        _card_regions = [r for r in CARD_ORDER if r in REGIONAL_BLUF_ENDPOINTS]
+        _incomplete_regions = []
+        _all_missing = []
+        _all_stale = []
+        for _region in _card_regions:
+            _b = blufs.get(_region)
+            if not _b:
+                _incomplete_regions.append(_region)   # endpoint exists but unreachable this cycle
+                continue
+            if not _b.get('picture_complete', True):
+                _incomplete_regions.append(_region)
+            for _t in (_b.get('trackers_missing') or []):
+                _all_missing.append(f'{_region}:{_t}')
+            for _t in (_b.get('trackers_stale') or []):
+                _all_stale.append(f'{_region}:{_t}')
+        data_completeness = {
+            'picture_complete':   (len(_incomplete_regions) == 0),
+            'incomplete_regions': _incomplete_regions,
+            'trackers_missing':   _all_missing,   # 'europe:greenland' form
+            'trackers_stale':     _all_stale,
+            'regions_live':       len([r for r in _card_regions if blufs.get(r)]),
+            'regions_expected':   len(_card_regions),
+        }
+
         result = {
             'success':         True,
             'from_cache':      False,
@@ -2375,6 +2414,7 @@ def build_gpi(force=False):
             'regional_cards':  regional_cards,
             'regions_live':    len(blufs),
             'regions_total':   len(REGIONAL_BLUF_ENDPOINTS),
+            'data_completeness': data_completeness,   # v3.1 honesty rollup
         }
 
         _redis_set(GPI_CACHE_KEY, result)
