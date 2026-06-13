@@ -89,11 +89,12 @@ import statistics
 import requests
 from datetime import datetime, timezone
 
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
 SNAPSHOT_KEY = 'blackswan:market:snapshots'
+GPI_BUNDLE_KEY = 'blackswan:market:gpi'   # compact read for the GPI fragility detector
 CACHE_TTL_HOURS = 12
 BACKTEST_TTL_HOURS = 168  # 7 days
 
@@ -852,6 +853,26 @@ def run_scan():
                       'active_features': active,
                       'snapped_at': payload['last_updated']})
         _redis_set(SNAPSHOT_KEY, snaps[-200:])
+
+    # ---- Compact GPI bundle (Slice 3, Jun 13 2026) --------------------
+    # The GPI economic axis + the fragility compound read consume this.
+    # Kept small and stable so the GPI detector never parses the full scan.
+    # ai_thematic_active flags the AI/data-center/semiconductor fever that
+    # makes a Taiwan-semiconductor disruption a high-stakes compound read.
+    ai = payload.get('ai_thematic_read') or {}
+    ai_active = bool(ai and ai.get('z') is not None and ai.get('z') > 2.0)
+    _redis_set(GPI_BUNDLE_KEY, {
+        'band': band,
+        'composite': score,
+        'as_of_month': latest,
+        'active_features': active,
+        'ai_thematic_active': ai_active,
+        'ai_thematic_z': (ai or {}).get('z'),
+        'historical_lag_read': payload.get('historical_lag_read'),
+        'top_analog': (payload.get('similarity_matches') or [{}])[0].get('label'),
+        'disclaimer': DISCLAIMER,
+        'updated_at': payload['last_updated'],
+    })
     return payload
 
 
