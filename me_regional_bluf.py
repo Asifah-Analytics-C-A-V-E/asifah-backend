@@ -1475,6 +1475,101 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
 # MAIN BUILD FUNCTION
 # ============================================================
 
+# ── Approach B: structured blocks + multi-axis tagging (Jun 13 2026) ──
+# ME already emits prose_v2 as a markdown string (\n\n paragraphs, **bold**
+# markers). To share ONE front-end renderer platform-wide, we ALSO emit a
+# bluf_v2 block array [{label,text}]. The markdown is preserved as bluf_v2_md.
+_ME_REGIONAL_AXIS_SETS = {
+    'kinetic_pressure': ['kinetic'], 'red_line_breached': ['kinetic'],
+    'theatre_high': ['kinetic'], 'theatre_active': ['kinetic'],
+    'dual_chokepoint': ['kinetic', 'economic'], 'strike_window': ['kinetic'],
+    'nuclear_signaling': ['kinetic'], 'kinetic_threshold': ['kinetic'],
+    'commodity': ['economic'], 'economic_stress': ['economic'],
+    'oil': ['economic'], 'sanctions': ['economic', 'diplomatic'],
+    'diplomatic_track_active': ['diplomatic'], 'diplomatic_active': ['diplomatic'],
+    'green_line_active': ['diplomatic'], 'mediation': ['diplomatic'],
+    'ceasefire': ['diplomatic'], 'humanitarian': ['humanitarian'],
+    'humanitarian_lebanon': ['humanitarian'], 'displacement': ['humanitarian'],
+    'migration': ['humanitarian'], 'health_emergency': ['humanitarian'],
+}
+_ME_AXIS_KEYWORD_HINTS = [
+    ('economic', ['economic', 'oil', 'commodity', 'wheat', 'sanction', 'currency', 'gold', 'trade']),
+    ('humanitarian', ['humanitarian', 'displace', 'refugee', 'migration', 'famine', 'idp', 'health']),
+    ('diplomatic', ['diplomatic', 'ceasefire', 'mediation', 'negotiat', 'off-ramp', 'envoy', 'brokering']),
+]
+
+def _me_axes_for_signal(sig):
+    sig = sig if isinstance(sig, dict) else {}
+    pt = sig.get('pressure_type')
+    cat = str(sig.get('category') or '').lower()
+    if cat in _ME_REGIONAL_AXIS_SETS:
+        axes = list(_ME_REGIONAL_AXIS_SETS[cat])
+        if pt and pt in ('kinetic','economic','diplomatic','humanitarian') and pt not in axes:
+            axes.insert(0, pt)
+        return axes
+    if pt and pt in ('kinetic','economic','diplomatic','humanitarian'):
+        return [pt]
+    blob = (cat + ' ' + str(sig.get('short_text') or '') + ' ' + str(sig.get('long_text') or '')).lower()
+    for axis, kws in _ME_AXIS_KEYWORD_HINTS:
+        if any(k in blob for k in kws):
+            return [axis]
+    return ['kinetic']
+
+def _me_tag_signal_axes(signals):
+    out = []
+    for s in (signals or []):
+        s2 = dict(s)
+        axes = _me_axes_for_signal(s2)
+        s2['axes'] = axes
+        s2.setdefault('pressure_type', axes[0])
+        out.append(s2)
+    return out
+
+def _me_prose_v2_to_blocks(md):
+    """Parse the markdown prose_v2 string into {label,text} blocks.
+    Para 1 starts '**Middle East -- date**' then posture + dive.
+    Para 3 starts '**Why this matters:**'. Bold inline names stay inline."""
+    if not md or not isinstance(md, str):
+        return []
+    paras = [p.strip() for p in md.split('\n\n') if p.strip()]
+    blocks = []
+    for i, para in enumerate(paras):
+        # Header para: leading '**Middle East -- date**'
+        import re as _re
+        hm = _re.match(r'^\*\*([^*]+)\*\*\s*(.*)$', para, _re.S)
+        if i == 0 and hm:
+            header_label = hm.group(1).strip()       # 'Middle East -- date'
+            rest = hm.group(2).strip()               # posture + dive sentences
+            blocks.append({'label': header_label, 'text': ''})
+            if rest:
+                # First sentence is the posture line; rest is theatre dive.
+                # Split at the first '. ' that ends the posture sentence.
+                # The posture sentence begins 'Regional posture at ...'
+                pm = _re.match(r'^(Regional posture[^.]*\.(?:\s+\d+\s+red line[^.]*\.)?)\s*([\s\S]*)$', rest)
+                if pm:
+                    posture_txt = pm.group(1).strip()
+                    dive_txt = pm.group(2).strip()
+                    if posture_txt.lower().startswith('regional posture'):
+                        posture_txt = posture_txt[len('Regional posture'):].lstrip(' at').strip()
+                        posture_txt = posture_txt[0].upper() + posture_txt[1:] if posture_txt else posture_txt
+                    blocks.append({'label': 'Regional Posture', 'text': posture_txt})
+                    if dive_txt:
+                        blocks.append({'label': 'Theatre Reads', 'text': dive_txt})
+                else:
+                    blocks.append({'label': 'Regional Posture', 'text': rest})
+            continue
+        # 'Why this matters:' closer
+        wm = _re.match(r'^\*\*Why this matters:\*\*\s*([\s\S]*)$', para)
+        if wm:
+            blocks.append({'label': 'Why This Matters', 'text': wm.group(1).strip()})
+            continue
+        # Otherwise: other-elevated / baseline paragraph -> Theatre Reads (append)
+        # strip stray ** markers for clean display
+        clean = _re.sub(r'\*\*', '', para)
+        blocks.append({'label': 'Theatre Reads', 'text': clean})
+    return blocks
+
+
 def build_regional_bluf(force=False):
     """
     Build the ME regional BLUF. Reads all SEVEN caches, synthesizes,
@@ -1535,6 +1630,7 @@ def build_regional_bluf(force=False):
     # (GPI's diplomatic + humanitarian axis cards need the full pool, not top 5).
     # `top_signals_capped` is the trimmed display version used for prose synthesis.
     all_signals = list(top_signals)                          # full pool — preserved
+    all_signals = _me_tag_signal_axes(all_signals)           # Jun 13 2026: multi-axis pills
     top_signals_capped = top_signals[:TOP_SIGNALS_COUNT]      # capped for prose
 
     # Write BLUF prose using capped top_signals (prose has limited word count)
@@ -1581,16 +1677,19 @@ def build_regional_bluf(force=False):
             'breached_count':     sum(1 for l in levels.values() if l >= 4),
             'region':             'me',
         }
-        bluf_v2 = _build_bluf_prose_v2(posture_for_v2, trackers)
+        bluf_v2_md = _build_bluf_prose_v2(posture_for_v2, trackers)
+        bluf_v2 = _me_prose_v2_to_blocks(bluf_v2_md)   # approach B blocks
     except Exception as e:
         print(f"[ME BLUF] prose_v2 build error: {str(e)[:200]}")
-        bluf_v2 = None   # Graceful degrade — legacy bluf still works
+        bluf_v2_md = None
+        bluf_v2 = []   # Graceful degrade — legacy bluf still works
 
     result = {
         'success':           True,
         'from_cache':        False,
         'bluf':              bluf_prose,
-        'bluf_v2':           bluf_v2,                 # v2.1.0 (May 22 2026): markdown-bolded prose
+        'bluf_v2':           bluf_v2,                 # Jun 13 2026: {label,text} block array (approach B)
+        'bluf_v2_md':        bluf_v2_md,              # v2.1.0: original markdown-bolded prose (preserved)
         'signals':           all_signals,             # v2.3.0: FULL signal pool — for GPI axis aggregation
         'top_signals':       top_signals_capped,      # v2.3.0: capped — for display + prose synthesis
         'posture_label':     posture_label,
