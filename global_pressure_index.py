@@ -1226,6 +1226,7 @@ def _narrative_nuclear_signaling_global(blufs):
 
 
 KINETIC_BUNDLE_KEY = 'kinetic:global:latest'
+MARKET_FRAGILITY_BUNDLE_KEY = 'blackswan:market:gpi'  # Market Watch fragility detector (Jun 13 2026)
 
 
 _COUNTRY_NAME_ALIASES = {
@@ -1357,6 +1358,100 @@ def _narrative_food_stress_convergence(blufs):
     }
 
 
+def _narrative_market_fragility(blufs):
+    """MARKET FRAGILITY (economic axis) + the FRAGILITY x KINETIC compound read
+    (Slice 3, Jun 13 2026). Black Swan #2 integration.
+
+    Doctrine: sensors below, analyst above. The Market Watch detector
+    (market_blackswan_detector.py) is the sensor -- it measures endogenous
+    financial fragility (how dry the forest is) against ~100 years of market
+    history. This GPI detector is the analyst: it surfaces that fragility on
+    the economic axis AND reads it TOGETHER with the platform's kinetic layers.
+
+    The flagship compound read: a fragile, AI/semiconductor-concentrated market
+    (the dry forest) co-occurring with Taiwan-Strait kinetic signaling (the
+    lightning aimed squarely at it). A Chinese move against Taiwan that
+    threatens TSMC/semiconductor output would strike the exact sector driving
+    the fragility -- neither tracker alone says much; together they are a
+    compound pattern no market-only or conflict-only tool surfaces.
+
+    Convergence framing, NOT prediction. Fragility describes present
+    conditions; it does not forecast a drawdown, and the kinetic read does not
+    forecast an invasion. The reader completes the inference.
+    """
+    frag = _redis_get(MARKET_FRAGILITY_BUNDLE_KEY) or {}
+    band = frag.get('band')
+    if not band or band == 'normal':
+        return None  # nothing to surface this cycle
+
+    composite = frag.get('composite')
+    ai_active = bool(frag.get('ai_thematic_active'))
+    feats = frag.get('active_features') or []
+    lag = frag.get('historical_lag_read')
+    disclaimer = frag.get('disclaimer', '')
+
+    # --- Compound check: AI/semiconductor fever x Taiwan-Strait kinetic ---
+    asia = blufs.get('asia')
+    tw_kinetic = False
+    cn_high = False
+    if asia:
+        tw_kinetic = _has_signal_category(
+            asia, 'kinetic_pressure', 'red_line_breached', 'kinetic_threshold',
+            'deterrence_gap', 'china_two_front_convergence')
+        cn_high = _has_signal_category(asia, 'theatre_high') and _level_of(asia) >= 4
+
+    semis_compound = ai_active and (tw_kinetic or cn_high)
+
+    band_label = band.upper()
+    feat_phrase = ', '.join(f.replace('_', ' ') for f in feats[:4]) if feats else 'multiple fragility signals'
+
+    if semis_compound:
+        return {
+            'priority': 13,  # high -- a flagship cross-domain convergence
+            'category': 'market_fragility_semis_compound',
+            'regions':  ['asia', 'global_market'],
+            'icon':     '\U0001f9e8',  # 🧨
+            'color':    '#dc2626',
+            'pressure_type': 'economic',
+            'headline': ('Market fragility %s AND Taiwan-Strait kinetic signaling -- '
+                         'the AI/semiconductor convergence'
+                         % band_label),
+            'detail':   ('The Market Watch fragility detector reads %s (composite %s), with the '
+                         'AI/data-center/semiconductor thematic running hot -- the concentration '
+                         'that defines the current market is precisely the sector most exposed to a '
+                         'Taiwan-Strait disruption. Simultaneously, the Asia-Pacific theater is '
+                         'showing kinetic / cross-strait signaling. A Chinese move threatening '
+                         'Taiwan semiconductor output would strike the exact sector driving market '
+                         'fragility: a compound pattern in which an endogenously fragile market '
+                         '(the dry forest) co-occurs with the one geopolitical fuse most precisely '
+                         'aimed at it. This is a convergence read of present conditions across two '
+                         'independent layers, not a prediction that either a drawdown or a Taiwan '
+                         'contingency will occur. %s'
+                         % (band, composite, ('Pattern note: ' + lag) if lag else '')),
+        }
+
+    # --- Economic-axis fragility surface (no kinetic co-occurrence yet) ---
+    detail = ('The Market Watch fragility detector reads %s (composite %s) on endogenous '
+              'market-fragility convergence, driven by %s. This measures how dry the forest '
+              'is -- valuation, concentration, and momentum conditions consistent with '
+              'historical pre-drawdown patterns -- not whether or when a drawdown occurs. '
+              'No kinetic co-occurrence with the AI/semiconductor exposure this cycle; the '
+              'compound read to watch is fragility plus a Taiwan-Strait disruption. %s'
+              % (band, composite, feat_phrase, ('Pattern note: ' + lag) if lag else ''))
+    pr = {'critical': 9, 'high': 11, 'elevated': 13}.get(band, 13)
+    return {
+        'priority': pr,
+        'category': 'market_fragility',
+        'regions':  ['global_market'],
+        'icon':     '\U0001f9a2',  # 🦢
+        'color':    '#f59e0b' if band in ('elevated',) else '#ef4444',
+        'pressure_type': 'economic',
+        'headline': ('Market-fragility convergence reads %s -- %s'
+                     % (band_label, feat_phrase)),
+        'detail':   detail,
+    }
+
+
 def _narrative_global_baseline(blufs):
     """Fallback: when no narratives detected, summarize the elevated regions."""
     elevated = [(r, _level_of(b)) for r, b in blufs.items() if _level_of(b) >= 3]
@@ -1476,6 +1571,7 @@ NARRATIVE_DETECTORS = [
     _narrative_houthi_fragility,
     _narrative_multiaxis_convergence,                    # multi-axis + global-commodity (Jun 6 2026)
     _narrative_food_stress_convergence,                  # food x kinetic x humanitarian (Jun 10 2026)
+    _narrative_market_fragility,                         # market fragility x Taiwan semis (Black Swan #2, Jun 13 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
