@@ -1611,6 +1611,7 @@ def build_top_signals(scan_data):
         signals.append({
             'priority':   prio,
             'category':   'diplomatic_active',
+            'pressure_type': 'diplomatic',   # v1.6.0 Jun 14 2026 — native axis tag (GPI robustness)
             'theatre':    'iran',
             'level':      ceasefire_lvl,
             'icon':       '🕊️',
