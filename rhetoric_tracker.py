@@ -608,6 +608,10 @@ CEASEFIRE_TRIGGERS = {
         # ── v2.3 Jun 14 2026 — disarmament-conditioned ceasefire (handover steps) ──
         'dibbin', 'replaced by the lebanese', 'lebanese army replaces',
         'laf takes control south', 'israeli troops withdrew', 'idf withdrew',
+        # Hezbollah DISARMING = de-escalation (its being armed is baseline, not a signal)
+        'hezbollah disarms', 'hezbollah hands over weapons', 'hezbollah hands over arms',
+        'hezbollah surrenders weapons', 'hezbollah surrenders arms',
+        'hezbollah gives up weapons',
     ],
     4: [
         'ceasefire framework agreed', 'deal reached lebanon',
@@ -622,6 +626,7 @@ CEASEFIRE_TRIGGERS = {
         'ambassador talks lebanon', 'us brokered talks lebanon',
         'israel lebanon washington', 'talks state department',
         # ── v2.3 Jun 14 2026 — gradual withdrawal + US-led peace process ──
+        'cessation of hostilities', 'cessation of hostilities holding',
         'gradual israeli withdrawal', 'pull back gradually', 'gradual withdrawal',
         'phased withdrawal', 'lebanese army deploys', 'army deploys south',
         'security coordination', 'israeli and lebanese army', 'lebanese army officials',
@@ -630,6 +635,7 @@ CEASEFIRE_TRIGGERS = {
         'us-led peace process', 'us peace process', 'peace process between israel',
         'aoun and netanyahu', 'aoun netanyahu', 'netanyahu and aoun',
         'disarmament framework', 'disarmament timeline',
+        'hezbollah agrees to disarm', 'hezbollah disarmament begins',
     ],
     3: [
         'ceasefire proposal', 'ceasefire offer', 'france proposes',
@@ -691,6 +697,69 @@ CROSSBORDER_TRIGGERS = {
         'instability', 'conflict risk',
     ],
 }
+
+INTERNAL_FRACTURE_TRIGGERS = {
+    # Vector 6: Internal Fracture / Civil War Pressure (Jun 14 2026).
+    # INTERNAL conflict drift, distinct from the Israel-Hezbollah external axis.
+    # Hezbollah being armed is BASELINE (not scored here); Hezbollah disarming is a
+    # ceasefire signal. The tripwire is NON-Hezbollah remilitarization + sectarian
+    # friction + state-vs-militia flashpoint + state collapse.
+    5: [
+        # Active internal armed conflict / militia clashes
+        'sectarian clashes', 'militia clashes', 'gun battle beirut',
+        'armed clashes lebanon', 'street battles beirut', 'factional fighting',
+        'internal fighting lebanon', 'gunfight beirut', 'sectarian fighting',
+        'اشتباكات طائفية',
+    ],
+    4: [
+        # NON-Hezbollah remilitarization (the civil-war tripwire)
+        'geagea', 'samir geagea', 'lebanese forces militia',
+        'lebanese forces fighters', 'lebanese forces arming', 'bachir gemayel',
+        'druze arming', 'druze militia', 'druze fighters', 'jumblatt fighters',
+        'psp militia', 'armed palestinians', 'palestinian gunmen',
+        'palestinian factions lebanon', 'sunni armed', 'sunni gunmen',
+        'sunni militia', 'sectarian militias', 'militias rearm', 'factions arming',
+        # Mobilization / calls to resist the state
+        'disarmament is extermination', 'resist the government',
+        'resist their government', 'stand against the government',
+        'take to the streets', 'rise up against',
+        # Armed display
+        'firing in the air', 'fired in the air', 'flashed pistols',
+        'pistols and rifles',
+        'تسليح الدروز', 'احتجاجات مسلحة',
+    ],
+    3: [
+        # Sectarian friction / displacement-driven communal tension
+        'sectarian tension', 'sectarian strife', 'sectarian violence',
+        'sectarian lines', 'shia sunni tension', 'evicted shia', 'kicked shia',
+        'landlords kicked', 'refused to rent', 'shia families out',
+        # Vigilantism
+        'right-wing gangs', 'black-clad men', 'neighborhood checkpoints',
+        'block the roads', 'blocked the roads', 'shut down the streets',
+        'show of force',
+        # State-vs-militia confrontation (disarmament FLASHPOINT, not framework)
+        'confront hezbollah', 'rein in hezbollah', 'hezbollah refuses disarm',
+        'forced disarmament', 'disarm by force', 'laf vs hezbollah',
+        # State-authority collapse
+        'where is the state', 'selective enforcement', 'uneven implementation',
+        'clashes with security forces',
+        'توتر طائفي', 'فلتان أمني',
+    ],
+    2: [
+        # Early grievance / civil-war discourse / communal tension
+        'civil war', 'new civil war', 'another civil war', 'brink of civil war',
+        'civil unrest', 'communal tension', 'sectarian divisions',
+        'distrust between sects', 'discrimination sectarian',
+        'shunned', 'green line beirut',
+        'حرب أهلية', 'فتنة',
+    ],
+    1: [
+        # Background sectarian mentions
+        'sectarian', 'communal', 'internal tension lebanon',
+        'طائفي',
+    ],
+}
+
 
 # Conditional Threats — "if X then Y" tripwire language
 CONDITIONAL_TRIGGERS = {
@@ -1455,6 +1524,7 @@ def score_vectors(text):
         ('rockets',      ROCKETS_TRIGGERS),
         ('ceasefire',    CEASEFIRE_TRIGGERS),
         ('crossborder',  CROSSBORDER_TRIGGERS),
+        ('internal_fracture', INTERNAL_FRACTURE_TRIGGERS),
     ]:
         for level in range(5, 0, -1):
             found = False
@@ -1919,6 +1989,7 @@ def run_rhetoric_scan(days=3):
         'rockets_max': 0,
         'ceasefire_max': 0,
         'crossborder_max': 0,
+        'internal_fracture_max': 0,
         'coordination_signals': [],
         'conditional_threats': [],
         'specificity_scores': [],
@@ -1950,6 +2021,8 @@ def run_rhetoric_scan(days=3):
             theatre_vectors['ceasefire_max'] = vectors['ceasefire'][0]
         if vectors['crossborder'][0] > theatre_vectors['crossborder_max']:
             theatre_vectors['crossborder_max'] = vectors['crossborder'][0]
+        if vectors['internal_fracture'][0] > theatre_vectors['internal_fracture_max']:
+            theatre_vectors['internal_fracture_max'] = vectors['internal_fracture'][0]
 
         # Specificity score (once per article, on first matched actor)
         if actors[0] == actors[0]:  # Always runs — explicit for clarity
@@ -2058,6 +2131,7 @@ def run_rhetoric_scan(days=3):
     rockets_level     = theatre_vectors['rockets_max']
     ceasefire_level   = theatre_vectors['ceasefire_max']
     crossborder_level = theatre_vectors['crossborder_max']
+    internal_fracture_level = theatre_vectors['internal_fracture_max']
 
     # Overall theatre level = max of non-ceasefire vectors
     max_actor_level = max(
@@ -2106,6 +2180,9 @@ def run_rhetoric_scan(days=3):
         'ceasefire_label':   ESCALATION_LEVELS[ceasefire_level]['label'],
         'crossborder_level': crossborder_level,
         'crossborder_label': ESCALATION_LEVELS[crossborder_level]['label'],
+        # ── INTERNAL FRACTURE / CIVIL WAR PRESSURE (Slice 1) ──
+        'internal_fracture_level': internal_fracture_level,
+        'internal_fracture_label': ESCALATION_LEVELS[internal_fracture_level]['label'],
         # ── DIPLOMATIC TRACK FIELDS ──
         # Active negotiations REDUCE the threat score (see _calculate_rhetoric_score).
         # These fields expose the diplomatic posture to the frontend sidebar
@@ -2415,6 +2492,7 @@ def register_rhetoric_endpoints(app):
                 'rockets_level':     cached.get('rockets_level', 0),
                 'ceasefire_level':   cached.get('ceasefire_level', 0),
                 'crossborder_level': cached.get('crossborder_level', 0),
+                'internal_fracture_level': cached.get('internal_fracture_level', 0),
                 # v2.0 enriched
                 'specificity_score': cached.get('specificity_score', 0),
                 'delta':             cached.get('delta'),
