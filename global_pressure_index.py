@@ -139,6 +139,17 @@ MIN_SIGNALS_PER_AXIS     = 2    # v3.6.0 May 23 2026 — axis distribution guard
 CORE_HEADLINE_COUNT      = 12   # v3.6.0 May 23 2026 — first N slots are pure tier+priority (no axis
                                 # rebalancing). Protects the headline narrative integrity. Slots 13-20
                                 # apply axis-distribution logic.
+DIPLOMATIC_SURFACE_CAP   = 5    # Jun 14 2026 — de-escalation MUST surface. Up to 5 simultaneous
+                                # diplomatic / de-escalation tracks (Lebanon, Ukraine, Iran-US, and
+                                # any others) are guaranteed a slot and never gate-kept out by the
+                                # per-region top-3 cut. Diplomatic signals are SCORE REDUCERS, so the
+                                # escalation-weighted tier sort buries them; this guarantees they show.
+DIPLOMATIC_SIGNAL_PHRASES = ('cessation of hostilities',)
+                                # Jun 14 2026 — text phrases that flag a signal as diplomatic even when
+                                # its category/source does not. Kept deliberately narrow: 'cessation of
+                                # hostilities' is unambiguous de-escalation language. (We avoid bare
+                                # 'ceasefire' here, since 'ceasefire collapsed' is ESCALATION; the
+                                # 'ceasefire' CATEGORY is already handled by _CATEGORY_AXIS_HINTS.)
 REGIONAL_FETCH_TIMEOUT   = 8    # seconds
 
 
@@ -414,6 +425,7 @@ _CATEGORY_AXIS_HINTS = {
     'witkoff':           PRESSURE_DIPLOMATIC,
     'salalah':           PRESSURE_DIPLOMATIC,
     'de_escalation':     PRESSURE_DIPLOMATIC,
+    'off_ramp':          PRESSURE_DIPLOMATIC,   # Jun 14 2026 — ME diplomatic-track emits 'off_ramp_active'
     'green_line':        PRESSURE_DIPLOMATIC,
 
     # Humanitarian — migration model + humanitarian signal categories
@@ -471,6 +483,14 @@ def _infer_pressure_type(signal):
         for hint, axis in _CATEGORY_AXIS_HINTS.items():
             if hint in category:
                 return axis
+
+    # 2b. Diplomatic phrase match (text) -- catches de-escalation language that
+    # arrives WITHOUT a diplomatic category, e.g. 'cessation of hostilities'.
+    _text = ((signal.get('short_text') or '') + ' '
+             + (signal.get('long_text') or '') + ' '
+             + (signal.get('text') or '')).lower()
+    if _text and any(p in _text for p in DIPLOMATIC_SIGNAL_PHRASES):
+        return PRESSURE_DIPLOMATIC
 
     # 3. Source-label fallbacks (for signals that come without a category)
     source = (signal.get('source') or '').lower()
@@ -1776,16 +1796,28 @@ def _build_global_top_signals(blufs, narratives):
         bluf = blufs.get(region)
         if not bluf:
             continue
-        for sig in _signals_of(bluf)[:3]:  # v3.5.0 May 21 2026 — bumped from 2 to 3 per region
+        region_pool = _signals_of(bluf)
+        pulled = list(region_pool[:3])  # v3.5.0 May 21 2026 — top 3 per region
+        # De-escalation un-gate-keep (Jun 14 2026): the trackers catch diplomatic
+        # signals and they reach the regional BLUFs, but a ceasefire / cessation-
+        # of-hostilities signal usually ranks BELOW a region's kinetic top 3 during
+        # active conflict -- so the [:3] cut silently dropped it from the feed. Pull
+        # any diplomatic signal the cut missed so it reaches the candidate pool; the
+        # diplomatic-axis allocation (Phase A) then surfaces it. Never gate-kept.
+        for sig in region_pool[3:]:
+            if _infer_pressure_type(sig) == PRESSURE_DIPLOMATIC:
+                pulled.append(sig)
+        for sig in pulled:
             signals.append({
-                'priority':   int(sig.get('priority', 5) or 5) - 2,  # demote vs. narratives
-                'category':   sig.get('category', 'regional'),
-                'theatre':    region,
-                'level':      sig.get('level', 0),
-                'icon':       sig.get('icon', '\u2022'),
-                'color':      sig.get('color', '#6b7280'),
-                'short_text': sig.get('short_text', sig.get('text', ''))[:120],   # v2.3.0: 80→120 (consistency)
-                'long_text':  sig.get('long_text', sig.get('short_text', '')),
+                'priority':      int(sig.get('priority', 5) or 5) - 2,  # demote vs. narratives
+                'category':      sig.get('category', 'regional'),
+                'theatre':       region,
+                'level':         sig.get('level', 0),
+                'icon':          sig.get('icon', '\u2022'),
+                'color':         sig.get('color', '#6b7280'),
+                'short_text':    sig.get('short_text', sig.get('text', ''))[:120],   # v2.3.0: 80→120 (consistency)
+                'long_text':     sig.get('long_text', sig.get('short_text', '')),
+                'pressure_type': sig.get('pressure_type') or _infer_pressure_type(sig),  # lock axis
                 # No 'regions' key — single-region signals naturally Tier 2 or 4
             })
 
@@ -1821,12 +1853,27 @@ def _build_global_top_signals(blufs, narratives):
     # gets the loudest narrative, but operators see the full picture in
     # slots 13-20 rather than only the kinetic axis. Sudan IDP surge during
     # active Iran kinetic = visible side-by-side.
+    # Hard ceiling helper (Jun 14 2026): never surface more than
+    # DIPLOMATIC_SURFACE_CAP diplomatic signals (keep the highest-ranked).
+    # Applied to BOTH return paths so the cap holds whether or not the
+    # axis-rebalancing branch runs.
+    def _cap_diplomatic(lst):
+        kept, dip_seen = [], 0
+        for _s in lst:
+            if (_s.get('pressure_type') or _infer_pressure_type(_s)) == PRESSURE_DIPLOMATIC:
+                if dip_seen >= DIPLOMATIC_SURFACE_CAP:
+                    continue
+                dip_seen += 1
+            kept.append(_s)
+        return kept
+
     if len(deduped) <= CORE_HEADLINE_COUNT:
         # Not enough signals to need rebalancing — strip internals and return
-        for s in deduped:
+        capped = _cap_diplomatic(deduped)
+        for s in capped:
             s.pop('_tier_boost', None)
             s.pop('_sort_key', None)
-        return deduped[:TOP_GLOBAL_SIGNALS_COUNT]
+        return capped[:TOP_GLOBAL_SIGNALS_COUNT]
 
     # Take first CORE_HEADLINE_COUNT as-is (pure tier+priority)
     headline_block = deduped[:CORE_HEADLINE_COUNT]
@@ -1849,9 +1896,14 @@ def _build_global_top_signals(blufs, narratives):
         if axis in candidates_by_axis:
             candidates_by_axis[axis].append(s)
 
-    # Phase A: try to bring each axis up to MIN_SIGNALS_PER_AXIS
-    for axis in PRESSURE_AXES:
-        while (axis_counts[axis] < MIN_SIGNALS_PER_AXIS
+    # Phase A: bring each axis up to its floor. Diplomatic gets a HIGHER floor
+    # (DIPLOMATIC_SURFACE_CAP) and is filled FIRST, so de-escalation tracks are
+    # guaranteed to surface and are not crowded out of the tail by other axes.
+    _axis_floor = {ax: MIN_SIGNALS_PER_AXIS for ax in PRESSURE_AXES}
+    _axis_floor[PRESSURE_DIPLOMATIC] = DIPLOMATIC_SURFACE_CAP
+    _fill_order = [PRESSURE_DIPLOMATIC] + [ax for ax in PRESSURE_AXES if ax != PRESSURE_DIPLOMATIC]
+    for axis in _fill_order:
+        while (axis_counts[axis] < _axis_floor[axis]
                and candidates_by_axis[axis]
                and len(tail_block) < remaining_slots):
             picked = candidates_by_axis[axis].pop(0)
@@ -1869,8 +1921,8 @@ def _build_global_top_signals(blufs, narratives):
                 break
             tail_block.append(s)
 
-    # Combine + strip internal fields
-    final = headline_block + tail_block
+    # Combine + strip internal fields, then enforce the diplomatic ceiling.
+    final = _cap_diplomatic(headline_block + tail_block)
     for s in final:
         s.pop('_tier_boost', None)
         s.pop('_sort_key', None)
