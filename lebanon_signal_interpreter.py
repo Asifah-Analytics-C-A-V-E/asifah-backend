@@ -959,6 +959,113 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches,
 # PUBLIC ENTRY POINT
 # ============================================================
 
+_CIVIL_WAR_PRECEDENTS = (
+    "the 1975-1990 civil war (sectarian militias, parallel armed authority, "
+    "state collapse along the Beirut Green Line)",
+    "the May 2008 clashes (Hezbollah vs. government and Sunni factions, resolved "
+    "only by the Doha Agreement)",
+)
+
+_CIVIL_WAR_DISCLAIMER = (
+    "This is a CONVERGENCE indicator, NOT a prediction of civil war. It reports "
+    "which internal-conflict precursors are present; the reader completes the inference."
+)
+
+
+def _score_civil_war_convergence(scan_data):
+    """Lebanon Internal-Fracture / Civil War Pressure convergence read (Slice 2).
+
+    Reads the internal_fracture rhetoric vector (the spine) together with three
+    independent amplifier layers: active external-war spillover (displacement /
+    sectarian blame pressure), the disarmament-conditioned ceasefire flashpoint
+    (which forces a state-vs-Hezbollah confrontation), and state-authority
+    weakness (LAF quiet while Hezbollah active = enforcement vacuum).
+
+    Convergence = MULTIPLE independent layers co-moving, not one source echoing.
+    Bands: Latent -> Elevated -> Acute -> Critical. Estimative, precedent-anchored.
+    Rhetoric-grounded; IDP/humanitarian load + internal GDELT events fold in later.
+    """
+    fr = int(scan_data.get('internal_fracture_level', 0) or 0)      # the spine
+    go = int(scan_data.get('ground_ops_level', 0) or 0)
+    rk = int(scan_data.get('rockets_level', 0) or 0)
+    cb = int(scan_data.get('crossborder_level', 0) or 0)
+    cf = int(scan_data.get('ceasefire_level', 0) or 0)
+    spillover = max(go, rk, cb)
+
+    actors  = scan_data.get('actors', {}) or {}
+    hez_mil = int(actors.get('hezbollah_military', {}).get('escalation_level', 0) or 0)
+    laf_lvl = int(actors.get('lebanese_government', {}).get('escalation_level', 0) or 0)
+    state_weak = (laf_lvl <= 1 and hez_mil >= 2)
+
+    # Independent amplifier layers present this cycle
+    layers = []
+    if fr >= 2:        layers.append('internal_fracture')         # sectarian/militia rhetoric
+    if spillover >= 4: layers.append('war_spillover')             # active external war
+    if cf >= 3:        layers.append('disarmament_flashpoint')    # ceasefire forces confrontation
+    if state_weak:     layers.append('state_authority_vacuum')    # enforcement gap
+    amps = len([l for l in layers if l != 'internal_fracture'])
+
+    # Band: internal_fracture is the spine; amplifier convergence escalates it.
+    if fr >= 5 or (fr >= 4 and amps >= 2):
+        band = 'Critical'
+    elif fr >= 4 or (fr == 3 and amps >= 2):
+        band = 'Acute'
+    elif fr >= 2 or amps >= 2:
+        band = 'Elevated'
+    else:
+        band = 'Latent'
+
+    amp_phrases = {
+        'war_spillover':          'active cross-border war driving displacement and sectarian blame',
+        'disarmament_flashpoint': 'a disarmament-conditioned ceasefire forcing a state-vs-Hezbollah confrontation',
+        'state_authority_vacuum': 'a state-authority vacuum (LAF unable to enforce against Hezbollah)',
+    }
+    active_amps = [amp_phrases[l] for l in layers if l in amp_phrases]
+    amp_clause = ('; co-occurring with ' + '; '.join(active_amps)) if active_amps else ''
+
+    if band == 'Latent':
+        answer = 'Hypothetical murmurings: internal-fracture signals are isolated, not converging.'
+        assessment = (
+            'Internal-fracture signals read as background sectarian tension rather than a '
+            'converging civil-war pattern this cycle. No broad non-Hezbollah remilitarization '
+            'or state-vs-militia mobilization detected.'
+        )
+    elif band == 'Elevated':
+        answer = 'Rising tension: communal friction present, short of the mobilization that precedes internal conflict.'
+        assessment = (
+            'Sectarian friction and vigilantism signals are present but not yet joined by broad '
+            'non-Hezbollah remilitarization' + amp_clause + '. This is consistent with rising '
+            'communal tension, short of the armed mobilization that preceded ' + _CIVIL_WAR_PRECEDENTS[1] + '.'
+        )
+    elif band == 'Acute':
+        answer = 'Real push beginning: non-Hezbollah remilitarization and state-vs-militia signals are converging.'
+        assessment = (
+            'Non-Hezbollah remilitarization (e.g. Lebanese Forces / Druze / armed factions), calls '
+            'to resist the state, and sectarian friction are converging' + amp_clause + '. This is '
+            'consistent with the pre-conflict mobilization that preceded ' + _CIVIL_WAR_PRECEDENTS[0] + '.'
+        )
+    else:  # Critical
+        answer = 'Actively being pushed toward internal conflict: multiple independent layers are converging.'
+        assessment = (
+            'Multiple independent layers -- armed mobilization, state-vs-militia confrontation' +
+            amp_clause + ' -- are converging at a level consistent with pre-civil-war conditions. '
+            'Both ' + _CIVIL_WAR_PRECEDENTS[0] + ' and ' + _CIVIL_WAR_PRECEDENTS[1] +
+            ' followed a similar convergence of communal grievance, parallel armed authority, and state paralysis.'
+        )
+
+    return {
+        'band':            band,                 # Latent / Elevated / Acute / Critical
+        'level':           fr,                   # internal-fracture spine level (0-5)
+        'active_layers':   layers,
+        'amplifier_count': amps,
+        'answer':          answer,               # one-line murmurings-vs-push read
+        'assessment':      assessment,           # estimative, precedent-anchored
+        'precedent':       list(_CIVIL_WAR_PRECEDENTS),
+        'disclaimer':      _CIVIL_WAR_DISCLAIMER,
+        'coverage':        'rhetoric-grounded; IDP/humanitarian load and internal GDELT events not yet folded in (Slice 2b)',
+    }
+
+
 def interpret_signals(scan_data):
     """
     Main entry point. Called from rhetoric_tracker.py with full scan_data.
@@ -970,6 +1077,7 @@ def interpret_signals(scan_data):
         green_lines  = _score_green_lines(scan_data)
         diplomatic   = _score_diplomatic_track(scan_data, green_lines)
         historical   = _match_historical(scan_data)
+        civil_war    = _score_civil_war_convergence(scan_data)
         so_what      = _build_so_what(scan_data, red_lines, historical,
                                       green_lines, diplomatic)
 
@@ -993,6 +1101,7 @@ def interpret_signals(scan_data):
             },
             'diplomatic_track':    diplomatic,
             'historical_matches':  historical,
+            'civil_war_convergence': civil_war,
             'interpreter_version': '1.1.0',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
@@ -1005,6 +1114,9 @@ def interpret_signals(scan_data):
             'green_lines':        {'triggered': [], 'active_count': 0, 'signaled_count': 0, 'diplomatic_score': 0},
             'diplomatic_track':   {'score': 0, 'scenario': 'Unknown', 'hezbollah_disrupting': False},
             'historical_matches': [],
+            'civil_war_convergence': {'band': 'Latent', 'level': 0, 'active_layers': [],
+                                      'amplifier_count': 0, 'answer': '', 'assessment': '',
+                                      'precedent': [], 'disclaimer': '', 'coverage': ''},
             'interpreter_version': '1.1.0',
             'error':              str(e)[:200],
         }
@@ -1103,6 +1215,25 @@ def build_top_signals(scan_data):
         })
     crossborder_lvl = int(scan_data.get('crossborder_level', 0) or 0)
     ceasefire_lvl   = int(scan_data.get('ceasefire_level', 0) or 0)
+    internal_fracture_lvl = int(scan_data.get('internal_fracture_level', 0) or 0)
+
+    # ── Civil War Pressure convergence (Slice 2) -> BLUF / GPI ──
+    cw = interp.get('civil_war_convergence') or {}
+    if cw.get('band') in ('Elevated', 'Acute', 'Critical'):
+        _cw_prio  = {'Elevated': 7, 'Acute': 10, 'Critical': 13}[cw['band']]
+        _cw_color = {'Elevated': '#f59e0b', 'Acute': '#f97316', 'Critical': '#dc2626'}[cw['band']]
+        signals.append({
+            'priority':   _cw_prio,
+            'category':   'civil_war_convergence',
+            'theatre':    'lebanon',
+            'level':      internal_fracture_lvl,
+            'icon':       '🔥',
+            'color':      _cw_color,
+            'short_text': (f'🇱🇧 LEBANON: Civil-war pressure {cw["band"]} '
+                           f'(internal fracture L{internal_fracture_lvl})'),
+            'long_text':  ((cw.get('answer', '') + ' ' + cw.get('assessment', '') + ' '
+                            + cw.get('disclaimer', '')).strip())[:480],
+        })
 
     actors          = scan_data.get('actors') or {}
     silence_alerts  = scan_data.get('silence_anomalies') or []
