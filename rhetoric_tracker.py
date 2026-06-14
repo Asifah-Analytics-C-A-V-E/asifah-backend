@@ -605,6 +605,9 @@ CEASEFIRE_TRIGGERS = {
         'ceasefire agreement signed', 'peace deal signed',
         'hezbollah agrees ceasefire', 'israel accepts ceasefire',
         'ceasefire takes effect', 'ceasefire implemented',
+        # ── v2.3 Jun 14 2026 — disarmament-conditioned ceasefire (handover steps) ──
+        'dibbin', 'replaced by the lebanese', 'lebanese army replaces',
+        'laf takes control south', 'israeli troops withdrew', 'idf withdrew',
     ],
     4: [
         'ceasefire framework agreed', 'deal reached lebanon',
@@ -618,6 +621,15 @@ CEASEFIRE_TRIGGERS = {
         'leiter lebanon', 'michel issa lebanon', 'hamadeh israel',
         'ambassador talks lebanon', 'us brokered talks lebanon',
         'israel lebanon washington', 'talks state department',
+        # ── v2.3 Jun 14 2026 — gradual withdrawal + US-led peace process ──
+        'gradual israeli withdrawal', 'pull back gradually', 'gradual withdrawal',
+        'phased withdrawal', 'lebanese army deploys', 'army deploys south',
+        'security coordination', 'israeli and lebanese army', 'lebanese army officials',
+        'vetted lebanese units', 'vetted military units', 'us trains lebanese',
+        'rubio lebanon', 'rubio hezbollah',
+        'us-led peace process', 'us peace process', 'peace process between israel',
+        'aoun and netanyahu', 'aoun netanyahu', 'netanyahu and aoun',
+        'disarmament framework', 'disarmament timeline',
     ],
     3: [
         'ceasefire proposal', 'ceasefire offer', 'france proposes',
@@ -631,6 +643,10 @@ CEASEFIRE_TRIGGERS = {
         'first contact israel lebanon', 'direct contact israel lebanon',
         'yechiel leiter', 'nawaf hamadeh', 'michel issa beirut',
         'israel open to talks lebanon', 'netanyahu direct talks lebanon',
+        # ── v2.3 Jun 14 2026 — process / LAF enforcement plan ──
+        'ambassador-level talks', 'ambassador level talks', 'washington hosts',
+        'us hosts', 'take back control', 'laf takes back',
+        'us backs lebanese army', 'laf enforcement',
         'مفاوضات مباشرة إسرائيل لبنان', 'محادثات واشنطن لبنان',
     ],
     2: [
