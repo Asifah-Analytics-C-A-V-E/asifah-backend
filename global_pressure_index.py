@@ -1586,6 +1586,62 @@ def _narrative_market_fragility(blufs):
     }
 
 
+def _narrative_conflict_repricing(blufs):
+    """Conflict-repricing market-belief read at GPI altitude (Slice 3, Jun 18 2026).
+
+    Reads the conflict_repricing_detector GPI bundle (repricing:israel:gpi):
+    whether informed capital is pricing the US-Iran off-ramp as durable, refusing
+    to, or repricing an expanding war premium with no off-ramp present. The
+    detector is the sensor; this is the analyst surfacing its read alongside the
+    diplomatic track (the _narrative_iran_deescalation companion).
+
+    Gated to gpi_eligible states (corroborated / contradicted / escalation
+    repricing) -- mixed / insufficient / no_read stay off the rollup (absence
+    stays honest). Priority is pinned BELOW the +11 global-level boost: a
+    market-belief read never raises the global level; the kinetic trackers own
+    that. Single region (['me']) so it never takes the cross-theater +30 tier.
+
+    Convergence framing, NOT prediction and NOT investment advice. The detail is
+    the detector's already-estimative prose; the reader completes the inference.
+    """
+    bundle = _redis_get('repricing:israel:gpi') or {}
+    if not isinstance(bundle, dict) or not bundle.get('gpi_eligible'):
+        return None
+    state = bundle.get('state')
+
+    market_read  = bundle.get('market_read', '') or ''
+    episode_read = bundle.get('episode_read', '') or ''
+    detail = (market_read + (' ' + episode_read if episode_read else '')).strip()
+    if not detail:
+        return None
+
+    if state == 'offramp_contradicted':
+        pr, color = 10, '#f59e0b'
+        headline = ('Markets are not pricing the US-Iran off-ramp as durable -- '
+                    'the tape diverges from the diplomatic track')
+    elif state == 'offramp_corroborated':
+        pr, color = 8, '#10b981'
+        headline = ('Markets are pricing the US-Iran off-ramp as durable -- '
+                    'the tape and the diplomatic track agree')
+    elif state == 'escalation_repricing':
+        pr, color = 10, '#ef4444'
+        headline = ('Markets repricing an expanding war-risk premium -- '
+                    'no diplomatic off-ramp present')
+    else:
+        return None
+
+    return {
+        'priority': pr,
+        'category': 'conflict_repricing_israel',
+        'regions':  ['me'],
+        'icon':     '\U0001F4CA',  # bar chart
+        'color':    color,
+        'pressure_type': 'economic',
+        'headline': headline,
+        'detail':   detail,
+    }
+
+
 def _narrative_global_baseline(blufs):
     """Fallback: when no narratives detected, summarize the elevated regions."""
     elevated = [(r, _level_of(b)) for r, b in blufs.items() if _level_of(b) >= 3]
@@ -1707,6 +1763,7 @@ NARRATIVE_DETECTORS = [
     _narrative_multiaxis_convergence,                    # multi-axis + global-commodity (Jun 6 2026)
     _narrative_food_stress_convergence,                  # food x kinetic x humanitarian (Jun 10 2026)
     _narrative_market_fragility,                         # market fragility x Taiwan semis (Black Swan #2, Jun 13 2026)
+    _narrative_conflict_repricing,                       # off-ramp market-belief read (Slice 3, Jun 18 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
