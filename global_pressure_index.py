@@ -917,6 +917,73 @@ def _narrative_iran_strike_window(blufs):
     }
 
 
+def _narrative_iran_deescalation(blufs):
+    """US-Iran de-escalation off-ramp at GPI altitude (v1.7.0 - Jun 18 2026).
+
+    Reads the maturity tag + contradiction flags the Iran rhetoric tracker emits
+    (rhetoric:iran:latest). Convergence/estimative framing: reports that an
+    off-ramp is present and how mature/reversible it is -- never predicts the war
+    ends. Priority kept BELOW the global-level boost threshold (11) so a
+    de-escalation narrative never raises the global level.
+    """
+    iran = _redis_get('rhetoric:iran:latest') or {}
+    if not isinstance(iran, dict):
+        return None
+    maturity = iran.get('de_escalation_maturity', 'none')
+    if maturity not in ('framework', 'signed', 'implementing'):
+        return None
+
+    milestones = iran.get('implementation_milestones', []) or []
+    contra     = iran.get('contradiction_active', False)
+    flags      = iran.get('contradiction_flags', []) or []
+    n          = len(milestones)
+    plural     = 's' if n != 1 else ''
+
+    if maturity == 'implementing':
+        headline = (f'US-Iran de-escalation -- framework moving toward implementation '
+                    f'({n} delivered milestone{plural})')
+        detail = (
+            f'The Iran rhetoric tracker reports an off-ramp at implementing maturity: '
+            f'{n} delivered milestone{plural} observed ({", ".join(milestones)}). '
+            f'This is consistent with a durable de-escalation, though reversibility '
+            f'language persists and the track remains conditional. ')
+    elif maturity == 'signed':
+        headline = 'US-Iran de-escalation -- signed framework, implementation pending'
+        detail = (
+            'The Iran rhetoric tracker reports a signed US-Iran framework. This is '
+            'consistent with de-escalation, but implementation is pending and explicitly '
+            'reversible on the 60-day track; no delivered milestones observed yet. ')
+    else:  # framework
+        headline = 'US-Iran de-escalation -- active negotiation track (unsigned)'
+        detail = (
+            'The Iran rhetoric tracker reports an active US-Iran negotiation track, '
+            'consistent with an emerging off-ramp that is not yet signed. ')
+
+    if contra:
+        bits = []
+        if 'israel_lebanon' in flags:
+            bits.append('continued Israeli operations in Lebanon')
+        if 'syria_hezbollah' in flags:
+            bits.append('calls for Syria to act against Hezbollah')
+        contra_txt = ' and '.join(bits) if bits else 'an unresolved Lebanon-front contradiction'
+        detail += (
+            f'A live contradiction -- {contra_txt} -- caps how deep the de-escalation '
+            f'reads; the all-fronts framing is not yet borne out on the Lebanon front. ')
+
+    detail += ('Framing is convergence, not prediction: an off-ramp is present and '
+               'measurably maturing or stalling -- the reader completes the inference.')
+
+    return {
+        'priority': 9,    # below the +11 global-level boost; de-escalation never escalates
+        'category': 'iran_deescalation',
+        'regions':  ['me'],
+        'icon':     '\U0001f91d',  # handshake
+        'color':    '#10b981',      # diplomatic green
+        'headline': headline,
+        'detail':   detail,
+    }
+
+
 def _narrative_dprk_russia_axis(blufs):
     """DPRK-Russia coordination (ammunition / troops / weapons)."""
     europe = blufs.get('europe')
@@ -1617,6 +1684,7 @@ def _narrative_multiaxis_convergence(blufs):
 NARRATIVE_DETECTORS = [
     _narrative_nuclear_signaling_global,
     _narrative_iran_strike_window,                       # convergence framing (May 22 2026)
+    _narrative_iran_deescalation,                        # off-ramp at altitude 3 (Jun 18 2026)
     _narrative_china_taiwan_takeover,
     _narrative_scs_first_island_chain_axis,             # Jun 2026 -- China+Taiwan+Vietnam SCS arc
     _narrative_dual_chokepoint,
