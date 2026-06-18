@@ -257,6 +257,7 @@ def _signals_of(bluf):
 
 _LEVEL_LABEL_MAP = {
     'surge': 5, 'critical': 5, 'crisis': 5,
+    'high': 4, 'incident': 4,   # v3.x (Jun 18 2026): 'high' was MISSING -> coerced to 0
     'elevated': 3, 'heightened': 3, 'warning': 3, 'alert': 3,
     'active': 2, 'rising': 2, 'tensions': 2,
     'normal': 1, 'stable': 1, 'baseline': 1,
@@ -1825,6 +1826,16 @@ def _build_global_top_signals(blufs, narratives):
 
         # Tier 2: Active conflict — single region at L5
         if level >= 5 and theatre != 'global':
+            return 20
+
+        # Tier 2 (extended, Jun 18 2026): a BREACHED red line at high+ severity is
+        # active-conflict class on its OWN merit -- it must NOT be buried just
+        # because its home region's ambient level isn't L5. Fixes non-ME strategic
+        # breaches (e.g. a record Ukrainian strike on Moscow) being floored to Tier 4
+        # while every ME L5 signal gets +20. Gated to genuine breaches (short_text
+        # carries the BREACH marker) so it never broadly amplifies high-volume noise.
+        short = (signal.get('short_text') or '').upper()
+        if level >= 4 and 'BREACH' in short and theatre != 'global':
             return 20
 
         # Tier 3: Major regional narratives (came from narrative detector, single region)
