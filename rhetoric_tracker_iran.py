@@ -898,6 +898,48 @@ DIPLOMATIC_TRIGGERS = {
 }
 
 
+# ════════════════════════════════════════════════════════════════════════
+# DE-ESCALATION CONTRADICTION TRIGGERS  (v1.7.0 - Jun 18 2026)
+# ------------------------------------------------------------------------
+# Signals that CONTRADICT the MOU's "end of war on ALL fronts incl. Lebanon"
+# clause. These do NOT add escalation on their own - they CAP how deep the
+# diplomatic de-escalation modifier may read (soft cap: -1 level), because a
+# live contradiction means the all-fronts off-ramp is less real than the deal
+# text claims. Doctrine: "contradiction is often a clue."
+#
+# Two families:
+#   israel_lebanon  - Israel rejecting / undercutting the Lebanon-front
+#                     ceasefire (incl. ongoing Israeli kinetic action in Lebanon)
+#   syria_hezbollah - third-party pressure on the Lebanon front: advocacy or
+#                     action urging Syria to move against Hezbollah
+#
+# Gating (applied in the scan, not here): the soft cap fires only when 2+
+# articles match across these families ("convergence of one source is an echo").
+# Because the cap subtracts from diplomatic_max, it is harmless when no
+# de-escalation is present (max(0, 0 - 1) == 0).
+# ════════════════════════════════════════════════════════════════════════
+DEESCALATION_CONTRADICTION_TRIGGERS = {
+    'israel_lebanon': [
+        'israel will not leave lebanon', 'israel stays in lebanon',
+        'israel remains in lebanon', 'idf remains in lebanon',
+        'idf stays in lebanon', 'israel rejects lebanon withdrawal',
+        'israel refuses lebanon withdrawal', 'no israeli withdrawal lebanon',
+        'israel continues operations lebanon', 'israel kills four in lebanon',
+        'israel strikes lebanon', 'israel attacks lebanon',
+        'israeli strike lebanon', 'israeli strikes lebanon',
+        'israel kills in lebanon', 'israel bombs lebanon',
+    ],
+    'syria_hezbollah': [
+        'syria take care of hezbollah', 'syria handle hezbollah',
+        'syria against hezbollah', 'syria move against hezbollah',
+        'syria confront hezbollah', 'syria disarm hezbollah',
+        'syria deal with hezbollah', 'trump syria hezbollah',
+        'syrian forces against hezbollah', 'syria troops hezbollah',
+        'syria deploy against hezbollah',
+    ],
+}
+
+
 REGIONAL_TRIGGERS = {
     5: [
         'iran closes hormuz', 'iran blockades hormuz',
