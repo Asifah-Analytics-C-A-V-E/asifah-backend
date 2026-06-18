@@ -1161,6 +1161,49 @@ def _extract_active_vectors(raw_data, threshold=2):
     return sorted(active, key=lambda x: -x[1])
 
 
+def _iran_offramp_sentence(trackers):
+    """Estimative US-Iran off-ramp sentence for BLUF prose (v1.7.0 - Jun 18 2026).
+
+    Reads the maturity tag + contradiction flags the Iran tracker now emits and
+    renders a single convergence-framed sentence (or None when no off-ramp).
+    Shared by both prose builders so legacy `bluf` and preferred `bluf_v2` stay
+    in sync. Estimative voice only: consistent with / historically / pending /
+    reversible -- never probabilities, dates, or "will".
+    """
+    iran_raw = (trackers.get('iran', {}) or {}).get('raw', {}) or {}
+    maturity = iran_raw.get('de_escalation_maturity', 'none')
+    if maturity not in ('framework', 'signed', 'implementing'):
+        return None
+    milestones = iran_raw.get('implementation_milestones', []) or []
+    contra     = iran_raw.get('contradiction_active', False)
+    flags      = iran_raw.get('contradiction_flags', []) or []
+
+    if maturity == 'implementing':
+        n = len(milestones)
+        s = (f"US-Iran de-escalation is moving from framework toward implementation "
+             f"({n} delivered milestone{'s' if n != 1 else ''} observed) -- consistent "
+             f"with a durable off-ramp, though reversibility language persists.")
+    elif maturity == 'signed':
+        s = ("A signed US-Iran framework is in place -- consistent with de-escalation, "
+             "but implementation is pending and explicitly reversible on the 60-day "
+             "track; no delivered milestones observed yet.")
+    else:  # framework
+        s = ("An active US-Iran negotiation track is consistent with an emerging "
+             "off-ramp, not yet signed.")
+
+    if contra:
+        bits = []
+        if 'israel_lebanon' in flags:
+            bits.append('continued Israeli operations in Lebanon')
+        if 'syria_hezbollah' in flags:
+            bits.append('calls for Syria to act against Hezbollah')
+        contra_txt = ' and '.join(bits) if bits else 'an unresolved Lebanon-front contradiction'
+        s += (f" The all-fronts ceasefire is contradicted by {contra_txt}, "
+              f"which caps how deep the de-escalation reads.")
+
+    return 'Iran -- ' + s
+
+
 def _build_bluf_prose_v2(posture, trackers):
     """
     BLUF prose v2 — human-language regional analytical summary.
@@ -1290,6 +1333,12 @@ def _build_bluf_prose_v2(posture, trackers):
             para2_parts.append(f"{', '.join(names[:-1])}, and {names[-1]} remain at baseline.")
 
     # ════════ PARA 3: Cascade closer ════════
+    # -- v1.7.0 (Jun 18 2026): US-Iran off-ramp into body para (estimative) --
+    # Appends to para2_parts (assembled below), surfaced before the cascade closer.
+    iran_offramp = _iran_offramp_sentence(trackers)
+    if iran_offramp:
+        para2_parts.append(iran_offramp)
+
     para3_parts = []
     if theatres_at_l3plus >= 3:
         para3_parts.append(
@@ -1414,6 +1463,11 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
             'Trump-Iran ceasefire (7 Apr) in effect -- '
             'watch IRGC-directed proxies in Iraq/Lebanon for compliance signals.'
         )
+
+    # -- v1.7.0 (Jun 18 2026): US-Iran off-ramp (maturity-aware, estimative) --
+    iran_offramp = _iran_offramp_sentence(trackers)
+    if iran_offramp:
+        parts.append(iran_offramp)
 
     # Lebanon/Hezbollah sentence if active
     leb_data  = trackers.get('lebanon', {}) or {}
