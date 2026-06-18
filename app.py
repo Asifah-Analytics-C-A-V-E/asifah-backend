@@ -1104,6 +1104,14 @@ try:
     print('[ME Backend] Market Black Swan detector loaded')
 except Exception as e:
     print(f'[ME Backend] WARNING: Market Black Swan unavailable ({e})')
+
+# Conflict Repricing -- market-belief layer reading the de-escalation off-ramp
+try:
+    from conflict_repricing_detector import register_conflict_repricing_endpoints
+    register_conflict_repricing_endpoints(app)
+    print('[ME Backend] Conflict Repricing detector loaded')
+except Exception as e:
+    print(f'[ME Backend] WARNING: Conflict Repricing unavailable ({e})')
 from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
 from israel_stability import register_israel_stability_endpoints
