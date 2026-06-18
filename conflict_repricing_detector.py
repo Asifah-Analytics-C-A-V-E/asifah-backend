@@ -38,7 +38,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-VERSION = '0.2.0'  # Slice 2 (episode library + Jaccard)
+VERSION = '0.3.0'  # Slice 2b (snapshot + label pattern memory)
 CACHE_TTL_HOURS = 12
 
 DISCLAIMER = ("This is a CONVERGENCE read of market positioning, NOT a forecast "
@@ -457,11 +457,22 @@ def _leg(tok):
     return _LEG_NAME.get(tok.split(':', 1)[0], tok)
 
 
-def match_episodes(scored, top_n=EPISODE_TOP_N, floor=EPISODE_MATCH_FLOOR):
-    """Top-N labeled regimes most similar to the current signature (Jaccard)."""
+def _labeled_pool(theater):
+    """Seed episodes + any operator-labeled episodes accumulated in Redis."""
+    extra = _redis_get(f'repricing:{theater}:labeled')
+    return LABELED_EPISODES + (extra if isinstance(extra, list) else [])
+
+
+def match_episodes(scored, theater='israel', top_n=EPISODE_TOP_N,
+                   floor=EPISODE_MATCH_FLOOR):
+    """Top-N labeled regimes most similar to the current signature (Jaccard).
+
+    Pool = the seeded LABELED_EPISODES plus any episodes the operator has
+    labeled into Redis via the /label endpoint (Slice 2b pattern memory).
+    """
     sig = _signature(scored)
     out = []
-    for ep in LABELED_EPISODES:
+    for ep in _labeled_pool(theater):
         ep_sig = frozenset(ep['signature'])
         j = _jaccard(sig, ep_sig)
         if j >= floor:
@@ -487,6 +498,46 @@ def episode_read(matches):
 
 
 # ------------------------------------------------------------
+# Pattern memory: auto-snapshot (Slice 2b)
+# ------------------------------------------------------------
+def _snapshot(theater, state, signature, offramp):
+    """Auto-archive a meaningful scan's signature for later labeling (Slice 2b).
+
+    Skips empty / non-readable states. Light dedup: an identical signature+state
+    inside the last hour is not re-archived (prevents force-scan test spam).
+    Capped at 200, newest last; no TTL (the cap bounds growth).
+    """
+    if state in ('insufficient_data', 'no_read'):
+        return
+    sig_list = sorted(signature)
+    if not sig_list:
+        return
+    key = f'repricing:{theater}:snapshots'
+    snaps = _redis_get(key)
+    if not isinstance(snaps, list):
+        snaps = []
+    now = datetime.now(timezone.utc)
+    if snaps:
+        last = snaps[-1]
+        if last.get('signature') == sig_list and last.get('state') == state:
+            try:
+                age = (now - datetime.fromisoformat(last['created_at'])).total_seconds()
+                if age < 3600:
+                    return
+            except Exception:
+                pass
+    snaps.append({
+        'id': now.strftime('%Y%m%dT%H%M%SZ'),
+        'date': now.strftime('%Y-%m-%d'),
+        'state': state,
+        'signature': sig_list,
+        'offramp_maturity': offramp.get('maturity'),
+        'created_at': now.isoformat(),
+    })
+    _redis_set(key, snaps[-200:])
+
+
+# ------------------------------------------------------------
 # Scan orchestration
 # ------------------------------------------------------------
 _GPI_GATED_STATES = {'offramp_contradicted', 'offramp_corroborated',
@@ -503,8 +554,9 @@ def run_scan(theater='israel'):
     scored = _gather_instruments(cfg)
     state, peace, esc = _classify(scored, offramp)
     market_read = build_market_read(cfg, state, scored, offramp, peace, esc)
-    matches = match_episodes(scored)
+    matches = match_episodes(scored, theater)
     ep_read = episode_read(matches)
+    _snapshot(theater, state, _signature(scored), offramp)
 
     now = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -601,6 +653,60 @@ def register_conflict_repricing_endpoints(app):
             'instruments': _gather_instruments(cfg),
             'version': VERSION,
         })
+
+    @app.route('/api/conflict-repricing/<theater>/history', methods=['GET'])
+    def api_conflict_repricing_history(theater):
+        if theater not in THEATER_CONFIG:
+            return jsonify({'error': 'unknown theater',
+                            'available': sorted(THEATER_CONFIG.keys())}), 404
+        return jsonify({
+            'theater': theater,
+            'snapshots': _redis_get(f'repricing:{theater}:snapshots') or [],
+            'labeled': _redis_get(f'repricing:{theater}:labeled') or [],
+            'seeds': LABELED_EPISODES,
+            'version': VERSION,
+        })
+
+    @app.route('/api/conflict-repricing/<theater>/label', methods=['POST'])
+    def api_conflict_repricing_label(theater):
+        # Operator tool: promote a snapshot into the labeled-episode pool that
+        # match_episodes consults. Validates regime against the known taxonomy.
+        if theater not in THEATER_CONFIG:
+            return jsonify({'success': False, 'error': 'unknown theater',
+                            'available': sorted(THEATER_CONFIG.keys())}), 404
+        body = request.get_json(silent=True) or {}
+        regime = body.get('regime')
+        label = body.get('label')
+        snap_id = body.get('id', 'latest')
+        if regime not in _REGIME_PHRASE:
+            return jsonify({'success': False,
+                            'error': f'regime must be one of {sorted(_REGIME_PHRASE)}'}), 400
+        if not label:
+            return jsonify({'success': False, 'error': 'label is required'}), 400
+        snaps = _redis_get(f'repricing:{theater}:snapshots') or []
+        if not isinstance(snaps, list) or not snaps:
+            return jsonify({'success': False, 'error': 'no snapshots to label'}), 404
+        if snap_id == 'latest':
+            snap = snaps[-1]
+        else:
+            snap = next((s for s in snaps if s.get('id') == snap_id), None)
+        if not snap:
+            return jsonify({'success': False,
+                            'error': f'snapshot id not found: {snap_id}'}), 404
+        episode = {
+            'id': f"labeled_{snap['id']}",
+            'date': body.get('date') or snap.get('date'),
+            'regime': regime,
+            'label': label,
+            'signature': snap.get('signature', []),
+        }
+        labeled = _redis_get(f'repricing:{theater}:labeled')
+        if not isinstance(labeled, list):
+            labeled = []
+        labeled.append(episode)
+        _redis_set(f'repricing:{theater}:labeled', labeled[-200:])
+        return jsonify({'success': True, 'labeled_episode': episode,
+                        'total_labeled': len(labeled[-200:]), 'version': VERSION})
 
     print(f'[Repricing] Endpoints registered (v{VERSION}) '
           f'theaters={sorted(THEATER_CONFIG.keys())}')
