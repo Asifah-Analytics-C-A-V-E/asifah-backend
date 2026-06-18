@@ -38,7 +38,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-VERSION = '0.1.0'  # Slice 1
+VERSION = '0.2.0'  # Slice 2 (episode library + Jaccard)
 CACHE_TTL_HOURS = 12
 
 DISCLAIMER = ("This is a CONVERGENCE read of market positioning, NOT a forecast "
@@ -398,6 +398,95 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
 
 
 # ------------------------------------------------------------
+# Episode library + Jaccard similarity (Slice 2)
+# ------------------------------------------------------------
+# Each market print has a SIGNATURE: the set of its active (non-flat) directional
+# votes, in PEACE-polarity vote space (peace = moving toward durable-peace
+# pricing). We Jaccard-match the live signature against a small library of
+# LABELED historical regimes. Flat/neutralized votes are excluded -- only active
+# legs carry signal (a convergence of one source is an echo). Post-hoc pattern
+# memory + structural similarity; NOT machine learning and NOT a forecast.
+LABELED_EPISODES = [
+    {'id': 'oct_2023_war_onset', 'date': 'Oct 2023',
+     'regime': 'war_expansion_riskoff', 'label': 'the Oct 2023 war onset',
+     'signature': ['broad:escalation', 'fx:escalation',
+                   'defense_spread:escalation', 'oil:escalation']},
+    {'id': 'jan_2026_rising_lion', 'date': 'Jan 2026',
+     'regime': 'winning_war_rally', 'label': 'the Jan 2026 Rising Lion rally',
+     'signature': ['broad:peace', 'fx:peace',
+                   'defense_spread:escalation', 'oil:escalation']},
+    {'id': 'mar_2026_war_week', 'date': 'Mar 2026',
+     'regime': 'winning_war_rally', 'label': 'the Mar 2026 war-week rally',
+     'signature': ['broad:peace', 'fx:peace',
+                   'defense_spread:escalation', 'oil:escalation']},
+    {'id': 'jun_2026_reescalation', 'date': 'Jun 8 2026',
+     'regime': 'war_expansion_riskoff',
+     'label': 'the Jun 8 2026 re-escalation selloff',
+     'signature': ['broad:escalation', 'fx:escalation',
+                   'defense_spread:escalation', 'oil:escalation']},
+    {'id': 'jun_2025_ceasefire', 'date': 'Jun 2025',
+     'regime': 'peace_dividend', 'label': 'the Jun 2025 ceasefire risk-on',
+     'signature': ['broad:peace', 'fx:peace',
+                   'defense_spread:peace', 'oil:peace']},
+]
+
+_REGIME_PHRASE = {
+    'war_expansion_riskoff': 'war-expansion risk-off',
+    'winning_war_rally': 'winning-war rally',
+    'peace_dividend': 'peace-dividend',
+}
+_LEG_NAME = {'broad': 'broad equities', 'fx': 'the shekel',
+             'defense_spread': 'defense demand', 'oil': 'oil'}
+
+EPISODE_MATCH_FLOOR = 0.15   # below this, not a meaningful analog
+EPISODE_TOP_N = 2
+
+
+def _signature(scored):
+    """Active (non-flat) directional votes as a token set, e.g. {'oil:peace'}."""
+    return frozenset(f"{s['id']}:{s['vote']}" for s in scored
+                     if s.get('vote') in ('peace', 'escalation'))
+
+
+def _jaccard(a, b):
+    u = a | b
+    return (len(a & b) / len(u)) if u else 0.0
+
+
+def _leg(tok):
+    return _LEG_NAME.get(tok.split(':', 1)[0], tok)
+
+
+def match_episodes(scored, top_n=EPISODE_TOP_N, floor=EPISODE_MATCH_FLOOR):
+    """Top-N labeled regimes most similar to the current signature (Jaccard)."""
+    sig = _signature(scored)
+    out = []
+    for ep in LABELED_EPISODES:
+        ep_sig = frozenset(ep['signature'])
+        j = _jaccard(sig, ep_sig)
+        if j >= floor:
+            shared = sorted({_leg(t) for t in (sig & ep_sig)})
+            out.append({'id': ep['id'], 'label': ep['label'], 'date': ep['date'],
+                        'regime': ep['regime'], 'similarity': round(j, 3),
+                        'shared_legs': shared})
+    out.sort(key=lambda r: r['similarity'], reverse=True)
+    return out[:top_n]
+
+
+def episode_read(matches):
+    """One estimative sentence naming the closest historical analog."""
+    if not matches:
+        return ("No labeled market-regime episode closely resembles this "
+                "signature.")
+    t = matches[0]
+    pct = int(round(t['similarity'] * 100))
+    legs = ', '.join(t['shared_legs']) if t['shared_legs'] else 'no shared legs'
+    return (f"Closest historical analog: {t['label']} ({t['date']}), a "
+            f"{_REGIME_PHRASE.get(t['regime'], t['regime'])} signature -- "
+            f"~{pct}% similar this cycle, sharing {legs}.")
+
+
+# ------------------------------------------------------------
 # Scan orchestration
 # ------------------------------------------------------------
 _GPI_GATED_STATES = {'offramp_contradicted', 'offramp_corroborated',
@@ -414,6 +503,8 @@ def run_scan(theater='israel'):
     scored = _gather_instruments(cfg)
     state, peace, esc = _classify(scored, offramp)
     market_read = build_market_read(cfg, state, scored, offramp, peace, esc)
+    matches = match_episodes(scored)
+    ep_read = episode_read(matches)
 
     now = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -425,6 +516,8 @@ def run_scan(theater='israel'):
         'flag': cfg['flag'],
         'state': state,
         'market_read': market_read,
+        'episode_read': ep_read,
+        'similar_episodes': matches,
         'offramp': offramp,
         'instruments': scored,
         'coherence': {'peace_votes': len(peace), 'escalation_votes': len(esc),
@@ -444,6 +537,8 @@ def run_scan(theater='israel'):
         'state': state,
         'gpi_eligible': state in _GPI_GATED_STATES,
         'market_read': market_read,
+        'episode_read': ep_read,
+        'top_analog': matches[0] if matches else None,
         'updated_at': now,
         'disclaimer': DISCLAIMER,
     })
