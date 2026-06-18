@@ -778,6 +778,10 @@ DIPLOMATIC_TRIGGERS = {
         'blockade on iran lifted', 'iran blockade lifted',
         'frozen assets released', 'iran assets unfrozen',
         'iran nuclear program dismantled',
+        # -- v1.7.0 Jun 18 2026 - June 16 MOU: all-fronts end-of-war (signed) --
+        'end of war all fronts', 'end war on all fronts',
+        'war on all fronts ends', 'all fronts ceasefire signed',
+        'iran peace deal signed',
         'توافق ایران آمریکا', 'اتفاق نووي إيران أمريكا',
         'توافق نهایی ایران', 'اتفاق نهائي إيران أمريكا',
     ],
@@ -837,6 +841,17 @@ DIPLOMATIC_TRIGGERS = {
         'trump iran deal post', 'trump announces iran deal',
         'trump iran deal close', 'trump iran deal imminent',
         'trump iran agreement near',
+        # -- v1.7.0 Jun 18 2026 - June 16 MOU framework clauses (promised) --
+        'all fronts ceasefire', 'ceasefire on all fronts',
+        'reconstruction fund', 'iran reconstruction fund',
+        '300 billion reconstruction', '300b reconstruction', 'rehabilitation fund iran',
+        'treasury waiver', 'treasury issues waiver', 'ofac waiver iran',
+        'unsc binding', 'unsc resolution iran', 'security council binding',
+        'binding final deal', 'un security council iran deal',
+        '30-day withdrawal', 'thirty day withdrawal',
+        'us forces withdraw iran', 'us withdraws from iran',
+        'iran clears mines', 'iran agrees clear mines', 'clear gulf mines',
+        'demine hormuz', 'demine the gulf', 'restore gulf traffic',
         'مذاکرات ایران آمریکا', 'مفاوضات إيران أمريكا',
         'توافق چارچوبی ایران', 'اتفاق إطار إيران',
         'پیشرفت چشمگیر', 'تقدم مشجع',
@@ -930,12 +945,50 @@ DEESCALATION_CONTRADICTION_TRIGGERS = {
         'israel kills in lebanon', 'israel bombs lebanon',
     ],
     'syria_hezbollah': [
-        'syria take care of hezbollah', 'syria handle hezbollah',
+        'take care of hezbollah', 'syria take care of hezbollah',
+        'syria should take care of hezbollah', 'syria come in and take care',
+        'syria to take care of hezbollah', 'syria handle hezbollah',
         'syria against hezbollah', 'syria move against hezbollah',
         'syria confront hezbollah', 'syria disarm hezbollah',
         'syria deal with hezbollah', 'trump syria hezbollah',
         'syrian forces against hezbollah', 'syria troops hezbollah',
         'syria deploy against hezbollah',
+    ],
+}
+
+
+# ════════════════════════════════════════════════════════════════════════
+# IMPLEMENTATION MILESTONE TRIGGERS  (v1.7.0 - Jun 18 2026)
+# ------------------------------------------------------------------------
+# DELIVERED (not merely promised) de-escalation events. The MOU *promising*
+# sanctions relief is a framework signal; Treasury *issuing* the waiver is an
+# implementation milestone. These do NOT change the score (Coco's call: trust
+# the diplomatic keywords for depth). They set the de_escalation_maturity TAG
+# used by the analyst layer (BLUF/GPI prose) so a *promised* outcome is never
+# narrated as an *achieved* one. The deepest "war is structurally over" framing
+# waits for milestones here; if the 60-day track stalls, they simply never fire
+# (absence stays honest).
+# ════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION_MILESTONE_TRIGGERS = {
+    'sanctions_relief_delivered': [
+        'treasury waiver issued', 'sanctions waiver granted',
+        'iran sanctions lifted', 'oil sanctions lifted',
+        'sanctions formally lifted', 'iran sanctions removed',
+        'ofac iran waiver issued',
+    ],
+    'funds_released': [
+        'iran funds released', 'frozen funds released',
+        'iran assets released', 'reconstruction fund disbursed',
+        'reconstruction funds disbursed', 'iran assets returned',
+    ],
+    'hormuz_reopened': [
+        'hormuz reopened', 'strait of hormuz reopened',
+        'gulf traffic restored', 'gulf shipping restored',
+        'mines cleared hormuz', 'iran mines cleared',
+    ],
+    'forces_withdrawn': [
+        'us forces withdrawn iran', 'us troops withdrawn iran',
+        'us withdrawal complete', 'forces withdrawn from gulf',
     ],
 }
 
