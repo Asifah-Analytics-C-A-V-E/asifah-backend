@@ -943,6 +943,13 @@ DEESCALATION_CONTRADICTION_TRIGGERS = {
         'israel strikes lebanon', 'israel attacks lebanon',
         'israeli strike lebanon', 'israeli strikes lebanon',
         'israel kills in lebanon', 'israel bombs lebanon',
+        # -- v1.7.1 (Jun 18 2026): Tehran-side all-fronts contradiction (Araghchi pattern) --
+        # Iran itself saying the war will not end while Israel remains in Lebanon
+        # is the cleanest statement of the all-fronts contradiction -- count it.
+        'israel halting lebanon', 'halting lebanon attacks',
+        'israel halt lebanon', 'war will not end without israel',
+        'israel occupation lebanon', 'israeli occupation lebanon',
+        'israel continues lebanon attacks', 'israel lebanon occupation',
     ],
     'syria_hezbollah': [
         'take care of hezbollah', 'syria take care of hezbollah',
