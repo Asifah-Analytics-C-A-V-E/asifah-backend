@@ -256,6 +256,25 @@ def _gather_instruments(cfg):
 # Coherence -> state classification
 # ------------------------------------------------------------
 def _classify(scored, offramp):
+    # Decontaminate the broad gauge before scoring coherence. The broad ETF (EIS)
+    # CONTAINS the defense/energy names whose war premium we isolate via the
+    # defense spread and oil. When the defense spread is COMPRESSING (peace vote)
+    # and the broad index is merely DOWN, that broad decline is being led by the
+    # same deflating war-premium sectors -- it is NOT an independent risk-off
+    # signal. Neutralize it to 'flat'. We deliberately do NOT flip it to 'peace':
+    # that would double-count the defense vote and manufacture coherence, which
+    # the convergence doctrine forbids (a derived signal is an echo, not a vote).
+    _bid = {s['id']: s for s in scored}
+    _broad = _bid.get('broad')
+    _def = _bid.get('defense_spread')
+    if (_broad and _def and _def.get('vote') == 'peace'
+            and _broad.get('vote') == 'escalation'
+            and (_broad.get('change_pct') or 0) < 0):
+        _broad['raw_vote'] = _broad['vote']
+        _broad['vote'] = 'flat'
+        _broad['neutralized'] = ('broad decline led by war-premium (defense/energy) '
+                                 'deflation -- not an independent risk-off read')
+
     peace = [s for s in scored if s['vote'] == 'peace']
     esc = [s for s in scored if s['vote'] == 'escalation']
     available = [s for s in scored if s['vote'] not in ('unavailable',)]
@@ -339,6 +358,20 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
                 f"positioning are aligned on durability this cycle. {DISCLAIMER}")
 
     if state == 'offramp_market_mixed':
+        if len(peace) >= 2 and len(esc) == 0:
+            observed = _observed_pattern(scored, 'peace')
+            return (f"Market read ({d}): An active {label} is present in the rhetoric "
+                    f"layer ({mat}). The clean signals present -- {observed} -- lean "
+                    f"toward informed capital pricing the off-ramp as durable, but the "
+                    f"instruments are not yet fully coherent, so this is a directional "
+                    f"lean rather than a corroboration read. {DISCLAIMER}")
+        if len(esc) >= 2 and len(peace) == 0:
+            observed = _observed_pattern(scored, 'escalation')
+            return (f"Market read ({d}): An active {label} is present in the rhetoric "
+                    f"layer ({mat}). The clean signals present -- {observed} -- lean "
+                    f"toward the market declining to price the off-ramp as durable, but "
+                    f"the instruments are not yet fully coherent, so this is a "
+                    f"directional lean rather than a contradiction read. {DISCLAIMER}")
         return (f"Market read ({d}): An active {label} is present in the rhetoric "
                 f"layer ({mat}), but market instruments are not moving coherently "
                 f"relative to it this cycle -- no clean corroboration or "
