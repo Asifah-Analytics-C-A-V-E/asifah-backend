@@ -2934,6 +2934,74 @@ def _calculate_rhetoric_score(theatre_summary, proxy_activation_level,
     return max(0, min(100, int(base)))
 
 
+def _detect_deescalation_context(articles, diplomatic_max_raw):
+    """De-escalation maturity + contradiction analysis (v1.7.0 - Jun 18 2026).
+
+    Reads the article pool for (a) implementation milestones (DELIVERED, not
+    merely promised) and (b) contradictions of the all-fronts off-ramp.
+
+    Score effect (the ONLY one): if 2+ articles match a contradiction trigger,
+    the diplomatic depth used for the modifier is soft-capped one level lower
+    (floor 0). Coco's rule: trust the keywords for depth, but a live, multi-source
+    contradiction means the all-fronts off-ramp is less real than the text claims.
+
+    Maturity is descriptive ONLY (drives BLUF/GPI prose, never the score):
+      framework    - diplomatic signals present, MOU being negotiated (L2-4)
+      signed       - signing-level diplomatic language present (L5)
+      implementing - at least one DELIVERED milestone observed
+    The deepest "war is structurally over" prose waits for 'implementing'.
+    """
+    # --- Contradictions: count DISTINCT articles matching any family ---
+    contradiction_articles = 0
+    family_hits = {fam: 0 for fam in DEESCALATION_CONTRADICTION_TRIGGERS}
+    for article in articles:
+        text = f"{article.get('title','')} {article.get('description','')}".lower()
+        matched = False
+        for fam, kws in DEESCALATION_CONTRADICTION_TRIGGERS.items():
+            if any(kw in text for kw in kws):
+                family_hits[fam] += 1
+                matched = True
+        if matched:
+            contradiction_articles += 1
+    contradiction_active = contradiction_articles >= 2   # 2+ article gate
+    contradiction_flags = [fam for fam, n in family_hits.items() if n > 0]
+
+    # --- Implementation milestones: which DELIVERED events appear ---
+    milestones = []
+    for fam, kws in IMPLEMENTATION_MILESTONE_TRIGGERS.items():
+        for article in articles:
+            text = f"{article.get('title','')} {article.get('description','')}".lower()
+            if any(kw in text for kw in kws):
+                milestones.append(fam)
+                break
+
+    # --- Maturity tag (descriptive only - never touches the score) ---
+    if milestones:
+        maturity = 'implementing'
+    elif diplomatic_max_raw >= 5:
+        maturity = 'signed'
+    elif diplomatic_max_raw >= 2:
+        maturity = 'framework'
+    else:
+        maturity = 'none'
+
+    # --- Soft cap (the only score effect) ---
+    diplomatic_max_effective = (
+        max(0, diplomatic_max_raw - 1) if contradiction_active else diplomatic_max_raw
+    )
+
+    return {
+        'contradiction_active':        contradiction_active,
+        'contradiction_article_count': contradiction_articles,
+        'contradiction_flags':         contradiction_flags,
+        'contradiction_family_hits':   family_hits,
+        'milestones':                  sorted(set(milestones)),
+        'maturity':                    maturity,
+        'diplomatic_max_raw':          diplomatic_max_raw,
+        'diplomatic_max_effective':    diplomatic_max_effective,
+    }
+
+
 # ============================================
 # MAIN SCAN
 # ============================================
@@ -2956,6 +3024,25 @@ def run_iran_rhetoric_scan(days=3):
     # ── Step 2: Fetch and classify articles ──
     articles = fetch_rhetoric_articles(days)
     actor_results, theatre_summary = classify_articles(articles, proxy_activation_level)
+
+    # -- v1.7.0 (Jun 18 2026): De-escalation maturity + contradiction soft-cap --
+    # Trust the diplomatic keywords for depth (Coco's call); but if 2+ articles
+    # carry a live contradiction of the all-fronts off-ramp (Israel won't leave
+    # Lebanon / Syria urged against Hezbollah), soft-cap the depth one level.
+    # Maturity (framework/signed/implementing) is descriptive only - it never
+    # touches the score; it tells the analyst layer how real the off-ramp is.
+    deesc_ctx = _detect_deescalation_context(articles, theatre_summary['diplomatic_max'])
+    theatre_summary['diplomatic_max_raw']   = deesc_ctx['diplomatic_max_raw']
+    theatre_summary['diplomatic_max']       = deesc_ctx['diplomatic_max_effective']
+    theatre_summary['deescalation_context'] = deesc_ctx
+    if deesc_ctx['contradiction_active']:
+        print(f"[Iran Rhetoric] (cap) Contradiction soft-cap: diplomatic_max "
+              f"{deesc_ctx['diplomatic_max_raw']} -> {deesc_ctx['diplomatic_max_effective']} "
+              f"({deesc_ctx['contradiction_article_count']} articles, "
+              f"flags={deesc_ctx['contradiction_flags']})")
+    if deesc_ctx['maturity'] != 'none':
+        print(f"[Iran Rhetoric] (maturity) {deesc_ctx['maturity']} "
+              f"(milestones={deesc_ctx['milestones']})")
 
     # ── Step 3: Compute theatre levels ──
     max_irgc     = theatre_summary['irgc_direct_max']
@@ -3053,6 +3140,19 @@ def run_iran_rhetoric_scan(days=3):
             4: 'Active Negotiations',
             5: 'Agreement Reached',
         }.get(theatre_summary['diplomatic_max'], 'Quiet'),
+
+        # -- v1.7.0 (Jun 18 2026): De-escalation maturity + contradiction cap --
+        # Surfaced for the strike-window suppressor, ME BLUF, and GPI prose.
+        # ceasefire_level above is already the CAPPED (effective) depth; the raw
+        # keyword depth is preserved here for transparency. Maturity is
+        # descriptive (framework/signed/implementing); contradiction_* records
+        # the live all-fronts contradiction that drove the soft cap.
+        'diplomatic_max_raw':          deesc_ctx['diplomatic_max_raw'],
+        'de_escalation_maturity':      deesc_ctx['maturity'],
+        'implementation_milestones':   deesc_ctx['milestones'],
+        'contradiction_active':        deesc_ctx['contradiction_active'],
+        'contradiction_flags':         deesc_ctx['contradiction_flags'],
+        'contradiction_article_count': deesc_ctx['contradiction_article_count'],
 
         # Special signals
         'operation_true_promise_count': otp_count,
