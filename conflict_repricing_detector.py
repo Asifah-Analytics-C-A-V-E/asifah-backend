@@ -159,12 +159,12 @@ THEATER_CONFIG = {
         'structural_alternative': ('it views the broader Israel-Iran threat as '
                                    'structural beyond this particular framework'),
         'instruments': [
-            {'id': 'broad', 'name': 'TA-35', 'ticker': '^TA35',
+            {'id': 'broad', 'name': 'Israel ETF (EIS)', 'ticker': 'EIS',
              'role': 'broad risk', 'peace_direction': 'up'},
             {'id': 'fx', 'name': 'the shekel', 'ticker': 'ILS=X',
              'role': 'FX risk premium', 'peace_direction': 'down'},  # USD/ILS down = shekel stronger
             {'id': 'defense_spread', 'name': 'defense (Elbit) vs the broad index',
-             'ticker': 'ESLT', 'spread_vs': '^TA35',
+             'ticker': 'ESLT', 'spread_vs': 'EIS',
              'role': 'defense demand', 'peace_direction': 'down'},
             {'id': 'oil', 'name': 'Brent', 'ticker': 'BZ=F',
              'role': 'war-premium commodity', 'peace_direction': 'down'},
@@ -288,7 +288,7 @@ def _phrase_instrument(s, vote_kind):
     up = (s['change_pct'] or 0) > 0
     iid = s['id']
     if iid == 'broad':
-        return 'the TA-35 is firming' if up else 'the TA-35 is weakening'
+        return 'broad Israel equities are firming' if up else 'broad Israel equities are weakening'
     if iid == 'fx':
         # ILS=X up = USD stronger = shekel weaker
         return 'the shekel is weakening' if up else 'the shekel is strengthening'
