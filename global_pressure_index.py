@@ -778,7 +778,15 @@ def _narrative_russia_iran_axis(blufs):
                          for s in iran_signals)
 
     triggers = sum([russia_high, russia_nuc, iran_high, has_iran_proxy])
-    if triggers >= 2:
+    # v1.7.2 (Jun 18 2026): a genuine cross-theater axis requires BOTH a real
+    # Europe/Russia-side signal AND an Iran-side signal. Previously any 2-of-4
+    # triggers fired it -- but iran_high (= ME REGION L3+, held high by Lebanon/
+    # Israel) and has_iran_proxy (Iran always emits commodity signals) are both
+    # ME-internal and persistently true, so the "axis" fired with ZERO Russia
+    # contribution and froze as the GPI lead. Gate on real cross-theater overlap.
+    europe_side = russia_high or russia_nuc
+    iran_side   = iran_high or has_iran_proxy
+    if europe_side and iran_side:
         return {
             'priority': 13,
             'category': 'russia_iran_axis',
