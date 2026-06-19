@@ -1586,25 +1586,25 @@ def _narrative_market_fragility(blufs):
     }
 
 
-def _narrative_conflict_repricing(blufs):
-    """Conflict-repricing market-belief read at GPI altitude (Slice 3, Jun 18 2026).
+def _repricing_narrative(redis_key, offramp_label, category, regions):
+    """Shared conflict-repricing market-belief read at GPI altitude (Slice 4c).
 
-    Reads the conflict_repricing_detector GPI bundle (repricing:israel:gpi):
-    whether informed capital is pricing the US-Iran off-ramp as durable, refusing
+    Reads a conflict_repricing_detector GPI bundle (repricing:<theater>:gpi):
+    whether informed capital is pricing the named off-ramp as durable, refusing
     to, or repricing an expanding war premium with no off-ramp present. The
     detector is the sensor; this is the analyst surfacing its read alongside the
-    diplomatic track (the _narrative_iran_deescalation companion).
+    diplomatic track.
 
     Gated to gpi_eligible states (corroborated / contradicted / escalation
     repricing) -- mixed / insufficient / no_read stay off the rollup (absence
     stays honest). Priority is pinned BELOW the +11 global-level boost: a
     market-belief read never raises the global level; the kinetic trackers own
-    that. Single region (['me']) so it never takes the cross-theater +30 tier.
+    that. Single region so it never takes the cross-theater +30 tier.
 
     Convergence framing, NOT prediction and NOT investment advice. The detail is
     the detector's already-estimative prose; the reader completes the inference.
     """
-    bundle = _redis_get('repricing:israel:gpi') or {}
+    bundle = _redis_get(redis_key) or {}
     if not isinstance(bundle, dict) or not bundle.get('gpi_eligible'):
         return None
     state = bundle.get('state')
@@ -1617,12 +1617,12 @@ def _narrative_conflict_repricing(blufs):
 
     if state == 'offramp_contradicted':
         pr, color = 10, '#f59e0b'
-        headline = ('Markets are not pricing the US-Iran off-ramp as durable -- '
-                    'the tape diverges from the diplomatic track')
+        headline = (f'Markets are not pricing the {offramp_label} as durable -- '
+                    f'the tape diverges from the diplomatic track')
     elif state == 'offramp_corroborated':
         pr, color = 8, '#10b981'
-        headline = ('Markets are pricing the US-Iran off-ramp as durable -- '
-                    'the tape and the diplomatic track agree')
+        headline = (f'Markets are pricing the {offramp_label} as durable -- '
+                    f'the tape and the diplomatic track agree')
     elif state == 'escalation_repricing':
         pr, color = 10, '#ef4444'
         headline = ('Markets repricing an expanding war-risk premium -- '
@@ -1632,14 +1632,27 @@ def _narrative_conflict_repricing(blufs):
 
     return {
         'priority': pr,
-        'category': 'conflict_repricing_israel',
-        'regions':  ['me'],
+        'category': category,
+        'regions':  regions,
         'icon':     '\U0001F4CA',  # bar chart
         'color':    color,
         'pressure_type': 'economic',
         'headline': headline,
         'detail':   detail,
     }
+
+
+def _narrative_conflict_repricing(blufs):
+    """Israel / US-Iran off-ramp market-belief read (Slice 3, Jun 18 2026)."""
+    return _repricing_narrative('repricing:israel:gpi', 'US-Iran off-ramp',
+                                'conflict_repricing_israel', ['me'])
+
+
+def _narrative_conflict_repricing_europe(blufs):
+    """Europe / Russia-Ukraine off-ramp market-belief read (Slice 4c, Jun 19 2026)."""
+    return _repricing_narrative('repricing:europe_ukraine:gpi',
+                                'Russia-Ukraine off-ramp',
+                                'conflict_repricing_europe', ['europe'])
 
 
 def _narrative_global_baseline(blufs):
@@ -1764,6 +1777,7 @@ NARRATIVE_DETECTORS = [
     _narrative_food_stress_convergence,                  # food x kinetic x humanitarian (Jun 10 2026)
     _narrative_market_fragility,                         # market fragility x Taiwan semis (Black Swan #2, Jun 13 2026)
     _narrative_conflict_repricing,                       # off-ramp market-belief read (Slice 3, Jun 18 2026)
+    _narrative_conflict_repricing_europe,                # Europe off-ramp market-belief read (Slice 4c, Jun 19 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
