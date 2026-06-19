@@ -72,6 +72,11 @@ CONVERGENCE_REGISTRY = [
         'icon':                    '\U0001f33e',         # 🌾
         'color':                   '#f59e0b',             # amber — economic axis primary
         'headline_template':       'Wheat-Lebanon convergence -- food security crisis compounded by global wheat {alert}',
+        # Freshness tiering (Jun 2026): topline ONLY when wheat reporting is RISING.
+        # A steady 7-day baseline drops to watch_priority so the structural risk
+        # persists as context without dominating the GPI topline every cycle.
+        'watch_priority':          6,
+        'watch_headline_template': 'Wheat-Lebanon structural food-security exposure -- standing watch (global wheat {alert}, no fresh escalation this cycle)',
         'detail': (
             'Lebanon imports ~60-67% of its wheat from Ukraine and ~80-90% combined '
             'from Black Sea (Ukraine + Russia). National wheat reserves stand at ~1 month '
@@ -879,9 +884,24 @@ def find_convergence_by_trigger(category, region):
     return None
 
 
-def format_headline(entry, alert_level):
-    """Format the headline_template with the actual alert level."""
-    return entry['headline_template'].format(alert=alert_level.upper())
+def format_headline(entry, alert_level, fresh=True):
+    """Format the headline for a convergence.
+
+    When `fresh` is False and the entry defines a `watch_headline_template`, use the
+    standing-watch phrasing instead of the topline phrasing. Falls back to the topline
+    template if no watch template is defined (backward compatible).
+    """
+    template = entry['headline_template']
+    if not fresh and entry.get('watch_headline_template'):
+        template = entry['watch_headline_template']
+    return template.format(alert=alert_level.upper())
+
+
+def convergence_priority(entry, fresh=True):
+    """Topline `priority` when fresh; `watch_priority` (if defined) when stale."""
+    if fresh:
+        return entry['priority']
+    return entry.get('watch_priority', entry['priority'])
 
 
 def format_enrichment_text(entry, alert_level, signal_count):
