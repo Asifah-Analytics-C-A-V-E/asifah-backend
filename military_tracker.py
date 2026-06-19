@@ -260,7 +260,7 @@ REGIONAL_THEATRES = {
         'label': 'Middle East & North Africa',
         'icon': '🕌',
         'order': 3,
-        'actors': ['israel', 'iran', 'iraq', 'bahrain', 'egypt', 'jordan', 'kuwait', 'oman', 'qatar', 'saudi_arabia', 'uae', 'libya'],
+        'actors': ['israel', 'iran', 'iraq', 'bahrain', 'egypt', 'jordan', 'kuwait', 'oman', 'qatar', 'saudi_arabia', 'uae', 'algeria', 'libya', 'morocco', 'tunisia'],
         'description': 'CENTCOM area — Persian Gulf, Red Sea, Eastern Med, Levant, Iraq theatre. Libya cross-listed with Africa theater (AFRICOM AOR).'
     },
     # ──────────────────────────────────────────────────────────────────
@@ -2747,6 +2747,120 @@ MILITARY_ACTORS = {
         'rss_feeds': [
             'https://news.google.com/rss/search?q=sudan+military+OR+sudan+civil+war+OR+rsf+sudan&hl=en&gl=US&ceid=US:en',
             'https://news.google.com/rss/search?q=el+fasher+OR+wad+madani+OR+darfur+rsf&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'algeria': {
+        'name': 'Algeria',
+        'flag': '🇩🇿',
+        'tier': 2,
+        'theatre': 'middle_east',
+        'weight': 0.55,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'algerian military', 'algeria army', 'armee algerienne',
+            'algerian peoples national army', 'anp algeria',
+            'said chengriha', 'algeria chief of staff',
+            'algeria defense', 'algeria military exercise',
+            # Morocco rupture / border
+            'algeria morocco border', 'algeria morocco tension',
+            'algeria morocco war', 'algeria morocco military',
+            'algeria closes airspace morocco', 'algeria morocco gas pipeline',
+            # Western Sahara / Polisario
+            'algeria polisario', 'algeria western sahara',
+            'tindouf camps', 'polisario algeria support', 'sahrawi algeria',
+            # Russia arms client / Wagner-adjacent
+            'algeria russia arms', 'algeria russia weapons',
+            'algeria su-57', 'algeria su-34', 'algeria russia military deal',
+            'algeria wagner', 'algeria africa corps',
+            # Sahel border / Mali
+            'algeria mali border', 'algeria sahel', 'algeria niger border',
+            'algeria mali tension', 'algeria counterterrorism sahel',
+            'algeria azawad', 'algeria jnim',
+            # Hydrocarbon / energy security
+            'algeria gas military', 'sonatrach security', 'in amenas',
+            'algeria hydrocarbon security', 'algeria europe gas',
+            'algeria pipeline security',
+            # Domestic / leadership
+            'tebboune military', 'algeria air defense', 'algeria drone',
+            'algeria mobilization', 'algeria france military tension',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=algeria+military+OR+algeria+morocco+OR+algeria+sahel&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=algeria+russia+arms+OR+algeria+western+sahara+OR+algeria+border&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'morocco': {
+        'name': 'Morocco',
+        'flag': '🇲🇦',
+        'tier': 2,
+        'theatre': 'middle_east',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'moroccan military', 'morocco army', 'far morocco',
+            'royal armed forces morocco', 'forces armees royales',
+            'morocco defense', 'morocco military exercise',
+            # Western Sahara / Polisario (core flashpoint)
+            'western sahara', 'polisario', 'polisario front', 'sahrawi',
+            'sadr western sahara', 'guerguerat', 'minurso',
+            'western sahara ceasefire', 'morocco polisario clashes',
+            'western sahara wall', 'berm western sahara',
+            # Algeria rupture
+            'morocco algeria border', 'morocco algeria tension',
+            'morocco algeria military',
+            # Israel / Abraham Accords defense ties
+            'morocco israel military', 'morocco israel defense',
+            'morocco israel drones', 'abraham accords morocco military',
+            'morocco israel cooperation',
+            # Drones / procurement
+            'morocco bayraktar', 'morocco drones turkey', 'morocco harop',
+            'morocco wing loong', 'morocco f-16', 'morocco abrams',
+            # US / exercises
+            'morocco us military', 'african lion exercise', 'morocco africom',
+            # Spain / migration / Sahel
+            'morocco spain ceuta', 'morocco melilla', 'morocco mauritania',
+            'morocco sahel', 'morocco migration military',
+            'mohammed vi military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=morocco+military+OR+western+sahara+OR+polisario&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=morocco+algeria+OR+morocco+israel+defense+OR+african+lion&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'tunisia': {
+        'name': 'Tunisia',
+        'flag': '🇹🇳',
+        'tier': 3,
+        'theatre': 'middle_east',
+        'weight': 0.4,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'tunisian military', 'tunisia army', 'armee tunisienne',
+            'tunisia armed forces', 'tunisia defense', 'tunisia national guard',
+            # Libya border / spillover
+            'tunisia libya border', 'ras jedir', 'tunisia libya security',
+            'tunisia libya smuggling', 'dehiba crossing',
+            # Jihadist / internal security
+            'tunisia jihadist', 'tunisia ansar al-sharia', 'mount chaambi',
+            'kasserine tunisia', 'tunisia counterterrorism', 'tunisia isis',
+            # Migration / Mediterranean
+            'tunisia migration', 'tunisia coast guard', 'sfax migration',
+            'tunisia lampedusa', 'tunisia eu migration deal',
+            'tunisia migrant boats',
+            # Leadership / political
+            'kais saied military', 'tunisia democratic backsliding',
+            'tunisia coup', 'tunisia political crisis',
+            # External / cooperation
+            'tunisia us military', 'tunisia african lion',
+            'tunisia algeria military', 'tunisia imf security',
+            'tunisia russia', 'tunisia air defense',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=tunisia+military+OR+tunisia+libya+border+OR+tunisia+migration&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=tunisia+security+OR+kais+saied+OR+tunisia+jihadist&hl=en&gl=US&ceid=US:en',
         ]
     },
 
