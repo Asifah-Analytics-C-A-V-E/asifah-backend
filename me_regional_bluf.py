@@ -761,6 +761,39 @@ def _fetch_commodity_pressure(commodity_id):
         return None
 
 
+def _convergence_is_fresh(conv_id, actual_alert, signals_count):
+    """Is a commodity convergence RISING (fresh -> topline) or a steady baseline
+    (-> watch)? Compares the current 7-day signal_count + alert tier against the
+    prior reading stored in Redis, then persists the current reading for next cycle.
+
+    Fresh when the signal count rises meaningfully (>= max(2, 15%)) OR the alert tier
+    steps up. Cold start (no prior baseline): only an intrinsically-high alert
+    (high/surge) is fresh; a mere 'elevated' waits for a baseline. Fail-open.
+    """
+    try:
+        from convergence_registry import alert_meets_threshold
+    except ImportError:
+        alert_meets_threshold = lambda a, b: False
+
+    key = f'convergence_freshness:{conv_id}'
+    prior = _redis_get(key) or {}
+    prior_count = prior.get('count')
+    prior_alert = prior.get('alert')
+
+    if prior_count is None:
+        is_fresh = alert_meets_threshold(actual_alert, 'high')
+    else:
+        rose_count = (signals_count - prior_count) >= max(2, prior_count * 0.15)
+        rose_alert = (actual_alert != prior_alert
+                      and alert_meets_threshold(actual_alert, prior_alert))
+        is_fresh = bool(rose_count or rose_alert)
+
+    # Persist current reading for next cycle (14-day TTL; self-heals if it goes quiet).
+    _redis_set(key, {'count': signals_count, 'alert': actual_alert,
+                     'ts': datetime.now(timezone.utc).isoformat()}, ttl=1209600)
+    return is_fresh
+
+
 def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
     """
     Generic Layer 2 enrichment: looks up CONVERGENCE_REGISTRY for any convergences
@@ -805,6 +838,12 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
 
         # Convergence is active — enrich the signal
         signals_count = commodity_state.get('signal_count', 0)
+
+        # Freshness gate (Jun 2026): is this commodity pressure RISING, or a steady
+        # baseline? signal_count is a 7-day rolling count; flat = no new info in the
+        # news this cycle. is_fresh -> GPI topline; stale -> GPI watch tier.
+        is_fresh = _convergence_is_fresh(entry['id'], actual_alert, signals_count)
+
         enrichment_text = format_enrichment_text(entry, actual_alert, signals_count)
         long_text_parts.append(enrichment_text)
 
@@ -815,11 +854,13 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
         signal_dict.setdefault('convergence_states', {})[entry['id']] = {
             'alert_level':     actual_alert,
             'signal_count':    signals_count,
+            'is_fresh':        is_fresh,
             'commodity':       commodity_id,
             'commodity_state': commodity_state,
         }
         activated.append(entry['id'])
-        print(f'[ME BLUF] Convergence activated: {entry["id"]} ({commodity_id} at {actual_alert.upper()})')
+        tier_word = 'TOPLINE' if is_fresh else 'WATCH'
+        print(f'[ME BLUF] Convergence activated: {entry["id"]} ({commodity_id} at {actual_alert.upper()}, {tier_word})')
 
     return activated
 
