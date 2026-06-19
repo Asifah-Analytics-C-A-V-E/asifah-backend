@@ -208,6 +208,8 @@ CONVERGENCE_REGISTRY = [
         'icon':                    '\U0001f6e2\ufe0f',                # 🛢️
         'color':                   '#f59e0b',                          # amber — economic axis
         'headline_template':       'China oil supply convergence -- Iran/Hormuz pressure compounded by China import dependency',
+        'watch_priority':          6,
+        'watch_headline_template': 'China-Hormuz oil structural exposure -- standing watch (global oil {alert}, no fresh Hormuz escalation this cycle)',
         'detail': (
             'China imports approximately 50% of its crude oil through the Strait of Hormuz. '
             'When Iran posture (theatre_score) reaches operational levels (L3+) or IRGC '
@@ -561,6 +563,8 @@ CONVERGENCE_REGISTRY = [
         'icon':                    '\U0001f50b',                   # 🔋
         'color':                   '#f59e0b',                       # amber — economic axis
         'headline_template':       'DRC cobalt supply convergence -- Kivu instability compounded by global cobalt {alert}',
+        'watch_priority':          6,
+        'watch_headline_template': 'DRC cobalt structural supply exposure -- standing watch (global cobalt {alert}, no fresh escalation this cycle)',
         'detail': (
             'DRC produces ~72% of global cobalt supply (essential for EV battery NMC '
             'cathode chemistry). CCP-linked entities control ~80% of Congolese cobalt '
@@ -614,6 +618,8 @@ CONVERGENCE_REGISTRY = [
         'icon':                    '\U0001f48e',                    # 💎
         'color':                   '#a855f7',                          # purple — regime axis (sanctions-enforcement)
         'headline_template':       'Diamond sanctions regime convergence -- G7 enforcement architecture under stress',
+        'watch_priority':          6,
+        'watch_headline_template': 'Diamond sanctions-regime structural exposure -- standing watch (G7 enforcement {alert}, no fresh stress this cycle)',
         'detail': (
             'STRUCTURAL READOUT: The G7 sanctions regime on Russian diamonds (effective '
             'Jan 1 2024 direct ban + March 1 2024 third-country ban) routes ALL '
@@ -744,6 +750,8 @@ CONVERGENCE_REGISTRY = [
         'icon':                    '\U0001fab5',                     # 🪵 placeholder for phosphate rock 🪨
         'color':                   '#f59e0b',                          # amber — economic axis
         'headline_template':       'Phosphate supply convergence -- Moroccan-OCP {alert} compounded by India import dependency + Hormuz sulfur cascade',
+        'watch_priority':          6,
+        'watch_headline_template': 'Phosphate food-security structural exposure -- standing watch (global phosphate {alert}, no fresh escalation this cycle)',
         'detail': (
             'Morocco/OCP controls ~70% of global proven phosphate reserves -- the most '
             'geographically concentrated fertilizer input on Earth. India is the world #1 '
