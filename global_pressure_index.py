@@ -1207,6 +1207,7 @@ def _detect_convergences_from_registry(blufs):
         from convergence_registry import (
             CONVERGENCE_REGISTRY,
             format_headline,
+            convergence_priority,
         )
     except ImportError:
         # Registry module not available — silent no-op
@@ -1256,16 +1257,30 @@ def _detect_convergences_from_registry(blufs):
         states = trigger_sig.get('convergence_states') or {}
         state = states.get(entry['id']) or {}
         alert_level = state.get('alert_level', 'elevated')
+        # Freshness tiering (Jun 2026): topline only when Layer 2 marks the commodity
+        # pressure RISING. A steady baseline drops to watch_priority AND sheds its
+        # cross-regional tag (so it loses the +30 Tier-1 boost in top_signals too),
+        # leaving the structural read as context, not a topline. Default True keeps
+        # legacy behavior if Layer 2 has not yet stamped is_fresh.
+        is_fresh = state.get('is_fresh', True)
+        # Only entries that OPT IN to watch tiering (define watch_priority) are
+        # demoted when stale. convergence_priority + format_headline already no-op
+        # for non-opted-in entries; this keeps the cross-regional tag intact for them.
+        opted_in = bool(entry.get('watch_priority'))
+        conv_regions = (list(entry.get('regions', []))
+                        if (is_fresh or not opted_in)
+                        else [found_in_region or entry.get('trigger_region')])
 
         matches.append({
-            'priority':         entry['priority'],
+            'priority':         convergence_priority(entry, is_fresh),
             'category':         entry['id'],
-            'regions':          list(entry.get('regions', [])),
+            'regions':          conv_regions,
             'icon':             entry['icon'],
             'color':            entry['color'],
-            'headline':         format_headline(entry, alert_level),
+            'headline':         format_headline(entry, alert_level, is_fresh),
             'detail':           entry['detail'],
             'detected_via':     found_in_region,   # diagnostic: which region's signal triggered detection
+            'fresh':            is_fresh,           # diagnostic: topline vs watch tier
         })
     return matches
 
