@@ -88,6 +88,7 @@ import math
 import statistics
 import requests
 from datetime import datetime, timezone
+from market_prose import market_disclaimer, analog_tail
 
 VERSION = '1.0.2'
 CACHE_KEY = 'blackswan:market:latest'
@@ -98,12 +99,11 @@ GPI_BUNDLE_KEY = 'blackswan:market:gpi'   # compact read for the GPI fragility d
 CACHE_TTL_HOURS = 12
 BACKTEST_TTL_HOURS = 168  # 7 days
 
-DISCLAIMER = ('This composite is a FRAGILITY indicator, NOT a market '
-              'forecast and NOT investment advice. Convergence with '
-              'historical pre-drawdown patterns describes present '
-              'conditions; it does not predict whether or when a drawdown '
-              'will occur. Historical lead times are descriptive of past '
-              'episodes only.')
+DISCLAIMER = market_disclaimer(
+    subject="endogenous market fragility",
+    forecast_of=" of whether or when a drawdown occurs",
+    coda=("Convergence with historical pre-drawdown patterns describes present "
+          "conditions, not an outcome. " + analog_tail()))
 
 # ------------------------------------------------------------
 # Redis REST helpers (Upstash) -- both env-name conventions
@@ -789,8 +789,7 @@ def _lag_prose(matches, backtest):
                          f"{mt['drawdown']}).")
     if not lines:
         return None
-    return ' '.join(lines) + (' Historical lead times are descriptive of past '
-                              'episodes only; they are not a forecast.')
+    return ' '.join(lines) + ' ' + analog_tail()
 
 
 # ------------------------------------------------------------
