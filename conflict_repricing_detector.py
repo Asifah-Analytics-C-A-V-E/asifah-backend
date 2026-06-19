@@ -37,14 +37,16 @@ import os
 import json
 import requests
 from datetime import datetime, timezone
+from market_prose import market_disclaimer
 
 VERSION = '0.4.0'  # Slice 4b (europe_ukraine theater + per-theater seeds)
 CACHE_TTL_HOURS = 12
 
-DISCLAIMER = ("This is a CONVERGENCE read of market positioning, NOT a forecast "
-              "of whether the off-ramp holds and NOT investment advice. It "
-              "reports what informed capital appears to be pricing; the reader "
-              "completes the inference.")
+DISCLAIMER = market_disclaimer(
+    subject="market positioning",
+    forecast_of=" of whether the off-ramp holds",
+    coda=("It reports what informed capital appears to be pricing; the reader "
+          "completes the inference."))
 
 # Move thresholds (percent) -- a move smaller than this is treated as flat.
 DEFAULT_MOVE_THRESHOLD = 1.0
