@@ -28,6 +28,14 @@ from datetime import datetime, timezone, timedelta
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
+# Shared FEWS NET food-security layer (fail-open if not yet deployed)
+try:
+    import fews_net
+    _FEWS_AVAILABLE = True
+except ImportError:
+    fews_net = None
+    _FEWS_AVAILABLE = False
+
 # ========================================
 # CONFIGURATION
 # ========================================
@@ -295,7 +303,7 @@ def fetch_reliefweb_updates():
 # Last updated from DTM Round 12 (Jan 2025) + March 2026 emergency tracking
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-03-10',
+    'last_manual_update': '2026-06-19',
     'data_period': 'Ongoing since 2011; post-Assad transition Dec 2024; Aleppo/NES emergency Jan-Mar 2026',
     'note': 'Static figures from IOM DTM baseline assessments and OCHA reports. Updated manually.',
 
@@ -325,13 +333,14 @@ STATIC_HUMANITARIAN = {
     },
 
     'aleppo_emergency': {
-        'active': True,
+        'active': False,
+        'status': 'Stabilized',
         'tracking_rounds': 14,
         'start_date': '2026-01-06',
         'trigger': 'Escalation of hostilities in Sheikh Maqsoud, Ashrafiyah, and Bani Zaid, Aleppo City',
         'peak_displacement': 148053,
         'peak_date': '2026-01-09',
-        'current_estimate': 'Approx 70% have returned since peak',
+        'current_estimate': 'Stabilized -- returns largely complete; Jan-Mar 2026 emergency phase closed, SDF integration holding',
         'sdf_ceasefire': 'Ceasefire and integration agreement announced Jan 30, 2026 — holding as of Mar 2026',
         'priority_needs': ['Cash assistance', 'Food', 'Non-food items', 'Shelter', 'Health services'],
         'source': 'IOM DTM Emergency Mobility Tracking Rounds 1-14',
@@ -602,6 +611,10 @@ def _fetch_all_humanitarian():
             displacement_data['dtm_round'] = dtm_data['country_level'].get('round_number', '')
             displacement_data['dtm_source'] = 'IOM DTM API v3 (live)'
 
+    # FEWS NET food-security panel (FAOB June 2026 PIN/IPC + WFP aid-cut overlay).
+    # Pulled from the shared fews_net module so Syria + every Africa page read one source.
+    food_security = fews_net.get_panel('syria') if _FEWS_AVAILABLE else None
+
     result = {
         'success': True,
         'fetched_at': datetime.now(timezone.utc).isoformat(),
@@ -609,6 +622,7 @@ def _fetch_all_humanitarian():
         'data_period': STATIC_HUMANITARIAN['data_period'],
         'last_manual_update': STATIC_HUMANITARIAN['last_manual_update'],
 
+        'food_security': food_security,
         'displacement': displacement_data,
         'al_hol_camp': STATIC_HUMANITARIAN['al_hol_camp'],
         'aleppo_emergency': STATIC_HUMANITARIAN['aleppo_emergency'],
