@@ -38,7 +38,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-VERSION = '0.3.0'  # Slice 2b (snapshot + label pattern memory)
+VERSION = '0.4.0'  # Slice 4b (europe_ukraine theater + per-theater seeds)
 CACHE_TTL_HOURS = 12
 
 DISCLAIMER = ("This is a CONVERGENCE read of market positioning, NOT a forecast "
@@ -156,6 +156,8 @@ THEATER_CONFIG = {
         'rhetoric_key': 'rhetoric:iran:latest',     # Phase-1 de-escalation fingerprint
         'rhetoric_label': 'US-Iran off-ramp',
         'contradiction_front': 'continued Israeli operations on the Lebanon front',
+        'contradiction_tail': ('the tape and the Lebanon front are positioned the '
+                               'same way this cycle'),
         'structural_alternative': ('it views the broader Israel-Iran threat as '
                                    'structural beyond this particular framework'),
         'instruments': [
@@ -169,11 +171,89 @@ THEATER_CONFIG = {
             {'id': 'oil', 'name': 'Brent', 'ticker': 'BZ=F',
              'role': 'war-premium commodity', 'peace_direction': 'down'},
         ],
+        'phrasing': {
+            'broad': ('broad Israel equities are firming',
+                      'broad Israel equities are weakening'),
+            'fx': ('the shekel is weakening', 'the shekel is strengthening'),
+            'defense_spread': ('defense (Elbit) is outperforming the broad index',
+                               'defense (Elbit) is underperforming the broad index'),
+            'oil': ('Brent is firming', 'Brent is softening'),
+        },
+        'leg_names': {'broad': 'broad equities', 'fx': 'the shekel',
+                      'defense_spread': 'defense demand', 'oil': 'oil'},
+        'episodes': [
+            {'id': 'oct_2023_war_onset', 'date': 'Oct 2023',
+             'regime': 'war_expansion_riskoff', 'label': 'the Oct 2023 war onset',
+             'signature': ['broad:escalation', 'fx:escalation',
+                           'defense_spread:escalation', 'oil:escalation']},
+            {'id': 'jan_2026_rising_lion', 'date': 'Jan 2026',
+             'regime': 'winning_war_rally', 'label': 'the Jan 2026 Rising Lion rally',
+             'signature': ['broad:peace', 'fx:peace',
+                           'defense_spread:escalation', 'oil:escalation']},
+            {'id': 'mar_2026_war_week', 'date': 'Mar 2026',
+             'regime': 'winning_war_rally', 'label': 'the Mar 2026 war-week rally',
+             'signature': ['broad:peace', 'fx:peace',
+                           'defense_spread:escalation', 'oil:escalation']},
+            {'id': 'jun_2026_reescalation', 'date': 'Jun 8 2026',
+             'regime': 'war_expansion_riskoff',
+             'label': 'the Jun 8 2026 re-escalation selloff',
+             'signature': ['broad:escalation', 'fx:escalation',
+                           'defense_spread:escalation', 'oil:escalation']},
+            {'id': 'jun_2025_ceasefire', 'date': 'Jun 2025',
+             'regime': 'peace_dividend', 'label': 'the Jun 2025 ceasefire risk-on',
+             'signature': ['broad:peace', 'fx:peace',
+                           'defense_spread:peace', 'oil:peace']},
+        ],
     },
-    # 'europe_ukraine': built in Slice 4 once a Russia-Ukraine off-ramp
-    # fingerprint exists. Instruments would be the European defense basket
-    # (Rheinmetall/BAE/Leonardo/Thales) vs a broad index, EUR, and Brent;
-    # structural_alternative = European rearmament structural beyond a truce.
+    'europe_ukraine': {
+        'display': 'Europe',
+        'flag': '\U0001F1EA\U0001F1FA',
+        'rhetoric_key': 'rhetoric:ukraine:latest',   # Slice 4a off-ramp fingerprint
+        'rhetoric_label': 'Russia-Ukraine off-ramp',
+        'contradiction_front': 'intensified strikes on both fronts',
+        'contradiction_tail': ('the tape and the battlefield are positioned the '
+                               'same way this cycle'),
+        'structural_alternative': ('it regards European rearmament as structural and '
+                                   'durable beyond a Ukraine truce'),
+        'instruments': [
+            {'id': 'broad', 'name': 'Europe ETF (VGK)', 'ticker': 'VGK',
+             'role': 'broad risk', 'peace_direction': 'up'},
+            {'id': 'fx', 'name': 'the euro', 'ticker': 'EURUSD=X',
+             'role': 'FX risk premium', 'peace_direction': 'up'},  # EUR/USD up = euro stronger
+            {'id': 'defense_spread', 'name': 'European defense (Rheinmetall) vs the broad index',
+             'ticker': 'RHM.DE', 'spread_vs': 'VGK',
+             'role': 'defense demand', 'peace_direction': 'down'},
+            {'id': 'oil', 'name': 'Brent', 'ticker': 'BZ=F',
+             'role': 'war-premium commodity', 'peace_direction': 'down'},
+        ],
+        'phrasing': {
+            'broad': ('broad European equities are firming',
+                      'broad European equities are weakening'),
+            'fx': ('the euro is strengthening', 'the euro is weakening'),
+            'defense_spread': ('European defense (Rheinmetall) is outperforming the broad index',
+                               'European defense (Rheinmetall) is underperforming the broad index'),
+            'oil': ('Brent is firming', 'Brent is softening'),
+        },
+        'leg_names': {'broad': 'broad equities', 'fx': 'the euro',
+                      'defense_spread': 'defense demand', 'oil': 'oil'},
+        'episodes': [
+            {'id': 'feb_2022_invasion', 'date': 'Feb 2022',
+             'regime': 'war_expansion_riskoff',
+             'label': 'the Feb 2022 invasion shock',
+             'signature': ['broad:escalation', 'fx:escalation',
+                           'defense_spread:escalation', 'oil:escalation']},
+            {'id': 'ukraine_durable_ceasefire', 'date': 'archetype',
+             'regime': 'peace_dividend',
+             'label': 'a durable Russia-Ukraine ceasefire',
+             'signature': ['broad:peace', 'fx:peace',
+                           'defense_spread:peace', 'oil:peace']},
+            {'id': 'eu_rearmament_structural', 'date': 'archetype',
+             'regime': 'rearmament_structural',
+             'label': 'a rearmament-structural peace',
+             'signature': ['broad:peace', 'fx:peace',
+                           'defense_spread:escalation', 'oil:peace']},
+        ],
+    },
 }
 
 
@@ -302,25 +382,17 @@ def _classify(scored, offramp):
 # ------------------------------------------------------------
 # Observed-pattern phrasing
 # ------------------------------------------------------------
-def _phrase_instrument(s, vote_kind):
-    """Plain-language phrase for one instrument given the direction it voted."""
+def _phrase_instrument(s, vote_kind, cfg):
+    """Plain-language phrase for one instrument, per-theater (config-driven)."""
     up = (s['change_pct'] or 0) > 0
-    iid = s['id']
-    if iid == 'broad':
-        return 'broad Israel equities are firming' if up else 'broad Israel equities are weakening'
-    if iid == 'fx':
-        # ILS=X up = USD stronger = shekel weaker
-        return 'the shekel is weakening' if up else 'the shekel is strengthening'
-    if iid == 'defense_spread':
-        return ('defense (Elbit) is outperforming the broad index' if up
-                else 'defense (Elbit) is underperforming the broad index')
-    if iid == 'oil':
-        return 'Brent is firming' if up else 'Brent is softening'
+    ph = (cfg.get('phrasing') or {}).get(s['id'])
+    if ph:
+        return ph[0] if up else ph[1]   # (up_phrase, down_phrase)
     return s['name']
 
 
-def _observed_pattern(scored, vote_kind):
-    parts = [_phrase_instrument(s, vote_kind) for s in scored if s['vote'] == vote_kind]
+def _observed_pattern(scored, vote_kind, cfg):
+    parts = [_phrase_instrument(s, vote_kind, cfg) for s in scored if s['vote'] == vote_kind]
     if not parts:
         return 'instruments are mixed'
     if len(parts) == 1:
@@ -339,9 +411,9 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
     if state == 'offramp_contradicted':
         contradiction = (f" and {cfg['contradiction_front']}"
                          if offramp['contradiction_active'] else "")
-        observed = _observed_pattern(scored, 'escalation')
-        tail = (" -- the tape and the Lebanon front are positioned the same way "
-                "this cycle" if offramp['contradiction_active'] else "")
+        observed = _observed_pattern(scored, 'escalation', cfg)
+        tail = (f" -- {cfg['contradiction_tail']}"
+                if offramp['contradiction_active'] else "")
         return (f"Market read ({d}): With an active {label} in the rhetoric layer "
                 f"({mat}){contradiction}, {observed}. This repricing is consistent "
                 f"with one of two readings: that informed capital is not pricing the "
@@ -350,7 +422,7 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
                 f"{tail}. {DISCLAIMER}")
 
     if state == 'offramp_corroborated':
-        observed = _observed_pattern(scored, 'peace')
+        observed = _observed_pattern(scored, 'peace', cfg)
         return (f"Market read ({d}): With an active {label} in the rhetoric layer "
                 f"({mat}), {observed}. This repricing is consistent with informed "
                 f"capital pricing the off-ramp as durable and beginning to discount "
@@ -359,14 +431,14 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
 
     if state == 'offramp_market_mixed':
         if len(peace) >= 2 and len(esc) == 0:
-            observed = _observed_pattern(scored, 'peace')
+            observed = _observed_pattern(scored, 'peace', cfg)
             return (f"Market read ({d}): An active {label} is present in the rhetoric "
                     f"layer ({mat}). The clean signals present -- {observed} -- lean "
                     f"toward informed capital pricing the off-ramp as durable, but the "
                     f"instruments are not yet fully coherent, so this is a directional "
                     f"lean rather than a corroboration read. {DISCLAIMER}")
         if len(esc) >= 2 and len(peace) == 0:
-            observed = _observed_pattern(scored, 'escalation')
+            observed = _observed_pattern(scored, 'escalation', cfg)
             return (f"Market read ({d}): An active {label} is present in the rhetoric "
                     f"layer ({mat}). The clean signals present -- {observed} -- lean "
                     f"toward the market declining to price the off-ramp as durable, but "
@@ -378,13 +450,13 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
                 f"contradiction read. {DISCLAIMER}")
 
     if state == 'escalation_repricing':
-        observed = _observed_pattern(scored, 'escalation')
+        observed = _observed_pattern(scored, 'escalation', cfg)
         return (f"Market read ({d}): No active off-ramp in the rhetoric layer, and "
                 f"{observed}. This repricing is consistent with informed capital "
                 f"pricing an expanding war-risk premium. {DISCLAIMER}")
 
     if state == 'calm_repricing':
-        observed = _observed_pattern(scored, 'peace')
+        observed = _observed_pattern(scored, 'peace', cfg)
         return (f"Market read ({d}): No named off-ramp in the rhetoric layer, yet "
                 f"{observed}. This repricing is consistent with a compressing "
                 f"war-risk premium absent a formal diplomatic track. {DISCLAIMER}")
@@ -406,34 +478,11 @@ def build_market_read(cfg, state, scored, offramp, peace, esc):
 # LABELED historical regimes. Flat/neutralized votes are excluded -- only active
 # legs carry signal (a convergence of one source is an echo). Post-hoc pattern
 # memory + structural similarity; NOT machine learning and NOT a forecast.
-LABELED_EPISODES = [
-    {'id': 'oct_2023_war_onset', 'date': 'Oct 2023',
-     'regime': 'war_expansion_riskoff', 'label': 'the Oct 2023 war onset',
-     'signature': ['broad:escalation', 'fx:escalation',
-                   'defense_spread:escalation', 'oil:escalation']},
-    {'id': 'jan_2026_rising_lion', 'date': 'Jan 2026',
-     'regime': 'winning_war_rally', 'label': 'the Jan 2026 Rising Lion rally',
-     'signature': ['broad:peace', 'fx:peace',
-                   'defense_spread:escalation', 'oil:escalation']},
-    {'id': 'mar_2026_war_week', 'date': 'Mar 2026',
-     'regime': 'winning_war_rally', 'label': 'the Mar 2026 war-week rally',
-     'signature': ['broad:peace', 'fx:peace',
-                   'defense_spread:escalation', 'oil:escalation']},
-    {'id': 'jun_2026_reescalation', 'date': 'Jun 8 2026',
-     'regime': 'war_expansion_riskoff',
-     'label': 'the Jun 8 2026 re-escalation selloff',
-     'signature': ['broad:escalation', 'fx:escalation',
-                   'defense_spread:escalation', 'oil:escalation']},
-    {'id': 'jun_2025_ceasefire', 'date': 'Jun 2025',
-     'regime': 'peace_dividend', 'label': 'the Jun 2025 ceasefire risk-on',
-     'signature': ['broad:peace', 'fx:peace',
-                   'defense_spread:peace', 'oil:peace']},
-]
-
 _REGIME_PHRASE = {
     'war_expansion_riskoff': 'war-expansion risk-off',
     'winning_war_rally': 'winning-war rally',
     'peace_dividend': 'peace-dividend',
+    'rearmament_structural': 'rearmament-structural',
 }
 _LEG_NAME = {'broad': 'broad equities', 'fx': 'the shekel',
              'defense_spread': 'defense demand', 'oil': 'oil'}
@@ -453,14 +502,15 @@ def _jaccard(a, b):
     return (len(a & b) / len(u)) if u else 0.0
 
 
-def _leg(tok):
-    return _LEG_NAME.get(tok.split(':', 1)[0], tok)
+def _leg(tok, leg_names):
+    return leg_names.get(tok.split(':', 1)[0], tok)
 
 
 def _labeled_pool(theater):
-    """Seed episodes + any operator-labeled episodes accumulated in Redis."""
+    """Per-theater seed episodes + any operator-labeled episodes from Redis."""
+    seeds = (THEATER_CONFIG.get(theater) or {}).get('episodes') or []
     extra = _redis_get(f'repricing:{theater}:labeled')
-    return LABELED_EPISODES + (extra if isinstance(extra, list) else [])
+    return list(seeds) + (extra if isinstance(extra, list) else [])
 
 
 def match_episodes(scored, theater='israel', top_n=EPISODE_TOP_N,
@@ -471,12 +521,13 @@ def match_episodes(scored, theater='israel', top_n=EPISODE_TOP_N,
     labeled into Redis via the /label endpoint (Slice 2b pattern memory).
     """
     sig = _signature(scored)
+    leg_names = (THEATER_CONFIG.get(theater) or {}).get('leg_names') or _LEG_NAME
     out = []
     for ep in _labeled_pool(theater):
         ep_sig = frozenset(ep['signature'])
         j = _jaccard(sig, ep_sig)
         if j >= floor:
-            shared = sorted({_leg(t) for t in (sig & ep_sig)})
+            shared = sorted({_leg(t, leg_names) for t in (sig & ep_sig)})
             out.append({'id': ep['id'], 'label': ep['label'], 'date': ep['date'],
                         'regime': ep['regime'], 'similarity': round(j, 3),
                         'shared_legs': shared})
@@ -663,7 +714,7 @@ def register_conflict_repricing_endpoints(app):
             'theater': theater,
             'snapshots': _redis_get(f'repricing:{theater}:snapshots') or [],
             'labeled': _redis_get(f'repricing:{theater}:labeled') or [],
-            'seeds': LABELED_EPISODES,
+            'seeds': (THEATER_CONFIG.get(theater) or {}).get('episodes') or [],
             'version': VERSION,
         })
 
