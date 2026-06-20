@@ -7787,7 +7787,7 @@ def api_dashboard():
     targets = [
         'iran', 'hezbollah', 'houthis', 'israel',
         'jordan', 'syria', 'iraq', 'saudi_arabia',
-        'uae', 'kuwait', 'bahrain', 'qatar', 'egypt', 'yemen',
+        'uae', 'kuwait', 'bahrain', 'qatar', 'egypt', 'oman', 'yemen',
         'algeria', 'libya', 'morocco', 'tunisia'
     ]
 
