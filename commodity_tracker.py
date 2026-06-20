@@ -291,7 +291,7 @@ COMMODITY_TYPES = {
             'qatar lng', 'sakhalin', 'arctic lng', 'galkynysh',
             'central asia china pipeline', 'tapi pipeline',
         ],
-        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china', 'turkmenistan', 'azerbaijan'],
+        'top_producers':  ['usa', 'russia', 'qatar', 'iran', 'china', 'turkmenistan', 'azerbaijan', 'algeria'],
         'top_consumers':  ['eu', 'china', 'japan', 'korea'],
     },
     'nickel': {
@@ -336,7 +336,7 @@ COMMODITY_TYPES = {
             'baku-tbilisi-ceyhan', 'btc pipeline', 'sangachal terminal',
             'caspian sea', 'ceyhan terminal', 'cpc pipeline', 'tengiz',
         ],
-        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan', 'kazakhstan'],
+        'top_producers':  ['saudi_arabia', 'russia', 'iran', 'iraq', 'usa', 'uae', 'azerbaijan', 'kazakhstan', 'algeria', 'libya'],
         'top_consumers':  ['china', 'usa', 'india', 'eu'],
     },
     'nitrogen': {
@@ -1332,6 +1332,12 @@ COMMODITY_KEYWORDS = {
 #   - Stability page UI — regime-shift badges on commodity tiles
 
 COUNTRY_COMMODITY_EXPOSURE = {
+    'algeria': {
+        'natural_gas':  {'role': 'producer',          'weight': 1.4,
+                         'note': "Africa's largest natural gas producer and a top-tier EU pipeline supplier — strategically elevated since 2022 as Europe diversified off Russian gas. Sonatrach (state-owned) exports via Medgaz (to Almeria, Spain) and the Trans-Mediterranean / Enrico Mattei line (through Tunisia to Mazara del Vallo, Italy); incremental-volume deals made Algeria one of Italy's top pipeline suppliers. The GME line to Spain via Morocco was closed in October 2021 over the Western Sahara dispute, rerouting volumes through Medgaz. Ageing fields (Hassi R'Mel), heavy domestic subsidy demand, and rising internal consumption cap export headroom. STABILITY LINK: hydrocarbon revenue underwrites the great majority of the state budget, so price or volume shocks transmit directly to fiscal and social-subsidy stability. Watch: Sonatrach contract announcements, Medgaz / TransMed throughput, Italy-Algeria volume deals, Hassi R'Mel decline rates, domestic-demand-versus-export tension."},
+        'oil':          {'role': 'producer',          'weight': 1.0,
+                         'note': "OPEC member (~1M bpd crude); Saharan Blend light sweet, Sonatrach-operated (Hassi Messaoud). Smaller and far steadier than Libya's volatile output, but bound to the same OPEC+ quota cadence and the same fiscal-dependency profile as the gas complex. Watch: OPEC+ quota decisions, Saharan Blend differentials, Sonatrach upstream investment."},
+    },
     'angola': {
         'oil':          {'role': 'producer',          'weight': 1.2, 'rank': 7,
                          'note': "Africa's #2 oil producer (~1.1M bpd 2025, post-Cabinda recovery); OPEC member until withdrawal Jan 2024 (cited quota disputes). Sonangol state oil company + TotalEnergies + ExxonMobil + Chevron + Eni majors. Block 17 (Total) + Block 15 (ExxonMobil) deepwater workhorses. PETROLEUM-AS-LEVERAGE: Angola left OPEC partly over US sanctions/Chinese debt dynamic. Lobito Corridor terminus at Lobito port = the Atlantic export endpoint for DRC + Zambia copper/cobalt — strategically positions Angola in US-China critical-minerals competition. Watch: Sonangol production guidance, Lobito throughput, Cabinda separatist tensions."},
@@ -1734,6 +1740,10 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Significant silver producer (by-product of polymetallic mining); Kazzinc + Kazakhmys + KAZ Minerals primary operators."},
         'chromium':     {'role': 'producer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 chromium producer (~15-18% global). Eurasian Resources Group (ERG) operates Donskoy GOK (Aktyubinsk Oblast) — one of the world's largest chrome ore mines. Vertically integrated into Kazchrome ferrochrome smelters (Aksu + Aktobe). KAZAKHSTAN-CHINA RAILWAY route exports significant volumes to Chinese stainless-steel sector. ERG is privately held (post-2013 ENRC delisting); financial transparency limited. Watch: ERG Donskoy output, Kazchrome smelter operational rates, Kazakhstan-China cross-border rail throughput."},
+    },
+    'libya': {
+        'oil':          {'role': 'producer',          'weight': 1.2,
+                         'note': "OPEC member with ~1.2M bpd capacity when stable, but output is chronically disrupted by the East-West institutional split (NOC / Tripoli versus LNA / Haftar-controlled eastern fields and terminals). Recurring blockades and force-majeure declarations at El Sharara (largest field) and El Feel, plus the eastern-crescent terminals (Es Sider, Ras Lanuf, Zueitina, Brega), make Libyan supply one of the most disruption-prone signals in the oil complex — a textbook conflict-to-supply-shock convergence pattern. Light sweet Es Sider crude competes with Mediterranean and West African grades into Europe. CONVERGENCE LINK: Libyan production-halt announcements have historically preceded short-cycle Brent risk-premium moves and frequently track the LNA / GNU political cycle rather than market fundamentals. Watch: NOC force-majeure notices, El Sharara / Es Sider status, LNA-NOC revenue-distribution disputes, eastern-terminal loadings (Kpler / tanker tracking)."},
     },
     'mexico': {
         'silver':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
