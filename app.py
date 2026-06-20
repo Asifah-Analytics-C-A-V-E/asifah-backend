@@ -1528,6 +1528,22 @@ TARGET_BASELINES = {
         'base_adjustment': +5,
         'description': 'Intercepting Iranian missiles/drones; regional spillover; Tower 22 threat'
     },
+    'algeria': {
+        'base_adjustment': +3,
+        'description': 'Western Sahara standoff and diplomatic rupture with Morocco; Sahel/JNIM spillover; major gas supplier to Europe'
+    },
+    'libya': {
+        'base_adjustment': +6,
+        'description': 'East-West institutional split (LNA/Haftar vs GNU/Tripoli); Russian/Wagner footprint; periodic militia clashes; migration corridor'
+    },
+    'morocco': {
+        'base_adjustment': +3,
+        'description': 'Western Sahara/Polisario dispute (MINURSO); rupture with Algeria; Abraham Accords member; generally stable state'
+    },
+    'tunisia': {
+        'base_adjustment': +3,
+        'description': 'Presidential consolidation under Saied; economic strain and migration pressure (Sfax); porous Libya border'
+    },
     'bahrain': {
         'base_adjustment': +10,
         'description': 'US 5th Fleet HQ; within Iranian missile range; Gulf tensions elevated'
@@ -1559,6 +1575,22 @@ TARGET_BASELINES = {
 }
 
 REDDIT_SUBREDDITS = {
+    "algeria": [
+        "Algeria", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
+    "libya": [
+        "Libya", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
+    "morocco": [
+        "Morocco", "WesternSahara", "geopolitics",
+        "CredibleDefense", "anime_titties", "MiddleEastNews"
+    ],
+    "tunisia": [
+        "Tunisia", "geopolitics", "CredibleDefense",
+        "anime_titties", "MiddleEastNews"
+    ],
     "hezbollah": ["ForbiddenBromance", "Israel", "Lebanon"],
     "iran": [
         "Iran", "Israel", "geopolitics",
@@ -1765,6 +1797,40 @@ TARGET_KEYWORDS = {
             'Tower 22', 'Captagon', 'Jordan border', 'Jordan airspace',
             'Jordan protest', 'Palestinian', 'ISIS Jordan'
         ]
+    },
+    'algeria': {
+        'keywords': [
+            'algeria', 'algerian', 'algiers', 'tebboune', 'anp algeria',
+            'chengriha', 'polisario', 'western sahara', 'tindouf', 'sahel',
+            'sonatrach', 'algeria gas', 'algeria morocco', 'algeria mali',
+            'algeria russia arms'
+        ],
+        'reddit_keywords': ['Algeria', 'Polisario', 'Western Sahara', 'Tebboune', 'Sahel', 'Morocco']
+    },
+    'libya': {
+        'keywords': [
+            'libya', 'libyan', 'tripoli', 'benghazi', 'haftar', 'lna',
+            'libyan national army', 'gnu', 'dbeibah', 'tobruk', 'misrata',
+            'sirte', 'wagner libya', 'libya oil', 'libya migration'
+        ],
+        'reddit_keywords': ['Libya', 'Haftar', 'Tripoli', 'GNU', 'LNA', 'Wagner']
+    },
+    'morocco': {
+        'keywords': [
+            'morocco', 'moroccan', 'rabat', 'mohammed vi', 'far morocco',
+            'western sahara', 'polisario', 'sahrawi', 'minurso', 'guerguerat',
+            'morocco algeria', 'abraham accords morocco', 'morocco israel',
+            'morocco drone'
+        ],
+        'reddit_keywords': ['Morocco', 'Western Sahara', 'Polisario', 'Sahrawi', 'Algeria', 'MINURSO']
+    },
+    'tunisia': {
+        'keywords': [
+            'tunisia', 'tunisian', 'tunis', 'kais saied', 'saied tunisia',
+            'ennahda', 'sfax', 'tunisia migration', 'ras jedir', 'chaambi',
+            'tunisia libya border', 'tunisia protests'
+        ],
+        'reddit_keywords': ['Tunisia', 'Kais Saied', 'Sfax', 'migration', 'Ennahda', 'Libya']
     },
     'bahrain': {
         'keywords': [
@@ -5560,9 +5626,14 @@ def api_threat(target):
             except Exception as e:
                 print(f"[Threat Scan] Bluesky error: {str(e)[:100]}")
 
+        # North Africa: French-language GDELT (francophone Maghreb press)
+        articles_gdelt_fr = []
+        if target in ('algeria', 'morocco', 'tunisia', 'libya'):
+            articles_gdelt_fr = fetch_gdelt_articles(query, days, 'fra')
+
         all_articles = (articles_en + articles_gdelt_en + articles_gdelt_ar +
-                       articles_gdelt_he + articles_gdelt_fa + articles_reddit +
-                       telegram_articles + bluesky_articles)
+                       articles_gdelt_he + articles_gdelt_fa + articles_gdelt_fr +
+                       articles_reddit + telegram_articles + bluesky_articles)
         
         # NEW: Fetch ALL RSS feeds (leadership rhetoric + Israeli news)
         print(f"[RSS] Fetching RSS feeds...")
@@ -7716,7 +7787,8 @@ def api_dashboard():
     targets = [
         'iran', 'hezbollah', 'houthis', 'israel',
         'jordan', 'syria', 'iraq', 'saudi_arabia',
-        'uae', 'kuwait', 'bahrain', 'qatar', 'egypt', 'yemen'
+        'uae', 'kuwait', 'bahrain', 'qatar', 'egypt', 'yemen',
+        'algeria', 'libya', 'morocco', 'tunisia'
     ]
 
     bundle = {}
