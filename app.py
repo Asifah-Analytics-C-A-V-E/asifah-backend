@@ -1286,6 +1286,10 @@ TRAVEL_ADVISORY_CODES = {
     'israel': ['IS', 'GZ', 'WE', 'IL'],  # Israel/West Bank/Gaza (FIPS + ISO — covers combined advisory)
     'syria': ['SY'],
     'jordan': ['JO'],
+    'algeria': ['AG'],     # Algeria (FIPS)
+    'libya': ['LY'],       # Libya (FIPS)
+    'morocco': ['MO'],     # Morocco (FIPS)
+    'tunisia': ['TS'],     # Tunisia (FIPS)
     'bahrain': ['BA'],     # Bahrain (FIPS)
     'kuwait': ['KU'],      # Kuwait (FIPS — not KW!)
     'saudi_arabia': ['SA'],# Saudi Arabia (FIPS)
@@ -1293,6 +1297,10 @@ TRAVEL_ADVISORY_CODES = {
     'oman': ['MU'],        # Oman (FIPS — not OM!)
     'qatar': ['QA'],       # Qatar (FIPS)
     'egypt': ['EG'],       # Egypt (FIPS)
+    'algeria': ['AG'],     # Algeria (FIPS)
+    'libya': ['LY'],       # Libya (FIPS)
+    'morocco': ['MO'],     # Morocco (FIPS -- ISO is MA)
+    'tunisia': ['TS'],     # Tunisia (FIPS -- not TN)
 }
 
 TRAVEL_ADVISORY_LEVELS = {
