@@ -3753,6 +3753,19 @@ def determine_alert_level(score):
     return 'normal'
 
 
+def _domestic_price_stress(commodity_id):
+    """Per-commodity domestic staple-price-stress indicator.
+
+    STUB -- returns None. Awaiting the WFP domestic staple-price basket feed.
+    Platform discipline (see FFPI section below): never fabricate a placeholder
+    stress value. Returns None until a real WFP-measured domestic-price source
+    is wired in. The commodity-summary schema already treats None as 'no data'
+    (see _build_empty_skeleton, which sets this field to None), and the frontend
+    handles None. When the WFP feed lands, compute the real reading here.
+    """
+    return None
+
+
 # ========================================
 # CONVERGENCE TRIGGER GATE (v1.3.0 -- Jun 2026)
 # A convergence's anchor commodity being globally hot is NOT enough to fire
