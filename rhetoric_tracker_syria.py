@@ -1407,6 +1407,104 @@ def _calculate_rhetoric_score(actor_results, theatre_summary):
 # ============================================
 # MAIN SCAN (v2.0)
 # ============================================
+# ============================================================================
+# PROJECTION NODE -- Syria is SPOKE #2 of the Erdogan wheel (Libya = spoke #1).
+# This theater tracker WRITES what Turkey is DOING in Syria to the shared
+# turkey:theater_footprints key. The Turkey tracker READS footprints across
+# theaters to detect a coordinated projection playbook (convergence detector
+# fires when >=2 theaters share an objective tag).
+# DISTINCT from CROSSTHEATER_KEY['turkey'] (the swing-state READ below) and from
+# fingerprint:turkey:* (Turkey writing ABOUT itself).
+# Shared hard-power tags (drone_export / mercenary_flow / base_access) use the
+# SAME names as the Libya spoke so the node can match objectives across theaters.
+# ============================================================================
+TURKEY_FOOTPRINTS_KEY = 'turkey:theater_footprints'
+TURKEY_OBJECTIVE_TAGS = {
+    'anti_pkk_sdf':    ['operation against sdf', 'anti-pkk', 'turkey strikes sdf',
+                        'turkish operation northeast', 'pkk targets', 'turkey sdf offensive',
+                        'tel rifaat', 'manbij operation', 'sdf disarm', 'ypg'],
+    'safe_zone':       ['safe zone', 'buffer zone', 'security corridor',
+                        'safe zone syria', 'turkish buffer'],
+    'mercenary_flow':  ['syrian national army', 'sna deployment', 'turkish-backed factions',
+                        'sna fighters', 'sna offensive'],
+    'base_access':     ['turkish base syria', 'turkish military base', 'observation post',
+                        'turkish outpost', 'turkish forces idlib'],
+    'drone_export':    ['bayraktar', 'tb2', 'turkish drones', 'akinci syria', 'drone strike sdf'],
+    'reconstruction':  ['reconstruction syria', 'turkey rebuild syria', 'voluntary return',
+                        'refugee return syria', 'economic integration north syria'],
+    'damascus_backing':['turkey new syria', 'ankara damascus', 'turkey backs sharaa',
+                        'ankara backs', 'turkey backs damascus', 'turkish support damascus',
+                        'erdogan syria government', 'turkey hts', 'sharaa', 'turkey damascus',
+                        'new syrian government'],
+}
+TURKEY_MODE_BY_TAG = {
+    'anti_pkk_sdf': 'hard_power', 'safe_zone': 'hard_power', 'mercenary_flow': 'hard_power',
+    'base_access': 'hard_power', 'drone_export': 'hard_power',
+    'reconstruction': 'economic',
+    'damascus_backing': 'diplomatic',
+}
+
+
+def _write_turkey_footprint(result, articles):
+    """
+    PROJECTION NODE -- spoke #2. Write Turkey's Syria footprint to the shared
+    turkey:theater_footprints key so the Turkey tracker reads it across theaters
+    (Libya = spoke #1) to answer 'what is Erdogan up to?'.
+
+    Folds BOTH the 'turkey' actor and its 'sna' proxy (Syrian National Army)
+    into Turkey's footprint, since SNA activity IS Turkish hard-power projection.
+    Schema: { ts, theater, level, top_phrases[], objective_tags[], mode }
+    """
+    try:
+        actors = result.get('actors', {})
+        tk  = actors.get('turkey', {})
+        sna = actors.get('sna', {})
+        level = max(tk.get('max_level', 0), sna.get('max_level', 0))
+
+        tk_text = ''
+        for src in (tk, sna):
+            for art in src.get('top_articles', [])[:8]:
+                tk_text += ' ' + (art.get('title', '') + ' ' + art.get('description', '')).lower()
+        if not tk_text.strip():
+            for art in articles:
+                t = "%s %s" % (art.get('title', ''), art.get('description', ''))
+                t = t.lower()
+                if any(w in t for w in ('turkey', 'turkish', 'ankara', 'erdogan',
+                                        'turkish-backed', 'sna ')):
+                    tk_text += ' ' + t
+
+        objective_tags = [tag for tag, kws in TURKEY_OBJECTIVE_TAGS.items()
+                          if any(k in tk_text for k in kws)]
+
+        mode = 'dormant'
+        for pref in ('hard_power', 'economic', 'diplomatic'):
+            if any(TURKEY_MODE_BY_TAG.get(t) == pref for t in objective_tags):
+                mode = pref
+                break
+
+        top_phrases = []
+        for src in (tk, sna):
+            for art in src.get('top_articles', [])[:3]:
+                ttl = art.get('title', '')
+                if ttl and len(top_phrases) < 3:
+                    top_phrases.append(ttl[:80])
+
+        existing = _redis_get(TURKEY_FOOTPRINTS_KEY) or {}
+        existing['syria'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theater': 'syria',
+            'level': level,
+            'top_phrases': top_phrases,
+            'objective_tags': objective_tags,
+            'mode': mode,
+        }
+        _redis_set(TURKEY_FOOTPRINTS_KEY, existing, ttl=24 * 3600)
+        print("[Syria Rhetoric] \u2705 Turkey footprint written "
+              "(level %s, mode %s, tags %s)" % (level, mode, objective_tags))
+    except Exception as e:
+        print("[Syria Rhetoric] Turkey footprint write error: %s" % e)
+
+
 def run_syria_rhetoric_scan(days=3):
     """Full Syria rhetoric scan. v2.0: delta, specificity, baselines, cross-theater."""
     print(f"[Syria Rhetoric Scan] Starting v2.0 scan ({days}-day window)...")
@@ -1518,6 +1616,10 @@ def run_syria_rhetoric_scan(days=3):
         result['turkey_syria_escalation'] = 'normal'
         result['turkey_nato_divergence']  = 'anchored'
         result['turkey_lebanon_vector']   = 'dormant'
+
+    # Projection Node -- spoke #2: WRITE Turkey's Syria footprint (Libya = spoke #1).
+    # Folds the SNA proxy in; node's convergence detector matches shared tags.
+    _write_turkey_footprint(result, articles)
 
     # Signal interpretation -- So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
