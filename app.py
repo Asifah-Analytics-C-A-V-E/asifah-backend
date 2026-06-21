@@ -67,6 +67,15 @@ try:
 except ImportError:
     SYRIA_HUMANITARIAN_AVAILABLE = False
     print("[ME Backend] ⚠️ Syria humanitarian module not available")
+
+# Libya humanitarian / displacement module (DTM API + ReliefWeb)
+try:
+    from libya_humanitarian import register_libya_humanitarian_endpoints
+    LIBYA_HUMANITARIAN_AVAILABLE = True
+    print("[ME Backend] ✅ Libya humanitarian module loaded")
+except ImportError:
+    LIBYA_HUMANITARIAN_AVAILABLE = False
+    print("[ME Backend] ⚠️ Libya humanitarian module not available")
 # Yemen stability + Houthi rhetoric modules
 try:
     from yemen_stability import register_yemen_routes
@@ -1121,6 +1130,9 @@ register_saudi_stability_endpoints(app)   # v0.5.0 May 29 2026
 # Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
 if SYRIA_HUMANITARIAN_AVAILABLE:
     register_syria_humanitarian_endpoints(app)
+# Libya Humanitarian / Displacement Module (DTM API + ReliefWeb)
+if LIBYA_HUMANITARIAN_AVAILABLE:
+    register_libya_humanitarian_endpoints(app)
 # Yemen Stability + Houthi Rhetoric Modules
 if YEMEN_AVAILABLE:
     register_yemen_routes(app)
