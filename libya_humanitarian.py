@@ -93,6 +93,51 @@ def _redis_set(key, value):
 
 
 # ========================================
+# UNHCR REFUGEE LAYER (reads shared Redis — populated by unhcr_feeds.py scanner)
+# ========================================
+
+def _read_unhcr_layer():
+    """
+    Read the UNHCR refugee/asylum layer for Libya from shared Redis.
+
+    Returns a DISTINCT 'refugees' block — deliberately NOT merged with the DTM
+    'displacement' block. These are different populations:
+      - DTM IDPs        = internally displaced LIBYANS (DTM owns the IDP line)
+      - UNHCR hosted    = INBOUND foreign refugees/asylum-seekers IN Libya
+      - DTM migrants    = transit-migrant presence (separate definition again)
+    Overlapping populations on different definitions -> NOT additive.
+    Fails soft: returns None if the UNHCR scanner hasn't populated yet.
+    """
+    try:
+        u = _redis_get('unhcr:libya:latest')
+        if not isinstance(u, dict):
+            return None
+        hosted = u.get('hosted') or {}
+        originated = u.get('originated') or {}
+        if not hosted and not originated:
+            return None
+        return {
+            'hosted_total':           hosted.get('total'),
+            'hosted_refugees':        hosted.get('refugees'),
+            'hosted_asylum_seekers':  hosted.get('asylum_seekers'),
+            'top_origins':            hosted.get('top_origins', []),
+            'originated_total_fled':  originated.get('total_fled'),
+            'originated_idps_unhcr':  originated.get('idps'),
+            'top_destinations':       originated.get('top_destinations', []),
+            'data_year':              hosted.get('data_year') or originated.get('data_year'),
+            'source':                 u.get('source', 'UNHCR Refugee Data Finder'),
+            'source_url':             u.get('source_url', 'https://www.unhcr.org/refugee-statistics/'),
+            'data_as_of':             u.get('data_as_of'),
+            'note': ('Inbound foreign refugees/asylum-seekers sheltering in Libya. '
+                     'Distinct from DTM internal IDPs and DTM transit-migrant counts — '
+                     'overlapping populations measured on different definitions, NOT additive.'),
+        }
+    except Exception as e:
+        print(f"[Libya UNHCR] read error: {str(e)[:100]}")
+        return None
+
+
+# ========================================
 # DTM API — IDP DISPLACEMENT DATA (Path A, live)
 # ========================================
 
@@ -365,6 +410,11 @@ def _fetch_all_humanitarian():
 
         'source_links': STATIC_HUMANITARIAN['source_links'],
     }
+
+    # UNHCR refugee/asylum layer (inbound foreign refugees — distinct from DTM IDPs)
+    unhcr_layer = _read_unhcr_layer()
+    if unhcr_layer:
+        result['refugees'] = unhcr_layer
 
     if _redis_available():
         _redis_set(CACHE_KEY, result)
