@@ -781,29 +781,33 @@ TURKEY_FOOTPRINTS_KEY = 'turkey:theater_footprints'
 
 def _read_oil_pulse_modifier():
     """
-    Read the Libya Oil Pulse sensor; map production-status band to a bounded
-    upward modifier. Oil is Libya's most acute economic lever -- a national
-    shutdown is a major escalation signal.
-      flowing -> 0 | disrupted -> +4 | force_majeure -> +8 | shutdown -> +12
-    NOTE (confirm against live payload): probes status under several field
-    names. Lock the accessor once the real libya_oil_pulse:latest is shared.
+    Read the Libya Oil Pulse sensor (status_band) and map it to a bounded
+    upward modifier. Oil is Libya's most acute economic lever. The event_counts
+    block FLOORS the modifier when active force-majeure/blockade/threat events
+    are present, so a lagging status_band cannot mask a live disruption.
+      flowing 0 | reopening 2 | disrupted 4 | blockade 6 | force_majeure 8 | shutdown 12
+    Locked against the live /api/libya/oil-pulse payload (status_band='flowing').
     """
     try:
         pulse = _redis_get(OIL_PULSE_KEY) or {}
         if not pulse:
             return 0, {'status': 'no_data', 'modifier': 0}
-        status = (pulse.get('status') or pulse.get('band')
-                  or pulse.get('pulse_status') or pulse.get('oil_status')
-                  or pulse.get('overall_status') or '')
-        status = str(status).lower().replace(' ', '_')
+        band = str(pulse.get('status_band') or pulse.get('status') or '').lower().replace(' ', '_')
         band_map = {
             'flowing': 0, 'normal': 0, 'stable': 0,
-            'disrupted': 4, 'partial': 4, 'reduced': 4,
+            'reopening': 2, 'partial': 2, 'recovering': 2,
+            'disrupted': 4, 'reduced': 4,
+            'blockade': 6, 'blockaded': 6,
             'force_majeure': 8,
             'shutdown': 12, 'halted': 12, 'closed': 12,
         }
-        mod = band_map.get(status, 0)
-        return mod, {'status': status or 'unknown', 'modifier': mod}
+        mod = band_map.get(band, 0)
+        ev = pulse.get('event_counts', {}) or {}
+        if ev.get('force_majeure', 0) > 0: mod = max(mod, 8)
+        if ev.get('blockade', 0)     > 0: mod = max(mod, 6)
+        if ev.get('threat', 0)       > 0: mod = max(mod, 3)
+        return mod, {'status': band or 'unknown', 'modifier': mod,
+                     'label': pulse.get('status_label', '')}
     except Exception as e:
         print(f"[Libya Rhetoric] Oil pulse read error: {e}")
         return 0, {'status': 'error', 'modifier': 0}
@@ -811,30 +815,31 @@ def _read_oil_pulse_modifier():
 
 def _read_displacement_modifier():
     """
-    Read UNHCR/DTM displacement sensors. A surge in refugee inflow (Libya hosts
-    ~658k, mostly Sudanese) or IDP displacement is upward CONTEXT pressure --
-    modest weight, since displacement is context, not the headline.
-      stable -> 0 | elevated -> +2 | high/surge -> +4
-    NOTE (confirm against live payload): probes surge/trend under several field
-    names across unhcr:libya:latest and libya_humanitarian:latest.
+    Read the Libya humanitarian / UNHCR sensor for a LIVE displacement-surge
+    band -> modest upward modifier (displacement is context, not headline).
+    Doctrine: absence stays honest. When the sensor exposes no live surge
+    (DTM API 403, UNHCR on annual stock, flows easing) this returns 0 rather
+    than inventing a signal from static baselines.
+      stable 0 | elevated +2 | high/surge +4
+    Reads a `surge_band` the humanitarian sensor is expected to expose; until
+    that field ships, the read correctly stays dormant.
     """
     try:
-        unhcr = _redis_get(UNHCR_LIBYA_KEY) or {}
-        hum   = _redis_get(HUMANITARIAN_KEY) or {}
-        surge = ''
-        for src in (unhcr, hum):
-            cand = (src.get('surge_band') or src.get('trend')
-                    or src.get('alert_level') or src.get('status') or '')
-            if cand:
-                surge = str(cand).lower()
-                break
-        band_map = {
-            'stable': 0, 'normal': 0, 'baseline': 0,
-            'elevated': 2, 'rising': 2,
-            'high': 4, 'surge': 4, 'critical': 4,
-        }
-        mod = band_map.get(surge, 0)
-        return mod, {'status': surge or 'unknown', 'modifier': mod}
+        hum = (_redis_get(HUMANITARIAN_KEY)
+               or _redis_get('libya_humanitarian_cache')
+               or _redis_get(UNHCR_LIBYA_KEY) or {})
+        if not hum:
+            return 0, {'status': 'no_data', 'modifier': 0}
+        band = (hum.get('surge_band') or hum.get('alert_level')
+                or hum.get('displacement_status')
+                or (hum.get('displacement', {}) or {}).get('surge_band')
+                or (hum.get('migration_hub', {}) or {}).get('surge_band') or '')
+        band = str(band).lower()
+        band_map = {'stable': 0, 'normal': 0, 'baseline': 0,
+                    'elevated': 2, 'rising': 2,
+                    'high': 4, 'surge': 4, 'critical': 4}
+        mod = band_map.get(band, 0)
+        return mod, {'status': band or 'no_live_surge', 'modifier': mod}
     except Exception as e:
         print(f"[Libya Rhetoric] Displacement read error: {e}")
         return 0, {'status': 'error', 'modifier': 0}
