@@ -36,7 +36,7 @@ import requests
 import threading
 from datetime import datetime, timezone
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 CACHE_TTL_HOURS = 24
 BACKGROUND_REFRESH_HOURS = 24
 REQUEST_TIMEOUT = (5, 20)
@@ -188,8 +188,41 @@ def _top_groups(rows, code_field, name_field, n=6):
     return [g for g in out if g['total'] > 0][:n]
 
 
+def _year_totals(rows, fields):
+    """Sum the given fields per year across rows. Returns {year:int -> total:int}."""
+    out = {}
+    for r in rows:
+        y = _int(r.get('year'))
+        if not y:
+            continue
+        out[y] = out.get(y, 0) + sum(_int(r.get(f)) for f in fields)
+    return out
+
+
+def _yoy(year_totals):
+    """Year-over-year delta from a {year: total} map, latest 2 years present.
+    Pure sensor output — the convergence detector decides what counts as a surge."""
+    if not year_totals:
+        return None
+    years = sorted(year_totals.keys(), reverse=True)
+    cur_y = years[0]
+    cur = year_totals[cur_y]
+    prior_y = years[1] if len(years) > 1 else None
+    prior = year_totals.get(prior_y, 0) if prior_y else 0
+    delta = cur - prior
+    pct = round(100.0 * delta / prior, 1) if prior else None
+    return {
+        'current_year': cur_y,
+        'prior_year': prior_y,
+        'current_total': cur,
+        'prior_total': prior,
+        'delta': delta,
+        'pct_change': pct,
+    }
+
+
 def fetch_country_unhcr(country_id):
-    """Fetch hosted + originated UNHCR figures for one country."""
+    """Fetch hosted + originated UNHCR figures for one country, plus YoY surge deltas."""
     iso = COUNTRY_ISO.get(country_id)
     if not iso:
         return None
@@ -203,26 +236,33 @@ def fetch_country_unhcr(country_id):
         'coo': iso, 'coa_all': 'true', 'cf_type': 'ISO', 'yearFrom': year_from,
     })
 
-    # Restrict each direction to its latest available year
+    # Per-year totals (refugees + asylum_seekers = the displacement load) for YoY,
+    # computed BEFORE we collapse to the latest year.
+    hosted_year_totals = _year_totals(hosted_rows, ['refugees', 'asylum_seekers'])
+    orig_year_totals = _year_totals(orig_rows, ['refugees', 'asylum_seekers'])
+
+    # Restrict each direction to its latest available year for the headline figures
     hy = _latest_year(hosted_rows)
     oy = _latest_year(orig_rows)
-    hosted_rows = [r for r in hosted_rows if _int(r.get('year')) == hy] if hy else []
-    orig_rows = [r for r in orig_rows if _int(r.get('year')) == oy] if oy else []
+    hosted_latest = [r for r in hosted_rows if _int(r.get('year')) == hy] if hy else []
+    orig_latest = [r for r in orig_rows if _int(r.get('year')) == oy] if oy else []
 
     hosted = {
-        'refugees': sum(_int(r.get('refugees')) for r in hosted_rows),
-        'asylum_seekers': sum(_int(r.get('asylum_seekers')) for r in hosted_rows),
+        'refugees': sum(_int(r.get('refugees')) for r in hosted_latest),
+        'asylum_seekers': sum(_int(r.get('asylum_seekers')) for r in hosted_latest),
         'data_year': hy,
-        'top_origins': _top_groups(hosted_rows, 'coo', 'coo_name'),
+        'top_origins': _top_groups(hosted_latest, 'coo', 'coo_name'),
+        'yoy': _yoy(hosted_year_totals),
     }
     hosted['total'] = hosted['refugees'] + hosted['asylum_seekers']
 
     originated = {
-        'refugees': sum(_int(r.get('refugees')) for r in orig_rows),
-        'asylum_seekers': sum(_int(r.get('asylum_seekers')) for r in orig_rows),
-        'idps': sum(_int(r.get('idps')) for r in orig_rows),
+        'refugees': sum(_int(r.get('refugees')) for r in orig_latest),
+        'asylum_seekers': sum(_int(r.get('asylum_seekers')) for r in orig_latest),
+        'idps': sum(_int(r.get('idps')) for r in orig_latest),
         'data_year': oy,
-        'top_destinations': _top_groups(orig_rows, 'coa', 'coa_name'),
+        'top_destinations': _top_groups(orig_latest, 'coa', 'coa_name'),
+        'yoy': _yoy(orig_year_totals),
     }
     originated['total_fled'] = originated['refugees'] + originated['asylum_seekers']
 
