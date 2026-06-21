@@ -1097,6 +1097,15 @@ try:
     print("[App] ✅ Rhetoric tracker loaded (with scan thread)")
 except ImportError:
     print("[App] ⚠️ Rhetoric tracker not found")
+
+# Libya Rhetoric Tracker — runs scan thread + serves endpoints (Jun 21 2026)
+try:
+    from rhetoric_tracker_libya import register_libya_rhetoric_endpoints
+    register_libya_rhetoric_endpoints(app)
+    print("[App] ✅ Libya rhetoric tracker loaded (with scan thread)")
+except Exception as e:
+    print(f"[App] ⚠️ Libya rhetoric tracker not found: {e}")
+
 register_military_endpoints(app)
 
 if THINK_TANK_AVAILABLE:
