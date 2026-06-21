@@ -76,6 +76,15 @@ try:
 except ImportError:
     LIBYA_HUMANITARIAN_AVAILABLE = False
     print("[ME Backend] ⚠️ Libya humanitarian module not available")
+
+# UNHCR Refugee Data Finder module (open public API — refugee/asylum/IDP baseline)
+try:
+    from unhcr_feeds import register_unhcr_endpoints
+    UNHCR_AVAILABLE = True
+    print("[ME Backend] ✅ UNHCR module loaded")
+except ImportError:
+    UNHCR_AVAILABLE = False
+    print("[ME Backend] ⚠️ UNHCR module not available")
 # Yemen stability + Houthi rhetoric modules
 try:
     from yemen_stability import register_yemen_routes
@@ -1133,6 +1142,9 @@ if SYRIA_HUMANITARIAN_AVAILABLE:
 # Libya Humanitarian / Displacement Module (DTM API + ReliefWeb)
 if LIBYA_HUMANITARIAN_AVAILABLE:
     register_libya_humanitarian_endpoints(app)
+# UNHCR Refugee Data Finder (scanner runs here — shared Redis; Africa backend reads later)
+if UNHCR_AVAILABLE:
+    register_unhcr_endpoints(app)
 # Yemen Stability + Houthi Rhetoric Modules
 if YEMEN_AVAILABLE:
     register_yemen_routes(app)
