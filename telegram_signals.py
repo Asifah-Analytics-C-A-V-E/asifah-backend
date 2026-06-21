@@ -7,6 +7,7 @@ from monitored Telegram channels across theatres:
 - Lebanon / Hezbollah
 - Yemen / Houthi / Red Sea
 - Syria / HTS / SDF / Druze
+- Libya / GNU-LNA / Africa Corps (Wagner)
 - Extended OSINT / Regional
 
 Usage:
@@ -154,6 +155,42 @@ IRAQ_CHANNELS = [
     'WarMonitors',          # War Monitor — Iraqi militia strikes
     'ClashReport',          # Clash Report — Iraq incident tracking
 ]
+
+LIBYA_CHANNELS = [
+    # ── Proven multi-theatre OSINT (already verified elsewhere in this file) ──
+    # Reliable for Libya kinetic/incident reporting on day one.
+    'OSINTdefender',        # OSINT Defender — Libya clashes, Africa Corps movements
+    'WarMonitors',          # War Monitor — Libya factional fighting
+    'ClashReport',          # Clash Report — Libya incident tracking
+    'IntelSlava',           # Intel Slava — Russian-aligned, strong on Africa Corps / Libya
+    'C_Military1',          # C_Military1 — Libya military activity
+    'AJEnglish',            # Al Jazeera English — Libya politics (GNU-LNA), migration
+    'GeoPWatch',            # Geopolitics Watch — Libya regional operations
+    'rageintel',            # RAGE Intel — high-volume kinetic OSINT
+
+    # ── CLUSTER A: Libyan media — GNU/west + LNA/east (east-west signal) ──
+    # ⚠️ VERIFY HANDLES — Libyan outlet channels migrate; dead handles fail gracefully.
+    'LibyaObserver',        # Libya Observer — EN, Tripoli/GNU-leaning (candidate; also try libyaobserver)
+    'LibyaHerald',          # Libya Herald — EN business/political (candidate)
+    'AddressLibya',         # Address Libya — EN/AR news (candidate; also try addresslibya)
+    'LibyaAlAhrar',         # Libya Al-Ahrar TV — revolution-era outlet (candidate)
+    'libya218',             # 218 News — Libyan TV/news (candidate; also try tv218news)
+    'LANANews',             # LANA — Libyan News Agency, official (candidate)
+    'almarsadlibya',        # Al-Marsad — eastern/LNA-leaning outlet (candidate — east signal)
+
+    # ── CLUSTER B: Africa Corps / Wagner / Russia-in-Africa (the NODE linchpin) ──
+    # ⚠️ VERIFY HANDLES — Wagner/Africa Corps channels are deplatformed and migrate often.
+    # These feed the Russia↔Libya↔Sahel cross-theatre fingerprint.
+    'rybar_force',          # Rybar — Russian milblogger, heavy Africa/Libya coverage (candidate; also try rybar)
+    'grey_zone',            # Grey Zone — Wagner-linked (candidate; may be banned/migrated)
+    'afrinz_ru',            # African Initiative — Russian Africa info-op agency (candidate; also try african_initiative_agency)
+
+    # ── CLUSTER C: Foreign-patron state media (supplements; GDELT/RSS catch most) ──
+    # ⚠️ VERIFY — patron rhetoric is often better caught via GDELT/RSS; these are supplements.
+    'trtworld',             # TRT World — Turkish state, GNU-side framing (candidate)
+    'anadoluagency',        # Anadolu Agency — Turkish state newswire (candidate)
+]
+
 
 ASIA_PACIFIC_CHANNELS = [
     'IntelSlava',           # Intel Slava — multilingual conflict OSINT
@@ -476,6 +513,21 @@ def fetch_telegram_signals_iran(hours_back=24):
         return []
 
 
+def fetch_telegram_signals_libya(hours_back=24):
+    """
+    Libya theatre fetch — GNU/Tripoli vs LNA/Haftar, Africa Corps (Wagner),
+    Fezzan/south (Tebu-Tuareg-Arab + Sudan spillover), oil/NOC, migration,
+    and the Russia-in-Africa node signals.
+    """
+    if not _telegram_available():
+        return []
+    try:
+        return _run_async(LIBYA_CHANNELS.copy(), hours_back)
+    except Exception as e:
+        print(f"[Telegram/Libya] ❌ fetch error: {str(e)[:200]}")
+        return []
+
+
 # ========================================
 # HEALTH CHECK
 # ========================================
@@ -492,6 +544,7 @@ def get_telegram_status():
         'channels_iraq': IRAQ_CHANNELS,
         'channels_iran': IRAN_CHANNELS,
         'channels_israel': ISRAEL_CHANNELS,
+        'channels_libya': LIBYA_CHANNELS,
         'channels_extended': EXTENDED_CHANNELS,
         'ready': _telegram_available() and (
             os.path.exists(f'{SESSION_NAME}.session') or
