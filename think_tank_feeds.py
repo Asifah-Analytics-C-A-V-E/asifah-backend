@@ -10,12 +10,20 @@ so each stability page can pull the relevant subset.
 v1.0 sources:
   - Badil (thebadil.com) — Lebanese policy institute, covers LB/SY/IL
 
+v1.1 Africa sources (added June 2026):
+  - ISS Africa (issafrica.org) — Pan-African human security; migration, Sahel, Horn, coups
+  - Africa Center / ACSS (africacenter.org) — US NDU; Wagner/Africa Corps, Sahel coups
+  - International Crisis Group (crisisgroup.org) — global feed, Africa-filtered
+
+  Africa sources share ONE classifier (_africa_country_tags); the endpoint
+  country allow-list is now derived dynamically from each source's 'countries',
+  so new sources/countries slot in without touching the endpoint.
+
 Future sources (file as backlog):
-  - International Crisis Group (ICG)
   - Carnegie Middle East Center
-  - Chatham House MENA
+  - Chatham House MENA / Africa Programme
+  - Clingendael (migration / central-Med)
   - Al-Monitor analysis section
-  - Middle East Institute (MEI)
 
 Pattern matches the standard Asifah backend module:
   - Upstash Redis REST cache (12hr TTL)
@@ -37,7 +45,7 @@ from email.utils import parsedate_to_datetime
 # CONFIG
 # ============================================================
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -82,6 +90,57 @@ def _badil_country_tags(title, description):
     return tags
 
 
+# ── Africa classifier (shared by ISS / ACSS / Crisis Group) ──
+# All three cover the same African conflict set, so they share one tagger.
+# Tokens chosen to avoid known substring collisions:
+#   'mali' lives inside 'somali' → Mali uses Bamako/Azawad/Goita etc., never bare 'mali'
+#   'niger' lives inside 'nigeria' → Niger uses Niamey/Nigerien/Tchiani, never bare 'niger'
+#   'sudan' lives inside 'south sudan' → Sudan uses Khartoum/RSF/Darfur/Burhan; South Sudan its own
+_AFRICA_KEYWORDS = {
+    'libya':        ['libya', 'libyan', 'tripoli', 'benghazi', 'haftar', 'dbeibah',
+                     'misrata', 'sirte', 'fezzan', 'tobruk', 'gnu', 'lna'],
+    'sudan':        ['khartoum', 'rsf', 'rapid support', 'hemedti', 'hemeti',
+                     'al-burhan', 'burhan', 'darfur', 'omdurman', 'el fasher',
+                     'el-fasher'],
+    'south_sudan':  ['south sudan', 'juba', 'salva kiir', 'riek machar',
+                     'splm', 'unmiss'],
+    'somalia':      ['somalia', 'somali', 'mogadishu', 'al-shabaab', 'al shabaab',
+                     'shabaab', 'puntland', 'somaliland', 'hassan sheikh'],
+    'ethiopia':     ['ethiopia', 'ethiopian', 'addis ababa', 'abiy', 'tigray',
+                     'tplf', 'amhara', 'oromia', 'fano'],
+    'mali':         ['bamako', 'azawad', 'goita', 'goïta', 'kidal', 'mopti',
+                     'timbuktu', 'tombouctou'],
+    'niger':        ['niamey', 'nigerien', 'tchiani', 'cnsp', 'tillaberi', 'tillabéri'],
+    'burkina_faso': ['burkina', 'burkinabe', 'burkinabè', 'ouagadougou',
+                     'traore', 'traoré'],
+    'chad':         ['chad', 'chadian', "n'djamena", 'ndjamena', 'deby', 'déby'],
+    'drc':          ['dr congo', 'drc', 'democratic republic of congo', 'kinshasa',
+                     'm23', 'tshisekedi', 'goma', 'kivu', 'congolese', 'fardc',
+                     'wazalendo'],
+    'zimbabwe':     ['zimbabwe', 'zimbabwean', 'harare', 'mnangagwa', 'zanu-pf',
+                     'chiwenga'],
+    'morocco':      ['morocco', 'moroccan', 'rabat', 'western sahara', 'polisario',
+                     'sahrawi', 'sahraoui', 'el guerguerat'],
+    'algeria':      ['algeria', 'algerian', 'algiers', 'tebboune', 'tindouf'],
+    'tunisia':      ['tunisia', 'tunisian', 'kais saied', 'saied', 'lampedusa', 'sfax'],
+    'egypt':        ['egypt', 'egyptian', 'cairo', 'sisi', 'el-sisi'],
+    'mauritania':   ['mauritania', 'mauritanian', 'nouakchott'],
+    'uganda':       ['uganda', 'ugandan', 'kampala', 'museveni'],
+}
+
+AFRICA_COUNTRY_IDS = list(_AFRICA_KEYWORDS.keys())
+
+
+def _africa_country_tags(title, description):
+    """Tag an article by African country mention. Shared by ISS / ACSS / Crisis Group."""
+    text = f"{title} {description}".lower()
+    tags = []
+    for country, kws in _AFRICA_KEYWORDS.items():
+        if any(k in text for k in kws):
+            tags.append(country)
+    return tags
+
+
 THINK_TANK_SOURCES = [
     {
         'id': 'badil',
@@ -92,6 +151,36 @@ THINK_TANK_SOURCES = [
         'countries': ['lebanon', 'syria', 'israel'],
         'tag_logic': _badil_country_tags,
         'description': 'Lebanese policy institute publishing long-form analysis on Lebanon, Syria, and regional dynamics.',
+    },
+    {
+        'id': 'iss_africa',
+        'name': 'ISS Africa',
+        'subtitle': 'Institute for Security Studies',
+        'site': 'https://issafrica.org',
+        'feed_url': 'https://issafrica.org/feed',   # ⚠️ VERIFY on first deploy (try /rss if 0 articles)
+        'countries': AFRICA_COUNTRY_IDS,
+        'tag_logic': _africa_country_tags,
+        'description': 'Pan-African human-security institute (Pretoria). Migration, Sahel, Horn of Africa, terrorism, governance, coups.',
+    },
+    {
+        'id': 'acss',
+        'name': 'Africa Center',
+        'subtitle': 'Africa Center for Strategic Studies (US NDU)',
+        'site': 'https://africacenter.org',
+        'feed_url': 'https://africacenter.org/feed/',   # ⚠️ VERIFY on first deploy
+        'countries': AFRICA_COUNTRY_IDS,
+        'tag_logic': _africa_country_tags,
+        'description': 'US National Defense University Africa security institute. Strong on Wagner/Africa Corps, Sahel coups, militant Islamist groups.',
+    },
+    {
+        'id': 'crisis_group_africa',
+        'name': 'Crisis Group',
+        'subtitle': 'International Crisis Group',
+        'site': 'https://www.crisisgroup.org',
+        'feed_url': 'https://www.crisisgroup.org/rss',   # global feed; Africa classifier filters to African items
+        'countries': AFRICA_COUNTRY_IDS,
+        'tag_logic': _africa_country_tags,
+        'description': 'Global conflict-prevention institute, Africa coverage filtered from the main feed (Sudan, Sahel, Libya, DRC, Horn).',
     },
     # Future sources will slot in here.
 ]
@@ -400,6 +489,14 @@ def start_background_refresh():
 # FLASK ENDPOINTS
 # ============================================================
 
+def _all_valid_countries():
+    """Union of every country any source can tag — keeps the endpoint allow-list in sync."""
+    valid = set()
+    for s in THINK_TANK_SOURCES:
+        valid.update(s.get('countries', []))
+    return valid
+
+
 def register_think_tank_endpoints(app, start_background=True):
     """Register /api/think-tank/* endpoints on the given Flask app.
 
@@ -424,7 +521,7 @@ def register_think_tank_endpoints(app, start_background=True):
         if request.method == 'OPTIONS':
             return ('', 204)
         country = (country or '').lower().strip()
-        valid = {'lebanon', 'syria', 'israel'}
+        valid = _all_valid_countries()
         if country not in valid:
             return jsonify({
                 'error': 'Unknown country',
