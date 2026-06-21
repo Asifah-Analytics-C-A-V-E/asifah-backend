@@ -1,8 +1,8 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
-v1.4.0 -- May 23, 2026 (Health/Pandemic + Africa Expansion)
-(prior: v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
+v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
+(prior: v1.4.0 May 23 2026; v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
 
 GLOBAL HUMANITARIAN CONVERGENCE DETECTOR
 
@@ -844,12 +844,121 @@ def build_humanitarian_bluf(signals, aggregation=None):
 # ============================================================
 # TOP-LEVEL ENTRY POINT
 # ============================================================
-def detect_and_build_bluf(articles):
+def _surge_severity(yoy):
+    """Severity 0-3 from a UNHCR YoY delta. 0 = not a surge (absence stays honest).
+    The STOCK is never a signal; only the year-over-year SURGE is."""
+    if not isinstance(yoy, dict):
+        return 0
+    delta = yoy.get('delta') or 0
+    if delta <= 0:
+        return 0  # flat or declining -> not a surge
+    prior = yoy.get('prior_total') or 0
+    pct = yoy.get('pct_change')
+    if prior == 0:
+        # appearing from ~zero -> notable only if large absolute (avoid coverage-onset noise)
+        if delta >= 50000:
+            return 2
+        if delta >= 20000:
+            return 1
+        return 0
+    if delta >= 50000 and pct is not None and pct >= 25:
+        return 3
+    if delta >= 20000 and pct is not None and pct >= 25:
+        return 2
+    if delta >= 10000 and pct is not None and pct >= 15:
+        return 1
+    return 0
+
+
+def detect_unhcr_displacement_signals(unhcr_payload):
+    """
+    Build synthetic displacement_surge signals from UNHCR structured YoY deltas
+    (the unhcr:all:latest payload written by unhcr_feeds.py).
+
+    Each country is checked in BOTH directions:
+      - hosted.yoy     -> absorbing a displacement wave (inbound)
+      - originated.yoy -> generating displacement (outbound / internal crisis)
+    Signals carry is_tracked_country so the aggregator de-weights countries that
+    already have their own Asifah tracker (rhetoric pages take priority).
+    Returns [] when nothing surges -- silence is a valid analytical output.
+    """
+    if not isinstance(unhcr_payload, dict):
+        return []
+    by_country = unhcr_payload.get('by_country') or {}
+    if not isinstance(by_country, dict):
+        return []
+
+    signals = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for cid, cdata in by_country.items():
+        if not isinstance(cdata, dict):
+            continue
+        hosted = cdata.get('hosted') or {}
+        originated = cdata.get('originated') or {}
+        h_yoy = hosted.get('yoy') if isinstance(hosted, dict) else None
+        o_yoy = originated.get('yoy') if isinstance(originated, dict) else None
+
+        h_sev = _surge_severity(h_yoy)
+        o_sev = _surge_severity(o_yoy)
+        if h_sev == 0 and o_sev == 0:
+            continue
+
+        if h_sev >= o_sev:
+            sev, yoy, direction = h_sev, h_yoy, 'inbound'
+        else:
+            sev, yoy, direction = o_sev, o_yoy, 'outbound'
+
+        label = cid.replace('_', ' ').title()
+        delta = yoy.get('delta', 0)
+        pct = yoy.get('pct_change')
+        pct_txt = f" (+{pct}%)" if pct is not None else ""
+        cur_year = yoy.get('current_year')
+
+        if direction == 'inbound':
+            short_text = f"\U0001f6b6 {label}: inbound displacement surge -- refugees/asylum +{delta:,} YoY{pct_txt}"
+            long_text = (f"{label} hosted refugee/asylum population rose by {delta:,}{pct_txt} "
+                         f"year-over-year (UNHCR end-{cur_year}). Consistent with absorbing a "
+                         f"cross-border displacement wave.")
+        else:
+            short_text = f"\U0001f6b6 {label}: outbound displacement surge -- +{delta:,} displaced abroad YoY{pct_txt}"
+            long_text = (f"Displacement originating from {label} rose by {delta:,}{pct_txt} "
+                         f"year-over-year (UNHCR end-{cur_year}). Consistent with an intensifying "
+                         f"internal crisis.")
+
+        signals.append({
+            'category':           'displacement_surge',
+            'country':            cid,
+            'country_label':      label,
+            'severity':           sev,
+            'pressure_type':      'humanitarian',
+            'level':              _severity_to_level(sev),
+            'short_text':         short_text[:150],
+            'long_text':          long_text,
+            'source_url':         'https://www.unhcr.org/refugee-statistics/',
+            'source_title':       'UNHCR Refugee Data Finder (YoY displacement delta)',
+            'source':             'UNHCR Refugee Data Finder',
+            'matched_keywords':   ['unhcr_yoy_surge', direction],
+            'detected_at':        now,
+            'icon':               '\U0001f6b6',
+            'theatre':            'global_humanitarian',
+            'region':             'global_humanitarian',
+            'is_tracked_country': cid in TRACKED_COUNTRIES,
+            'signal_origin':      'unhcr_structured',
+        })
+
+    return signals
+
+
+def detect_and_build_bluf(articles, extra_signals=None):
     """
     Convenience wrapper: run detection + aggregation + build BLUF.
     Returns the canonical BLUF payload ready for the API endpoint.
+    extra_signals: pre-built signals (e.g. UNHCR structured surges) merged in.
     """
     signals = detect_humanitarian_signals(articles or [])
+    if extra_signals:
+        signals = signals + list(extra_signals)
     aggregation = aggregate_convergence(signals)
     return build_humanitarian_bluf(signals, aggregation)
 
@@ -1051,7 +1160,15 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 
             # Build fresh
             articles = _gather_articles()
-            bluf = detect_and_build_bluf(articles)
+            # UNHCR structured displacement surges (shared Redis; gated by TRACKED_COUNTRIES)
+            unhcr_signals = []
+            try:
+                _unhcr_all = _upstash_get('unhcr:all:latest')
+                if isinstance(_unhcr_all, dict):
+                    unhcr_signals = detect_unhcr_displacement_signals(_unhcr_all)
+            except Exception as _ue:
+                print(f'[humanitarian_convergence] UNHCR signal read skipped: {str(_ue)[:80]}')
+            bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals)
 
             # Cache for 30 min
             _upstash_setex('humanitarian_convergence:bluf:latest', 1800, bluf)
@@ -1085,6 +1202,12 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
         try:
             articles = _gather_articles()
             signals = detect_humanitarian_signals(articles)
+            try:
+                _unhcr_all = _upstash_get('unhcr:all:latest')
+                if isinstance(_unhcr_all, dict):
+                    signals = signals + detect_unhcr_displacement_signals(_unhcr_all)
+            except Exception:
+                pass
             agg = aggregate_convergence(signals)
             bluf = build_humanitarian_bluf(signals, agg)
             return jsonify({
@@ -1118,6 +1241,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.4.0'
+__version__ = '1.5.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
