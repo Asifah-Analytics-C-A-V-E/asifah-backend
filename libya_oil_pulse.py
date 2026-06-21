@@ -42,7 +42,8 @@ import threading
 import requests
 import xml.etree.ElementTree as ET
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 
 # curl_cffi: TLS/JA3 impersonation for RSS feeds blocked at the network layer.
 try:
@@ -65,7 +66,8 @@ CACHE_KEY = 'libya_oil_pulse:latest'
 HISTORY_KEY = 'libya_oil_pulse:history'
 CACHE_TTL = 6 * 3600  # 6 hours
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
+RECENCY_WINDOW_DAYS = 90  # only events within this window drive the status band
 
 
 # ============================================
@@ -244,6 +246,9 @@ REOPEN_KEYWORDS = [
     'restarted production', 'back online', 'loading resumes', 'resume loading',
     'resume exports', 'resumes exports', 'lifts blockade', 'lifted blockade',
     'production restored', 'output restored', 'reopening',
+    'lifting force majeure', 'lifting the force majeure', 'after lifting',
+    'ends blockade', 'ended blockade', 'ends the blockade', 'first oil export',
+    'oil export after', 'export resumes', 'exports resume',
 ]
 
 # Blockade / shut-in language
@@ -262,6 +267,15 @@ ESCALATION_KEYWORDS = [
     'all oil', 'all ports', 'all fields', 'nationwide', 'national shutdown',
     'total shutdown', 'complete shutdown', 'exports halted', 'halt all oil',
     'shut all', 'entire oil', 'all oil exports', 'all terminals',
+]
+
+# Conditional / threat language -- a *possible* or *threatened* action, NOT a current one.
+# Downgrades a force-majeure/blockade match to a 'threat' (does not drive shutdown).
+CONDITIONAL_KEYWORDS = [
+    'may announce', 'may declare', 'could declare', 'could announce',
+    'plans to declare', 'set to declare', 'threatens', 'threaten to',
+    'considering', 'weighs', 'warns of', 'risk of', 'fears of', 'mulls',
+    'expected to declare', 'preparing to',
 ]
 
 # Production-figure extraction (numbers + a bpd-style unit)
@@ -306,6 +320,21 @@ _DISCLAIMER = ("Sensor feed: open-source oil-production STATUS signals "
                "Libyan oil operations; it does not predict production or revenue outcomes.")
 
 
+def _parse_published(s):
+    """Parse an RSS pubDate (RFC 822) to an aware datetime, or None."""
+    if not s:
+        return None
+    try:
+        dt = parsedate_to_datetime(s)
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
 def detect_oil_status(articles):
     """
     Classify Libya's current oil-operations status from a list of article dicts
@@ -314,23 +343,44 @@ def detect_oil_status(articles):
     """
     events = []
     facilities_seen = {}   # name -> {'type', 'mentions', 'last_event', 'last_title'}
-    counts = {'force_majeure': 0, 'blockade': 0, 'reopen': 0, 'production': 0}
+    counts = {'force_majeure': 0, 'blockade': 0, 'reopen': 0, 'production': 0, 'threat': 0}
     escalation = False
     production_figure = None
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RECENCY_WINDOW_DAYS)
+    stale_dropped = 0
+    offtopic_dropped = 0
 
     for art in (articles or []):
         title = (art.get('title') or '').strip()
         if not title:
             continue
+        tl = title.lower()
+
+        # Relevance gate: must be about Libyan oil (kills cross-topic RSS bleed,
+        # e.g. a Strait-of-Hormuz 'reopening' headline).
+        fac_name, fac_type = _match_facility(tl)
+        if 'libya' not in tl and fac_name is None:
+            offtopic_dropped += 1
+            continue
+
+        # Recency gate: stale news (a 2020 force-majeure) is history, not current status.
+        dt = _parse_published(art.get('published'))
+        if dt is None or dt < cutoff:
+            stale_dropped += 1
+            continue
+
         etype = _classify_event(title)
         if not etype:
             continue
+
+        # Conditional/threat downgrade: "may announce force majeure" is not a declaration.
+        if etype in ('force_majeure', 'blockade') and any(k in tl for k in CONDITIONAL_KEYWORDS):
+            etype = 'threat'
+
         counts[etype] = counts.get(etype, 0) + 1
-        tl = title.lower()
         if etype in ('force_majeure', 'blockade') and any(k in tl for k in ESCALATION_KEYWORDS):
             escalation = True
-
-        fac_name, fac_type = _match_facility(tl)
         if fac_name:
             slot = facilities_seen.setdefault(
                 fac_name, {'type': fac_type, 'mentions': 0, 'last_event': etype, 'last_title': title})
@@ -360,6 +410,7 @@ def detect_oil_status(articles):
 
     # --- Status band ---
     fm, bl, ro = counts['force_majeure'], counts['blockade'], counts['reopen']
+    th = counts['threat']
     disruption = fm + bl
     facility_count = len(facilities_seen)
 
@@ -369,6 +420,11 @@ def detect_oil_status(articles):
         band = 'shutdown' if (escalation or facility_count >= 3) else 'force_majeure'
     else:  # blockade only
         band = 'shutdown' if escalation else 'disrupted'
+
+    # A credible recent THREAT to declare force majeure (no actual shut-in, no offsetting
+    # recovery) is amber, not green.
+    if band == 'flowing' and th > 0 and ro == 0:
+        band = 'disrupted'
 
     # --- Headline: lead with the most severe present event, else honest baseline ---
     def _first(etype):
@@ -388,7 +444,7 @@ def detect_oil_status(articles):
     if lead:
         headline = lead['title']
     elif band == 'flowing':
-        headline = 'No active disruption signals detected this scan -- production reporting nominal.'
+        headline = f'No active disruption signals in the last {RECENCY_WINDOW_DAYS} days -- production reporting nominal.'
     else:
         headline = 'Oil-status signals detected.'
 
@@ -412,6 +468,10 @@ def detect_oil_status(articles):
         'events': events[:10],
         'event_counts': counts,
         'article_count': len(articles or []),
+        'recent_event_count': len(events),
+        'recency_window_days': RECENCY_WINDOW_DAYS,
+        'stale_dropped': stale_dropped,
+        'offtopic_dropped': offtopic_dropped,
         'source': 'Google News RSS -- NOC / oil-facility status signals',
         'disclaimer': _DISCLAIMER,
         'version': __version__,
