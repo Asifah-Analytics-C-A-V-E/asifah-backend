@@ -85,6 +85,15 @@ try:
 except ImportError:
     UNHCR_AVAILABLE = False
     print("[ME Backend] ⚠️ UNHCR module not available")
+
+# Libya Oil Pulse module (oil production-STATUS sensor — force majeure / blockades / output, NOT price)
+try:
+    from libya_oil_pulse import register_libya_oil_pulse_endpoints
+    LIBYA_OIL_PULSE_AVAILABLE = True
+    print("[ME Backend] ✅ Libya Oil Pulse module loaded")
+except ImportError:
+    LIBYA_OIL_PULSE_AVAILABLE = False
+    print("[ME Backend] ⚠️ Libya Oil Pulse module not available")
 # Yemen stability + Houthi rhetoric modules
 try:
     from yemen_stability import register_yemen_routes
@@ -1145,6 +1154,9 @@ if LIBYA_HUMANITARIAN_AVAILABLE:
 # UNHCR Refugee Data Finder (scanner runs here — shared Redis; Africa backend reads later)
 if UNHCR_AVAILABLE:
     register_unhcr_endpoints(app)
+# Libya Oil Pulse (oil production-status sensor — force majeure / blockades / output)
+if LIBYA_OIL_PULSE_AVAILABLE:
+    register_libya_oil_pulse_endpoints(app)
 # Yemen Stability + Houthi Rhetoric Modules
 if YEMEN_AVAILABLE:
     register_yemen_routes(app)
