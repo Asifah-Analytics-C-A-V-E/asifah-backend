@@ -766,6 +766,195 @@ def _detect_silence_anomalies(actor_results, baselines):
 # CROSS-THEATER COORDINATION
 # ========================================
 
+# ============================================================
+# SLICE 2 -- CONVERGENCE LAYER (sensor reads + migration + Turkey emit)
+# ============================================================
+# Doctrine: the Libya stability-page sensors are the DIAL; this rhetoric
+# tracker (analyst) READS the dial and nudges its score. Every read fails
+# soft -- a missing/unparseable sensor yields modifier 0, never an error.
+
+OIL_PULSE_KEY         = 'libya_oil_pulse:latest'
+UNHCR_LIBYA_KEY       = 'unhcr:libya:latest'
+HUMANITARIAN_KEY      = 'libya_humanitarian:latest'
+TURKEY_FOOTPRINTS_KEY = 'turkey:theater_footprints'
+
+
+def _read_oil_pulse_modifier():
+    """
+    Read the Libya Oil Pulse sensor; map production-status band to a bounded
+    upward modifier. Oil is Libya's most acute economic lever -- a national
+    shutdown is a major escalation signal.
+      flowing -> 0 | disrupted -> +4 | force_majeure -> +8 | shutdown -> +12
+    NOTE (confirm against live payload): probes status under several field
+    names. Lock the accessor once the real libya_oil_pulse:latest is shared.
+    """
+    try:
+        pulse = _redis_get(OIL_PULSE_KEY) or {}
+        if not pulse:
+            return 0, {'status': 'no_data', 'modifier': 0}
+        status = (pulse.get('status') or pulse.get('band')
+                  or pulse.get('pulse_status') or pulse.get('oil_status')
+                  or pulse.get('overall_status') or '')
+        status = str(status).lower().replace(' ', '_')
+        band_map = {
+            'flowing': 0, 'normal': 0, 'stable': 0,
+            'disrupted': 4, 'partial': 4, 'reduced': 4,
+            'force_majeure': 8,
+            'shutdown': 12, 'halted': 12, 'closed': 12,
+        }
+        mod = band_map.get(status, 0)
+        return mod, {'status': status or 'unknown', 'modifier': mod}
+    except Exception as e:
+        print(f"[Libya Rhetoric] Oil pulse read error: {e}")
+        return 0, {'status': 'error', 'modifier': 0}
+
+
+def _read_displacement_modifier():
+    """
+    Read UNHCR/DTM displacement sensors. A surge in refugee inflow (Libya hosts
+    ~658k, mostly Sudanese) or IDP displacement is upward CONTEXT pressure --
+    modest weight, since displacement is context, not the headline.
+      stable -> 0 | elevated -> +2 | high/surge -> +4
+    NOTE (confirm against live payload): probes surge/trend under several field
+    names across unhcr:libya:latest and libya_humanitarian:latest.
+    """
+    try:
+        unhcr = _redis_get(UNHCR_LIBYA_KEY) or {}
+        hum   = _redis_get(HUMANITARIAN_KEY) or {}
+        surge = ''
+        for src in (unhcr, hum):
+            cand = (src.get('surge_band') or src.get('trend')
+                    or src.get('alert_level') or src.get('status') or '')
+            if cand:
+                surge = str(cand).lower()
+                break
+        band_map = {
+            'stable': 0, 'normal': 0, 'baseline': 0,
+            'elevated': 2, 'rising': 2,
+            'high': 4, 'surge': 4, 'critical': 4,
+        }
+        mod = band_map.get(surge, 0)
+        return mod, {'status': surge or 'unknown', 'modifier': mod}
+    except Exception as e:
+        print(f"[Libya Rhetoric] Displacement read error: {e}")
+        return 0, {'status': 'error', 'modifier': 0}
+
+
+# Bidirectional migration model (central-Mediterranean departure dynamic).
+# OUT = exodus/departures surging (instability push) -> escalatory (+).
+# RETURN = repatriation / voluntary return / reduced crossings -> de-escalatory (-).
+MIGRATION_OUT_TRIGGERS = {
+    8: ['mass exodus libya', 'record crossings libya', 'migrant surge central mediterranean'],
+    5: ['departures surge', 'boats leaving libya surge', 'lampedusa overwhelmed',
+        'smuggling networks active', 'migrant boats surge'],
+    3: ['migrant departures rise', 'crossings increase', 'central mediterranean route active',
+        'smuggling resumes'],
+    1: ['migrant departures', 'central mediterranean crossings', 'libya departures'],
+}
+MIGRATION_RETURN_TRIGGERS = {
+    8: ['mass voluntary return libya', 'large-scale repatriation libya'],
+    5: ['voluntary return program', 'iom return libya', 'repatriation flights libya',
+        'returns surge'],
+    3: ['migrants return', 'crossings drop', 'departures fall', 'reduced crossings'],
+    1: ['voluntary return', 'repatriation libya', 'returnees libya'],
+}
+
+
+def _score_migration_flows(articles):
+    """
+    Bidirectional migration: OUT flows (escalatory +) net against RETURN flows
+    (de-escalatory -). Net capped to +/-8. Both flows tracked independently so
+    the frontend can show 'Mixed Flows'.
+    """
+    out_level, return_level = 0, 0
+    for art in articles:
+        text = f"{art.get('title','')} {art.get('description','')}".lower()
+        for lvl in (8, 5, 3, 1):
+            if out_level < lvl and any(k in text for k in MIGRATION_OUT_TRIGGERS[lvl]):
+                out_level = lvl
+            if return_level < lvl and any(k in text for k in MIGRATION_RETURN_TRIGGERS[lvl]):
+                return_level = lvl
+    net = max(-8, min(8, out_level - return_level))
+    return net, {'out_level': out_level, 'return_level': return_level, 'net': net,
+                 'mixed_flows': out_level > 0 and return_level > 0}
+
+
+# Turkey OBJECTIVE-tag keyword map (what Turkey is DOING in Libya). Posture tags
+# (neo_ottoman / sunni_leadership / anti_israel / strategic_autonomy) are read
+# from Turkey's OWN tracker in Slice 3 -- Libya emits objective tags + mode.
+TURKEY_OBJECTIVE_TAGS = {
+    'gnu_backing':          ['turkey gnu', 'ankara tripoli', 'turkey backs tripoli',
+                             'turkish support tripoli', 'turkey libya government'],
+    'drone_export':         ['bayraktar', 'tb2', 'turkish drones', 'akinci libya'],
+    'naval_mou':            ['maritime mou', 'maritime deal', 'turkey libya maritime',
+                             'maritime memorandum'],
+    'energy_claim_eastmed': ['eez', 'exclusive economic zone', 'eastern mediterranean',
+                             'gas fields', 'hydrocarbon mou', 'east med energy'],
+    'mercenary_flow':       ['syrian mercenaries', 'syrian fighters libya', 'sadat'],
+    'base_access':          ['al-watiya', 'watiya airbase', 'turkish base libya', 'mitiga turkish'],
+}
+TURKEY_MODE_BY_TAG = {
+    'drone_export': 'hard_power', 'base_access': 'hard_power', 'mercenary_flow': 'hard_power',
+    'naval_mou': 'economic', 'energy_claim_eastmed': 'economic',
+    'gnu_backing': 'diplomatic',
+}
+
+
+def _write_turkey_footprint(result, articles):
+    """
+    PROJECTION NODE -- spoke #1. Write Turkey's Libya footprint to the shared
+    `turkey:theater_footprints` key so the Turkey tracker (Slice 3) can read it
+    across theaters to answer 'what is Erdogan up to?'.
+
+    DISTINCT from `fingerprint:turkey:*` (Turkey writing ABOUT itself). This is
+    a theater tracker writing what Turkey is DOING IN this theater.
+    Schema: { ts, theater, level, top_phrases[], objective_tags[], mode }
+    """
+    try:
+        actors = result.get('actors', {})
+        tk = actors.get('turkey_libya', {})
+        level = tk.get('max_escalation_level', 0)
+
+        tk_text = ''
+        for art in tk.get('top_articles', [])[:8]:
+            tk_text += ' ' + (art.get('title', '') + ' ' + art.get('description', '')).lower()
+        if not tk_text.strip():
+            for art in articles:
+                t = f"{art.get('title','')} {art.get('description','')}".lower()
+                if any(w in t for w in ('turkey', 'turkish', 'ankara', 'erdogan')):
+                    tk_text += ' ' + t
+
+        objective_tags = [tag for tag, kws in TURKEY_OBJECTIVE_TAGS.items()
+                          if any(k in tk_text for k in kws)]
+
+        mode = 'dormant'
+        for pref in ('hard_power', 'economic', 'diplomatic'):
+            if any(TURKEY_MODE_BY_TAG.get(t) == pref for t in objective_tags):
+                mode = pref
+                break
+
+        top_phrases = []
+        for art in tk.get('top_articles', [])[:3]:
+            ttl = art.get('title', '')
+            if ttl:
+                top_phrases.append(ttl[:80])
+
+        existing = _redis_get(TURKEY_FOOTPRINTS_KEY) or {}
+        existing['libya'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theater': 'libya',
+            'level': level,
+            'top_phrases': top_phrases,
+            'objective_tags': objective_tags,
+            'mode': mode,
+        }
+        _redis_set(TURKEY_FOOTPRINTS_KEY, existing, ttl=24 * 3600)
+        print(f"[Libya Rhetoric] \u2705 Turkey footprint written "
+              f"(level {level}, mode {mode}, tags {objective_tags})")
+    except Exception as e:
+        print(f"[Libya Rhetoric] Turkey footprint write error: {e}")
+
+
 def _write_crosstheater_signal(result):
     """
     Write Libya's fingerprint to the shared cross-theater Redis key.
@@ -1786,6 +1975,14 @@ def run_rhetoric_scan(days=3):
         ground_ops_level, rockets_level, ceasefire_level, crossborder_level
     )
 
+    # -- Slice 2: convergence-layer modifiers (sensor reads + migration) --
+    # Sensors are the dial; the analyst reads the dial and nudges the score.
+    oil_mod, oil_detail   = _read_oil_pulse_modifier()
+    disp_mod, disp_detail = _read_displacement_modifier()
+    mig_net, mig_detail   = _score_migration_flows(articles)
+    convergence_modifier  = oil_mod + disp_mod + mig_net
+    rhetoric_score = max(0, min(100, rhetoric_score + convergence_modifier))
+
     # Theatre specificity
     spec_scores = theatre_vectors['specificity_scores']
     theatre_specificity = round(sum(spec_scores) / len(spec_scores), 1) if spec_scores else 0
@@ -1822,6 +2019,16 @@ def run_rhetoric_scan(days=3):
         # ── INTERNAL FRACTURE / CIVIL WAR PRESSURE (Slice 1) ──
         'internal_fracture_level': internal_fracture_level,
         'internal_fracture_label': ESCALATION_LEVELS[internal_fracture_level]['label'],
+        # -- CONVERGENCE LAYER (Slice 2): sensor + migration modifiers --
+        'oil_pulse_modifier':     oil_mod,
+        'oil_pulse_status':       oil_detail.get('status', 'unknown'),
+        'displacement_modifier':  disp_mod,
+        'displacement_status':    disp_detail.get('status', 'unknown'),
+        'migration_out_level':    mig_detail.get('out_level', 0),
+        'migration_return_level': mig_detail.get('return_level', 0),
+        'migration_net_modifier': mig_net,
+        'migration_mixed_flows':  mig_detail.get('mixed_flows', False),
+        'convergence_modifier':   convergence_modifier,
         # ── DIPLOMATIC TRACK FIELDS ──
         # Active negotiations REDUCE the threat score (see _calculate_rhetoric_score).
         # These fields expose the diplomatic posture to the frontend sidebar
@@ -1924,6 +2131,7 @@ def run_rhetoric_scan(days=3):
 
     # ── Cross-theater coordination ──
     _write_crosstheater_signal(result)
+    _write_turkey_footprint(result, articles)   # Slice 2: Projection-Node spoke #1
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
     # -- Turkey read (Slice 1 stub): Libya is the first new spoke of the
