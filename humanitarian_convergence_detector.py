@@ -1,6 +1,7 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.6.2 -- June 22, 2026 (WB exposure/distress split: food-import is exposure; L5 needs distress)
 v1.6.1 -- June 22, 2026 (WB calibration: amplifier-only gate + named mechanisms)
 v1.6.0 -- June 22, 2026 (World Bank structural-stress signals)
 v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
@@ -838,7 +839,7 @@ def build_humanitarian_bluf(signals, aggregation=None):
             'categories':          aggregation['categories'],
             'novel_countries':     aggregation['novel_countries'],
             'tracked_countries_present': aggregation['tracked_countries_present'],
-            'detector_version':    'humanitarian_convergence_detector v1.4.0',
+            'detector_version':    f'humanitarian_convergence_detector v{__version__}',
         },
     }
 
@@ -963,11 +964,13 @@ _WB_TRACKED_ISO3 = {'LBN', 'SYR', 'YEM', 'IRN', 'CUB', 'PSE'}
 #                      (Gulf states, Israel, North Africa, Central Asia).
 #   reserves_months -- near-meaningless for currency-union / financial-hub
 #                      members that do not hold large FX reserves (eurozone).
+#   food_import_dependence -- a fragility (how hard a shock lands), not distress;
+#                      every small island imports food. Exposure, not crisis.
 # They count only as AMPLIFIERS inside a genuine compound cluster, never as a
 # standalone alarm. (Absence stays honest: the raw readings still surface in the
 # gatherer's sensor-layer output; we simply do not let them alone trigger an
 # analyst-layer convergence read.)
-_WB_AMPLIFIER_ONLY = {'water_stress', 'reserves_months'}
+_WB_AMPLIFIER_ONLY = {'water_stress', 'reserves_months', 'food_import_dependence'}
 
 # Single-metric naming for lone-extreme survivors (a non-amplifier metric at an
 # extreme reading). Each names the pathway + the named outcome it has
@@ -1070,7 +1073,13 @@ def detect_worldbank_structural_signals(wb_payload):
 
         severity = max(1, min(3, int(c.get('stress_severity') or 1)))
         n = len(stressed)
-        # L5 means multi-system convergence; a lone extreme caps at L4.
+        # Exposure is not distress: L5 (severity 3) requires genuine multi-system
+        # convergence -- a non-amplifier (distress-metric) extreme, OR 3+ co-
+        # occurring stressors. A lone amplifier extreme (desert water, thin
+        # reserves, import reliance) caps at L4, never L5.
+        if severity >= 3 and not (non_amp_extreme or n >= 3):
+            severity = 2
+        # A lone stressor never exceeds L4.
         if n < 2:
             severity = min(severity, 2)
 
@@ -1433,6 +1442,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.6.1'
+__version__ = '1.6.2'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
