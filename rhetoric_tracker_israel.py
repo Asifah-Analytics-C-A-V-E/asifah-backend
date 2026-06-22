@@ -1599,6 +1599,54 @@ def fetch_rhetoric_articles(days=3):
 # ============================================
 # CLASSIFY ARTICLES
 # ============================================
+# ============================================================================
+# RECENCY DECAY (Jun 2026) -- old articles fade as live signals.
+# News RSS hands back articles months/years old regardless of the day window;
+# without decay an old headline pins the theatre at a live high level. A fresh
+# article scores at full strength; its contribution fades linearly to zero by
+# RECENCY_ZERO_DAYS. Estimative doctrine: stale is context, not a present-tense
+# signal. Undated items default to full weight so real-time posts are not
+# suppressed. Tunable via the two constants below. Ported from the Libya tracker.
+# ============================================================================
+RECENCY_FULL_DAYS = 7
+RECENCY_ZERO_DAYS = 45
+
+
+def _parse_pub_date(published):
+    """Parse RSS/NewsAPI ISO dates and GDELT seendate; return aware datetime or None."""
+    if not published or not isinstance(published, str):
+        return None
+    val = published.strip()
+    try:
+        dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        return datetime.strptime(val, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _recency_weight(published, now=None):
+    """Recency decay weight in [0.0, 1.0] for live signal scoring."""
+    dt = _parse_pub_date(published)
+    if dt is None:
+        return 1.0
+    now = now or datetime.now(timezone.utc)
+    age_days = (now - dt).total_seconds() / 86400.0
+    if age_days <= RECENCY_FULL_DAYS:
+        return 1.0
+    if age_days >= RECENCY_ZERO_DAYS:
+        return 0.0
+    return 1.0 - (age_days - RECENCY_FULL_DAYS) / (RECENCY_ZERO_DAYS - RECENCY_FULL_DAYS)
+
+
+def _decay_level(level, weight):
+    """Apply a recency weight to a 0-5 escalation/vector level (rounded int)."""
+    return int(round((level or 0) * weight))
+
+
 def classify_articles(articles):
     actor_results = {
         actor_id: {
@@ -1635,6 +1683,7 @@ def classify_articles(articles):
     for article in articles:
         text = f"{article.get('title', '')} {article.get('description', '')}".lower()
         pub_date = article.get('published', '')
+        _rec_w = _recency_weight(pub_date)  # recency decay weight for this article
 
         spec_score = _score_specificity(text)
         if spec_score > 0:
@@ -1681,47 +1730,54 @@ def classify_articles(articles):
                 for kw in STRIKE_POSTURE_TRIGGERS.get(level, []):
                     if kw in text:
                         eff = 2 if is_reporting_ctx and level >= 3 else level
+                        eff = _decay_level(eff, _rec_w)
+                        _dl = _decay_level(level, _rec_w)
                         if eff > ar['strike_posture_score']:
                             ar['strike_posture_score'] = eff
-                        if level > theatre_summary['strike_posture_max']:
-                            theatre_summary['strike_posture_max'] = level
+                        if _dl > theatre_summary['strike_posture_max']:
+                            theatre_summary['strike_posture_max'] = _dl
                         break
 
                 # Outbound: Annexation
                 for kw in ANNEXATION_TRIGGERS.get(level, []):
                     if kw in text:
                         eff = 2 if is_reporting_ctx and level >= 3 else level
+                        eff = _decay_level(eff, _rec_w)
+                        _dl = _decay_level(level, _rec_w)
                         if eff > ar['annexation_score']:
                             ar['annexation_score'] = eff
-                        if level > theatre_summary['annexation_max']:
-                            theatre_summary['annexation_max'] = level
+                        if _dl > theatre_summary['annexation_max']:
+                            theatre_summary['annexation_max'] = _dl
                         break
 
                 # Inbound: Ballistic
                 for kw in BALLISTIC_TRIGGERS.get(level, []):
                     if kw in text:
-                        if level > ar['ballistic_score']:
-                            ar['ballistic_score'] = level
-                        if level > theatre_summary['ballistic_max']:
-                            theatre_summary['ballistic_max'] = level
+                        _dl = _decay_level(level, _rec_w)
+                        if _dl > ar['ballistic_score']:
+                            ar['ballistic_score'] = _dl
+                        if _dl > theatre_summary['ballistic_max']:
+                            theatre_summary['ballistic_max'] = _dl
                         break
 
                 # Inbound: Northern Front
                 for kw in NORTHERN_FRONT_TRIGGERS.get(level, []):
                     if kw in text:
-                        if level > ar['northern_score']:
-                            ar['northern_score'] = level
-                        if level > theatre_summary['northern_max']:
-                            theatre_summary['northern_max'] = level
+                        _dl = _decay_level(level, _rec_w)
+                        if _dl > ar['northern_score']:
+                            ar['northern_score'] = _dl
+                        if _dl > theatre_summary['northern_max']:
+                            theatre_summary['northern_max'] = _dl
                         break
 
                 # Inbound: Asymmetric
                 for kw in ASYMMETRIC_TRIGGERS.get(level, []):
                     if kw in text:
-                        if level > ar['asymmetric_score']:
-                            ar['asymmetric_score'] = level
-                        if level > theatre_summary['asymmetric_max']:
-                            theatre_summary['asymmetric_max'] = level
+                        _dl = _decay_level(level, _rec_w)
+                        if _dl > ar['asymmetric_score']:
+                            ar['asymmetric_score'] = _dl
+                        if _dl > theatre_summary['asymmetric_max']:
+                            theatre_summary['asymmetric_max'] = _dl
                         break
 
         # Coordination signals
