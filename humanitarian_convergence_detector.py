@@ -1,6 +1,7 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.6.1 -- June 22, 2026 (WB calibration: amplifier-only gate + named mechanisms)
 v1.6.0 -- June 22, 2026 (World Bank structural-stress signals)
 v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
 (prior: v1.4.0 May 23 2026; v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
@@ -956,6 +957,73 @@ def detect_unhcr_displacement_signals(unhcr_payload):
 # keys on ISO3. Used to DE-WEIGHT tracked countries, not exclude them.
 _WB_TRACKED_ISO3 = {'LBN', 'SYR', 'YEM', 'IRN', 'CUB', 'PSE'}
 
+# Metrics that are structurally-normal-extreme for whole classes of economy and
+# therefore must NOT fire a convergence signal on their own:
+#   water_stress    -- permanent baseline of desalination / desert economies
+#                      (Gulf states, Israel, North Africa, Central Asia).
+#   reserves_months -- near-meaningless for currency-union / financial-hub
+#                      members that do not hold large FX reserves (eurozone).
+# They count only as AMPLIFIERS inside a genuine compound cluster, never as a
+# standalone alarm. (Absence stays honest: the raw readings still surface in the
+# gatherer's sensor-layer output; we simply do not let them alone trigger an
+# analyst-layer convergence read.)
+_WB_AMPLIFIER_ONLY = {'water_stress', 'reserves_months'}
+
+# Single-metric naming for lone-extreme survivors (a non-amplifier metric at an
+# extreme reading). Each names the pathway + the named outcome it has
+# historically preceded -- estimative voice, reader completes the inference.
+_WB_SINGLE_LABEL = {
+    'inflation': ('acute price instability',
+        'runaway consumer prices have historically preceded subsidy-cut unrest and currency crises'),
+    'food_insecurity': ('acute food insecurity',
+        'food insecurity at this share of population has historically preceded subsistence-driven displacement'),
+    'unemployment': ('labor-market distress',
+        'extreme joblessness has historically preceded protest waves and out-migration pressure'),
+    'poverty': ('deep structural poverty',
+        'extreme-poverty headcounts at this level mark acute vulnerability to any further shock'),
+    'food_import_dependence': ('import-dependence exposure',
+        'heavy food-import reliance has historically preceded price-shock vulnerability when trade or financing is disrupted'),
+}
+
+
+def _wb_name_mechanism(stressed, extreme):
+    """
+    Map a cluster of co-occurring World Bank stressors to a NAMED structural
+    mechanism + the named outcome it has historically preceded. Synthesis, not
+    enumeration: names the pathway the instruments agree on. Returns
+    (mechanism_label, precedent_clause). Precedent is precedent-anchored and
+    estimative -- it never asserts an outcome.
+    """
+    s = set(stressed)
+    ext = set(extreme)
+    n = len(stressed)
+    # Compound syndromes, most-specific first.
+    if ('inflation' in ext) and ('food_insecurity' in s):
+        return ('hyperinflation-famine coupling',
+                'the coupling of runaway prices with broad food insecurity has historically '
+                'preceded acute hunger crises and subsistence-driven unrest')
+    if ('food_insecurity' in s) and ('water_stress' in s) and (('poverty' in s) or ('food_import_dependence' in s)):
+        return ('subsistence-failure chain',
+                'water-constrained domestic production layered on import dependence and poverty '
+                'has historically preceded famine conditions')
+    if ('inflation' in s) and ('food_import_dependence' in s):
+        return ('balance-of-payments squeeze',
+                'high inflation alongside heavy import dependence has historically preceded '
+                'balance-of-payments crises and subsidy-cut unrest')
+    if ('unemployment' in ext) and (('poverty' in s) or ('food_insecurity' in s)):
+        return ('labor-market and welfare distress',
+                'extreme joblessness alongside material deprivation has historically preceded '
+                'protest waves and out-migration pressure')
+    # Lone-extreme survivor: name it after its driving metric.
+    if n == 1:
+        for k in ('inflation', 'food_insecurity', 'unemployment', 'poverty', 'food_import_dependence'):
+            if k in ext:
+                return _WB_SINGLE_LABEL[k]
+    # Genuine 2+ cluster with no named syndrome match.
+    return ('compound structural stress',
+            'the accumulation of co-occurring subsistence-cost and external-financing pressure '
+            'has historically preceded periods of acute instability')
+
 
 def detect_worldbank_structural_signals(wb_payload):
     """
@@ -963,10 +1031,16 @@ def detect_worldbank_structural_signals(wb_payload):
     (worldbank:structural:latest written by world_bank_gatherer.py).
 
     Sensor -> analyst handoff: the gatherer reports raw structural readings;
-    THIS function applies the estimative interpretation. Only COMPOUND stress
-    (2+ co-occurring stressors) or an EXTREME single reading is surfaced -- a
-    lone chronic stressor is context, not a bubbling-up signal. Returns [] when
-    nothing converges (silence is a valid analytical output).
+    THIS function applies the estimative interpretation. v1.6.1 calibration:
+      * A signal needs at least one NON-amplifier stressor (inflation, food
+        insecurity, unemployment, poverty, import dependence). A lone extreme on
+        water stress or reserve-months is structurally-normal for desert /
+        currency-union economies and is suppressed -- it amplifies, never fires.
+      * A lone non-amplifier stressor fires only if it is EXTREME, and is capped
+        at L4 -- L5 is reserved for genuine multi-system compound convergence.
+      * Each surviving signal is named: the mechanism + the outcome it has
+        historically preceded (synthesis, not a count).
+    Returns [] when nothing converges (silence is a valid analytical output).
     """
     if not isinstance(wb_payload, dict):
         return []
@@ -982,11 +1056,24 @@ def detect_worldbank_structural_signals(wb_payload):
             continue
         stressed = c.get('stressed') or []
         extreme = c.get('extreme') or []
-        # Compound-or-extreme gate: a single moderate stressor stays silent.
-        if len(stressed) < 2 and not extreme:
+
+        # --- Calibration gate ---
+        non_amp_stressed = [k for k in stressed if k not in _WB_AMPLIFIER_ONLY]
+        non_amp_extreme = [k for k in extreme if k not in _WB_AMPLIFIER_ONLY]
+        # Need a genuine (non-amplifier) stressor: drops Gulf water-only and
+        # eurozone reserves-only false positives.
+        if not non_amp_stressed:
+            continue
+        # A lone genuine stressor must be extreme to fire; 2+ fire regardless.
+        if len(stressed) < 2 and not non_amp_extreme:
             continue
 
         severity = max(1, min(3, int(c.get('stress_severity') or 1)))
+        n = len(stressed)
+        # L5 means multi-system convergence; a lone extreme caps at L4.
+        if n < 2:
+            severity = min(severity, 2)
+
         label = c.get('country_name', iso3)
         readings = c.get('indicators') or {}
 
@@ -1001,14 +1088,19 @@ def detect_worldbank_structural_signals(wb_payload):
             bits.append(f"{r.get('label')} {r.get('value')}{r.get('unit', '')}{trend}")
         stressor_txt = '; '.join(bits) if bits else f"{len(stressed)} structural stressors"
 
-        n = len(stressed)
-        ext_txt = ' (one at an extreme reading)' if extreme else ''
-        short_text = f"\U0001f3e6 {label}: compound structural stress -- {stressor_txt}"
+        mechanism, precedent = _wb_name_mechanism(stressed, extreme)
+        if n >= 2:
+            lead = f"{label} shows {n} co-occurring structural stressors"
+            if extreme:
+                lead += ' (one at an extreme reading)'
+        else:
+            lead = f"{label} shows an extreme single-metric reading"
+
+        short_text = f"\U0001f3e6 {label}: {mechanism} -- {stressor_txt}"
         long_text = (
-            f"{label} shows {n} co-occurring structural stressors{ext_txt}: {stressor_txt}. "
-            f"The compound pattern is consistent with accumulating subsistence-cost and "
-            f"external-financing pressure of the kind that historically precedes acute "
-            f"instability. (World Bank Indicators, latest available year per metric.)"
+            f"{lead}: {stressor_txt}. Signature: {mechanism} -- {precedent}. "
+            f"(World Bank Indicators, latest available year per metric. Convergence "
+            f"reading -- instruments agreeing, not a forecast.)"
         )
 
         signals.append({
@@ -1020,10 +1112,11 @@ def detect_worldbank_structural_signals(wb_payload):
             'level':              _severity_to_level(severity),
             'short_text':         short_text[:150],
             'long_text':          long_text,
+            'mechanism':          mechanism,
             'source_url':         'https://data.worldbank.org',
             'source_title':       'World Bank Indicators (structural-stress sweep)',
             'source':             'World Bank Indicators API',
-            'matched_keywords':   ['worldbank_structural'] + list(stressed[:4]),
+            'matched_keywords':   ['worldbank_structural', mechanism.replace(' ', '_')] + list(stressed[:4]),
             'detected_at':        now,
             'icon':               '\U0001f3e6',
             'theatre':            'global_humanitarian',
@@ -1340,6 +1433,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.5.0'
+__version__ = '1.6.1'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
