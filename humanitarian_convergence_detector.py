@@ -1,6 +1,7 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.6.0 -- June 22, 2026 (World Bank structural-stress signals)
 v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
 (prior: v1.4.0 May 23 2026; v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
 
@@ -950,6 +951,90 @@ def detect_unhcr_displacement_signals(unhcr_payload):
     return signals
 
 
+# ISO3 codes for countries that already have their own Asifah tracker.
+# Mirrors TRACKED_COUNTRIES (which uses lowercase slugs); the World Bank payload
+# keys on ISO3. Used to DE-WEIGHT tracked countries, not exclude them.
+_WB_TRACKED_ISO3 = {'LBN', 'SYR', 'YEM', 'IRN', 'CUB', 'PSE'}
+
+
+def detect_worldbank_structural_signals(wb_payload):
+    """
+    Build structural_stress signals from the World Bank gatherer payload
+    (worldbank:structural:latest written by world_bank_gatherer.py).
+
+    Sensor -> analyst handoff: the gatherer reports raw structural readings;
+    THIS function applies the estimative interpretation. Only COMPOUND stress
+    (2+ co-occurring stressors) or an EXTREME single reading is surfaced -- a
+    lone chronic stressor is context, not a bubbling-up signal. Returns [] when
+    nothing converges (silence is a valid analytical output).
+    """
+    if not isinstance(wb_payload, dict):
+        return []
+    by_country = wb_payload.get('by_country') or {}
+    if not isinstance(by_country, dict):
+        return []
+
+    signals = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for iso3, c in by_country.items():
+        if not isinstance(c, dict):
+            continue
+        stressed = c.get('stressed') or []
+        extreme = c.get('extreme') or []
+        # Compound-or-extreme gate: a single moderate stressor stays silent.
+        if len(stressed) < 2 and not extreme:
+            continue
+
+        severity = max(1, min(3, int(c.get('stress_severity') or 1)))
+        label = c.get('country_name', iso3)
+        readings = c.get('indicators') or {}
+
+        bits = []
+        for key in stressed[:4]:
+            r = readings.get(key) or {}
+            if not r:
+                continue
+            trend = ''
+            if r.get('deteriorating'):
+                trend = ' rising' if r.get('stress_when') == 'above' else ' falling'
+            bits.append(f"{r.get('label')} {r.get('value')}{r.get('unit', '')}{trend}")
+        stressor_txt = '; '.join(bits) if bits else f"{len(stressed)} structural stressors"
+
+        n = len(stressed)
+        ext_txt = ' (one at an extreme reading)' if extreme else ''
+        short_text = f"\U0001f3e6 {label}: compound structural stress -- {stressor_txt}"
+        long_text = (
+            f"{label} shows {n} co-occurring structural stressors{ext_txt}: {stressor_txt}. "
+            f"The compound pattern is consistent with accumulating subsistence-cost and "
+            f"external-financing pressure of the kind that historically precedes acute "
+            f"instability. (World Bank Indicators, latest available year per metric.)"
+        )
+
+        signals.append({
+            'category':           'structural_stress',
+            'country':            iso3.lower(),
+            'country_label':      label,
+            'severity':           severity,
+            'pressure_type':      'humanitarian',
+            'level':              _severity_to_level(severity),
+            'short_text':         short_text[:150],
+            'long_text':          long_text,
+            'source_url':         'https://data.worldbank.org',
+            'source_title':       'World Bank Indicators (structural-stress sweep)',
+            'source':             'World Bank Indicators API',
+            'matched_keywords':   ['worldbank_structural'] + list(stressed[:4]),
+            'detected_at':        now,
+            'icon':               '\U0001f3e6',
+            'theatre':            'global_humanitarian',
+            'region':             'global_humanitarian',
+            'is_tracked_country': iso3 in _WB_TRACKED_ISO3,
+            'signal_origin':      'worldbank_structural',
+        })
+
+    return signals
+
+
 def detect_and_build_bluf(articles, extra_signals=None):
     """
     Convenience wrapper: run detection + aggregation + build BLUF.
@@ -1168,7 +1253,15 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
                     unhcr_signals = detect_unhcr_displacement_signals(_unhcr_all)
             except Exception as _ue:
                 print(f'[humanitarian_convergence] UNHCR signal read skipped: {str(_ue)[:80]}')
-            bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals)
+            # World Bank structural-stress sweep (shared Redis; de-weighted by tracked set)
+            wb_signals = []
+            try:
+                _wb_struct = _upstash_get('worldbank:structural:latest')
+                if isinstance(_wb_struct, dict):
+                    wb_signals = detect_worldbank_structural_signals(_wb_struct)
+            except Exception as _we:
+                print(f'[humanitarian_convergence] World Bank signal read skipped: {str(_we)[:80]}')
+            bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals + wb_signals)
 
             # Cache for 30 min
             _upstash_setex('humanitarian_convergence:bluf:latest', 1800, bluf)
@@ -1206,6 +1299,12 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
                 _unhcr_all = _upstash_get('unhcr:all:latest')
                 if isinstance(_unhcr_all, dict):
                     signals = signals + detect_unhcr_displacement_signals(_unhcr_all)
+            except Exception:
+                pass
+            try:
+                _wb_struct = _upstash_get('worldbank:structural:latest')
+                if isinstance(_wb_struct, dict):
+                    signals = signals + detect_worldbank_structural_signals(_wb_struct)
             except Exception:
                 pass
             agg = aggregate_convergence(signals)
