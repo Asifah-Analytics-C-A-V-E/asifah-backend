@@ -59,6 +59,16 @@ except ImportError as e:
     COMMODITY_TRACKER_AVAILABLE = False
     print(f"[ME Backend] ⚠️ Commodity tracker not available: {e}")
 
+# Commodity x World Bank structural convergence (Tier-2 analyst overlay)
+# Reads worldbank:structural:latest + COUNTRY_COMMODITY_EXPOSURE; writes nothing.
+try:
+    from commodity_structural_convergence import register_commodity_convergence_endpoints
+    COMMODITY_CONVERGENCE_AVAILABLE = True
+    print("[ME Backend] ✅ Commodity structural-convergence module loaded")
+except ImportError as e:
+    COMMODITY_CONVERGENCE_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ Commodity structural-convergence not available: {e}")
+
 # Syria humanitarian data module (DTM API + ReliefWeb + OCHA)
 try:
     from syria_humanitarian import register_syria_humanitarian_endpoints
@@ -1128,6 +1138,11 @@ if THINK_TANK_AVAILABLE:
 if COMMODITY_TRACKER_AVAILABLE:
     register_commodity_endpoints(app)
     print("[ME Backend] ✅ Commodity endpoints registered: /api/commodity-pressure, /api/commodity-prices")
+
+# Commodity x structural convergence — depends on the registry imported above
+if COMMODITY_CONVERGENCE_AVAILABLE:
+    register_commodity_convergence_endpoints(app)
+    print("[ME Backend] ✅ Commodity convergence registered: /api/commodity-structural-convergence")
 
 # Flight Disruptions — background scan thread (12h cycle)
 try:
