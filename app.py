@@ -157,6 +157,19 @@ except ImportError:
     HUMANITARIAN_GATHERER_AVAILABLE = False
     print("[ME Backend] ⚠️ Humanitarian Article Gatherer not available")
 
+# ──── World Bank Structural-Stress Gatherer (WRITER) ────
+# Sweeps the World Bank Indicators API across all countries every 24h and
+# writes a per-country structural-stress profile to worldbank:structural:latest.
+# Sensor layer -- the convergence detector reads this and applies the
+# estimative interpretation.
+try:
+    from world_bank_gatherer import register_worldbank_gatherer_routes
+    WORLDBANK_GATHERER_AVAILABLE = True
+    print("[ME Backend] ✅ World Bank Structural-Stress Gatherer loaded")
+except ImportError:
+    WORLDBANK_GATHERER_AVAILABLE = False
+    print("[ME Backend] ⚠️ World Bank Gatherer not available")
+
 try:
     from kinetic_activity_gatherer import register_kinetic_endpoints
     KINETIC_GATHERER_AVAILABLE = True
@@ -1197,6 +1210,12 @@ if CASCADE_DETECTOR_AVAILABLE:
 if HUMANITARIAN_GATHERER_AVAILABLE:
     register_humanitarian_gatherer_routes(app, start_scheduler=True)
     print("[ME Backend] ✅ Humanitarian Gatherer routes registered: /api/humanitarian-gatherer/scan, /health, /articles")
+
+# World Bank Structural-Stress Gatherer -- 24h daemon sweep of the World Bank
+# Indicators API. Writes worldbank:structural:latest for the convergence detector.
+if WORLDBANK_GATHERER_AVAILABLE:
+    register_worldbank_gatherer_routes(app, start_scheduler=True)
+    print("[ME Backend] ✅ World Bank Gatherer routes registered: /api/worldbank-gatherer/scan, /health")
 
 # Kinetic Activity Gatherer -- gap-filling CAMEO-coded conflict/cooperation
 # tracker for the uncovered world. Registered BEFORE GPI so the Slice-2 BLUF
