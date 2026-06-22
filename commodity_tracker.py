@@ -1434,6 +1434,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Khoemacau Mining (Northwest Copper Belt) acquired by MMG (China Minmetals) 2023 for $1.88B — meaningful but secondary to diamonds in Botswana's economic picture. Cupric Canyon ZF site also developing. Adds Chinese SOE footprint to Botswana otherwise dominated by Western-aligned mining capital."},
     },
     'brazil': {
+        'silicon':      {'role': 'producer', 'weight': 1.0,
+                         'note': "Largest single source of U.S. silicon-metal imports (~38%); cheap hydropower underwrites carbothermic smelting (Ferbasa, Minasligas). Emerging downstream solar-glass / high-purity-silica ambition (Homerun, Bahia). Western-aligned counterweight to Chinese silicon-metal supply."},
         'coffee':       {'role': 'producer',          'weight': 1.4, 'rank': 1,
                          'note': "World's #1 coffee producer and exporter (Arabica-dominant; Minas Gerais, Sao Paulo, Espirito Santo). Brazilian frost and drought are the single biggest global coffee price drivers - the 2021 frost and subsequent droughts drove multi-year price spikes. Watch: Minas Gerais frost/drought, CONAB crop estimates, ICE arabica certified stocks, real (BRL) moves affecting export economics."},
         'nitrogen':     {'role': 'consumer', 'weight': 1.4, 'rank': 2,
@@ -1454,6 +1456,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #4 bauxite producer (~30 Mt/yr); Porto Trombetas (Mineração Rio do Norte, MRN — Vale+BHP+Rio Tinto+South32+Hydro JV) in Pará is the largest operation. Norsk Hydro Paragominas + Alunorte alumina refinery (Barcarena). Brazilian bauxite + alumina industry is significant Atlantic-basin counterweight to Guinea + Australia. Watch: MRN production, Norsk Hydro Brazil segment results."},
     },
     'canada': {
+        'silicon':      {'role': 'producer', 'weight': 0.8,
+                         'note': "Silicon-metal producer (Quebec -- Ferroglobe Becancour) on cheap hydropower; ~28% of U.S. silicon-metal imports and a near-shore, allied alternative to Chinese supply. Added silicon metal to its own critical-minerals list in 2024."},
         'potash':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 potash producer (~14M tonnes/yr, ~36% global); Saskatchewan basin (largest known reserves globally); Nutrien (TSE:NTR — formed from PotashCorp + Agrium 2018 merger); Mosaic Esterhazy K3 mine. Canpotex consortium handles offshore exports. Brazil + USA + China are largest customers. Ukraine war + Belarus sanctions made Canada the structural Western-aligned potash anchor."},
         'uranium':      {'role': 'producer',          'weight': 1.3, 'rank': 2,
@@ -1480,6 +1484,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Chile imports ~20-30% of sulfur for copper-oxide processing (solvent extraction-electrowinning, SX-EW). China sulfur export ban (May 2026) + Hormuz closure trapped Gulf supply; Chilean sulfur import prices doubled. CASCADE EXPOSURE: this is the FIRST visible cascade-transmission belt — Hormuz disruption -> sulfur scarcity -> Chilean copper output risk. Ivanhoe Mines founder warned >3 week disruption would close copper oxide operations. Watch: Chilean copper-oxide vs. concentrate output mix, ENAP sulfur import data, Cochilco sector reports.'},
     },
     'china': {
+        'silicon':      {'role': 'producer', 'weight': 1.5, 'rank': 1,
+                         'note': "China dominates the entire silicon chain -- ~80% of global silicon materials (USGS 2024) and >80% of polysilicon. Xinjiang concentration carries UFLPA / forced-labor exposure; the Guangzhou Futures Exchange runs industrial-silicon futures. Overproduction is cratering global polysilicon prices and undermining Western producers; subject of a U.S. Commerce Section 232 probe. Command-node of the chip-and-solar feedstock."},
         'rice':         {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 rice producer and consumer; broadly self-sufficient via hybrid-rice yields and large Sinograin state reserves, so China acts as a price-stabilizer more than an import-dependency story - but stockpiling policy and occasional large import/export swings still move regional flows. Watch: Sinograin reserve actions, hybrid-rice acreage, customs import data (periodic buys from Vietnam/Thailand), domestic minimum purchase prices."},
         'nitrogen':     {'role': 'producer_consumer', 'weight': 1.5, 'rank': 1,
@@ -1551,6 +1557,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "DRC is a meaningful diamond producer (~15-20 Mcarats/yr) but historically conflict-adjacent supply (Kasai region); Kimberley Process participant. Société Anonyme MIBA + small-scale artisanal sector. Less material than DRC's cobalt/copper/coltan story but adds to the Africa-diamonds picture and the broader conflict-minerals frame. Watch: MIBA production data, Kimberley Process annual statistics."},
     },
     'egypt': {
+        'silicon':      {'role': 'producer', 'weight': 0.7,
+                         'note': "EMERGING PRODUCER with strategic ambition: ~20 billion tonnes of silica resources (among the world's largest). Vision 2030 targets lifting mining to ~5-6% of GDP, and 2025 ministerial policy elevated silica sand to a strategic industrial mineral -- with an explicit climb from raw-sand export toward metallurgical silicon, polysilicon, and solar feedstock (EMRA reconstituted as an economic authority). Low-cost energy + IFC backing. Output is nascent; the weight reflects ambition + reserve base, not current tonnage. Watch: EMRA tenders, silica-to-solar value-add projects, Chinese polysilicon JVs."},
         'rice':         {'role': 'producer',          'weight': 0.9,
                          'note': "Nile Delta producer that also imports in drought years; rice shares the politically charged subsidized-staple space with baladi bread. Water scarcity (GERD/Nile constraints) periodically forces cultivation-area restrictions, tightening domestic supply and occasionally banning exports. Watch: cultivation-area decrees, GASC tenders, Nile water-allocation news, subsidy-reform signals."},
         'nitrogen':     {'role': 'producer', 'weight': 1.3,
@@ -1598,6 +1606,20 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #2 uranium consumer; ~70% of French electricity from nuclear (~56 reactors operated by EDF). Orano (formerly Areva) provides full fuel cycle: La Hague reprocessing + Tricastin enrichment + Melox MOX fabrication. Niger uranium supply traditionally critical (~20% of French imports historically) — disrupted by 2023 Niger coup; pivot to Kazakhstan + Canada + Australia accelerated. Macron's 2022 nuclear renaissance announcement (6 new EPR2 reactors) raises uranium demand trajectory. Watch: Niger uranium status, Orano-Kazatomprom contracts, EDF reactor availability."},
         'wheat':        {'role': 'producer',          'weight': 1.0,
                          'note': "Largest individual EU wheat producer (~35-37 Mt/yr, ~26% of EU total). Major Egypt + Algeria + sub-Saharan Africa supplier. CAP-driven; Brittany + Beauce + Picardy regions. Listed separately from EU bloc only because French wheat exports have a distinct national identity in MENA markets (vs. generic 'EU' supply)."},
+    },
+    'germany': {
+        'semiconductors': {'role': 'component_producer', 'weight': 1.4, 'rank': 2,
+                         'note': "EUV CHOKEPOINT INPUT: Carl Zeiss SMT (optics) + Trumpf (high-power CO2 lasers) are the near-sole suppliers of the optical and light-source subsystems inside every ASML EUV lithography machine -- no Zeiss/Trumpf, no leading-edge chips anywhere on Earth. Plus 'Silicon Saxony' around Dresden (GlobalFoundries, Infineon, Bosch) and the TSMC-led ESMC fab under construction (~2027). Component-producer sitting on a genuine global chokepoint."},
+        'natural_gas':  {'role': 'consumer',           'weight': 1.4, 'rank': 1,
+                         'note': "Europe's largest natural-gas consumer; the post-2022 loss of Russian pipeline gas forced a scramble to Norwegian pipeline supply plus new LNG import terminals (Wilhelmshaven, Brunsbuttel). Gas price and availability gate the entire German industrial base -- chemicals, steel, glass. Watch: Norwegian flow rates, LNG terminal throughput, industrial-curtailment signals."},
+        'silicon':      {'role': 'producer',           'weight': 1.2,
+                         'note': "Wacker Chemie (Burghausen) is the West's leading hyperpure-polysilicon producer -- nearly half the world's microchips use Wacker polysilicon -- and Siltronic is a top-tier silicon-wafer maker. Both are margin-squeezed by Chinese polysilicon oversupply. Germany is the non-China anchor of the upstream chip-feedstock chain. Watch: Wacker capacity adds, Siltronic strategic review, EU anti-dumping posture."},
+        'nitrogen':     {'role': 'producer_consumer',  'weight': 1.2,
+                         'note': "BASF's Ludwigshafen complex (the world's largest integrated chemical site) is a major ammonia/nitrogen producer and a textbook GAS-CASCADE node: when European gas spiked in 2022, BASF curtailed ammonia and bought on world markets, tightening global nitrogen supply. Watch: BASF ammonia run-rates, European gas spreads."},
+        'potash':       {'role': 'producer',           'weight': 1.1,
+                         'note': "K+S AG (Kassel) is one of the world's leading potash and salt producers -- German mines (Werra, Zielitz) plus the Bethune mine in Canada -- a Western fertilizer anchor alongside Canada, Belarus, and Russia. Potash processing is energy-intensive, so German power costs feed directly into output economics."},
+        'copper':       {'role': 'consumer',           'weight': 0.9,
+                         'note': "Aurubis (Hamburg) is Europe's largest copper smelter and recycler -- a processing node converting concentrate and scrap into refined copper for German industry. Exposure runs to concentrate supply (treatment/refining charges) and energy costs, not mine ownership."},
     },
     'guinea': {
         'bauxite':      {'role': 'producer',          'weight': 1.5, 'rank': 2,
@@ -1725,6 +1747,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Iran has used GOLD-FOR-OIL settlement extensively as US-dollar-sanctions workaround. Tehran Bourse gold trading + Iranian central bank (CBI) gold reserves opaque. Iran-China + Iran-Russia + Iran-Turkey gold flow tracked via UAE intermediary refiners. Sanctions-evasion architecture canonical case study. Watch: UAE gold import data from Iran, Tehran Bourse gold-coin premium, CBI reserve disclosures (rare)."},
     },
     'japan': {
+        'silicon':      {'role': 'producer', 'weight': 1.2,
+                         'note': "WAFER CHOKEPOINT: Shin-Etsu + SUMCO together make ~50%+ of the world's finished silicon wafers -- the step between polysilicon and chips. Mitsubishi Chemical is the only meaningful synthetic high-purity-quartz backstop to Spruce Pine (and costlier). Producer at the highest-value link of the chain."},
         'lithium':      {'role': 'consumer',          'weight': 1.0,
                          'note': "World #3 lithium consumer; Panasonic (Tesla 4680 cells + ENERGY Storage); battery materials + electrolyte + separator IP dominant globally (Toray, Sumitomo Chemical, Asahi Kasei). Toyota's solid-state battery push raises specialty lithium demand. ~95% imported (Australia + Chile primary)."},
         'cobalt':       {'role': 'consumer',          'weight': 1.0,
@@ -1784,6 +1808,18 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'oil':          {'role': 'producer',          'weight': 1.2,
                          'note': "OPEC member with ~1.2M bpd capacity when stable, but output is chronically disrupted by the East-West institutional split (NOC / Tripoli versus LNA / Haftar-controlled eastern fields and terminals). Recurring blockades and force-majeure declarations at El Sharara (largest field) and El Feel, plus the eastern-crescent terminals (Es Sider, Ras Lanuf, Zueitina, Brega), make Libyan supply one of the most disruption-prone signals in the oil complex — a textbook conflict-to-supply-shock convergence pattern. Light sweet Es Sider crude competes with Mediterranean and West African grades into Europe. CONVERGENCE LINK: Libyan production-halt announcements have historically preceded short-cycle Brent risk-premium moves and frequently track the LNA / GNU political cycle rather than market fundamentals. Watch: NOC force-majeure notices, El Sharara / Es Sider status, LNA-NOC revenue-distribution disputes, eastern-terminal loadings (Kpler / tanker tracking)."},
     },
+    'malaysia': {
+        'semiconductors': {'role': 'producer',           'weight': 1.3, 'rank': 3,
+                         'note': "Penang -- the 'Silicon Valley of the East' -- is a global center of gravity for semiconductor back-end (assembly, packaging, test), handling on the order of ~13% of the world's chip packaging (Intel, AMD, Infineon, Bosch). Malaysia owns the back-end of the chip chain the way Taiwan owns the front-end. Watch: Penang capex, US-China packaging-tariff spillover, flood/grid disruption to the cluster."},
+        'rare_earths':  {'role': 'processor',          'weight': 1.1,
+                         'note': "Lynas Malaysia (Kuantan) is the only commercial-scale rare-earth separation plant outside China -- ~13-15% of ex-China oxide capacity (~8,500-9,000 t/yr), processing Australian Mt Weld concentrate and serving as the West's main alternative for heavy REEs (dysprosium, terbium). Its March 2026 license renewal carries a hard condition: the radioactive cracking-and-leaching front end must leave Kuantan for Kalgoorlie (WA) by 2031, while Malaysia keeps the high-value separation/refining. Watch: WLP-residue compliance, 2031 relocation progress, NdPr ramp toward 12,000 t/yr."},
+        'silicon':      {'role': 'producer',           'weight': 1.0,
+                         'note': "Major non-China polysilicon: OCI's Malaysian plant (the former Tokuyama Bintulu site) supplies solar- and electronic-grade polysilicon prized precisely because it sits outside Xinjiang -- the 'UFLPA-clean' feedstock that U.S. and European solar buyers seek. Sarawak hydropower-fed. Watch: OCI Malaysia expansion, U.S. solar polysilicon sourcing rules."},
+        'natural_gas':  {'role': 'producer',           'weight': 1.1,
+                         'note': "Petronas's Bintulu LNG complex (Sarawak) makes Malaysia one of the world's larger LNG exporters, supplying Japan, Korea, China, and Taiwan. State champion Petronas underwrites a large share of federal revenue. Watch: Petronas LNG cargoes, Sarawak gas-rights friction with the federal government."},
+        'oil':          {'role': 'producer',           'weight': 0.9,
+                         'note': "Petronas-operated offshore crude (Malay, Sarawak, and Sabah basins) plus the Pengerang refining/petrochemical complex; a modest but steady regional producer. Oil and gas rents are central to the federal budget and to Petronas's outsized national role."},
+    },
     'mexico': {
         'silver':       {'role': 'producer',          'weight': 1.5, 'rank': 1,
                          'note': 'World #1 silver producer (~6,120 MT, ~22% global); Zacatecas/Durango/Chihuahua; Fresnillo (largest primary silver mine); Peñoles/Fresnillo PLC dominant; ancient mining tradition'},
@@ -1807,6 +1843,18 @@ COUNTRY_COMMODITY_EXPOSURE = {
     'netherlands': {
         'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 4,
                          'note': "Holds the single most concentrated leverage point in semiconductor manufacturing: ASML's EUV lithography monopoly. ASML (Veldhoven) is the only company in the world that produces extreme ultraviolet lithography systems required for sub-7nm chip manufacturing — meaning every leading-edge fab on Earth (TSMC, Samsung, Intel, SK Hynix) depends on ASML. Dutch government export-control decisions on EUV (and increasingly DUV) shipments to China constitute the most consequential single-country technology policy in the world. Also home to NXP (automotive chips). Watch: ASML quarterly bookings, Dutch trade ministry export-license announcements, EU Chips Act milestones."},
+    },
+    'norway': {
+        'natural_gas':  {'role': 'producer',           'weight': 1.5, 'rank': 1,
+                         'note': "Since 2022 Norway is the EU's single largest natural-gas supplier -- ~30% of EU gas (~109-122 bcm/yr), having replaced Russia's Gazprom -- delivered mostly through ~8,800 km of subsea pipelines, with Equinor marketing about two-thirds. The flip side is acute physical exposure: the remote offshore pipeline grid is a hard-to-attribute sabotage target (post-Nord Stream). Watch: Equinor maintenance/outage notices (they move European TTF within minutes), subsea-infrastructure security incidents."},
+        'oil':          {'role': 'producer',           'weight': 1.2,
+                         'note': "Western Europe's largest oil producer (~2 mb/d, ~2% of global supply); Equinor-operated North Sea fields anchored by Johan Sverdrup, the region's largest. Crude and gas together are ~57% of Norway's export value. A stable, Western-aligned barrel feeding the Government Pension Fund Global."},
+        'silicon':      {'role': 'producer',           'weight': 1.0,
+                         'note': "Dual silicon role: Elkem is a major silicon-metal and silicones producer on cheap hydropower, and The Quartz Corp's Drag operation (northern Norway) is one of only two large-scale high-purity-quartz sources on Earth alongside Spruce Pine, NC -- the crucible feedstock the entire wafer industry depends on. A quiet Western chokepoint backstop."},
+        'rare_earths':  {'role': 'producer',           'weight': 0.6,
+                         'note': "EMERGING: the Fen Complex (Telemark) is described as Europe's largest rare-earth deposit, under development by Rare Earths Norway as a potential non-China REE source for European magnets. Pre-production; the weight reflects strategic potential, not current output. Watch: Fen financing and permitting milestones."},
+        'nickel':       {'role': 'consumer',           'weight': 0.6,
+                         'note': "Glencore's Nikkelverk refinery (Kristiansand) is one of the world's largest nickel/cobalt/copper refineries -- a processing node turning imported matte into high-purity class-1 nickel and cobalt for European battery and alloy supply. Exposure is to matte feed and energy, not mining."},
     },
     'nigeria': {
         'rice':         {'role': 'consumer',          'weight': 1.0,
@@ -1845,6 +1893,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #2 nickel producer (~12% global); Nickel Asia + Global Ferronickel + Dinapigue Mining. Surigao + Palawan mines. Philippines-Indonesia together = ~60% global nickel. Marcos Jr. administration considering Indonesian-style export ban for downstream processing investment. Watch: DENR mining-policy announcements, Nickel Asia (NAC.PS) earnings, Marcos Jr. industry plans."},
     },
     'russia': {
+        'silicon':      {'role': 'producer', 'weight': 0.9,
+                         'note': "Major ferrosilicon producer -- historically ~37% of U.S. ferrosilicon imports before sanctions rerouted volumes toward China and Asia. RusAl / Bratsk complex. Sanctions exposure makes Russian silicon flow a swing variable for Western steel + aluminum feedstock."},
         'nitrogen':     {'role': 'producer', 'weight': 1.5, 'rank': 1,
                          'note': "World's #1 nitrogen-fertilizer exporter (urea, ammonia, ammonium nitrate); cheap domestic gas = structural cost advantage. EuroChem, Acron, Uralchem, Togliattiazot. CHOKEPOINT: the Togliatti-Odesa ammonia pipeline + Yuzhny / Black Sea terminals (war-disrupted) are a recurring grain-deal bargaining chip. Sanctions carve-outs explicitly protect food + fertilizer flows. Watch: Black Sea ammonia corridor status, EU sanctions-exemption debates, export tax / quota changes."},
         'oil':          {'role': 'producer',          'weight': 1.5, 'rank': 2,
@@ -1911,6 +1961,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "~70% imported; Saudi Arabia + Nigeria + Angola primary suppliers. Sasol synthetic-fuel (coal-to-liquid Secunda + Sasolburg) covers ~25-30% of domestic liquid fuels — unique strategic asset. Refining sector contracted significantly 2020-2024 (multiple refinery shutdowns: Engen Durban, Sapref). Watch: Sasol earnings, refinery utilization, fuel-import volumes."},
     },
     'south_korea': {
+        'silicon':      {'role': 'consumer', 'weight': 1.2,
+                         'note': "Dual role: OCI is a major polysilicon producer, while Samsung + SK Hynix fabs make Korea one of the largest silicon demand sinks on Earth. Exposure runs both up (polysilicon supply) and down (advanced-node demand for wafers + HPQ crucibles)."},
         'lithium':      {'role': 'consumer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 lithium consumer; LG Energy Solution + Samsung SDI + SK On are the world's #2 battery cell manufacturing trio (combined ~20-25% global EV battery market share). Heavy supplier of cells to Western automakers (Hyundai, Kia, GM, Ford, VW). ~95% imported lithium hydroxide + carbonate. Watch: Korean battery cell production data, LG ES (KS:373220) earnings, IRA Section 30D compliance."},
         'cobalt':       {'role': 'consumer',          'weight': 1.2, 'rank': 2,
@@ -1927,6 +1979,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'Major nuclear power user (~26 reactors, ~30% of electricity); KEPCO domestic build + UAE Barakah export contract; nuclear fuel imports'},
     },
     'taiwan': {
+        'silicon':      {'role': 'consumer', 'weight': 1.5, 'rank': 1,
+                         'note': "Demand center of gravity: TSMC's fabs consume the wafers, HPQ crucibles, and polysilicon-derived silicon at the leading edge -- the strategic prize of the entire chain. Cross-strait disruption transmits directly to global chip + silicon-feedstock supply."},
         'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 1,
                          'note': "🥇 World's #1 semiconductor producer; TSMC (Hsinchu + Tainan + Kaohsiung megafabs) holds ~55% global foundry market share + ~90%+ leading-edge (3nm/5nm) production. UMC + Vanguard secondary foundries. TSMC Arizona (US) + Kumamoto (Japan) + Dresden (Germany) overseas fabs come online 2024-2026 but Taiwan retains structural concentration. SILICON SHIELD doctrine: Taiwan's semiconductor concentration is its primary deterrent against Chinese kinetic action. Watch: TSMC quarterly results, capex guidance, overseas-fab capacity additions, US export-controls Entity List China chip-design firm additions."},
         'oil':          {'role': 'consumer',          'weight': 1.2,
@@ -1991,6 +2045,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #1 sunflower oil producer + exporter (~50% global pre-war); war degraded but partially restored. India + EU primary buyers. Major global cooking oil market mover."},
     },
     'usa': {
+        'silicon':      {'role': 'producer', 'weight': 1.4,
+                         'note': "FEEDSTOCK CHOKEPOINT: Spruce Pine, NC (Sibelco/Unimin + The Quartz Corp) supplies ~80%+ of the world's ultra-high-purity quartz used to make the crucibles that melt silicon -- a single-point-of-failure exposed when Hurricane Helene idled it in 2024. Also a polysilicon producer (Hemlock) and the demand surge: CHIPS Act fabs (TSMC AZ, Intel, Micron). Silicon added to the 2025 U.S. Critical Minerals List. Watch: Spruce Pine operating status, Section 232 polysilicon action."},
         'nitrogen':     {'role': 'producer_consumer', 'weight': 1.3, 'rank': 3,
                          'note': "Major nitrogen producer AND consumer -- cheap shale gas underpins large domestic urea / ammonia / UAN output (CF Industries, Nutrien, Koch), yet the Corn Belt still imports to balance. Gulf Coast ammonia capacity is gas-price sensitive. Watch: CF Industries guidance, Henry Hub gas, Corn Belt application-season demand, tariff actions on imported UAN."},
         'semiconductors': {'role': 'producer',        'weight': 1.5, 'rank': 5,
