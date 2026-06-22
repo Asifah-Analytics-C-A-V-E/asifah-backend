@@ -486,6 +486,25 @@ COMMODITY_TYPES = {
             'futures':  None,  # no liquid semiconductor futures market
         },
     },
+    'silicon': {
+        'name': 'Silicon',
+        'icon': '🟦',
+        'tier': 1,
+        'category': 'strategic_mineral',
+        'has_spot_price': True,
+        'yahoo_ticker': 'GSM',                       # Ferroglobe -- largest listed Western silicon-metal/ferrosilicon producer
+        'yahoo_proxies': ['DQ', 'WCH.DE', 'TAN'],    # Daqo (CN polysilicon) + Wacker Chemie (DE) + Invesco Solar ETF
+        'unit': 'USD (GSM equity proxy)',
+        'description': 'Silicon (metallurgical + ferrosilicon + polysilicon) -- the chip-and-solar backbone. Cascade: quartz/silica -> metallurgical silicon (~98-99%, carbothermic reduction) -> polysilicon (Siemens process, 6N-9N+) -> wafers -> chips/solar cells. China ~80% of global silicon materials (USGS 2024) and >80% of polysilicon. Crucible chokepoint: Spruce Pine NC (Sibelco/Unimin + The Quartz Corp) supplies ~80%+ of the ultra-high-purity quartz used to melt silicon -- the Helene-flood 2024 single-point-of-failure. No liquid Western silicon futures; tracked via Ferroglobe (GSM) + Daqo/Wacker (polysilicon) + solar ETF; Chinese industrial-silicon futures trade on the Guangzhou Futures Exchange. Added to the 2025 U.S. Critical Minerals List (esp. ferroalloys); CHIPS Act demand surge; Commerce Section 232 polysilicon probe.',
+        'chokepoints': [
+            'spruce pine quartz', 'high-purity quartz', 'hpq crucible',
+            'sibelco iota', 'the quartz corp', 'drag norway quartz',
+            'xinjiang polysilicon', 'guangzhou silicon futures',
+            'wacker burghausen', 'hemlock michigan', 'daqo xinjiang',
+        ],
+        'top_producers':  ['china', 'russia', 'brazil', 'norway', 'usa', 'france', 'malaysia'],
+        'top_consumers':  ['china', 'usa', 'eu', 'japan', 'korea', 'taiwan'],
+    },
     'silver': {
         'name': 'Silver',
         'icon': '🪙',
@@ -1021,6 +1040,26 @@ COMMODITY_KEYWORDS = {
         '半導体', 'チップ', 'TSMC熊本', 'ラピダス',
         # Korean
         '반도체', '삼성전자', 'SK하이닉스',
+    ],
+    'silicon': [
+        # Core material / grades
+        'silicon', 'silicon metal', 'metallurgical silicon', 'ferrosilicon',
+        'polysilicon', 'polysilicon prices', 'silicon wafer', 'silicon ingot',
+        'solar-grade silicon', 'semiconductor-grade silicon', 'silicon carbide',
+        # Feedstock / high-purity quartz
+        'silica', 'silica sand', 'quartz', 'high-purity quartz', 'hpq',
+        'quartz crucible', 'spruce pine', 'the quartz corp', 'sibelco iota',
+        # Companies
+        'ferroglobe', 'daqo', 'daqo new energy', 'wacker chemie', 'wacker polysilicon',
+        'hemlock semiconductor', 'rec silicon', 'oci polysilicon', 'tongwei', 'gcl',
+        # Geographic / chokepoint
+        'xinjiang polysilicon', 'guangzhou silicon futures', 'drag norway',
+        # Market / policy events
+        'polysilicon dumping', 'silicon export', 'section 232 polysilicon',
+        'chips act silicon', 'silicon critical mineral', 'forced labor polysilicon',
+        'uflpa polysilicon',
+        # Chinese
+        '硅', '多晶硅', '工业硅', '硅片', '光伏',
     ],
     'silver': [
         # Producers / state actors
