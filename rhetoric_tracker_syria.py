@@ -1189,6 +1189,54 @@ def fetch_rhetoric_articles(days=3):
 # ============================================
 # CLASSIFY ARTICLES (v2.0 — multi-actor + reporting downgrade)
 # ============================================
+# ============================================================================
+# RECENCY DECAY (Jun 2026) -- old articles fade as live signals.
+# News RSS hands back articles months/years old regardless of the day window;
+# without decay an old headline pins the theatre at a live high level. A fresh
+# article scores at full strength; its contribution fades linearly to zero by
+# RECENCY_ZERO_DAYS. Estimative doctrine: stale is context, not a present-tense
+# signal. Undated items default to full weight so real-time posts are not
+# suppressed. Tunable via the two constants below. Ported from the Libya tracker.
+# ============================================================================
+RECENCY_FULL_DAYS = 7      # full strength within a week
+RECENCY_ZERO_DAYS = 45     # no live contribution past ~6 weeks
+
+
+def _parse_pub_date(published):
+    """Parse RSS/NewsAPI ISO dates and GDELT seendate; return aware datetime or None."""
+    if not published or not isinstance(published, str):
+        return None
+    val = published.strip()
+    try:
+        dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        return datetime.strptime(val, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _recency_weight(published, now=None):
+    """Recency decay weight in [0.0, 1.0] for live signal scoring."""
+    dt = _parse_pub_date(published)
+    if dt is None:
+        return 1.0
+    now = now or datetime.now(timezone.utc)
+    age_days = (now - dt).total_seconds() / 86400.0
+    if age_days <= RECENCY_FULL_DAYS:
+        return 1.0
+    if age_days >= RECENCY_ZERO_DAYS:
+        return 0.0
+    return 1.0 - (age_days - RECENCY_FULL_DAYS) / (RECENCY_ZERO_DAYS - RECENCY_FULL_DAYS)
+
+
+def _decay_level(level, weight):
+    """Apply a recency weight to a 0-5 escalation/vector level (rounded int)."""
+    return int(round((level or 0) * weight))
+
+
 def classify_articles(articles):
     """Classify articles. v2.0: multi-actor matching, reporting downgrade."""
 
@@ -1227,6 +1275,7 @@ def classify_articles(articles):
     for article in articles:
         text = f"{article.get('title', '')} {article.get('description', '')}".lower()
         pub_date = article.get('published', '')
+        _rec_w = _recency_weight(pub_date)  # recency decay weight for this article
 
         # Druze signal detection
         druze_hits = [kw for kw in DRUZE_KEYWORDS if kw in text]
@@ -1287,6 +1336,8 @@ def classify_articles(articles):
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
                             effective_level = 2
+                        effective_level = _decay_level(effective_level, _rec_w)
+                        _dlevel = _decay_level(level, _rec_w)
                         if effective_level > ar['factional_score']:
                             ar['factional_score'] = effective_level
                             ar['escalation_history'].append({
@@ -1295,8 +1346,8 @@ def classify_articles(articles):
                                 'vector': 'factional',
                                 'phrase': kw,
                             })
-                        if level > theatre_summary['factional_max_level']:
-                            theatre_summary['factional_max_level'] = level
+                        if _dlevel > theatre_summary['factional_max_level']:
+                            theatre_summary['factional_max_level'] = _dlevel
                         break
 
                 # Israeli strikes
@@ -1305,10 +1356,12 @@ def classify_articles(articles):
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
                             effective_level = 2
+                        effective_level = _decay_level(effective_level, _rec_w)
+                        _dlevel = _decay_level(level, _rec_w)
                         if effective_level > ar['israeli_strike_score']:
                             ar['israeli_strike_score'] = effective_level
-                        if level > theatre_summary['israeli_strike_max_level']:
-                            theatre_summary['israeli_strike_max_level'] = level
+                        if _dlevel > theatre_summary['israeli_strike_max_level']:
+                            theatre_summary['israeli_strike_max_level'] = _dlevel
                         break
 
                 # ISIS
@@ -1317,10 +1370,12 @@ def classify_articles(articles):
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
                             effective_level = 2
+                        effective_level = _decay_level(effective_level, _rec_w)
+                        _dlevel = _decay_level(level, _rec_w)
                         if effective_level > ar['isis_score']:
                             ar['isis_score'] = effective_level
-                        if level > theatre_summary['isis_max_level']:
-                            theatre_summary['isis_max_level'] = level
+                        if _dlevel > theatre_summary['isis_max_level']:
+                            theatre_summary['isis_max_level'] = _dlevel
                         break
 
             # Top articles
