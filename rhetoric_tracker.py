@@ -1513,6 +1513,54 @@ def classify_actor(article):
     return matched
 
 
+# ============================================================================
+# RECENCY DECAY (Jun 2026) -- old articles fade as live signals.
+# News RSS hands back articles months/years old regardless of the day window;
+# without decay an old headline pins the theatre at a live high level. A fresh
+# article scores at full strength; its contribution fades linearly to zero by
+# RECENCY_ZERO_DAYS. Estimative doctrine: stale is context, not a present-tense
+# signal. Undated items default to full weight so real-time posts are not
+# suppressed. Tunable via the two constants below. Ported from the Libya tracker.
+# ============================================================================
+RECENCY_FULL_DAYS = 7
+RECENCY_ZERO_DAYS = 45
+
+
+def _parse_pub_date(published):
+    """Parse RSS/NewsAPI ISO dates and GDELT seendate; return aware datetime or None."""
+    if not published or not isinstance(published, str):
+        return None
+    val = published.strip()
+    try:
+        dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        return datetime.strptime(val, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _recency_weight(published, now=None):
+    """Recency decay weight in [0.0, 1.0] for live signal scoring."""
+    dt = _parse_pub_date(published)
+    if dt is None:
+        return 1.0
+    now = now or datetime.now(timezone.utc)
+    age_days = (now - dt).total_seconds() / 86400.0
+    if age_days <= RECENCY_FULL_DAYS:
+        return 1.0
+    if age_days >= RECENCY_ZERO_DAYS:
+        return 0.0
+    return 1.0 - (age_days - RECENCY_FULL_DAYS) / (RECENCY_ZERO_DAYS - RECENCY_FULL_DAYS)
+
+
+def _decay_level(level, weight):
+    """Apply a recency weight to a 0-5 escalation/vector level (rounded int)."""
+    return int(round((level or 0) * weight))
+
+
 def score_vectors(text):
     """
     Score article against all 4 vectors.
@@ -2012,6 +2060,13 @@ def run_rhetoric_scan(days=3):
         # Score vectors
         vectors = score_vectors(text)
 
+        # Recency decay -- old articles fade as live signals (stale != current)
+        _rec_w = _recency_weight(article.get('publishedAt'))
+        if _rec_w < 1.0:
+            for _vk in ('ground_ops', 'rockets', 'ceasefire', 'crossborder', 'internal_fracture'):
+                _lvl, _kw = vectors[_vk]
+                vectors[_vk] = (_decay_level(_lvl, _rec_w), _kw)
+
         # Update theatre vector maxes
         if vectors['ground_ops'][0] > theatre_vectors['ground_ops_max']:
             theatre_vectors['ground_ops_max'] = vectors['ground_ops'][0]
@@ -2055,6 +2110,7 @@ def run_rhetoric_scan(days=3):
 
             # Score with actor context (v2.1 reporting downgrade)
             escalation_level, trigger_phrase = score_escalation(article, actor_id)
+            escalation_level = _decay_level(escalation_level, _rec_w)  # recency decay
 
             if escalation_level > ar['max_escalation_level']:
                 ar['max_escalation_level'] = escalation_level
