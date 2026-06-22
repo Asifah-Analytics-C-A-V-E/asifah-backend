@@ -1391,6 +1391,54 @@ def _score_specificity(text):
 # returns per-dimension max levels. Output flows to (a) the
 # cross-theater fingerprint write, and (b) the score modifier.
 # ============================================
+# ============================================================================
+# RECENCY DECAY (Jun 2026) -- old articles fade as live signals.
+# News RSS hands back articles months/years old regardless of the day window;
+# without decay an old headline pins the theatre at a live high level. A fresh
+# article scores at full strength; its contribution fades linearly to zero by
+# RECENCY_ZERO_DAYS. Estimative doctrine: stale is context, not a present-tense
+# signal. Undated items default to full weight so real-time posts are not
+# suppressed. Tunable via the two constants below. Ported from the Libya tracker.
+# ============================================================================
+RECENCY_FULL_DAYS = 7
+RECENCY_ZERO_DAYS = 45
+
+
+def _parse_pub_date(published):
+    """Parse RSS/NewsAPI ISO dates and GDELT seendate; return aware datetime or None."""
+    if not published or not isinstance(published, str):
+        return None
+    val = published.strip()
+    try:
+        dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        return datetime.strptime(val, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _recency_weight(published, now=None):
+    """Recency decay weight in [0.0, 1.0] for live signal scoring."""
+    dt = _parse_pub_date(published)
+    if dt is None:
+        return 1.0
+    now = now or datetime.now(timezone.utc)
+    age_days = (now - dt).total_seconds() / 86400.0
+    if age_days <= RECENCY_FULL_DAYS:
+        return 1.0
+    if age_days >= RECENCY_ZERO_DAYS:
+        return 0.0
+    return 1.0 - (age_days - RECENCY_FULL_DAYS) / (RECENCY_ZERO_DAYS - RECENCY_FULL_DAYS)
+
+
+def _decay_level(level, weight):
+    """Apply a recency weight to a 0-5 escalation/vector level (rounded int)."""
+    return int(round((level or 0) * weight))
+
+
 def _score_iran_regime_signals(articles):
     """
     Score each regime-signal dimension separately.
@@ -1422,14 +1470,16 @@ def _score_iran_regime_signals(articles):
         title = (article.get('title', '') or '').lower()
         desc  = (article.get('description', '') or '').lower()
         text  = f"{title} {desc}"
+        _rec_w = _recency_weight(article.get('published'))
 
         for dim, ladder in dimensions.items():
             # Find highest level matched in this article for this dimension
             for level in range(5, 0, -1):
                 phrases = ladder.get(level, [])
                 if any(phrase.lower() in text for phrase in phrases):
-                    if level > scores[dim]:
-                        scores[dim] = level
+                    _dl = _decay_level(level, _rec_w)
+                    if _dl > scores[dim]:
+                        scores[dim] = _dl
                     break
 
     scores['max'] = max(scores.values()) if scores else 0
@@ -2674,6 +2724,7 @@ def classify_articles(articles, proxy_activation_level):
     for article in articles:
         text = f"{article.get('title', '')} {article.get('description', '')}".lower()
         pub_date = article.get('published', '')
+        _rec_w = _recency_weight(pub_date)  # recency decay weight for this article
 
         # Operation True Promise detection
         otp_hits = [p for p in OPERATION_TRUE_PROMISE_PATTERNS if p in text]
@@ -2736,10 +2787,12 @@ def classify_articles(articles, proxy_activation_level):
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
                             effective_level = 2
+                        effective_level = _decay_level(effective_level, _rec_w)
+                        _dl = _decay_level(level, _rec_w)
                         if effective_level > ar['irgc_direct_score']:
                             ar['irgc_direct_score'] = effective_level
-                        if level > theatre_summary['irgc_direct_max']:
-                            theatre_summary['irgc_direct_max'] = level
+                        if _dl > theatre_summary['irgc_direct_max']:
+                            theatre_summary['irgc_direct_max'] = _dl
                         break
 
                 # Nuclear
@@ -2748,19 +2801,22 @@ def classify_articles(articles, proxy_activation_level):
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 4 and is_reporting_context:
                             effective_level = 3
+                        effective_level = _decay_level(effective_level, _rec_w)
+                        _dl = _decay_level(level, _rec_w)
                         if effective_level > ar['nuclear_score']:
                             ar['nuclear_score'] = effective_level
-                        if level > theatre_summary['nuclear_max']:
-                            theatre_summary['nuclear_max'] = level
+                        if _dl > theatre_summary['nuclear_max']:
+                            theatre_summary['nuclear_max'] = _dl
                         break
 
                 # Domestic
                 for kw in DOMESTIC_TRIGGERS.get(level, []):
                     if kw in text:
-                        if level > ar['domestic_score']:
-                            ar['domestic_score'] = level
-                        if level > theatre_summary['domestic_max']:
-                            theatre_summary['domestic_max'] = level
+                        _dl = _decay_level(level, _rec_w)
+                        if _dl > ar['domestic_score']:
+                            ar['domestic_score'] = _dl
+                        if _dl > theatre_summary['domestic_max']:
+                            theatre_summary['domestic_max'] = _dl
                         break
 
                 # Regional
@@ -2769,26 +2825,30 @@ def classify_articles(articles, proxy_activation_level):
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 3 and is_reporting_context:
                             effective_level = 2
+                        effective_level = _decay_level(effective_level, _rec_w)
+                        _dl = _decay_level(level, _rec_w)
                         if effective_level > ar['regional_score']:
                             ar['regional_score'] = effective_level
-                        if level > theatre_summary['regional_max']:
-                            theatre_summary['regional_max'] = level
+                        if _dl > theatre_summary['regional_max']:
+                            theatre_summary['regional_max'] = _dl
                         break
 
                 # Soft Power / Influence Operations
                 for kw in SOFT_POWER_KEYWORDS.get(level, []):
                     if kw in text:
-                        if level > ar['soft_power_score']:
-                            ar['soft_power_score'] = level
-                        if level > theatre_summary['soft_power_max']:
-                            theatre_summary['soft_power_max'] = level
+                        _dl = _decay_level(level, _rec_w)
+                        if _dl > ar['soft_power_score']:
+                            ar['soft_power_score'] = _dl
+                        if _dl > theatre_summary['soft_power_max']:
+                            theatre_summary['soft_power_max'] = _dl
                         break
 
                 # ── v1.1: Diplomatic Track (de-escalation, REDUCES pressure) ──
                 for kw in DIPLOMATIC_TRIGGERS.get(level, []):
                     if kw in text:
-                        if level > theatre_summary['diplomatic_max']:
-                            theatre_summary['diplomatic_max'] = level
+                        _dl = _decay_level(level, _rec_w)
+                        if _dl > theatre_summary['diplomatic_max']:
+                            theatre_summary['diplomatic_max'] = _dl
                         break
 
     # Per-actor finalization
