@@ -29,7 +29,7 @@ DOCTRINE  (analyst layer -- estimative voice, convergence-not-prediction)
   instruments agreeing (here: a static supply-chain map + a live macro feed),
   not with stacked severity inside one feed.
 
-ENDPOINTS (registered via register_convergence_endpoints(app))
+ENDPOINTS (registered via register_commodity_convergence_endpoints(app))
   GET /api/commodity-structural-convergence
         Full join: every commodity that has >=1 convergence cell.
   GET /api/commodity-structural-convergence/<commodity>
@@ -449,7 +449,7 @@ def build_single_commodity(commodity_id, min_severity=MIN_SEVERITY):
 # ------------------------------------------------------------
 # Flask registration (canonical Asifah pattern)
 # ------------------------------------------------------------
-def register_convergence_endpoints(app):
+def register_commodity_convergence_endpoints(app):
     """Register the commodity x structural convergence endpoints on `app`."""
     from flask import jsonify, request
 
