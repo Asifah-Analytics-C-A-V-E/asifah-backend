@@ -56,7 +56,7 @@ DESIGN PRINCIPLES (lifted from military interpreter):
 from __future__ import annotations
 from datetime import datetime, timezone
 
-INTERPRETER_VERSION = '1.0.0'
+INTERPRETER_VERSION = '1.1.0'   # v1.1.0 Jun 22 2026 - structural-convergence fusion line
 
 # ══════════════════════════════════════════════════════════════
 # REGION CANON (alphabetical, full diplomatic names per Coco)
@@ -315,7 +315,87 @@ def _pretty_country(country_id):
 # EXECUTIVE SUMMARY BUILDER
 # ══════════════════════════════════════════════════════════════
 
-def build_executive_summary(scan_result):
+def _convergence_fusion_line(scan_result, convergence=None):
+    """
+    AT MOST ONE estimative compound line fusing two INDEPENDENT instruments:
+    live news-signal pressure (scan_result) and World Bank structural stress
+    (commodity_structural_convergence). Fires ONLY when a commodity is BOTH at
+    high/surge news-signal pressure AND carries >=1 structural-convergence cell.
+
+    Names up to two pairings with DISTINCT stressed countries, so a single
+    stressed country that fans across many commodities (e.g. Egypt) is mentioned
+    once, not repeatedly. Convergence-not-prediction: describes co-occurrence,
+    forecasts nothing. Soft-fail by construction -- any missing field, feed, or
+    import returns '' and the executive summary renders exactly as before.
+
+    The build_convergence import is intentionally LAZY (call-time, not module
+    top): commodity_structural_convergence imports commodity_tracker, which
+    imports THIS interpreter -- a top-level import here would be circular.
+    """
+    try:
+        summaries = _safe_dict(_safe_dict(scan_result).get('commodity_summaries'))
+        if not summaries:
+            return ''
+
+        # Commodities at high/surge news-signal pressure (rank >= 3).
+        pressured = {}
+        for cid, sm in summaries.items():
+            if isinstance(sm, dict) and _alert_rank(sm.get('alert_level')) >= 3:
+                pressured[cid] = _alert_rank(sm.get('alert_level'))
+        if not pressured:
+            return ''
+
+        # Structural convergence -- injected by caller, else computed lazily.
+        if convergence is None:
+            try:
+                from commodity_structural_convergence import build_convergence
+                convergence = build_convergence()
+            except Exception:
+                return ''
+        if not isinstance(convergence, dict) or not convergence.get('structural_feed_present'):
+            return ''
+
+        # Pair pressured commodities with their structural cells.
+        pairings = []
+        for c in (convergence.get('commodities') or []):
+            cid = c.get('commodity')
+            cells = c.get('cells') or []
+            if cid in pressured and cells:
+                pairings.append((pressured[cid], cells[0].get('stress_severity', 0), c, cells[0]))
+        if not pairings:
+            return ''
+
+        # Strongest first: news-signal rank, then structural severity.
+        pairings.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+        # Up to two pairings, each a DISTINCT stressed country (Egypt-cap).
+        seen = set()
+        phrases = []
+        for _rank, _sev, c, cell in pairings:
+            country = cell.get('country')
+            if not country or country in seen:
+                continue
+            seen.add(country)
+            cname = (c.get('name') or c.get('commodity') or '').lower()
+            ctry = cell.get('country_name') or country.replace('_', ' ').title()
+            role = (cell.get('role') or 'exposed').replace('_', ' ')
+            phrases.append(f"{cname} ({ctry}, a structurally stressed {role})")
+            if len(phrases) >= 2:
+                break
+        if not phrases:
+            return ''
+
+        return (
+            "\U0001f310 Convergence overlay: among commodities under pressure this "
+            f"scan, {_natural_join(phrases)} \u2014 commodity exposure and independent "
+            "World Bank structural stress stacking in the same country. Read together, "
+            "not as a forecast."
+        )
+    except Exception:
+        return ''
+
+
+def build_executive_summary(scan_result, convergence=None):
     """
     Build a 1–3 sentence top-line BLUF for the commodity tracker.
 
@@ -407,6 +487,14 @@ def build_executive_summary(scan_result):
             "Global commodity pressure at baseline. No surge-level or "
             "high-pressure signals across the 22 tracked commodities this scan."
         )
+
+    # -- Structural-convergence fusion (v1.1.0) --
+    # One compound line when a commodity under pressure ALSO has a structural
+    # cell. Only augments an existing pressure picture (parts already non-empty).
+    if parts:
+        _fusion = _convergence_fusion_line(scan_result, convergence)
+        if _fusion:
+            parts.append(_fusion)
 
     return ' '.join(parts)
 
