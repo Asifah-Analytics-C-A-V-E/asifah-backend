@@ -56,7 +56,7 @@ DESIGN PRINCIPLES (lifted from military interpreter):
 from __future__ import annotations
 from datetime import datetime, timezone
 
-INTERPRETER_VERSION = '1.1.0'   # v1.1.0 Jun 22 2026 - structural-convergence fusion line
+INTERPRETER_VERSION = '1.1.1'   # v1.1.1 Jun 23 2026 - scrub: dynamic commodity count + sorted elevated fallback (anti-pinning)
 
 # ══════════════════════════════════════════════════════════════
 # REGION CANON (alphabetical, full diplomatic names per Coco)
@@ -473,6 +473,9 @@ def build_executive_summary(scan_result, convergence=None):
             if isinstance(summary, dict)
             and _alert_rank(summary.get('alert_level')) == 2
         ]
+        # Busiest-first so fresh elevated signals rise; dict order would otherwise
+        # pin whichever commodities sit earliest in the tracked roster.
+        elevated.sort(key=lambda x: -x[1].get('total_score', 0))
         if elevated:
             names = [
                 _commodity_display_name(s) or cid
@@ -483,9 +486,11 @@ def build_executive_summary(scan_result, convergence=None):
                 f"{_natural_join(names)} showing above-routine signal "
                 f"activity but no commodity is in surge or high tier."
             )
+        n_tracked = sum(1 for s in commodity_summaries.values() if isinstance(s, dict))
+        scope = f"the {n_tracked} tracked commodities" if n_tracked else "all tracked commodities"
         return (
             "Global commodity pressure at baseline. No surge-level or "
-            "high-pressure signals across the 22 tracked commodities this scan."
+            f"high-pressure signals across {scope} this scan."
         )
 
     # -- Structural-convergence fusion (v1.1.0) --
