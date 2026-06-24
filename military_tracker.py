@@ -253,8 +253,8 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'denmark', 'turkey', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary'],
-        'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Cyprus, Caucasus'
+        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary'],
+        'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Greece/Aegean, Cyprus, Caucasus'
     },
     'middle_east': {
         'label': 'Middle East & North Africa',
@@ -1829,6 +1829,47 @@ MILITARY_ACTORS = {
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=cyprus+military+OR+akrotiri+OR+attack+OR+evacuation&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+    'greece': {
+        'name': 'Greece',
+        'flag': '🇬🇷',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # Hellenic armed forces
+            'greece military', 'greek armed forces', 'hellenic army',
+            'hellenic navy', 'hellenic air force', 'greek defense', 'greek defence',
+            'greek general staff', 'greece mobilization', 'greece mobilisation',
+            # Aegean / Greece-Turkey dyad
+            'greece turkey tensions', 'aegean dispute', 'aegean airspace',
+            'aegean overflight', 'turkish overflight aegean', 'greek airspace violation',
+            'greece turkey dogfight', 'greek f-16', 'greek rafale', 'greek mirage 2000',
+            'casus belli aegean', 'imia islet', 'kastellorizo', 'greek islands militarization',
+            # Evros land border
+            'evros border', 'evros greece turkey', 'evros militarization',
+            'greek border guards', 'evros migrants', 'greece migrants pushback',
+            # Air defense / hardware
+            'greek s-300', 's-300 crete', 'greek patriot', 'belharra frigate',
+            'kimon frigate', 'greek navy frigate', 'greek submarine fleet',
+            # Bases (US / NATO)
+            'souda bay', 'souda bay crete', 'nsa souda bay', 'larissa air base',
+            'andravida air base', 'stefanovikio', 'alexandroupoli port',
+            # Cyprus / Eastern Med projection
+            'greece deploy cyprus', 'greek jets cyprus', 'greece cyprus military',
+            'greek f-16 cyprus', 'eastern mediterranean greece', 'greece eez',
+            'greece libya maritime', 'greece egypt eez', 'greece france defense',
+            'greece nato', 'greece israel defense',
+            # Greek-language keywords
+            'ελληνικός στρατός',
+            'πολεμική αεροπορία',
+            'αιγαίο', 'ελληνοτουρκικά',
+            'εθνική άμυνα', 'ένοπλες δυνάμεις',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=greece+military+OR+aegean+OR+hellenic+OR+evros+OR+%22greece+turkey%22&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -4262,6 +4303,11 @@ ASSET_TARGET_MAPPING = {
             'location': 'Cyprus (Paphos)',
             'targets': ['cyprus'],
             'description': 'Cypriot/Greek Air Force. Eastern Med.'
+        },
+        'Souda Bay (NSA Crete)': {
+            'location': 'Greece (Crete)',
+            'targets': ['greece'],
+            'description': 'US Navy / NATO naval support activity + air base. Eastern Med power projection.'
         },
         'Nakhchivan': {
             'location': 'Azerbaijan (exclave)',
