@@ -1527,6 +1527,12 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'manganese':    {'role': 'producer',          'weight': 1.0, 'rank': 3,
                          'note': "World's #3 manganese producer historically; GEMCO (South32 Groote Eylandt Mining Company, Northern Territory) was one of the world's largest single manganese operations. CYCLONE MEGAN (March 2024) caused severe damage to GEMCO infrastructure including the haul road and wharf — partial recovery ongoing through 2025-2026. Bootu Creek + Element 25 (Butcherbird, WA) are secondary operations. Australian outage redirected global manganese flow toward South Africa + Gabon. Watch: South32 GEMCO recovery timeline (ASX:S32), Element 25 production ramp."},
     },
+    'azerbaijan': {
+        'oil':          {'role': 'producer',          'weight': 1.0, 'data_as_of': '2026-06',
+                         'note': "Caspian crude anchor (~600-700k bpd; the BP-operated Azeri-Chirag-Gunashli mega-complex, on a gradual decline). The Baku-Tbilisi-Ceyhan (BTC) pipeline is the strategically pivotal asset -- the only major westbound Caspian crude artery that bypasses BOTH Russia and Iran, delivering Azeri light crude to Ceyhan on Turkey's Mediterranean coast. SOCAR is the state operator. STRATEGIC LINKAGE: Azerbaijan supplies on the order of ~40% of Israel's crude (BTC -> Ceyhan -> tanker) -- a quiet but consequential energy-security tie. Watch: BP ACG production guidance, BTC throughput, SOCAR export statistics, Ceyhan loadings."},
+        'natural_gas':  {'role': 'producer',          'weight': 1.2, 'data_as_of': '2026-06',
+                         'note': "Shah Deniz (BP-operated) feeds the Southern Gas Corridor -- SCP -> TANAP (Turkey) -> TAP (Greece-Albania-Italy) -- the EU's flagship non-Russian gas diversification route. The July 2022 EU-Azerbaijan MoU aims to roughly DOUBLE SGC deliveries toward ~20 bcm/yr by 2027, making Azerbaijan a strategically outsized (if volumetrically modest) European supplier. Also a Middle Corridor / Trans-Caspian transit node for Turkmen and Kazakh volumes. Watch: Shah Deniz Stage 2/3 ramp, TAP expansion, EU-Azerbaijan SGC volume commitments, SOCAR gas export data."},
+    },
     'belarus': {
         'potash':       {'role': 'producer',         'weight': 1.2, 'rank': 3,
                          'note': 'Belaruskali, sanctioned 2021, rebuilt via Russian ports + China rail'},
@@ -1770,6 +1776,12 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "K+S AG (Kassel) is one of the world's leading potash and salt producers -- German mines (Werra, Zielitz) plus the Bethune mine in Canada -- a Western fertilizer anchor alongside Canada, Belarus, and Russia. Potash processing is energy-intensive, so German power costs feed directly into output economics."},
         'copper':       {'role': 'consumer',           'weight': 0.9,
                          'note': "Aurubis (Hamburg) is Europe's largest copper smelter and recycler -- a processing node converting concentrate and scrap into refined copper for German industry. Exposure runs to concentrate supply (treatment/refining charges) and energy costs, not mine ownership."},
+    },
+    'greece': {
+        'oil':          {'role': 'transit',           'weight': 1.0, 'data_as_of': '2026-06',
+                         'note': "FLOW, NOT STOCK: Greece produces almost no crude but owns the world's LARGEST merchant fleet by deadweight tonnage -- Greek shipowners control a very large share of the global crude- and product-tanker fleet -- so Greek exposure is to FREIGHT RATES and chokepoint reroutes, not wellhead output. A Red Sea (Bab-el-Mandeb) or Hormuz disruption forcing Cape-of-Good-Hope reroutes hits Greek owners' economics directly. Plus domestic refining/bunkering (HELLENiQ Energy [ex-Hellenic Petroleum], Motor Oil Hellas at Corinth) and Aegean bunker hubs. Watch: Baltic Dirty/Clean tanker indices, Greek-owned fleet-share data, Red Sea/Hormuz reroute signals, HELLENiQ/Motor Oil refining runs."},
+        'natural_gas':  {'role': 'transit',           'weight': 0.8, 'data_as_of': '2026-06',
+                         'note': "Emerging South-East Europe gas gateway: the Trans Adriatic Pipeline (TAP) lands Azeri Shah Deniz gas en route to Italy; the Revithoussa LNG terminal and the new Alexandroupoli FSRU (offshore northern Greece) import LNG for onward flow into the Balkans; and the Greece-Bulgaria IGB interconnector links the network northward. Greece's role is corridor / regasification, not production. Watch: Alexandroupoli FSRU throughput, Revithoussa send-out, TAP flows, IGB utilization."},
     },
     'guinea': {
         'bauxite':      {'role': 'producer',          'weight': 1.5, 'rank': 2,
