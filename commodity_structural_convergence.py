@@ -80,9 +80,10 @@ CONVERGENCE_DISCLAIMER = (
 # both simply never join, which is honest absence, not an error.
 SLUG_TO_ISO3 = {
     'algeria': 'DZA', 'angola': 'AGO', 'argentina': 'ARG', 'australia': 'AUS',
+    'azerbaijan': 'AZE',
     'belarus': 'BLR', 'belgium': 'BEL', 'botswana': 'BWA', 'brazil': 'BRA',
     'canada': 'CAN', 'chile': 'CHL', 'china': 'CHN', 'cuba': 'CUB',
-    'drc': 'COD', 'egypt': 'EGY', 'france': 'FRA', 'germany': 'DEU',
+    'drc': 'COD', 'egypt': 'EGY', 'france': 'FRA', 'germany': 'DEU', 'greece': 'GRC',
     'guinea': 'GIN', 'hungary': 'HUN', 'india': 'IND', 'indonesia': 'IDN',
     'iran': 'IRN', 'israel': 'ISR', 'japan': 'JPN', 'jordan': 'JOR',
     'kazakhstan': 'KAZ', 'lebanon': 'LBN', 'libya': 'LBY', 'malaysia': 'MYS',
