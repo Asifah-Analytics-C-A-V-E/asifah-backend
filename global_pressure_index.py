@@ -1786,16 +1786,22 @@ def _narrative_turkey_regional_convergence(blufs):
       - turkey:theater_footprints  active projection theaters (ME). Turkey pushing
                                    hard-power/economic/diplomatic INTO a theater.
                                    Live writers: libya (spoke #1), syria (spoke #2).
+      - crosstheater['turkey']     the Turkey tracker's OWN read of relationships it
+                                   tracks but the theater does not: israel_friction
+                                   (Israel friction node) + lebanon_vector (Lebanon
+                                   projection node). Israel/Lebanon carry no native
+                                   Turkey actor, so this slice is their honest source.
+                                   Freshness-gated (<=48h) -- a stale slice is skipped.
 
-    Absence-honest: nodes that are not written are skipped. New projection theaters
-    (e.g. lebanon) join automatically -- the whole footprints dict is iterated; new
-    periphery spokes (e.g. israel) join the moment they appear in PERIPHERY_SPOKES.
+    Absence-honest: unwritten nodes are skipped, and a theater sourced twice is
+    de-duplicated to the hottest read. New projection theaters join automatically
+    (the footprints dict is iterated); new periphery spokes join via PERIPHERY_SPOKES.
 
     GATE (tunable): a genuine cross-theater convergence requires breadth, not a
     single hot spot. Fires when >=3 theaters are active (L2+), OR >=2 active spanning
     BOTH a projection theater AND a peripheral one. Otherwise stays silent.
     """
-    PERIPHERY_SPOKES = ['greece', 'cyprus', 'azerbaijan', 'israel']  # israel auto-joins when it writes
+    PERIPHERY_SPOKES = ['greece', 'cyprus', 'azerbaijan']  # spoke:turkey:<c> writers (Israel arrives via the self-slice, block 3)
     ACTIVE_LEVEL     = 2     # L2+ = concrete moves, not declaratory rhetoric
     REL_LABEL = {
         'peer_rivalry': 'rivalry', 'rivalry': 'rivalry',
@@ -1830,6 +1836,54 @@ def _narrative_turkey_regional_convergence(blufs):
                 'descriptor': str(fp.get('mode', 'dormant')).lower(),
                 'top':        (fp.get('top_phrases') or [''])[0],
             })
+
+    # 3) Turkey self-slice -- rhetoric:crosstheater:fingerprints['turkey']. The Turkey
+    #    tracker's own read of relationships the theater trackers do NOT carry: Israel
+    #    (friction) and Lebanon (projection vector). Israel/Lebanon have no native Turkey
+    #    actor, so this slice is their honest source. Freshness-gated to <=48h.
+    FRESH_HOURS           = 48
+    ISRAEL_FRICTION_LEVEL = {'normal': 0, 'simmering': 1, 'elevated': 2, 'high': 3}
+    LEBANON_VECTOR_LEVEL  = {'dormant': 0, 'rhetoric': 1, 'soft_power': 2,
+                             'economic': 2, 'security': 3, 'kinetic_risk': 4}
+    LEBANON_VECTOR_MODE   = {'dormant': 'dormant', 'rhetoric': 'diplomatic',
+                             'soft_power': 'soft_power', 'economic': 'economic',
+                             'security': 'hard_power', 'kinetic_risk': 'hard_power'}
+    _ct = _redis_get('rhetoric:crosstheater:fingerprints')
+    _tk = _ct.get('turkey') if isinstance(_ct, dict) else None
+    if isinstance(_tk, dict):
+        _fresh = False
+        try:
+            _age_h = (datetime.now(timezone.utc)
+                      - datetime.fromisoformat(_tk['ts'])).total_seconds() / 3600.0
+            _fresh = _age_h <= FRESH_HOURS
+        except Exception:
+            _fresh = False
+        if _fresh:
+            _isr = str(_tk.get('israel_friction', 'normal')).lower()
+            nodes.append({
+                'theater':    'israel',
+                'level':      ISRAEL_FRICTION_LEVEL.get(_isr, 0),
+                'kind':       'periphery',
+                'descriptor': 'friction',
+                'top':        'Turkey-Israel friction: ' + _isr,
+            })
+            _lv = str(_tk.get('lebanon_vector', 'dormant')).lower()
+            nodes.append({
+                'theater':    'lebanon',
+                'level':      max(LEBANON_VECTOR_LEVEL.get(_lv, 0),
+                                  _safe_level(_tk.get('lebanon_vector_stage', 0))),
+                'kind':       'projection',
+                'descriptor': LEBANON_VECTOR_MODE.get(_lv, 'dormant'),
+                'top':        'Turkey-Lebanon vector: ' + _lv,
+            })
+
+    # De-duplicate by theater (a theater sourced twice -> keep the hottest read)
+    _best = {}
+    for _n in nodes:
+        _cur = _best.get(_n['theater'])
+        if _cur is None or _n['level'] > _cur['level']:
+            _best[_n['theater']] = _n
+    nodes = list(_best.values())
 
     if not nodes:
         return None
