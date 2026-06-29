@@ -484,6 +484,104 @@ def _extract_commodity_signals(scan_data):
     }
 
 
+def _extract_gaza_wb_signals(scan_data):
+    """
+    Country-altitude So-What read for the reframed Gaza + West Bank lanes
+    (June 2026 ceasefire era). Estimative voice ONLY -- consistent with /
+    historically precedes / likely indicates. No probabilities, dates, or 'will'.
+
+    Gaza: ceasefire-phase proxy posture (disarmament defiance vs rearm/rebuild).
+    West Bank: DUAL READ -- Iran-activation (the threat signal that feeds the
+    Iran wheel) vs destabilization tinder (settler violence + PA fiscal stress),
+    which is context, NOT a threat level on its own. The compound read is when
+    both co-occur.
+    """
+    actors = scan_data.get('actors', {})
+    gz = actors.get('hamas_gaza', {})
+    wb = actors.get('west_bank_civil', {})
+    gz_level = gz.get('max_level', 0)
+    wb_level = wb.get('max_level', 0)
+
+    def _titles(a):
+        return ' '.join((art.get('title') or '').lower()
+                        for art in a.get('top_articles', []))
+    gz_txt = _titles(gz)
+    wb_txt = _titles(wb)
+
+    sit = []
+    indicator_text = ''
+
+    # ---- Gaza: ceasefire-phase proxy read ----
+    GZ_DISARM = ('disarm', 'decommission', 'board of peace', 'mladenov')
+    GZ_REARM  = ('rearm', 'rebuild', 'tunnel', 'smuggl')
+    GZ_VIOL   = ('violation', 'ceasefire breach', 'reinvade', 'strike gaza')
+    if gz_level >= 2 or gz.get('statement_count', 0) >= 3:
+        if any(k in gz_txt for k in GZ_DISARM):
+            sit.append(
+                'In Gaza, Hamas signaling is consistent with refusal to decommission under '
+                'the Board of Peace framework -- the disarmament deadlock that has historically '
+                'preceded ceasefire-phase breakdown.'
+            )
+        elif any(k in gz_txt for k in GZ_REARM):
+            sit.append(
+                'In Gaza, rebuild and rearm signals are consistent with proxy reconstitution '
+                'during the ceasefire pause rather than de-escalation.'
+            )
+        elif any(k in gz_txt for k in GZ_VIOL):
+            sit.append(
+                'In Gaza, ceasefire-violation signals are present -- consistent with a brittle '
+                'rather than a consolidating truce.'
+            )
+        else:
+            sit.append(
+                'Gaza proxy signal is active (L%d) without a clear disarmament or rearm flavor '
+                'this cycle.' % gz_level
+            )
+
+    # ---- West Bank: dual read (Iran-activation vs destabilization tinder) ----
+    WB_ACTIVATION = ('islamic jihad', 'pij', 'jenin battalion', 'tulkarm', 'nur shams',
+                     'lions den', 'smuggl', 'weapons cache', 'cell', 'foiled', 'irgc')
+    WB_TINDER = ('settler', 'jewish terror', 'authority collapse', 'clearance revenue',
+                 'palestinian banks', 'annexation', 'outpost')
+    wb_has_act = any(k in wb_txt for k in WB_ACTIVATION)
+    wb_has_tin = any(k in wb_txt for k in WB_TINDER)
+
+    if wb_has_act and wb_has_tin:
+        sit.append(
+            'In the West Bank, Iran-aligned faction activity (smuggling / cell signals) is '
+            'co-occurring with destabilization tinder (settler violence, PA fiscal stress) -- '
+            'the compound pattern that has historically preceded a widening security vacuum.'
+        )
+        indicator_text = (
+            'West Bank shows BOTH Iran-activation and destabilization tinder this cycle -- '
+            'the co-occurrence is the compound read, not two separate stories.'
+        )
+    elif wb_has_act:
+        sit.append(
+            'In the West Bank, faction activity is consistent with Iran\'s stated third-front '
+            'effort -- smuggling and cell signals have historically preceded attack-cell maturation.'
+        )
+    elif wb_has_tin:
+        sit.append(
+            'In the West Bank, the active signal is destabilization tinder (settler violence, '
+            'PA fiscal stress) -- on its own a civil-unrest read; it compounds only if Iran-aligned '
+            'faction activation co-occurs.'
+        )
+
+    watch_text = ''
+    if gz_level >= 2 or wb_level >= 2:
+        watch_text = ('Gaza disarmament-track collapse signals; West Bank smuggling-route or '
+                      'cell-dismantlement reporting (Iran third-front maturation)')
+
+    situation_text = ' '.join(sit)
+    return {
+        'has_signal':     bool(situation_text),
+        'situation_text': situation_text,
+        'indicator_text': indicator_text,
+        'watch_text':     watch_text,
+    }
+
+
 def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     """
     Generate plain-language executive assessment from current signals.
@@ -651,6 +749,16 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
             indicators.insert(0, commodity_signals['indicator_text'])  # Prepend — high-priority signal
         if commodity_signals.get('watch_text'):
             watch_items.insert(0, commodity_signals['watch_text'])
+
+    # -- Gaza + West Bank ceasefire-era read (June 2026; estimative voice) --
+    gaza_wb = _extract_gaza_wb_signals(scan_data)
+    if gaza_wb.get('has_signal'):
+        if gaza_wb.get('situation_text'):
+            situation_parts.append(gaza_wb['situation_text'])
+        if gaza_wb.get('indicator_text'):
+            indicators.append(gaza_wb['indicator_text'])
+        if gaza_wb.get('watch_text'):
+            watch_items.append(gaza_wb['watch_text'])
 
     return {
         'scenario':          scenario,
