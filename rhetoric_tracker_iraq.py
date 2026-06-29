@@ -1423,6 +1423,126 @@ def _calculate_rhetoric_score(actor_results, theatre_summary):
 # ============================================
 # MAIN SCAN (v2.0)
 # ============================================
+# ============================================================
+# TURKEY PROJECTION FOOTPRINT -- Iraq is spoke #3 of the Erdogan
+# wheel (Libya = #1, Syria = #2). Iraq has NO dedicated Turkey actor
+# (Turkish activity is folded into the KRG actor + kurdish vector) and
+# actor levels here are vector-scored, so unlike Libya/Syria this node
+# derives the Turkey level INTERNALLY by scoring Turkey-in-Iraq articles
+# against a focused cross-border-operations ladder. Writes
+# turkey:theater_footprints['iraq'] for the GPI Turkey-convergence
+# detector to read across theaters. DISTINCT from fingerprint:turkey:*
+# (Turkey writing ABOUT itself); this is the theater observing what
+# Turkey is DOING IN Iraq.
+# ============================================================
+TURKEY_FOOTPRINTS_KEY = 'turkey:theater_footprints'
+
+# An article counts as Turkey-in-Iraq only if it pairs a Turkey token with
+# an Iraq/Kurdistan-theater token (filters out generic Turkey noise).
+_TK_TOKENS = ('turkey', 'turkish', 'ankara', 'erdogan', 'turkiye')
+_IRAQ_THEATER_TOKENS = ('iraq', 'kurdistan', 'pkk', 'peshmerga', 'erbil',
+                        'duhok', 'dohuk', 'sinjar', 'shingal', 'kirkuk', 'bashiqa',
+                        'qandil', 'metina', 'avashin', 'ceyhan', 'zilkan', 'sulaymaniyah')
+
+# Focused escalation ladder for Turkish cross-border operations in Iraq.
+# Highest matched band wins; ASCII-only.
+TURKEY_IRAQ_LADDER = {
+    5: ['major incursion', 'large-scale operation', 'invasion of iraq', 'occupation of iraqi',
+        'summons turkish ambassador', 'sovereignty violation', 'declares war'],
+    4: ['killed in turkish', 'peshmerga killed', 'civilians killed', 'turkish strike kills',
+        'clashes with turkish', 'shot down turkish drone', 'turkish soldiers killed',
+        'soldiers killed in iraq'],
+    3: ['ground operation', 'ground offensive', 'new turkish base', 'troop deployment',
+        'claw operation', 'operation claw', 'cross-border ground', 'turkish offensive',
+        'forward operating base'],
+    2: ['airstrike', 'air strike', 'drone strike', 'shelling', 'artillery',
+        'bombed pkk', 'struck pkk', 'targeted pkk', 'turkish jets', 'air raid'],
+    1: ['will not tolerate', 'threatens', 'vowed to', 'warned', 'right to strike',
+        'will act against pkk', 'condemns pkk'],
+}
+
+TURKEY_IRAQ_OBJECTIVE_TAGS = {
+    'anti_pkk_ops':         ['pkk', 'qandil', 'metina', 'avashin', 'claw operation',
+                             'operation claw', 'kurdistan workers'],
+    'base_presence':        ['bashiqa', 'zilkan', 'turkish base', 'forward operating base',
+                             'military outpost'],
+    'energy_leverage':      ['ceyhan', 'pipeline', 'oil exports', 'crude exports', 'kirkuk oil'],
+    'sovereignty_friction': ['iraqi sovereignty', 'baghdad protest', 'summons', 'withdraw troops',
+                             'condemned', 'sovereignty violation'],
+    'sinjar_ops':           ['sinjar', 'shingal', 'yazidi'],
+}
+TURKEY_IRAQ_MODE_BY_TAG = {
+    'anti_pkk_ops': 'hard_power', 'base_presence': 'hard_power', 'sinjar_ops': 'hard_power',
+    'energy_leverage': 'economic',
+    'sovereignty_friction': 'diplomatic',
+}
+
+
+def _is_turkey_iraq(text):
+    return any(tk in text for tk in _TK_TOKENS) and any(k in text for k in _IRAQ_THEATER_TOKENS)
+
+
+def _write_turkey_footprint(result, articles):
+    """
+    PROJECTION NODE -- spoke #3 (Iraq). Writes Turkey's Iraq footprint to the shared
+    turkey:theater_footprints key so the GPI Turkey-convergence detector reads it across
+    theaters (Libya = #1, Syria = #2). Iraq has no dedicated Turkey actor, so the level
+    is derived here by scoring Turkey-in-Iraq articles against TURKEY_IRAQ_LADDER.
+    Schema: { ts, theater, level, top_phrases[], objective_tags[], mode }.
+    """
+    try:
+        tk_texts = []
+        top_phrases = []
+        for art in articles:
+            text = ("%s %s" % (art.get('title', ''), art.get('description', ''))).lower()
+            if not _is_turkey_iraq(text):
+                continue
+            tk_texts.append(text)
+            if len(top_phrases) < 3:
+                ttl = str(art.get('title', ''))
+                if ttl:
+                    top_phrases.append(ttl[:80])
+
+        level = 0
+        for text in tk_texts:
+            for lvl in (5, 4, 3, 2, 1):
+                if lvl <= level:
+                    break
+                if any(p in text for p in TURKEY_IRAQ_LADDER[lvl]):
+                    level = lvl
+                    break
+            if level >= 5:
+                break
+
+        blob = ' '.join(tk_texts)
+        objective_tags = [tag for tag, kws in TURKEY_IRAQ_OBJECTIVE_TAGS.items()
+                          if any(k in blob for k in kws)]
+        mode = 'dormant'
+        for pref in ('hard_power', 'economic', 'diplomatic'):
+            if any(TURKEY_IRAQ_MODE_BY_TAG.get(t) == pref for t in objective_tags):
+                mode = pref
+                break
+        # L2+ ladder bands are kinetic (strikes / ground ops / clashes) -> hard-power by
+        # nature; an escalatory event reads hard_power even if no specific tag keyword hit.
+        if mode == 'dormant' and level >= 2:
+            mode = 'hard_power'
+
+        existing = _redis_get(TURKEY_FOOTPRINTS_KEY) or {}
+        existing['iraq'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theater': 'iraq',
+            'level': level,
+            'top_phrases': top_phrases,
+            'objective_tags': objective_tags,
+            'mode': mode,
+        }
+        _redis_set(TURKEY_FOOTPRINTS_KEY, existing, ttl=24 * 3600)
+        print("[Iraq Rhetoric] Turkey footprint written (level %d, mode %s, tags %s)"
+              % (level, mode, objective_tags))
+    except Exception as e:
+        print("[Iraq Rhetoric] Turkey footprint write error: %s" % e)
+
+
 def run_iraq_rhetoric_scan(days=3):
     """Full Iraq rhetoric scan. v2.0: adds delta, specificity, baselines, cross-theater."""
     print(f"\n[Iraq Rhetoric] ═══ Starting scan v2.0 (days={days}) ═══")
@@ -1524,6 +1644,7 @@ def run_iraq_rhetoric_scan(days=3):
 
     # Cross-theater
     _write_crosstheater_signal(result)
+    _write_turkey_footprint(result, articles)   # Projection-Node spoke #3 (Iraq)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
     # Signal interpretation
