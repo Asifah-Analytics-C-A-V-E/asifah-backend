@@ -1646,7 +1646,11 @@ def _compute_proxy_activation_index():
             return 0, {'reason': 'No cross-theater data available', 'proxies': {}}
 
         now = datetime.now(timezone.utc)
-        proxy_theaters = ['yemen', 'lebanon', 'iraq', 'syria']
+        # Proxy set (post-Dec-2024): Syria REMOVED -- it is the ruptured corridor,
+        # not a live limb (its L2+ now reflects HTS/Sharaa/Turkey-Gulf forces hostile
+        # to Tehran). Gaza + West Bank added (slices written by the Israel tracker).
+        # Aligns this altitude-1 index with the GPI Iran-axis recompute.
+        proxy_theaters = ['yemen', 'lebanon', 'iraq', 'gaza', 'west_bank']
         fresh_proxies = {}
 
         for name in proxy_theaters:
@@ -1701,10 +1705,26 @@ def _compute_proxy_activation_index():
         if shared_targets and level < 5:
             level = min(level + 1, 5)
 
+        # Syria = ruptured corridor: read SEPARATELY, surfaced not counted. A fresh
+        # L2+ Syria signal now means the severed land bridge is active with forces
+        # hostile to Tehran -- the honest read is "N proxies active WHILE the Syrian
+        # corridor is severed," never "N+1 proxies active."
+        syria_fp = fingerprints.get('syria', {})
+        syria_ruptured = False
+        try:
+            if syria_fp and (now - datetime.fromisoformat(syria_fp['ts'])).total_seconds() / 3600 <= 24 \
+               and syria_fp.get('level', 0) >= 2:
+                syria_ruptured = True
+        except Exception:
+            pass
+
         detail = {
             'elevated_proxies': {k: v.get('level', 0) for k, v in elevated_proxies.items()},
             'fresh_proxies': list(fresh_proxies.keys()),
             'missing_proxies': [p for p in proxy_theaters if p not in fresh_proxies],
+            'syria_ruptured': syria_ruptured,
+            'syria_status': ('severed land bridge -- active but counted OUT of Axis activation'
+                             if syria_ruptured else 'no fresh ruptured-corridor signal'),
             'shared_phrases': list(shared_phrases.keys())[:5],
             'shared_targets': list(shared_targets.keys())[:5],
             'synchronized_language': len(shared_phrases) > 0,
@@ -1834,7 +1854,9 @@ def _compute_unity_of_fronts(fingerprints=None, iran_result=None):
             return 0, {'reason': 'No cross-theater data available', 'fronts': {}}
 
         now = datetime.now(timezone.utc)
-        proxy_theaters = ['yemen', 'lebanon', 'iraq', 'syria']
+        # Syria REMOVED from the Axis front-set (post-Dec-2024 ruptured corridor);
+        # Gaza + West Bank added. A severed Syria cannot be a unity-of-fronts supporter.
+        proxy_theaters = ['yemen', 'lebanon', 'iraq', 'gaza', 'west_bank']
 
         # Collect fresh proxies (within 24h) and their invoked grievances
         proxy_grievances = {}   # theater -> set(grievance tags)
