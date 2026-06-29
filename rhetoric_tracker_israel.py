@@ -241,33 +241,36 @@ ACTORS = {
         'name': 'Hamas / Gaza',
         'flag': '🇵🇸', 'icon': '💥',
         'color': '#7c3aed',
-        'role': 'Southern Asymmetric Threat',
-        'description': 'Hamas military wing, Gaza rockets, hostage situation, Gulf-based political signals',
+        'role': 'Gaza Proxy Node (Axis of Resistance)',
+        'description': 'Hamas + PIJ as Iran-aligned Gaza proxy -- disarmament defiance, Board of Peace rejection, rebuild/rearm signals, ceasefire violations',
         'keywords': [
-            'hamas fires rockets', 'hamas attack israel',
-            'al-qassam brigade', 'hamas military wing',
-            'rockets from gaza', 'mortar fire israel',
-            'hamas demands', 'hamas hostage', 'hamas ceasefire',
-            'hamas political bureau', 'haniyeh', 'sinwar',
-            'חמאס', 'קסאם', 'עזה ירי',
-            'حماس تطلق', 'كتائب القسام',
+            'hamas', 'al-qassam', 'qassam brigades', 'hamas military wing',
+            'hamas political bureau', 'hamas refuses to disarm', 'hamas rejects disarmament',
+            'hamas disarmament', 'decommission', 'board of peace', 'mladenov',
+            'hamas rearm', 'hamas tunnels', 'hamas rebuild', 'ceasefire violation gaza',
+            'islamic jihad', 'palestinian islamic jihad', 'saraya al-quds', 'al-quds brigades',
+            'חמאס', 'קסאם', 'עזה',
+            'حماس', 'كتائب القسام', 'الجهاد الإسلامي', 'سرايا القدس',
         ],
         'baseline_statements_per_week': 10,
     },
     'west_bank_civil': {
-        'name': 'West Bank / Palestinian Civil',
+        'name': 'West Bank',
         'flag': '🇵🇸', 'icon': '✊',
         'color': '#0ea5e9',
-        'role': 'Occupied Territory Signals',
-        'description': 'Palestinian civil unrest, settler violence, annexation resistance, non-Hamas agitation',
+        'role': 'West Bank Node (Iran third-front attempt + destabilization)',
+        'description': 'Dual read: Iran-activation (PIJ relocation, faction cells, IRGC smuggling via Jordan, Turkey-directed cells) AND destabilization tinder (settler violence, PA fiscal collapse) -- only activation feeds the Iran wheel',
         'keywords': [
-            'west bank protest', 'west bank unrest', 'settler violence',
-            'west bank raid', 'jenin raid', 'nablus raid',
-            'palestinian killed west bank', 'idf west bank',
-            'west bank annexation protest', 'settler attack',
-            'ramallah protest', 'hebron tension',
-            'גדה המערבית מחאה', 'מתנחלים אלימות',
-            'الضفة الغربية احتجاجات', 'مستوطنون عنف',
+            'islamic jihad west bank', 'pij west bank', 'jenin battalion', 'jenin brigade',
+            'tulkarm brigade', 'nur shams', 'lions den', 'al-aqsa martyrs brigade',
+            'iran smuggling west bank', 'weapons smuggling jordan', 'irgc west bank',
+            'hamas west bank cell', 'weapons cache west bank', 'foiled attack west bank',
+            'settler violence', 'settler attack', 'jewish terrorism',
+            'palestinian authority collapse', 'clearance revenue', 'palestinian banks',
+            'west bank annexation', 'settler outpost', 'e1 settlement',
+            'jenin raid', 'tulkarm raid', 'nablus raid', 'idf west bank',
+            'הגדה המערבית', 'אלימות מתנחלים', 'גנין',
+            'الضفة الغربية', 'كتيبة جنين', 'عنف المستوطنين',
         ],
         'baseline_statements_per_week': 8,
     },
@@ -610,28 +613,35 @@ ASYMMETRIC_TRIGGERS = {
     5: [
         'hamas mass attack israel', 'hamas invasion israel',
         'houthi hits tel aviv', 'houthi ballistic lands israel',
-        'west bank uprising', 'intifada declared',
-        'mass rocket fire gaza',
+        'west bank uprising', 'intifada declared', 'third intifada',
+        'mass rocket fire gaza', 'gaza war resumes', 'idf reinvades gaza',
     ],
     4: [
         'rockets from gaza israel', 'hamas fires rockets',
         'houthi missile intercepted israel', 'houthi drone israel',
         'west bank shooting rampage', 'terror attack tel aviv',
         'major attack jerusalem', 'stabbing wave',
+        'hamas refuses disarmament', 'ied attack jenin', 'bus bombing plot',
+        'rocket found west bank', 'soldier killed west bank',
     ],
     3: [
         'hamas threatens attack', 'hamas warns israel',
         'rockets gaza', 'houthi targets israel',
         'west bank shooting', 'terror attack israel',
         'jenin attack', 'nablus attack',
+        'hamas rejects board of peace', 'islamic jihad operation',
+        'jenin battalion', 'tulkarm brigade', 'foiled attack west bank',
+        'weapons cache west bank', 'settler rampage',
     ],
     2: [
         'hamas rocket', 'gaza rocket', 'west bank attack',
         'terror attack', 'houthi threatens israel',
+        'hamas disarmament', 'iran smuggling west bank', 'settler violence',
+        'palestinian authority collapse', 'lions den',
     ],
     1: [
         'hamas', 'gaza', 'houthi israel', 'west bank',
-        'terror', 'rocket fire',
+        'terror', 'rocket fire', 'board of peace', 'islamic jihad',
     ],
 }
 
@@ -1206,7 +1216,109 @@ def _detect_silence_anomalies(actor_results, baselines):
 # ============================================
 # CROSS-THEATER — Israel writes as strike actor
 # ============================================
-def _write_crosstheater_signal(result):
+# ============================================
+# WEST BANK proxy-activation + Turkey cross-over scorers
+# West Bank is a DUAL-WHEEL node: an Iran proxy slice (rhetoric:crosstheater:
+# fingerprints['west_bank']) AND a Turkey projection footprint (turkey:
+# theater_footprints['west_bank'], Turkey-directed Hamas-abroad cells).
+# DISCIPLINE: the wheel level reads ONLY Iran-activation (smuggling, PIJ,
+# faction cells, camp IEDs). Settler violence + PA fiscal collapse are
+# destabilization TINDER -- they stay on the card / Israel inbound score and
+# are deliberately kept OUT of the proxy level (same error class as Syria).
+# ============================================
+TURKEY_FOOTPRINTS_KEY = 'turkey:theater_footprints'
+
+WB_GEO = ('west bank', 'judea', 'samaria', 'jenin', 'tulkarm', 'tulkarem', 'nablus',
+          'hebron', 'ramallah', 'nur shams', 'qalqilya', 'jericho')
+
+# Iran-activation ladder (NOT settler/PA tinder). Highest matched band wins.
+WB_IRAN_ACTIVATION_LADDER = {
+    5: ['west bank uprising', 'third intifada', 'mass casualty attack'],
+    4: ['ied attack', 'roadside bomb', 'shooting attack', 'bus bombing', 'rocket fired',
+        'rocket found', 'soldier killed', 'killed in attack'],
+    3: ['weapons cache', 'weapons smuggling', 'arms smuggling', 'foiled attack', 'foiled plot',
+        'cell dismantled', 'jenin battalion', 'tulkarm brigade', 'islamic jihad operation',
+        'command center', 'explosives'],
+    2: ['islamic jihad', 'lions den', 'iran smuggling', 'irgc', 'militant cell', 'armed group',
+        'al-aqsa martyrs', 'former prisoners'],
+    1: ['militant', 'gunmen', 'resistance'],
+}
+
+# Turkey-directed-cells ladder (Hamas-abroad command hosted in Turkey).
+WB_TURKEY_LADDER = {
+    4: ['directed from turkey', 'command center in turkey', 'turkey-based command'],
+    3: ['hamas operatives in turkey', 'directed by hamas abroad', 'turkey directs',
+        'operatives in turkey'],
+    2: ['hamas turkey', 'turkey hamas office', 'ankara hamas', 'hamas command abroad'],
+}
+
+
+def _score_wb_iran_activation(articles):
+    """Iran-activation level for the West Bank proxy slice. Requires a West-Bank
+    geo token AND an activation signal -- pure settler-violence/PA articles
+    (tinder) match nothing here and contribute 0, by design."""
+    level = 0
+    phrases = []
+    targets = []
+    for art in (articles or []):
+        text = ((art.get('title') or '') + ' ' + (art.get('description') or '')).lower()
+        if not any(g in text for g in WB_GEO):
+            continue
+        matched = 0
+        for lvl in (5, 4, 3, 2, 1):
+            if any(p in text for p in WB_IRAN_ACTIVATION_LADDER[lvl]):
+                matched = lvl
+                break
+        if matched == 0:
+            continue
+        if matched > level:
+            level = matched
+        ttl = (art.get('title') or '')[:60]
+        if ttl and len(phrases) < 5:
+            phrases.append(ttl)
+        for tgt in SPECIFIC_TARGETS_INBOUND:
+            if tgt in text and tgt not in targets:
+                targets.append(tgt)
+    return level, phrases, targets
+
+
+def _write_wb_turkey_footprint(articles):
+    """Cross-over wheel: Turkey-directed Hamas cells in the West Bank ->
+    turkey:theater_footprints['west_bank']. Read by the GPI Turkey-convergence
+    detector alongside Libya/Syria/Iraq. Absence-honest (level 0 -> dormant)."""
+    try:
+        level = 0
+        phrases = []
+        for art in (articles or []):
+            text = ((art.get('title') or '') + ' ' + (art.get('description') or '')).lower()
+            if ('turk' not in text and 'ankara' not in text):
+                continue
+            if not any(g in text for g in WB_GEO) and 'hamas' not in text:
+                continue
+            for lvl in (4, 3, 2):
+                if any(p in text for p in WB_TURKEY_LADDER[lvl]):
+                    if lvl > level:
+                        level = lvl
+                    ttl = (art.get('title') or '')[:80]
+                    if ttl and len(phrases) < 3:
+                        phrases.append(ttl)
+                    break
+        existing = _redis_get(TURKEY_FOOTPRINTS_KEY) or {}
+        existing['west_bank'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theater': 'west_bank',
+            'level': level,
+            'top_phrases': phrases,
+            'objective_tags': (['hamas_abroad', 'cell_direction'] if level >= 2 else []),
+            'mode': ('proxy_direction' if level >= 2 else 'dormant'),
+        }
+        _redis_set(TURKEY_FOOTPRINTS_KEY, existing, ttl=24 * 3600)
+        print("[Israel Rhetoric] Turkey-WB footprint written (level %d)" % level)
+    except Exception as e:
+        print("[Israel Rhetoric] Turkey-WB footprint error: %s" % e)
+
+
+def _write_crosstheater_signal(result, articles=None):
     """Israel writes is_strike_actor: True to shared fingerprint."""
     try:
         existing = _redis_get(CROSSTHEATER_KEY) or {}
@@ -1243,7 +1355,42 @@ def _write_crosstheater_signal(result):
             'specificity_score': result.get('specificity_score', 0),
         }
 
+        # -- Gaza proxy slice (Hamas + PIJ as Iran-aligned Gaza proxy) --
+        gz = actors.get('hamas_gaza', {})
+        gz_level = gz.get('max_level', 0)
+        gz_phrases = [(_a.get('title') or '')[:60] for _a in gz.get('top_articles', [])[:5] if _a.get('title')]
+        gz_targets = []
+        for _a in gz.get('top_articles', [])[:5]:
+            _tl = (_a.get('title') or '').lower()
+            for _tgt in SPECIFIC_TARGETS_INBOUND:
+                if _tgt in _tl and _tgt not in gz_targets:
+                    gz_targets.append(_tgt)
+        existing['gaza'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theatre': 'Gaza',
+            'level': gz_level,
+            'top_phrases': gz_phrases[:5],
+            'named_targets': gz_targets[:6],
+            'actor_levels': {'hamas_gaza': gz_level},
+            'relationship': 'iran_proxy', 'node_class': 'proxy',
+        }
+
+        # -- West Bank proxy slice: Iran-activation ONLY (settler/PA tinder excluded) --
+        _wb_level, _wb_phrases, _wb_targets = _score_wb_iran_activation(articles or [])
+        existing['west_bank'] = {
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'theatre': 'West Bank',
+            'level': _wb_level,
+            'top_phrases': _wb_phrases[:5],
+            'named_targets': _wb_targets[:6],
+            'actor_levels': {'iran_activation': _wb_level},
+            'relationship': 'iran_proxy', 'node_class': 'proxy',
+        }
+
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8*3600)
+
+        # -- West Bank Turkey footprint (cross-over wheel: Turkey-directed cells) --
+        _write_wb_turkey_footprint(articles or [])
         print(f"[Israel Rhetoric] ✅ Strike actor fingerprint written (is_strike_actor: True)")
     except Exception as e:
         print(f"[Israel Rhetoric] Cross-theater write error: {e}")
@@ -2048,7 +2195,7 @@ def run_israel_rhetoric_scan(days=3):
     result['delta'] = _compute_delta()
 
     # Write fingerprint
-    _write_crosstheater_signal(result)
+    _write_crosstheater_signal(result, articles)
 
     # Signal interpretation — So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
