@@ -344,6 +344,7 @@ NARRATIVE_AXIS_SETS = {
     'houthi_fragility':                ['kinetic', 'economic'],
     'multiaxis_convergence':           ['kinetic', 'economic'],   # by definition cross-axis
     'turkey_regional_convergence':     ['kinetic', 'diplomatic'], # projection (hard-power) + alignment/mediation
+    'iran_axis_convergence':           ['kinetic', 'economic', 'diplomatic'], # proxy arena + chokepoint/oil + mediation counterweight
 }
 
 def _axes_for_narrative(n):
@@ -1774,6 +1775,164 @@ def _narrative_multiaxis_convergence(blufs):
     return cards or None
 
 
+def _narrative_iran_axis_convergence(blufs):
+    """
+    CONVERGENCE: Iran-aligned proxy fronts elevated simultaneously -- the Axis
+    acting as one arena (Unity of Fronts / wahdat al-sahat). The read is the
+    SIMULTANEITY plus Iran's standing command posture, NOT a kinetic body-count.
+    As the acute missile-exchange phase recedes, THIS is the narrative that carries
+    the Iran story: continued influence over proxies, chokepoint leverage, and
+    oil/shipping repricing -- pressure that persists after the volleys stop.
+
+    Self-contained RECOMPUTE (mirrors the Iran tracker index, but owned here):
+      - proxy slices  rhetoric:crosstheater:fingerprints[<theater>] {ts, level,
+                      top_phrases, named_targets}. Set: Yemen, Lebanon, Iraq, Gaza,
+                      West Bank. Freshness-gated <=24h; L2+ counts.
+      - Syria         RUPTURED node -- post-Dec-2024 the corridor is severed; counted
+                      OUT of activation and surfaced as the broken land bridge, not a
+                      live limb (its L2+ now reflects forces hostile to Tehran).
+      - iran slice    hub posture READ straight from ['iran']: unity_of_fronts_level,
+                      is_command_node, level (NOT recomputed).
+
+    Absence-honest: stale/unwritten proxies skipped; absent mediation named as absent,
+    never inferred. Mediation (Oman/Qatar) is OPPOSITE-sign -- it sits BESIDE the
+    alarm as a counterweight, it does NOT net against it.
+
+    Priority is kept BELOW the +11 kinetic global-boost: an INFLUENCE convergence
+    surfaces as a prominent narrative but never inflates the kinetic-weighted global
+    level (that would mix axes). It rises naturally as the kinetic detectors quiet.
+
+    GATE: breadth, not depth. Fires when >=3 proxies active (L2+), OR Unity of Fronts
+    elevated (>=2) with >=2 proxies active. Otherwise silent.
+    """
+    PROXY_THEATERS = ['yemen', 'lebanon', 'iraq', 'gaza', 'west_bank']
+    FRESH_HOURS  = 24
+    ACTIVE_LEVEL = 2
+    LADDER = {0: 0, 1: 1, 2: 2, 3: 4, 4: 5, 5: 5}  # 5-proxy rescale; breadth jump at 3 preserved
+
+    ct = _redis_get('rhetoric:crosstheater:fingerprints')
+    if not isinstance(ct, dict):
+        return None
+
+    now = datetime.now(timezone.utc)
+    def _fresh(fp):
+        try:
+            return (now - datetime.fromisoformat(fp['ts'])).total_seconds() / 3600.0 <= FRESH_HOURS
+        except Exception:
+            return False
+
+    active = {}
+    all_phrases, all_targets = {}, {}
+    for name in PROXY_THEATERS:
+        fp = ct.get(name)
+        if not isinstance(fp, dict) or not _fresh(fp):
+            continue
+        lvl = _safe_level(fp.get('level', 0))
+        if lvl < ACTIVE_LEVEL:
+            continue
+        phrases = fp.get('top_phrases', []) or []
+        targets = fp.get('named_targets', []) or []
+        active[name] = {'level': lvl, 'phrases': phrases, 'targets': targets}
+        for p in phrases:
+            all_phrases.setdefault(str(p)[:30].lower(), []).append(name)
+        for t in targets:
+            all_targets.setdefault(t, []).append(name)
+
+    n = len(active)
+    proxy_level = LADDER[min(n, 5)]
+    shared_phrases = {p: t for p, t in all_phrases.items() if len(t) >= 2}
+    shared_targets = {t: ns for t, ns in all_targets.items() if len(ns) >= 2}
+    if shared_phrases and proxy_level < 5:
+        proxy_level = min(proxy_level + 1, 5)
+    if shared_targets and proxy_level < 5:
+        proxy_level = min(proxy_level + 1, 5)
+
+    # Syria -- ruptured corridor (counted OUT; surfaced as severed land bridge)
+    sfp = ct.get('syria')
+    syria_ruptured = (isinstance(sfp, dict) and _fresh(sfp)
+                      and _safe_level(sfp.get('level', 0)) >= ACTIVE_LEVEL)
+
+    # Hub posture -- READ from the iran slice (not recomputed)
+    iran_fp = ct.get('iran') if isinstance(ct.get('iran'), dict) else {}
+    uof_level     = _safe_level(iran_fp.get('unity_of_fronts_level', 0))
+    uof_grievance = iran_fp.get('unity_of_fronts_grievance')
+    is_command    = bool(iran_fp.get('is_command_node'))
+    iran_level    = _safe_level(iran_fp.get('level', 0))
+
+    converged = (n >= 3) or (uof_level >= 2 and n >= 2)
+    if not converged:
+        return None
+
+    # Mediation counterweight (forward hook; opposite-sign, never nets against alarm)
+    mediation = []
+    for med in ('oman', 'qatar'):
+        mfp = ct.get(med)
+        if isinstance(mfp, dict) and _fresh(mfp):
+            if mfp.get('mediation_active') or _safe_level(mfp.get('level', 0)) >= 2:
+                mediation.append(med.title())
+
+    # Chokepoint / oil drift (absence-honest -- from observed proxy phrases ONLY)
+    MARITIME = ('hormuz', 'strait', 'shipping', 'tanker', 'cargo', 'red sea', 'bab el', 'maritime')
+    chokepoint = any(any(tok in ' '.join(d['phrases']).lower() for tok in MARITIME)
+                     for d in active.values())
+
+    names_titled = sorted(t.replace('_', ' ').title() for t in active)
+
+    # ---- Prose: LEAD with Unity of Fronts, drift toward influence ----
+    if uof_level >= 2:
+        lead = ("Unity of Fronts (wahdat al-sahat) is elevated (L%d): Iran-aligned fronts are "
+                "speaking and acting as a single arena rather than as separate theaters" % uof_level)
+        if uof_grievance:
+            lead += " around a shared grievance (%s)" % str(uof_grievance)
+        lead += ". "
+        headline = ("Iran Axis convergence -- Unity of Fronts L%d, %d proxy fronts active"
+                    % (uof_level, n))
+    else:
+        lead = "Iran-aligned proxy fronts are simultaneously active across separated theaters. "
+        headline = "Iran Axis convergence -- %d proxy fronts active simultaneously" % n
+
+    detail = lead
+    detail += ("Active fronts: " + ", ".join(names_titled)
+               + " (recomputed activation L%d). " % proxy_level)
+    if shared_targets:
+        detail += ("Shared named targets across fronts (" + ", ".join(list(shared_targets)[:3])
+                   + ") sharpen the read from parallel noise toward coordination. ")
+    elif shared_phrases:
+        detail += ("Synchronized framing across fronts is consistent with coordination rather than "
+                   "coincidence. ")
+    if syria_ruptured:
+        detail += ("Syria registers active but is read as the SEVERED land bridge, not a live limb -- "
+                   "post-2024 its signal reflects forces hostile to Tehran, so it is counted out of the "
+                   "activation and surfaced as the broken corridor. ")
+    if is_command or iran_level >= 2:
+        detail += "Tehran's own posture reads as command-node (hub) rather than a co-equal front. "
+    if chokepoint:
+        detail += ("Pressure is migrating from open kinetic exchange toward chokepoint leverage -- "
+                   "maritime and shipping signals in the front phrases are consistent with Iran "
+                   "exercising influence through the Strait and Red Sea rather than direct volleys. ")
+    if mediation:
+        detail += ("A mediation track is concurrently active (" + ", ".join(mediation) + "); it sits "
+                   "BESIDE this convergence as an off-ramp counterweight and does not net against the "
+                   "proxy-pressure read. ")
+    else:
+        detail += "No active mediation counterweight detected this cycle. "
+    detail += ("This composite is a CONVERGENCE indicator, NOT a probability of action; each front is "
+               "independently sourced and the reader completes the inference.")
+
+    high_band = (proxy_level >= 4) or (uof_level >= 3)
+    priority  = 10 if high_band else 9   # below +11 kinetic boost -- influence, not kinetic escalation
+
+    return {
+        'priority': priority,
+        'category': 'iran_axis_convergence',
+        'regions':  ['me'],
+        'icon':     '\U0001f517',   # link/chain -- fronts linked as one arena (NOT a flag)
+        'color':    '#be185d',      # deep rose -- distinct from kinetic crimson / turkey orange / russia-iran purple
+        'headline': headline,
+        'detail':   detail,
+    }
+
+
 def _narrative_turkey_regional_convergence(blufs):
     """
     CONVERGENCE: Turkey's fingerprints elevated simultaneously across SEPARATED
@@ -1966,6 +2125,7 @@ NARRATIVE_DETECTORS = [
     _narrative_conflict_repricing,                       # off-ramp market-belief read (Slice 3, Jun 18 2026)
     _narrative_conflict_repricing_europe,                # Europe off-ramp market-belief read (Slice 4c, Jun 19 2026)
     _narrative_turkey_regional_convergence,              # Turkey cross-theater convergence (projection + periphery, Jun 28 2026)
+    _narrative_iran_axis_convergence,                    # Iran Unity-of-Fronts / proxy-arena influence read (Jun 29 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
