@@ -343,6 +343,7 @@ NARRATIVE_AXIS_SETS = {
     'wha_cascade':                     ['humanitarian', 'economic'],
     'houthi_fragility':                ['kinetic', 'economic'],
     'multiaxis_convergence':           ['kinetic', 'economic'],   # by definition cross-axis
+    'turkey_regional_convergence':     ['kinetic', 'diplomatic'], # projection (hard-power) + alignment/mediation
 }
 
 def _axes_for_narrative(n):
@@ -1773,6 +1774,123 @@ def _narrative_multiaxis_convergence(blufs):
     return cards or None
 
 
+def _narrative_turkey_regional_convergence(blufs):
+    """
+    CONVERGENCE: Turkey's fingerprints elevated simultaneously across SEPARATED
+    theaters. The read is the simultaneity, NOT a Turkey scorecard. Two written
+    conventions are unified from shared Redis (cross-backend):
+
+      - spoke:turkey:<c>           reactive periphery (Europe). Polarity in
+                                   'relationship' (alignment / friction / rivalry).
+                                   Live writers: greece, cyprus, azerbaijan.
+      - turkey:theater_footprints  active projection theaters (ME). Turkey pushing
+                                   hard-power/economic/diplomatic INTO a theater.
+                                   Live writers: libya (spoke #1), syria (spoke #2).
+
+    Absence-honest: nodes that are not written are skipped. New projection theaters
+    (e.g. lebanon) join automatically -- the whole footprints dict is iterated; new
+    periphery spokes (e.g. israel) join the moment they appear in PERIPHERY_SPOKES.
+
+    GATE (tunable): a genuine cross-theater convergence requires breadth, not a
+    single hot spot. Fires when >=3 theaters are active (L2+), OR >=2 active spanning
+    BOTH a projection theater AND a peripheral one. Otherwise stays silent.
+    """
+    PERIPHERY_SPOKES = ['greece', 'cyprus', 'azerbaijan', 'israel']  # israel auto-joins when it writes
+    ACTIVE_LEVEL     = 2     # L2+ = concrete moves, not declaratory rhetoric
+    REL_LABEL = {
+        'peer_rivalry': 'rivalry', 'rivalry': 'rivalry',
+        'friction': 'friction', 'alignment': 'alignment', 'axis': 'alignment',
+    }
+
+    nodes = []  # each: {theater, level, kind, descriptor, top}
+
+    # 1) Reactive periphery -- individual spoke:turkey:<c> keys
+    for c in PERIPHERY_SPOKES:
+        fp = _redis_get('spoke:turkey:' + c)
+        if not isinstance(fp, dict):
+            continue
+        nodes.append({
+            'theater':    c,
+            'level':      _safe_level(fp.get('level', 0)),
+            'kind':       'periphery',
+            'descriptor': REL_LABEL.get(str(fp.get('relationship', '')).lower(), 'friction'),
+            'top':        fp.get('top_signal', ''),
+        })
+
+    # 2) Active projection -- shared turkey:theater_footprints {theater: {...}}
+    footprints = _redis_get('turkey:theater_footprints')
+    if isinstance(footprints, dict):
+        for theater, fp in footprints.items():
+            if not isinstance(fp, dict):
+                continue
+            nodes.append({
+                'theater':    str(theater),
+                'level':      _safe_level(fp.get('level', 0)),
+                'kind':       'projection',
+                'descriptor': str(fp.get('mode', 'dormant')).lower(),
+                'top':        (fp.get('top_phrases') or [''])[0],
+            })
+
+    if not nodes:
+        return None
+
+    active          = [n for n in nodes if n['level'] >= ACTIVE_LEVEL]
+    theaters_active = {n['theater'] for n in active}
+    has_projection  = any(n['kind'] == 'projection' for n in active)
+    has_periphery   = any(n['kind'] == 'periphery'  for n in active)
+
+    converged = (len(theaters_active) >= 3) or \
+                (len(active) >= 2 and has_projection and has_periphery)
+    if not converged:
+        return None
+
+    peak = max(active, key=lambda n: n['level'])
+
+    # Projection clause (theaters + mode mix)
+    proj_th   = sorted({n['theater'].title() for n in active if n['kind'] == 'projection'})
+    proj_mode = sorted({n['descriptor'] for n in active
+                        if n['kind'] == 'projection' and n['descriptor'] != 'dormant'})
+    # Periphery clause (grouped by polarity)
+    peri_by = {}
+    for n in active:
+        if n['kind'] == 'periphery':
+            peri_by.setdefault(n['descriptor'], []).append(n['theater'].title())
+
+    parts = []
+    if proj_th:
+        mode_txt = ('/'.join(m.replace('_', '-') for m in proj_mode) + ' ') if proj_mode else ''
+        parts.append(mode_txt + 'projection in ' + ' and '.join(proj_th))
+    peri_bits = []
+    for rel in ('alignment', 'friction', 'rivalry'):
+        if peri_by.get(rel):
+            peri_bits.append(rel + ' with ' + ' and '.join(sorted(peri_by[rel])))
+    if peri_bits:
+        parts.append('; '.join(peri_bits))
+    spread = '; '.join(p for p in parts if p)
+
+    headline = ("Turkey convergence -- %d fingerprints elevated across %d theaters"
+                % (len(active), len(theaters_active)))
+    detail = (
+        "Turkish signals are simultaneously elevated across separated theaters: " + spread + ". "
+        "Peak: " + peak['theater'].title() + " (L" + str(peak['level']) + "). Concurrent hard-power "
+        "projection and peripheral friction across theaters that do not share a local driver is "
+        "consistent with a phase of assertive, multi-front Turkish posture -- the breadth that has "
+        "historically accompanied Ankara pressing several files at once. This is a CONVERGENCE "
+        "indicator, NOT a probability of action; each node is independently sourced and the reader "
+        "completes the inference."
+    )
+
+    return {
+        'priority': 13,
+        'category': 'turkey_regional_convergence',
+        'regions':  sorted({'europe' if n['kind'] == 'periphery' else 'me' for n in active}),
+        'icon':     '\U0001f9ed',   # compass -- projection/convergence, deliberately NOT a Turkey flag
+        'color':    '#ea580c',      # burnt orange -- distinct from russia_iran purple / arctic blue
+        'headline': headline,
+        'detail':   detail,
+    }
+
+
 # Registry of detectors. Order doesn't matter -- sorting is by priority.
 NARRATIVE_DETECTORS = [
     _narrative_nuclear_signaling_global,
@@ -1793,6 +1911,7 @@ NARRATIVE_DETECTORS = [
     _narrative_market_fragility,                         # market fragility x Taiwan semis (Black Swan #2, Jun 13 2026)
     _narrative_conflict_repricing,                       # off-ramp market-belief read (Slice 3, Jun 18 2026)
     _narrative_conflict_repricing_europe,                # Europe off-ramp market-belief read (Slice 4c, Jun 19 2026)
+    _narrative_turkey_regional_convergence,              # Turkey cross-theater convergence (projection + periphery, Jun 28 2026)
     # Fallback always last
     _narrative_global_baseline,
 ]
