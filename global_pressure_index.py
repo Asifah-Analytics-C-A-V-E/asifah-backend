@@ -929,46 +929,77 @@ def _narrative_iran_strike_window(blufs):
 
 
 def _narrative_iran_deescalation(blufs):
-    """US-Iran de-escalation off-ramp at GPI altitude (v1.7.0 - Jun 18 2026).
+    """US-Iran ceasefire trajectory at GPI altitude -- BIDIRECTIONAL (v1.8.0 - Jun 29 2026).
 
-    Reads the maturity tag + contradiction flags the Iran rhetoric tracker emits
-    (rhetoric:iran:latest). Convergence/estimative framing: reports that an
-    off-ramp is present and how mature/reversible it is -- never predicts the war
-    ends. Priority kept BELOW the global-level boost threshold (11) so a
-    de-escalation narrative never raises the global level.
+    Reads the Iran tracker's ceasefire_trajectory (a bidirectional read weighing
+    consolidation vs breach from the same evidence) PLUS the maturity tag and
+    contradiction flags (rhetoric:iran:latest). Surfaces the lean BOTH ways:
+    consolidating/holding (green), strained (amber), fraying/breach-risk (orange/red).
+    Convergence framing, never a forecast. Priority stays BELOW the +11 kinetic boost --
+    a ceasefire read surfaces as a narrative, it does not drive the kinetic global level.
+
+    Backward-compatible: if the Iran tracker has not yet emitted ceasefire_trajectory,
+    falls back to the maturity-only behavior.
     """
     iran = _redis_get('rhetoric:iran:latest') or {}
     if not isinstance(iran, dict):
         return None
-    maturity = iran.get('de_escalation_maturity', 'none')
-    if maturity not in ('framework', 'signed', 'implementing'):
-        return None
 
+    traj       = iran.get('ceasefire_trajectory', {}) or {}
+    lean       = traj.get('lean', 'quiet')
+    maturity   = iran.get('de_escalation_maturity', 'none')
     milestones = iran.get('implementation_milestones', []) or []
     contra     = iran.get('contradiction_active', False)
     flags      = iran.get('contradiction_flags', []) or []
-    n          = len(milestones)
-    plural     = 's' if n != 1 else ''
 
-    if maturity == 'implementing':
-        headline = (f'US-Iran de-escalation -- framework moving toward implementation '
-                    f'({n} delivered milestone{plural})')
-        detail = (
-            f'The Iran rhetoric tracker reports an off-ramp at implementing maturity: '
-            f'{n} delivered milestone{plural} observed ({", ".join(milestones)}). '
-            f'This is consistent with a durable de-escalation, though reversibility '
-            f'language persists and the track remains conditional. ')
-    elif maturity == 'signed':
-        headline = 'US-Iran de-escalation -- signed framework, implementation pending'
-        detail = (
-            'The Iran rhetoric tracker reports a signed US-Iran framework. This is '
-            'consistent with de-escalation, but implementation is pending and explicitly '
-            'reversible on the 60-day track; no delivered milestones observed yet. ')
-    else:  # framework
-        headline = 'US-Iran de-escalation -- active negotiation track (unsigned)'
-        detail = (
-            'The Iran rhetoric tracker reports an active US-Iran negotiation track, '
-            'consistent with an emerging off-ramp that is not yet signed. ')
+    has_offramp = maturity in ('framework', 'signed', 'implementing')
+    has_lean    = lean not in ('quiet', '')
+    if not has_offramp and not has_lean:
+        return None
+
+    n = len(milestones)
+    plural = 's' if n != 1 else ''
+
+    # Lean -> (color, icon, label). Green consolidating, amber strained, orange/red breach.
+    LEAN_META = {
+        'consolidating': ('#10b981', '\U0001f91d', 'consolidating'),
+        'holding':       ('#10b981', '\U0001f91d', 'holding'),
+        'strained':      ('#f59e0b', '\u2696\ufe0f', 'strained (bumpy road)'),
+        'fraying':       ('#f97316', '\u26a0\ufe0f', 'fraying'),
+        'breach_risk':   ('#ef4444', '\u26a0\ufe0f', 'breach-risk'),
+        'quiet':         ('#10b981', '\U0001f91d', 'holding'),
+    }
+    color, icon, lean_label = LEAN_META.get(lean, LEAN_META['quiet'])
+
+    # Headline: breach-leaning leads with the trajectory; otherwise maturity-flavored.
+    if lean in ('fraying', 'breach_risk', 'strained'):
+        headline = 'US-Iran ceasefire trajectory -- %s' % lean_label.upper()
+    elif has_offramp and maturity == 'implementing':
+        headline = ('US-Iran ceasefire -- framework moving toward implementation '
+                    '(%d delivered milestone%s)' % (n, plural))
+    elif has_offramp and maturity == 'signed':
+        headline = 'US-Iran ceasefire -- signed framework, implementation pending'
+    elif has_offramp:
+        headline = 'US-Iran ceasefire -- active negotiation track (unsigned)'
+    else:
+        headline = 'US-Iran ceasefire trajectory -- %s' % lean_label.upper()
+
+    # Detail: lead with the bidirectional trajectory read (strip its own trailing
+    # disclaimer to avoid a mid-paragraph repeat), then maturity + contradiction context.
+    detail = ''
+    traj_detail = traj.get('detail', '') or ''
+    _DISC = 'This is a CONVERGENCE indicator'
+    traj_read = (traj_detail.split(_DISC)[0].strip() if _DISC in traj_detail else traj_detail.strip())
+    if traj_read:
+        detail += traj_read + ' '
+
+    if has_offramp and maturity == 'implementing':
+        detail += ('Off-ramp maturity reads implementing -- %d delivered milestone%s (%s). '
+                   % (n, plural, ', '.join(milestones)))
+    elif has_offramp and maturity == 'signed':
+        detail += 'Off-ramp maturity reads signed framework, implementation pending. '
+    elif has_offramp:
+        detail += 'Off-ramp maturity reads active negotiation track, unsigned. '
 
     if contra:
         bits = []
@@ -977,23 +1008,23 @@ def _narrative_iran_deescalation(blufs):
         if 'syria_hezbollah' in flags:
             bits.append('calls for Syria to act against Hezbollah')
         contra_txt = ' and '.join(bits) if bits else 'an unresolved Lebanon-front contradiction'
-        detail += (
-            f'A live contradiction -- {contra_txt} -- caps how deep the de-escalation '
-            f'reads; the all-fronts framing is not yet borne out on the Lebanon front. ')
+        detail += ('A live contradiction -- %s -- caps how deep any de-escalation reads; '
+                   'the all-fronts framing is not yet borne out on the Lebanon front. ' % contra_txt)
 
-    detail += ('Framing is convergence, not prediction: an off-ramp is present and '
-               'measurably maturing or stalling -- the reader completes the inference.')
+    detail += ('Framing is convergence, not prediction -- a ceasefire read leaning toward '
+               'consolidation or breach, with the reader completing the inference.')
+
+    priority = 10 if lean in ('fraying', 'breach_risk') else 9   # still below the +11 kinetic boost
 
     return {
-        'priority': 9,    # below the +11 global-level boost; de-escalation never escalates
+        'priority': priority,
         'category': 'iran_deescalation',
         'regions':  ['me'],
-        'icon':     '\U0001f91d',  # handshake
-        'color':    '#10b981',      # diplomatic green
+        'icon':     icon,
+        'color':    color,
         'headline': headline,
-        'detail':   detail,
+        'detail':   detail.strip(),
     }
-
 
 def _narrative_dprk_russia_axis(blufs):
     """DPRK-Russia coordination (ammunition / troops / weapons)."""
