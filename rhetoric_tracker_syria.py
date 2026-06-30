@@ -359,6 +359,47 @@ HEZBOLLAH_SYRIA_NEXUS = [
     'حزب الله سوريا أسلحة', 'ضربات إسرائيل حزب الله سوريا',
 ]
 
+# Gulf reconstruction-contest keywords - Saudi/Qatar/UAE influence competition
+# with Turkey over the shape of post-Assad Syria. Reconstruction financing is the
+# primary lever of external influence now that the military phase has receded.
+GULF_CONTEST_KEYWORDS = [
+    'saudi syria', 'saudi arabia syria', 'riyadh syria',
+    'saudi reconstruction', 'saudi investment syria',
+    'qatar syria', 'qatari syria', 'doha syria',
+    'qatar reconstruction', 'qatar funding syria',
+    'uae syria', 'emirati syria', 'abu dhabi syria',
+    'uae reconstruction', 'emirates syria',
+    'gulf states syria', 'gulf reconstruction', 'gulf investment syria',
+    'gulf funding syria', 'gulf influence syria',
+    'السعودية سوريا', 'قطر سوريا', 'الإمارات سوريا', 'إعمار الخليج',
+]
+
+# Foreign-fighter / ex-AQ legitimacy keywords - foreign jihadist factions being
+# folded into the new defense ministry. HTS's core emerged from al-Qaeda's Syrian
+# affiliate; formalizing these units institutionalizes an ex-jihadist force as the
+# state's army - the central legitimacy question for recognition and sanctions relief.
+FOREIGN_FIGHTER_KEYWORDS = [
+    'foreign fighter', 'foreign fighters', 'muhajir', 'muhajireen', 'muhajiroun',
+    'uyghur', 'uighur', 'turkistan islamic', 'turkestan islamic',
+    'uzbek fighters', 'tajik fighters', 'chechen fighters', 'central asian fighters',
+    'foreign brigade', 'foreign commanders syria', 'foreign fighters army',
+    'jihadist integration', 'defense ministry foreign',
+    'al-qaeda legacy', 'former al-qaeda', 'ex-al-qaeda', 'nusra legacy',
+    'jolani al-qaeda', 'sharaa al-qaeda',
+    'المهاجرين', 'مقاتلون أجانب', 'الحزب الإسلامي التركستاني',
+]
+
+# Syria-into-Lebanon / Hezbollah-disarmament keywords - US-pushed dynamic for
+# Syria to assist Hezbollah disarmament or assert a Lebanon role; opposed by both
+# Beirut and Jerusalem. Historically precedes Syrian-Lebanese friction.
+SYRIA_LEBANON_KEYWORDS = [
+    'disarm hezbollah', 'hezbollah disarmament', 'syria disarm hezbollah',
+    'syria lebanon border', 'syrian forces lebanon', 'syrian army lebanon',
+    'syria role lebanon', 'syria enter lebanon', 'syria lebanon security',
+    'syria pressure hezbollah', 'damascus lebanon role',
+    'نزع سلاح حزب الله', 'سوريا لبنان حزب الله',
+]
+
 
 # ============================================
 # REPORTING ACTOR DOWNGRADE (v2.0)
@@ -1269,6 +1310,9 @@ def classify_articles(articles):
         'coordination_signals': [],
         'druze_signals': [],
         'hezbollah_nexus_signals': [],
+        'gulf_contest_signals': [],
+        'foreign_fighter_signals': [],
+        'syria_lebanon_signals': [],
         'all_specificity_scores': [],
     }
 
@@ -1291,6 +1335,33 @@ def classify_articles(articles):
         if hezbollah_hits:
             theatre_summary['hezbollah_nexus_signals'].append({
                 'message': f"Hezbollah arms/Syria nexus: {hezbollah_hits[0]}",
+                'article': article.get('title', '')[:100],
+                'published': pub_date if isinstance(pub_date, str) else '',
+            })
+
+        # Gulf reconstruction-contest signal
+        gulf_hits = [kw for kw in GULF_CONTEST_KEYWORDS if kw in text]
+        if gulf_hits:
+            theatre_summary['gulf_contest_signals'].append({
+                'message': f"Gulf reconstruction/influence signal: {gulf_hits[0]}",
+                'article': article.get('title', '')[:100],
+                'published': pub_date if isinstance(pub_date, str) else '',
+            })
+
+        # Foreign-fighter / ex-AQ integration signal
+        ff_hits = [kw for kw in FOREIGN_FIGHTER_KEYWORDS if kw in text]
+        if ff_hits:
+            theatre_summary['foreign_fighter_signals'].append({
+                'message': f"Foreign-fighter/ex-AQ integration signal: {ff_hits[0]}",
+                'article': article.get('title', '')[:100],
+                'published': pub_date if isinstance(pub_date, str) else '',
+            })
+
+        # Syria-into-Lebanon / Hezbollah-disarmament signal
+        syrleb_hits = [kw for kw in SYRIA_LEBANON_KEYWORDS if kw in text]
+        if syrleb_hits:
+            theatre_summary['syria_lebanon_signals'].append({
+                'message': f"Syria-Lebanon / Hezbollah-disarm signal: {syrleb_hits[0]}",
                 'article': article.get('title', '')[:100],
                 'published': pub_date if isinstance(pub_date, str) else '',
             })
@@ -1607,11 +1678,17 @@ def run_syria_rhetoric_scan(days=3):
         'silence_anomalies': [],
         'crosstheater_coordination': [],
         'hezbollah_nexus_count': len(theatre_summary['hezbollah_nexus_signals']),
+        'gulf_contest_count': len(theatre_summary['gulf_contest_signals']),
+        'foreign_fighter_count': len(theatre_summary['foreign_fighter_signals']),
+        'syria_lebanon_count': len(theatre_summary['syria_lebanon_signals']),
         # Signals
         'actors': actor_results,
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'druze_signals': theatre_summary['druze_signals'][:5],
         'hezbollah_nexus_signals': theatre_summary['hezbollah_nexus_signals'][:3],
+        'gulf_contest_signals': theatre_summary['gulf_contest_signals'][:3],
+        'foreign_fighter_signals': theatre_summary['foreign_fighter_signals'][:3],
+        'syria_lebanon_signals': theatre_summary['syria_lebanon_signals'][:3],
         'scan_time_seconds': scan_time,
         'version': '2.0.0-syria-rhetoric',
     }
