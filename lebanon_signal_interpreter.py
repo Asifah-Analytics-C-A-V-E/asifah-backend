@@ -1800,6 +1800,33 @@ def build_top_signals(scan_data):
                             + cw.get('disclaimer', '')).strip())[:480],
         })
 
+    # ── Framework Implementation (Slice 2/3) -> BLUF / GPI ──
+    # A signed sovereignty framework is BLUF-worthy at every band. The detail
+    # carries the spoke/wheel read: where Lebanon sits relative to the Iran axis.
+    fi = interp.get('framework_implementation') or {}
+    if fi.get('band'):
+        _fi_prio = {'Stalled': 8, 'Contested': 9, 'Implementing': 11, 'Collapsing': 12}.get(fi['band'], 8)
+        _fi_lvl  = {'Implementing': 1, 'Stalled': 2, 'Contested': 3, 'Collapsing': 4}.get(fi['band'], 2)
+        _delink  = {
+            'Implementing': 'Spoke read: Lebanon de-linking from the Iran axis as the state reclaims monopoly on force.',
+            'Contested':    'Spoke read: Lebanon spoke wobbling -- de-linking contested, not yet real.',
+            'Stalled':      'Spoke read: Lebanon remains an active Iran proxy; the framework is a latent off-ramp, not yet pulling the spoke loose.',
+            'Collapsing':   'Spoke read: Lebanon firmly in the Iran axis; the framework is being hollowed out.',
+        }.get(fi['band'], '')
+        signals.append({
+            'priority':   _fi_prio,
+            'category':   'framework_implementation',
+            'theatre':    'lebanon',
+            'level':      _fi_lvl,
+            'icon':       '\U0001f4dc',  # scroll
+            'color':      fi.get('band_color', '#94a3b8'),
+            'short_text': (f'{LEBANON_FLAG} LEBANON: Trilateral Framework signed -- '
+                           f'implementation {fi["band"]}'),
+            'long_text':  ((fi.get('answer', '') + ' ' + _delink + ' '
+                            + fi.get('assessment', '') + ' '
+                            + fi.get('disclaimer', '')).strip())[:480],
+        })
+
     actors          = scan_data.get('actors') or {}
     silence_alerts  = scan_data.get('silence_anomalies') or []
     laf_gap         = bool(so_what.get('laf_enforcement_gap', False))
