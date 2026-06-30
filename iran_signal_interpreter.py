@@ -921,6 +921,20 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
             'to ACTIVE projection tier.'
         )
 
+    # ── Ceasefire trajectory (bidirectional 60-day-window read, Jun 2026) ──
+    # Surfaces the Iran tracker's ceasefire_trajectory -- a read that weighs
+    # consolidation (MOU maturing) against breach (going hot) from the same
+    # evidence. Estimative voice; the trajectory prose is already doctrine-clean.
+    _traj = fp.get('ceasefire_trajectory', {}) or {}
+    _traj_lean = _traj.get('lean', 'quiet')
+    if _traj_lean not in ('quiet', ''):
+        _td = _traj.get('detail', '') or ''
+        _disc = 'This is a CONVERGENCE indicator'
+        _tread = _td.split(_disc)[0].strip() if _disc in _td else _td.strip()
+        _thead = _traj.get('headline', 'Ceasefire trajectory')
+        if _tread:
+            situation_parts.append('%s. %s' % (_thead, _tread))
+
     # ── Key indicators ──
     indicators = []
 
@@ -1007,6 +1021,12 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     watch_items.append('NOTAM closures over Iranian or Israeli airspace')
     if otp_signals >= 5:
         watch_items.append(f'OTP wave count -- currently at {otp_signals} signals, acceleration = escalation')
+    if _traj_lean in ('strained', 'fraying', 'breach_risk'):
+        watch_items.append('Ceasefire-track breach signals -- Lebanon-front contradictions, '
+                           'Hormuz/shipping incidents, talks-collapse or enrichment-resumption language')
+    elif _traj_lean in ('consolidating', 'holding'):
+        watch_items.append('MOU milestone delivery (sanctions relief, Hormuz reopening, withdrawals) '
+                           'vs reversal or all-fronts-contradiction language')
 
     return {
         'scenario':        scenario,
