@@ -1061,6 +1061,43 @@ def _write_crosstheater_signal(result):
         print(f"[Lebanon Rhetoric] Cross-theater write error: {e}")
 
 
+def _write_crosstheater_framework(result):
+    """
+    Slice 3 -- merge Lebanon's Trilateral Framework de-linking posture into the
+    shared cross-theater Redis slice AFTER interpretation is computed (the band is
+    not known at the earlier _write_crosstheater_signal call). The Iran wheel reads
+    this to factor whether Lebanon -- a proxy spoke -- is de-linking from the Iran
+    axis under the signed sovereignty framework.
+
+    Absence-honest: only an Implementing band genuinely pulls the spoke loose;
+    Contested is partial; Stalled/Collapsing leave Lebanon a full-weight proxy.
+    """
+    try:
+        interp = result.get('interpretation') or {}
+        fi = interp.get('framework_implementation') or {}
+        fw = result.get('framework_signals') or {}
+        if not fi.get('band'):
+            return
+        band = fi['band']
+        delink = {'Implementing': 'active', 'Contested': 'partial',
+                  'Stalled': 'none', 'Collapsing': 'none'}.get(band, 'none')
+        existing = _redis_get(CROSSTHEATER_KEY) or {}
+        leb = existing.get('lebanon')
+        if not isinstance(leb, dict):
+            return
+        leb['framework_signed']            = True
+        leb['framework_band']              = band
+        leb['framework_gate']              = fi.get('gate', 'closed')
+        leb['spoke_delinking']             = delink
+        leb['sovereignty_trajectory']      = fi.get('sovereignty_trajectory', '')
+        leb['hezbollah_framework_posture'] = fw.get('hezbollah_posture', 'reject')
+        existing['lebanon'] = leb
+        _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
+        print(f"[Lebanon Rhetoric] Framework fingerprint merged (band={band}, delink={delink})")
+    except Exception as e:
+        print(f"[Lebanon Rhetoric] Framework fingerprint merge error: {e}")
+
+
 def _detect_crosstheater_coordination():
     """
     Read all theater fingerprints and detect simultaneous elevation,
@@ -2418,6 +2455,7 @@ def run_rhetoric_scan(days=3):
     if INTERPRETER_AVAILABLE:
         try:
             result['interpretation'] = lebanon_interpret_signals(result)
+            _write_crosstheater_framework(result)   # Slice 3: spoke de-linking fingerprint
             best = result['interpretation']['historical_matches']
             best_pct = best[0]['similarity'] if best else 'none'
             laf_gap = result['interpretation']['so_what'].get('laf_enforcement_gap', False)
