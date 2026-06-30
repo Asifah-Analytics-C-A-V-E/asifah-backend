@@ -1110,14 +1110,21 @@ def _extract_so_what_phrase(raw_data):
     """
     Pull a short analytical phrase from a tracker's so_what dict.
 
-    Normalizes 3 different so_what shapes:
-        - {factor, scenario, description, watch_for}  (VZ/Peru/Chile)
-        - {scenario, ...}                              (Cuba legacy)
-        - missing -> return ''
+    Resolves the so_what LOCATION (two conventions on the platform) then its shape:
+        - top-level   raw['so_what']                     (legacy: VZ/Peru/Chile/Cuba)
+        - nested      raw['interpretation']['so_what']   (v2.0: Yemen/Iran/Israel/Lebanon/Iraq/Syria)
+    Shape: {factor} preferred over {scenario}; scenario snake_case -> readable;
+           missing -> ''.
     """
     if not isinstance(raw_data, dict):
         return ''
     so_what = raw_data.get('so_what')
+    if not isinstance(so_what, dict):
+        # v2.0 trackers nest so_what under interpretation. Without this fallback the
+        # analytical-read slot comes up empty for every nested-so_what theater.
+        interp = raw_data.get('interpretation')
+        if isinstance(interp, dict):
+            so_what = interp.get('so_what')
     if not isinstance(so_what, dict):
         return ''
 
@@ -1245,6 +1252,60 @@ def _iran_offramp_sentence(trackers):
     return 'Iran -- ' + s
 
 
+def _yemen_action_clause(so_what):
+    """
+    Regional-altitude read on Yemen's two founding questions -- Bab el-Mandeb
+    closure and direct strikes on Israel -- derived from the Yemen tracker's own
+    action_reads BANDS (read via the computed level + color), then re-expressed in
+    a tight regional analytical voice. This is a recompute, not a copy of the Yemen
+    page prose: the BLUF owns its regional framing.
+
+    Surfaces only the two convergent bands (#dc2626 strong, #f97316 elevated);
+    the rising-but-below (#f59e0b) and baseline (#6b7280) bands are intentionally
+    NOT named at regional altitude. Estimative, convergence-framed; the reader
+    completes the inference.
+
+    Absence-honest: returns '' when neither read is convergent.
+    """
+    if not isinstance(so_what, dict):
+        return ''
+    reads = so_what.get('action_reads')
+    if not isinstance(reads, list) or not reads:
+        return ''
+
+    mandeb_bit = ''
+    israel_bit = ''
+    for ar in reads:
+        if not isinstance(ar, dict):
+            continue
+        q = (ar.get('question') or '').lower()
+        color = ar.get('color', '')
+        lvl = ar.get('level', 0)
+        if 'mandeb' in q:
+            if color == '#dc2626':
+                mandeb_bit = (f'Houthi maritime signals consistent with movement toward '
+                              f'Bab el-Mandeb closure (L{lvl})')
+            elif color == '#f97316':
+                mandeb_bit = (f'Houthi maritime pressure elevated short of Bab el-Mandeb '
+                              f'closure (L{lvl})')
+        elif 'israel' in q:
+            if color == '#dc2626':
+                israel_bit = (f'direct-strike posture toward Israel consistent with an '
+                              f'active campaign (L{lvl})')
+            elif color == '#f97316':
+                israel_bit = (f'direct-strike posture toward Israel consistent with a '
+                              f'resumption posture (L{lvl})')
+
+    bits = [b for b in (mandeb_bit, israel_bit) if b]
+    if not bits:
+        return ''
+
+    clause = 'Yemen read: ' + '; '.join(bits) + '.'
+    if so_what.get('dual_chokepoint') and mandeb_bit:
+        clause += ' The Iran-Hormuz dual-chokepoint pattern is active.'
+    return clause
+
+
 def _build_bluf_prose_v2(posture, trackers):
     """
     BLUF prose v2 — human-language regional analytical summary.
@@ -1332,6 +1393,13 @@ def _build_bluf_prose_v2(posture, trackers):
             dive += "."
         para1_parts.append(dive)
 
+    # Yemen regional chokepoint/strike read -- names the Bab el-Mandeb + Israel
+    # action reads at regional altitude (recomputed from the action_reads bands).
+    if top_theatre == 'yemen':
+        _yclause = _yemen_action_clause(top_data.get('so_what'))
+        if _yclause:
+            para1_parts.append(_yclause)
+
     # ════════ PARA 2: Other elevated theaters + baselines ════════
     para2_parts = []
     other_elevated = [
@@ -1362,6 +1430,10 @@ def _build_bluf_prose_v2(posture, trackers):
                 sent += f" -- {vecs[0][0]} elevated at L{vecs[0][1]}."
             else:
                 sent += "."
+        if theatre == 'yemen':
+            _yclause = _yemen_action_clause(data.get('so_what'))
+            if _yclause:
+                sent += f" {_yclause}"
         para2_parts.append(sent)
 
     if baseline_theatres:
