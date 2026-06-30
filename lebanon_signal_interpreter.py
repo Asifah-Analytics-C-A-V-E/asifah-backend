@@ -1403,6 +1403,217 @@ def _score_civil_war_convergence(scan_data):
     }
 
 
+_FRAMEWORK_PRECEDENTS = (
+    "UNSCR 1701 (2006): signed and internationally guaranteed, but never enforced -- "
+    "the LAF deployed south of the Litani for two decades without disarming Hezbollah",
+    "the Nov 2024 ceasefire: a withdrawal-and-disarmament framework that degraded into a "
+    "contested buffer zone with Hezbollah's arms intact",
+)
+
+_FRAMEWORK_DISCLAIMER = (
+    "This is a CONVERGENCE indicator of framework-IMPLEMENTATION trajectory, NOT a "
+    "prediction that Lebanon will or will not achieve sovereignty. It reports which "
+    "implementation milestones and interference signals are present; the reader completes "
+    "the inference."
+)
+
+_FRAMEWORK_BAND_META = {
+    'Implementing': ('#10b981', '\U0001f7e2'),   # green circle
+    'Contested':    ('#f59e0b', '\U0001f7e1'),   # yellow circle
+    'Stalled':      ('#94a3b8', '\u26aa'),        # white circle
+    'Collapsing':   ('#dc2626', '\U0001f534'),   # red circle
+}
+
+
+def _score_framework_implementation(scan_data):
+    """Lebanon Trilateral Framework IMPLEMENTATION read (Slice 2).
+
+    The Framework is SIGNED (Slice 1). This read answers the question that signing
+    opened: is Lebanon trending toward SOVEREIGNTY (the framework being implemented)
+    or is FOREIGN INTERFERENCE winning (rejection / re-arming / occupation persisting)?
+
+    Doctrine -- ACCEPTANCE PRECEDES DISARMAMENT. The acceptance gate (Hezbollah +
+    Iran) is the precondition: until it opens, LAF 'clearance' cannot target Hezbollah
+    and milestones do not yet count as genuine sovereignty progress. We track milestone
+    PRESENCE (not completion), name the precedent (20-year 1701 non-enforcement), and do
+    NOT declare sovereignty. Absence stays honest: when nothing is moving, the read is
+    Stalled, not optimistic.
+
+    Bands (sovereignty trajectory, best -> worst):
+      Implementing -> Contested -> Stalled -> Collapsing
+
+    Reads from framework_signals (postures) + the escalation-blind framework pool +
+    actor articles. Milestone keywords are ACTION-specific (actual events), not the
+    framework merely DESCRIBING a step -- otherwise every framework article would read
+    as a false 'milestone present'.
+    """
+    fw = scan_data.get('framework_signals') or {}
+    actors = scan_data.get('actors', {}) or {}
+    pool = scan_data.get('framework_articles', []) or []
+
+    def _scan(keywords, actor_ids=None):
+        for art in pool:
+            t = (art.get('title', '') or '').lower()
+            if any(k in t for k in keywords):
+                return True
+        if actor_ids:
+            for aid in actor_ids:
+                for art in actors.get(aid, {}).get('top_articles', []):
+                    t = (art.get('title', '') or '').lower()
+                    if any(k in t for k in keywords):
+                        return True
+        return False
+
+    # ── Acceptance gate (the precondition) ──
+    hez   = fw.get('hezbollah_posture', 'reject')
+    iran  = fw.get('iran_posture', 'unclear')
+    berri = fw.get('berri_posture', 'reject')
+    gate_open    = (hez == 'accept' and iran == 'accept')
+    gate_partial = (not gate_open) and (hez == 'accept' or iran == 'accept' or berri == 'accept')
+    gate = 'open' if gate_open else ('partial' if gate_partial else 'closed')
+
+    # ── Progress milestones (-> sovereignty). ACTION-specific keywords. ──
+    milestones = {
+        'pilot_zone_launch': _scan(
+            ['pilot zone launched', 'pilot zone begins', 'clearance operation', 'clearance underway',
+             'laf enters south', 'south litani clearance', 'إطلاق المنطقة', 'بدء التطهير']),
+        'laf_clearance': _scan(
+            ['laf clears', 'army clears', 'weapons seizure', 'seizes weapons', 'arrests hezbollah',
+             'laf dismantles', 'army deploys south of litani', 'الجيش يصادر', 'الجيش يطبق',
+             'مصادرة سلاح'], ['lebanese_government']),
+        'verification': _scan(
+            ['verification team', 'verified disarmament', 'third party verifies', 'inspectors confirm',
+             'تحقق', 'فريق التحقق']),
+        'mcg_active': _scan(
+            ['mcg4l meets', 'mcg4l session', 'coordination group convenes', 'deconfliction cell',
+             'military coordination group meets', 'لجنة التنسيق العسكري']),
+        'idf_redeploy': _scan(
+            ['idf withdraws', 'israel withdraws', 'israeli pullback', 'idf redeploys', 'israel pulls back',
+             'troops withdraw lebanon', 'israeli redeployment', 'الانسحاب الإسرائيلي', 'انسحاب القوات',
+             'נסיגה מלבנון'], ['israel_lebanon']),
+        'cbm': _scan(
+            ['detainees released', 'prisoners released', 'remains returned', 'bodies handed over',
+             'return of remains', 'الإفراج عن المعتقلين', 'إعادة الرفات']),
+        'reconstruction': _scan(
+            ['reconstruction begins', 'rebuilding begins', 'reconstruction underway', 'إعادة الإعمار']),
+    }
+    progress = [k for k, v in milestones.items() if v]
+
+    # ── Stall / interference signals (-> foreign interference) ──
+    stalls = {
+        'hezbollah_reject':  (hez != 'accept'),
+        'iran_rearming':     _scan(
+            ['weapons transfer', 'arms smuggling', 'resupply', 'rearming hezbollah', 'iran rearm',
+             'syria corridor weapons', 'نقل أسلحة', 'تهريب سلاح'],
+            ['iran_lebanon', 'syria_border', 'hezbollah_military']),
+        'idf_expansion':     _scan(
+            ['israel expands', 'buffer zone expansion', 'seizes more territory', 'expands security zone',
+             'new israeli positions', 'توسيع المنطقة العازلة'], ['israel_lebanon']),
+        'framework_breach':  _scan(
+            ['framework collapse', 'deal collapses', 'agreement breached', 'withdraws from agreement',
+             'framework dead', 'abandons framework', 'انهيار الاتفاق', 'خرق الاتفاق']),
+        'funds_to_hezbollah': _scan(
+            ['funds reach hezbollah', 'reconstruction funds hezbollah', 'money to hezbollah']),
+    }
+    stall_signals = [k for k, v in stalls.items() if v]
+
+    # ── Band logic. Acceptance gate gates the optimistic bands. ──
+    active_reversal = (stalls['framework_breach'] or stalls['funds_to_hezbollah'] or
+                       (stalls['iran_rearming'] and stalls['idf_expansion']))
+    if active_reversal:
+        band = 'Collapsing'
+    elif gate_open and len(progress) >= 2:
+        band = 'Implementing'
+    elif gate_open or gate_partial or len(progress) >= 1:
+        band = 'Contested'
+    else:
+        band = 'Stalled'
+
+    band_color, band_icon = _FRAMEWORK_BAND_META[band]
+
+    # ── Sovereignty-vs-interference framing + estimative assessment per band ──
+    if band == 'Stalled':
+        trajectory = 'interference frozen in place -- neither advancing nor receding'
+        answer = ('Signed but frozen: the framework is on paper, the actors who must disarm '
+                  'reject it, and nothing is moving toward sovereignty.')
+        assessment = (
+            'The Trilateral Framework is signed, but the acceptance gate is shut: Hezbollah '
+            '(and Speaker Berri / Amal) reject disarmament, and acceptance must precede any '
+            'disarmament milestone. No clearance, verification, MCG4L activity, or IDF '
+            'redeployment is in evidence; Israel holds its positions pending disarmament. This '
+            'is consistent with ' + _FRAMEWORK_PRECEDENTS[0] + '. The sovereignty checklist '
+            'stays aspirational while Iranian patronage and Israeli occupation persist '
+            'unchanged. US Treasury sanctions are positioned as coercive leverage on '
+            'fence-sitters, but no posture shift has yet followed.')
+    elif band == 'Contested':
+        trajectory = 'sovereignty-vs-interference balance live and genuinely reversible'
+        _movers = []
+        if berri == 'accept':
+            _movers.append('a Berri / Amal tone shift')
+        if hez == 'accept':
+            _movers.append('Hezbollah acceptance language')
+        if iran == 'accept':
+            _movers.append('an Iranian green-light signal')
+        if progress:
+            _movers.append('early implementation steps (' + ', '.join(progress) + ')')
+        answer = ('Movement has begun: the framework is being tested against resistance, and '
+                  'the sovereignty outcome is genuinely open.')
+        assessment = (
+            'Partial movement is appearing -- ' + ('; '.join(_movers) if _movers else 'early signals') +
+            ' -- against continued Hezbollah resistance. The acceptance gate is cracking but not '
+            'open, so this is not yet genuine disarmament progress. It is consistent with prior '
+            'junctures where Shia institutional actors (Amal) shifted before Hezbollah, but no '
+            'precedent exists for actual Hezbollah disarmament; ' + _FRAMEWORK_PRECEDENTS[1] +
+            '. The balance is live and reversible.')
+    elif band == 'Implementing':
+        trajectory = 'trajectory toward sovereignty -- the state reclaiming its monopoly on force'
+        answer = ('Trajectory toward sovereignty: the acceptance gate is open and concrete '
+                  'milestones are moving.')
+        assessment = (
+            'Hezbollah and Iran acceptance signals are present and concrete milestones (' +
+            ', '.join(progress) + ') are in evidence -- an unprecedented break from ' +
+            _FRAMEWORK_PRECEDENTS[0] + '. This is the only configuration consistent with the '
+            'Lebanese state reclaiming its monopoly on force. NOTE: presence of milestones is '
+            'not completion -- sovereignty here is a process being observed, not a result being '
+            'declared.')
+    else:  # Collapsing
+        trajectory = 'foreign interference ascendant -- the framework being hollowed out in practice'
+        _rev = []
+        if stalls['framework_breach']:
+            _rev.append('framework-breach language')
+        if stalls['iran_rearming']:
+            _rev.append('Iranian re-arming via the Syria corridor')
+        if stalls['idf_expansion']:
+            _rev.append('IDF expansion')
+        if stalls['funds_to_hezbollah']:
+            _rev.append('reconstruction funds reaching Hezbollah')
+        answer = ('Interference ascendant: the framework is being actively reversed or breached.')
+        assessment = (
+            'Active-reversal signals -- ' + '; '.join(_rev) + ' -- are converging. The framework '
+            'is signed but being hollowed out in practice, consistent with ' +
+            _FRAMEWORK_PRECEDENTS[1] + '. Foreign interference (Iranian patronage and/or Israeli '
+            'occupation) is gaining rather than receding.')
+
+    return {
+        'band':             band,                  # Implementing / Contested / Stalled / Collapsing
+        'band_color':       band_color,
+        'band_icon':        band_icon,
+        'sovereignty_trajectory': trajectory,
+        'gate':             gate,                  # open / partial / closed
+        'acceptance_gate_open': gate_open,
+        'milestones_present': progress,
+        'milestone_count':  len(progress),
+        'stall_signals':    stall_signals,
+        'answer':           answer,                # one-line sovereignty-vs-interference read
+        'assessment':       assessment,            # estimative, precedent-anchored
+        'precedent':        list(_FRAMEWORK_PRECEDENTS),
+        'disclaimer':       _FRAMEWORK_DISCLAIMER,
+        'framework_signed_date': fw.get('framework_signed_date', '2026-06-26'),
+        'coverage':         'rhetoric + framework-pool grounded; pilot-zone/MCG4L OSINT will '
+                            'deepen as implementation reporting matures',
+    }
+
+
 def interpret_signals(scan_data):
     """
     Main entry point. Called from rhetoric_tracker.py with full scan_data.
@@ -1419,6 +1630,7 @@ def interpret_signals(scan_data):
         diplomatic   = _score_diplomatic_track(scan_data, green_lines)
         historical   = _match_historical(scan_data)
         civil_war    = _score_civil_war_convergence(scan_data)
+        framework_impl = _score_framework_implementation(scan_data)
         so_what      = _build_so_what(scan_data, red_lines, historical,
                                       green_lines, diplomatic)
 
@@ -1442,6 +1654,7 @@ def interpret_signals(scan_data):
             },
             'diplomatic_track':    diplomatic,
             'framework_signals':   framework,
+            'framework_implementation': framework_impl,
             'historical_matches':  historical,
             'civil_war_convergence': civil_war,
             'interpreter_version': '1.2.0',
@@ -1460,6 +1673,12 @@ def interpret_signals(scan_data):
                                    'berri_posture': 'reject', 'treasury_sticks': False,
                                    'acceptance_gate_open': False},
             'historical_matches': [],
+            'framework_implementation': {'band': 'Stalled', 'band_color': '#94a3b8',
+                                         'band_icon': '\u26aa', 'sovereignty_trajectory': '',
+                                         'gate': 'closed', 'milestones_present': [],
+                                         'milestone_count': 0, 'stall_signals': [],
+                                         'answer': '', 'assessment': '', 'precedent': [],
+                                         'disclaimer': '', 'coverage': ''},
             'civil_war_convergence': {'band': 'Latent', 'level': 0, 'active_layers': [],
                                       'amplifier_count': 0, 'answer': '', 'assessment': '',
                                       'precedent': [], 'disclaimer': '', 'coverage': ''},
