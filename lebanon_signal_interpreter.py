@@ -597,13 +597,22 @@ def _detect_framework_signals(scan_data):
     Al Jazeera, Times of Israel, Arab News; Security Annex scoop (H. Nasr / Asharq).
     """
     actors = scan_data.get('actors', {})
+    framework_pool = scan_data.get('framework_articles', []) or []
 
     def _scan(actor_ids, keywords):
+        # actor top_articles (escalation-ranked)
         for aid in actor_ids:
             for art in actors.get(aid, {}).get('top_articles', []):
                 title = art.get('title', '').lower()
                 if any(kw in title for kw in keywords):
                     return True
+        # Slice 1b: escalation-blind framework pool -- where the de-escalatory
+        # acceptance / Berri / sanctions signals actually live (top_articles
+        # squeezes them out, so we scan this dedicated pool too).
+        for art in framework_pool:
+            title = art.get('title', '').lower()
+            if any(kw in title for kw in keywords):
+                return True
         return False
 
     # -- Framework event / annex / mechanism mention (corroboration signal) --
