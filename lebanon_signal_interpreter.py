@@ -1,11 +1,11 @@
 """
 lebanon_signal_interpreter.py
 Asifah Analytics -- ME Backend Module
-v1.1.0
+v1.2.0
 
 Signal interpretation engine for the Lebanon Rhetoric Tracker.
 
-Lebanon's analytical frame is now FOUR-WAY (v1.1.0):
+Lebanon's analytical frame is now FIVE-WAY (v1.2.0):
 
   1. Is Hezbollah re-activating under Iranian direction
      (not in defense of Lebanon -- in service of the axis)?
@@ -13,8 +13,11 @@ Lebanon's analytical frame is now FOUR-WAY (v1.1.0):
      or can conditions be created for withdrawal?
   3. Will the LAF/GOL ever actually enforce 1701 and give
      Israel confidence to pull back?
-  4. [NEW v1.1.0] Is there a genuine diplomatic off-ramp, and
-     is Hezbollah escalating specifically to blow it up?
+  4. Is there a genuine diplomatic off-ramp, and is Hezbollah
+     escalating specifically to blow it up?
+  5. [NEW v1.2.0] The Trilateral Framework is SIGNED -- is it being
+     IMPLEMENTED (Lebanon trending sovereign) or rejected/stalled
+     (foreign interference dominates)? Acceptance precedes disarmament.
 
 Key contextual factors baked in:
   - Hezbollah entered the war March 2, 2026 on Iran direction
@@ -28,8 +31,34 @@ Key contextual factors baked in:
     first direct contact without diplomatic relations. Hezbollah is
     escalating rockets and street pressure specifically to derail talks.
     This is the dual-track moment: active war + active diplomacy.
+  - JUNE 26, 2026: US-Israel-Lebanon TRILATERAL FRAMEWORK signed in
+    Washington (14 points + Security Annex: MCG4L coordination cell,
+    4-step pilot-zone clearance model, two initial pilot zones -- one
+    south of the Litani, one in the northern security zone). GOL (Aoun/
+    Salam/Amb. Hamadeh) signed; Israel (Amb. Leiter) signed; US (Rubio)
+    mediated. The Framework defines sovereignty as a checklist: state
+    monopoly on force, verified Hezbollah disarmament, GOL-only war/peace
+    authority, full IDF withdrawal, reconstruction funds walled off from
+    non-state groups.
+  - REJECTION IS THE CURRENT REALITY (as of signing): Hezbollah SG Qassem
+    rejects ("no normalization", weapons stay, unconditional IDF withdrawal);
+    a Hezbollah MP warned authorities against enforcing it; Speaker Berri
+    (Amal) also rejects. Israel (Netanyahu/Katz) will not withdraw until
+    disarmament. US Treasury sanctions (e.g. Sleiman Frangieh) are coercive
+    "sticks" meant to move fence-sitters (notably Berri) toward positive steps.
+    Acceptance by Hezbollah + Iran is the gate that precedes disarmament.
 
 CHANGELOG:
+  v1.2.0 (2026-06-30):
+    - Added _detect_framework_signals() -- Trilateral Framework detection spine
+      (signed event + Hezbollah/Iran/Berri acceptance-vs-rejection postures +
+      US Treasury sanctions "sticks"). Acceptance-before-disarmament sequencing.
+    - Added 4 framework GREEN_LINES (framework_signed, hezbollah_accepts_framework,
+      iran_accepts_framework, berri_positive_shift)
+    - Refreshed _score_diplomatic_track scenario labels for the post-signing era
+    - Surfaced framework posture in _build_so_what (situation + watch)
+    - framework_signals added to interpret_signals output (consumed by the Slice 2
+      sovereignty-vs-interference implementation read)
   v1.1.0 (2026-04-10):
     - Added GREEN_LINES system (diplomatic off-ramp signals)
     - Added _score_green_lines() function
@@ -230,6 +259,64 @@ GREEN_LINES = [
         'category': 'laf_signal',
         'source':   'Israeli withdrawal condition: LAF enforcement (not just presence) '
                     'is the stated condition for IDF pullback from buffer zone',
+    },
+    # ── v1.2.0 Trilateral Framework green lines (acceptance precedes disarmament) ──
+    {
+        'id':       'framework_signed',
+        'label':    'Trilateral Framework Agreement Signed',
+        'detail':   'The US-Israel-Lebanon Trilateral Framework (14 points + Security '
+                    'Annex) was signed in Washington June 26, 2026 -- the most significant '
+                    'diplomatic event in the Lebanon file in a generation',
+        'momentum': 3,
+        'color':    '#10b981',
+        'icon':     '📜',
+        'category': 'framework',
+        'source':   'U.S. Dept of State, signed 2026-06-26 (Leiter/Hamadeh/Holler, Rubio '
+                    'mediating); corroborated Al Jazeera, Times of Israel, Arab News. A '
+                    'signed framework is the diplomatic achievement; implementation is a '
+                    'separate read (sovereignty-vs-interference).',
+    },
+    {
+        'id':       'hezbollah_accepts_framework',
+        'label':    'Hezbollah Accepts Framework / Disarmament',
+        'detail':   'Hezbollah (SG Qassem) shifts from rejection to acceptance of the '
+                    'Framework and disarmament -- the gate that must open before any '
+                    'disarmament milestone can begin',
+        'momentum': 3,
+        'color':    '#10b981',
+        'icon':     '🕊️',
+        'category': 'framework_acceptance',
+        'source':   'Acceptance precedes disarmament. Baseline as of signing: Hezbollah '
+                    'REJECTS ("no normalization", weapons stay). This line fires only on a '
+                    'detected shift toward acceptance -- absence is the honest current read.',
+    },
+    {
+        'id':       'iran_accepts_framework',
+        'label':    'Iran Signals Acceptance of Framework',
+        'detail':   'Iran signals it will not obstruct the Framework / green-lights '
+                    'Hezbollah accommodation -- woven via the US-Iran MoU (Lebanon was '
+                    'reportedly an Iranian priority in that MoU)',
+        'momentum': 3,
+        'color':    '#10b981',
+        'icon':     '🇮🇷',
+        'category': 'framework_acceptance',
+        'source':   'Iran is the patron; Hezbollah accommodation historically tracks Tehran '
+                    'posture. Baseline: unclear (woven via MoU, no clean public framework '
+                    'line). Fires only on a detected Iranian acceptance signal.',
+    },
+    {
+        'id':       'berri_positive_shift',
+        'label':    'Speaker Berri / Amal Tone Shift Toward Framework',
+        'detail':   'Speaker Nabih Berri (Amal) shifts tone/language toward acceptance -- '
+                    'the key Shia swing figure, more pragmatic than Hezbollah and the '
+                    'target of US Treasury sanctions pressure ("sticks")',
+        'momentum': 2,
+        'color':    '#22c55e',
+        'icon':     '⚖️',
+        'category': 'framework_acceptance',
+        'source':   'Berri is the institutional Shia interlocutor (Speaker since 1992). '
+                    'Baseline as of signing: REJECTS. A Berri shift is a leading indicator '
+                    'that Treasury "sticks" are working and the Shia bloc may move.',
     },
 ]
 
@@ -462,6 +549,139 @@ def _score_red_lines(scan_data):
     return triggered
 
 
+# ============================================================
+# v1.2.0 -- TRILATERAL FRAMEWORK DETECTION SPINE
+# ============================================================
+# Standing framework postures as of 2026-06-26 (signing). Documented public
+# positions: Hezbollah (SG Qassem) and Speaker Berri / Amal both REJECT the
+# Framework and disarmament. Iran's posture is woven via the US-Iran MoU and is
+# not a clean public framework line -> 'unclear'. REVIEW periodically: scan
+# detection overrides the baseline toward acceptance when a shift is reported.
+_FRAMEWORK_BASELINE = {
+    'hezbollah': 'reject',
+    'berri':     'reject',
+    'iran':      'unclear',
+}
+_FRAMEWORK_SIGNED_DATE = '2026-06-26'
+
+
+def _detect_framework_signals(scan_data):
+    """
+    v1.2.0 -- Trilateral Framework detection spine.
+
+    The US-Israel-Lebanon Trilateral Framework was SIGNED in Washington on
+    2026-06-26 (14 points + a Security Annex establishing the Military
+    Coordination Group for Lebanon (MCG4L) and a 4-step pilot-zone clearance
+    model; two initial pilot zones agreed). The Framework defines sovereignty as
+    a checklist (state monopoly on force, verified Hezbollah disarmament, GOL-only
+    war/peace authority, full IDF withdrawal, reconstruction funds walled off from
+    non-state groups).
+
+    The analytical question is no longer 'will there be a deal' -- it is whether
+    the actors who must COMPLY move toward acceptance and then implementation, or
+    reject it (the interference read). ACCEPTANCE PRECEDES DISARMAMENT, so we
+    track, in order:
+      1. Framework SIGNED            (done -- known fact, baseline ACTIVE)
+      2. Hezbollah acceptance        (baseline REJECT; gate for disarmament)
+      3. Iran acceptance             (baseline UNCLEAR; woven via US-Iran MoU)
+      4. Berri / Amal posture shift  (baseline REJECT; key Shia swing, sanctions-pressured)
+      5. (Slice 2) milestone implementation
+
+    US Treasury sanctions (e.g. Sleiman Frangieh) are read as coercive "sticks"
+    meant to move fence-sitters (notably Berri) toward positive steps.
+
+    Returns a dict consumed by the green lines, the so-what, and the Slice 2
+    sovereignty-vs-interference implementation read.
+
+    Sources: U.S. Dept of State (state.gov, signed 2026-06-26); corroborated by
+    Al Jazeera, Times of Israel, Arab News; Security Annex scoop (H. Nasr / Asharq).
+    """
+    actors = scan_data.get('actors', {})
+
+    def _scan(actor_ids, keywords):
+        for aid in actor_ids:
+            for art in actors.get(aid, {}).get('top_articles', []):
+                title = art.get('title', '').lower()
+                if any(kw in title for kw in keywords):
+                    return True
+        return False
+
+    # -- Framework event / annex / mechanism mention (corroboration signal) --
+    framework_mention = _scan(
+        ['lebanese_government', 'israel_lebanon', 'hezbollah_political'],
+        ['framework agreement', 'trilateral framework', 'washington agreement',
+         'security annex', 'mcg4l', 'military coordination group',
+         'pilot zone', 'pilot area', 'litani sector', '14-point', '14 point',
+         'اتفاق الإطار', 'الإطار الثلاثي', 'اتفاق واشنطن', 'الملحق الأمني',
+         'הסכם המסגרת', 'מסגרת משולשת']
+    )
+
+    # -- Hezbollah ACCEPTANCE vs REJECTION (acceptance overrides baseline reject) --
+    hezb_accept = _scan(
+        ['hezbollah_political'],
+        ['hezbollah accepts framework', 'hezbollah backs agreement', 'qassem accepts',
+         'hezbollah agrees to disarm', 'hand over weapons', 'hezbollah will disarm',
+         'accepts disarmament', 'hezbollah endorses framework',
+         'حزب الله يقبل الاتفاق', 'حزب الله يوافق', 'تسليم السلاح']
+    )
+
+    # -- Iran ACCEPTANCE vs REJECTION --
+    iran_accept = _scan(
+        ['iran_lebanon'],
+        ['iran backs framework', 'iran supports lebanon deal', 'iran accepts',
+         'tehran endorses', 'iran green light', 'tehran backs',
+         'إيران تدعم', 'إيران تؤيد الاتفاق']
+    )
+    iran_reject = _scan(
+        ['iran_lebanon'],
+        ['iran rejects', 'iran condemns deal', 'tehran opposes', 'iran slams',
+         'إيران ترفض', 'إيران تدين']
+    )
+
+    # -- Berri / Amal (Speaker; key Shia swing; sanctions-pressured) --
+    berri_positive = _scan(
+        ['lebanese_government', 'hezbollah_political'],
+        ['berri accepts', 'berri backs', 'berri endorses', 'berri welcomes',
+         'amal accepts', 'berri supports framework', 'berri open to',
+         'بري يقبل', 'بري يرحب', 'بري يدعم']
+    )
+
+    # -- US Treasury sanctions as "sticks" --
+    treasury_sticks = _scan(
+        ['lebanese_government', 'hezbollah_political', 'israel_lebanon'],
+        ['treasury sanctions', 'ofac', 'us sanctions', 'sanctioned', 'frangieh',
+         'sanctions lebanese', 'designated by treasury',
+         'عقوبات الخزانة', 'عقوبات أمريكية', 'فرنجية']
+    )
+
+    # Resolve postures: baseline stands unless a positive shift is detected.
+    hezbollah_posture = 'accept' if hezb_accept else _FRAMEWORK_BASELINE['hezbollah']
+    berri_posture     = 'accept' if berri_positive else _FRAMEWORK_BASELINE['berri']
+    if iran_accept and not iran_reject:
+        iran_posture = 'accept'
+    elif iran_reject and not iran_accept:
+        iran_posture = 'reject'
+    else:
+        iran_posture = _FRAMEWORK_BASELINE['iran']
+
+    # Acceptance gate: has the disarmament gate (Hezbollah + Iran) opened at all?
+    acceptance_gate_open = (hezbollah_posture == 'accept' and iran_posture == 'accept')
+
+    return {
+        'framework_signed':      True,
+        'framework_signed_date': _FRAMEWORK_SIGNED_DATE,
+        'framework_mention':     framework_mention,
+        'hezbollah_posture':     hezbollah_posture,   # accept | reject
+        'iran_posture':          iran_posture,        # accept | reject | unclear
+        'berri_posture':         berri_posture,       # accept | reject
+        'treasury_sticks':       treasury_sticks,
+        'acceptance_gate_open':  acceptance_gate_open,
+        'source': ('U.S. Dept of State, signed 2026-06-26; corroborated Al Jazeera, '
+                   'Times of Israel, Arab News'),
+        'data_as_of': _FRAMEWORK_SIGNED_DATE,
+    }
+
+
 def _score_green_lines(scan_data):
     """
     NEW v1.1.0 -- Evaluate Lebanon diplomatic off-ramp signals.
@@ -583,6 +803,39 @@ def _score_green_lines(scan_data):
             'trigger': f'LAF signaling willingness to enforce south Lebanon (LAF L{laf_level})',
         })
 
+    # ── v1.2.0 Framework green lines (signed event + acceptance gate) ──
+    framework = scan_data.get('framework_signals') or {}
+    if framework.get('framework_signed'):
+        triggered.append({
+            **next(g for g in GREEN_LINES if g['id'] == 'framework_signed'),
+            'status': 'ACTIVE',
+            'trigger': ('Trilateral Framework signed in Washington '
+                        + str(framework.get('framework_signed_date', '2026-06-26'))
+                        + ' (14 points + Security Annex / MCG4L). Diplomatic '
+                          'achievement secured; implementation is the open question.'),
+        })
+    if framework.get('hezbollah_posture') == 'accept':
+        triggered.append({
+            **next(g for g in GREEN_LINES if g['id'] == 'hezbollah_accepts_framework'),
+            'status': 'ACTIVE',
+            'trigger': 'Hezbollah acceptance language detected -- the disarmament gate '
+                       'is opening (shift from the rejection baseline).',
+        })
+    if framework.get('iran_posture') == 'accept':
+        triggered.append({
+            **next(g for g in GREEN_LINES if g['id'] == 'iran_accepts_framework'),
+            'status': 'ACTIVE',
+            'trigger': 'Iranian acceptance / non-obstruction signal detected -- patron '
+                       'green-light for Hezbollah accommodation.',
+        })
+    if framework.get('berri_posture') == 'accept':
+        triggered.append({
+            **next(g for g in GREEN_LINES if g['id'] == 'berri_positive_shift'),
+            'status': 'ACTIVE',
+            'trigger': 'Speaker Berri / Amal tone shift toward the Framework detected -- '
+                       'leading indicator that Shia-bloc posture may be moving.',
+        })
+
     # Sort by momentum descending
     triggered.sort(key=lambda x: -x['momentum'])
     return triggered
@@ -615,8 +868,25 @@ def _score_diplomatic_track(scan_data, green_lines_triggered):
     momentum += ceasefire * 5   # ceasefire vector adds context
     score = min(100, momentum)
 
-    # Diplomatic scenario label
-    if score >= 75:
+    # Diplomatic scenario label.
+    # v1.2.0: once the Framework is SIGNED the diplomatic ACHIEVEMENT is secured;
+    # the live question becomes compliance/implementation. The label reflects the
+    # signed phase + the acceptance gate; the full sovereignty-vs-interference band
+    # is the Slice 2 implementation read.
+    framework = scan_data.get('framework_signals') or {}
+    if framework.get('framework_signed'):
+        _hez = framework.get('hezbollah_posture', 'reject')
+        _irn = framework.get('iran_posture', 'unclear')
+        if _hez == 'accept' and _irn == 'accept':
+            scenario       = 'FRAMEWORK SIGNED -- Compliance Gate Opening, Implementation Ahead'
+            scenario_color = '#10b981'
+        elif _hez == 'accept' or _irn == 'accept':
+            scenario       = 'FRAMEWORK SIGNED -- Partial Acceptance, Compliance Incomplete'
+            scenario_color = '#22c55e'
+        else:
+            scenario       = 'FRAMEWORK SIGNED -- Rejected by Hezbollah/Amal, Implementation Contested'
+            scenario_color = '#f59e0b'
+    elif score >= 75:
         scenario       = 'BREAKTHROUGH — Direct Talks Active, Framework Possible'
         scenario_color = '#10b981'
     elif score >= 50:
@@ -648,6 +918,13 @@ def _score_diplomatic_track(scan_data, green_lines_triggered):
         'hezbollah_disrupting': hezbollah_disrupting,
         'active_count':        len(active_lines),
         'signaled_count':      len(signaled_lines),
+        'framework_signed':    bool(framework.get('framework_signed')),
+        'framework_posture':   {
+            'hezbollah': framework.get('hezbollah_posture', 'reject'),
+            'iran':      framework.get('iran_posture', 'unclear'),
+            'berri':     framework.get('berri_posture', 'reject'),
+        },
+        'treasury_sticks':     bool(framework.get('treasury_sticks')),
     }
 
 
@@ -807,14 +1084,53 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches,
             f'The critical question: what would GOL and LAF need to DO for Israel to feel confident enough to withdraw?'
         )
 
-    # NEW v1.1.0: Diplomatic track situation
+    # v1.2.0: Framework situation (the headline now -- supersedes the April talks frame)
+    framework = scan_data.get('framework_signals') or {}
+    if framework.get('framework_signed'):
+        _hez = framework.get('hezbollah_posture', 'reject')
+        _berri = framework.get('berri_posture', 'reject')
+        _iran = framework.get('iran_posture', 'unclear')
+        _gate = (_hez == 'accept' and _iran == 'accept')
+        situation_parts.append(
+            'TRILATERAL FRAMEWORK SIGNED (Washington, June 26 2026): the 14-point framework '
+            '+ Security Annex (MCG4L, 4-step pilot-zone clearance model, two initial pilot '
+            'zones) is the most significant Lebanon diplomatic event in a generation. It '
+            'defines Lebanese sovereignty as a checklist -- state monopoly on force, verified '
+            'Hezbollah disarmament, GOL-only war/peace authority, full IDF withdrawal. The '
+            'diplomatic achievement is secured; the open question is IMPLEMENTATION '
+            '(sovereignty) vs. rejection (foreign interference).'
+        )
+        if not _gate:
+            _rejecters = []
+            if _hez != 'accept':
+                _rejecters.append('Hezbollah (Qassem)')
+            if _berri != 'accept':
+                _rejecters.append('Speaker Berri/Amal')
+            _stick = (' US Treasury sanctions (e.g. Frangieh) are active as coercive "sticks" '
+                      'to move fence-sitters toward acceptance.'
+                      if framework.get('treasury_sticks') else
+                      ' US Treasury sanctions are positioned as coercive "sticks" to move '
+                      'fence-sitters toward acceptance.')
+            situation_parts.append(
+                'ACCEPTANCE GATE CLOSED: ' + (' and '.join(_rejecters) or 'key actors') +
+                ' reject the framework and disarmament -- and acceptance must precede '
+                'disarmament. Israel will not withdraw until disarmament begins. The read '
+                'leans contested/stalled, not sovereignty -- consistent with the 20-year '
+                'pattern where Hezbollah retained its arms despite UNSCR 1701.' + _stick
+            )
+        else:
+            situation_parts.append(
+                'ACCEPTANCE GATE OPENING: Hezbollah and Iran acceptance signals detected -- '
+                'the disarmament gate may be opening, an unprecedented break from the 20-year '
+                'rejection pattern. Watch for first concrete pilot-zone clearance.'
+            )
+
+    # Diplomatic track context (momentum)
     if diplomatic_score >= 30:
         dipl_scenario = diplomatic_track.get('scenario', '')
         situation_parts.append(
-            f'DIPLOMATIC TRACK ACTIVE (score {diplomatic_score}/100): {dipl_scenario}. '
-            f'{diplomatic_track.get("active_count", 0)} green line(s) confirmed active. '
-            f'Direct Israel-Lebanon ambassador contact opened April 2026 -- '
-            f'first direct talks without diplomatic relations. State Dept meeting April 15.'
+            f'Diplomatic track score {diplomatic_score}/100: {dipl_scenario}. '
+            f'{diplomatic_track.get("active_count", 0)} green line(s) confirmed active.'
         )
 
     if hezbollah_disrupting:
@@ -839,10 +1155,10 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches,
 
     if hezbollah_disrupting:
         indicators.append(
-            'HEZBOLLAH DISRUPTION PATTERN: Military escalation simultaneous with diplomatic opening '
-            'is Hezbollah attempting to collapse talks before they gain momentum. '
-            'The April 15 State Dept meeting is the immediate tripwire -- '
-            'watch for Hezbollah major attack in the 48-72 hours before talks.'
+            'HEZBOLLAH DISRUPTION PATTERN: Military escalation running simultaneously with the '
+            'signed Framework is Hezbollah signalling it will not be implemented on its back. '
+            'With Hezbollah rejecting disarmament, kinetic activity is the leverage to keep the '
+            'acceptance gate shut and force Israel to stay -- preserving the "resistance" rationale.'
         )
 
     if laf_enforcement_gap:
@@ -874,11 +1190,12 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches,
 
     if diplomatic_score >= 50:
         indicators.append(
-            'DIPLOMATIC OFF-RAMP: Direct Israel-Lebanon talks represent the most significant '
-            'de-escalation signal since the Nov 2024 ceasefire. '
-            'Watch April 15 State Dept meeting for framework outline. '
-            'Key Israeli conditions: LAF enforcement south of Litani, Hezbollah disarmament. '
-            'Key Lebanese condition: full IDF withdrawal, no security zone.'
+            'SIGNED FRAMEWORK, CONTESTED IMPLEMENTATION: the June 26 2026 Trilateral Framework '
+            'is the most significant Lebanon diplomatic event in a generation -- but the actors '
+            'who must comply (Hezbollah, Berri/Amal) reject it. Acceptance precedes disarmament; '
+            'until the acceptance gate opens, the sovereignty checklist (state monopoly on force, '
+            'verified disarmament, full IDF withdrawal) stays aspirational. Israel will not '
+            'withdraw until disarmament begins -- the chicken-and-egg that has held for 20 years.'
         )
 
     # ── Assessment ──
@@ -894,29 +1211,40 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches,
             f'Historical response window: {top_match["window_hours"]}h. Analytical estimate only.'
         )
 
-    # NEW v1.1.0: Add diplomatic track to assessment when active
+    # v1.2.0: Add framework/implementation read to assessment when diplomatic track active
     if diplomatic_score >= 30:
         assessment_parts.append(
-            f'However: the diplomatic track (score {diplomatic_score}/100) introduces a '
-            f'genuine off-ramp that has no historical analog in prior Lebanon escalation cycles. '
-            f'Direct Israel-Lebanon talks are unprecedented. '
-            f'If a framework emerges from April 15 talks, the military logic could collapse rapidly. '
-            f'If talks fail or IDF escalates before April 15, escalation logic dominates. '
-            f'The 72-96 hours around the April 15 meeting are the highest-stakes window.'
+            f'However: the Trilateral Framework (signed June 26 2026; diplomatic score '
+            f'{diplomatic_score}/100) is a genuine off-ramp with no historical analog in prior '
+            f'Lebanon escalation cycles -- a SIGNED, US-guaranteed sovereignty roadmap. The '
+            f'decisive variable is no longer whether a deal exists but whether the acceptance '
+            f'gate opens: Hezbollah and Iran moving from rejection to acceptance is the '
+            f'precondition for any disarmament milestone. Until then the military and diplomatic '
+            f'logics run in parallel rather than one collapsing the other. A Berri/Amal tone '
+            f'shift -- the figure most exposed to US Treasury sanctions pressure -- is the '
+            f'leading indicator to watch.'
         )
 
     # ── Watch list ──
     watch_items = []
 
-    # Diplomatic items come FIRST when track is active
-    if diplomatic_score >= 30:
+    # v1.2.0: Framework implementation watch (acceptance precedes disarmament)
+    if framework.get('framework_signed'):
         watch_items.append(
-            'April 15 State Dept talks -- Leiter (Israel) / Issa (US) / Hamadeh (Lebanon): '
-            'watch for framework outline on LAF enforcement, IDF withdrawal timeline, Hezbollah disarmament'
+            'Hezbollah (Qassem) posture on the Framework + disarmament -- ACCEPTANCE is the '
+            'gate that must open before any disarmament milestone; currently rejected'
         )
         watch_items.append(
-            'Hezbollah response to talks -- major attack before April 15 = disruption attempt; '
-            'silence = possible Iranian pressure to let talks proceed'
+            'Iran posture on the Framework (via the US-Iran MoU) -- patron green-light is the '
+            'second half of the acceptance gate'
+        )
+        watch_items.append(
+            'Speaker Berri / Amal tone shift -- key Shia swing figure under US Treasury '
+            'sanctions pressure; a Berri move is the leading indicator the bloc may follow'
+        )
+        watch_items.append(
+            'First concrete pilot-zone step (South Litani sector) -- LAF clearance, '
+            'third-party verification, MCG4L activity = implementation actually beginning'
         )
 
     watch_items += [
@@ -1073,6 +1401,10 @@ def interpret_signals(scan_data):
     v1.1.0: Now includes green_lines and diplomatic_track in output.
     """
     try:
+        # v1.2.0: framework detection runs FIRST and is stashed into scan_data so
+        # green lines / diplomatic track / so-what all read the same posture spine.
+        framework    = _detect_framework_signals(scan_data)
+        scan_data['framework_signals'] = framework
         red_lines    = _score_red_lines(scan_data)
         green_lines  = _score_green_lines(scan_data)
         diplomatic   = _score_diplomatic_track(scan_data, green_lines)
@@ -1100,9 +1432,10 @@ def interpret_signals(scan_data):
                 'diplomatic_score':  diplomatic['score'],
             },
             'diplomatic_track':    diplomatic,
+            'framework_signals':   framework,
             'historical_matches':  historical,
             'civil_war_convergence': civil_war,
-            'interpreter_version': '1.1.0',
+            'interpreter_version': '1.2.0',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
 
@@ -1113,11 +1446,15 @@ def interpret_signals(scan_data):
             'red_lines':          {'triggered': [], 'breached_count': 0, 'approaching_count': 0, 'highest_severity': 0},
             'green_lines':        {'triggered': [], 'active_count': 0, 'signaled_count': 0, 'diplomatic_score': 0},
             'diplomatic_track':   {'score': 0, 'scenario': 'Unknown', 'hezbollah_disrupting': False},
+            'framework_signals':  {'framework_signed': True, 'framework_signed_date': '2026-06-26',
+                                   'hezbollah_posture': 'reject', 'iran_posture': 'unclear',
+                                   'berri_posture': 'reject', 'treasury_sticks': False,
+                                   'acceptance_gate_open': False},
             'historical_matches': [],
             'civil_war_convergence': {'band': 'Latent', 'level': 0, 'active_layers': [],
                                       'amplifier_count': 0, 'answer': '', 'assessment': '',
                                       'precedent': [], 'disclaimer': '', 'coverage': ''},
-            'interpreter_version': '1.1.0',
+            'interpreter_version': '1.2.0',
             'error':              str(e)[:200],
         }
 
