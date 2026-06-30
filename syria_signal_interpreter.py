@@ -147,6 +147,27 @@ RED_LINES = [
         'category': 'deescalation_signal',
         'source':   'Transition analysis -- governance consolidation is the key variable for Syria long-term stability',
     },
+    # -- Category F: Transition legitimacy / regional pressure -----
+    {
+        'id':       'foreign_fighter_integration',
+        'label':    'Foreign Fighters Formalized into Syrian Military',
+        'detail':   'Foreign jihadist factions folded into the new defense ministry -- institutionalizes an ex-AQ-rooted force as the state army',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🎖️',
+        'category': 'legitimacy_trigger',
+        'source':   'Transition analysis -- HTS core emerged from the al-Qaeda Syrian affiliate; foreign-fighter integration is the central Western-recognition and sanctions-relief question',
+    },
+    {
+        'id':       'syria_lebanon_pressure',
+        'label':    'Syria Pressed Toward Lebanon / Hezbollah Disarmament Role',
+        'detail':   'US pressure for Syria to assist Hezbollah disarmament or assert a Lebanon role -- opposed by both Beirut and Jerusalem',
+        'severity': 2,
+        'color':    '#f97316',
+        'icon':     '🇱🇧',
+        'category': 'regional_pressure_trigger',
+        'source':   'Regional analysis -- historically precedes Syrian-Lebanese friction; Lebanon and Israel both oppose a Syrian security role in Lebanon',
+    },
 ]
 
 
@@ -251,6 +272,9 @@ def _score_red_lines(scan_data):
 
     druze_signals = scan_data.get('druze_signals', [])
     hezbollah_nexus = scan_data.get('hezbollah_nexus_count', 0)
+    gulf_contest_count   = scan_data.get('gulf_contest_count', 0)
+    foreign_fighter_count = scan_data.get('foreign_fighter_count', 0)
+    syria_lebanon_count  = scan_data.get('syria_lebanon_count', 0)
 
     def _scan(actor_ids, keywords):
         for aid in actor_ids:
@@ -302,6 +326,21 @@ def _score_red_lines(scan_data):
     isis_major = isis_vec >= 3 or _scan(['isis'], [
         'isis seizes', 'islamic state captures', 'isis controls',
         'mass casualty', 'isis attack city', 'caliphate'
+    ])
+
+    # Foreign-fighter / ex-AQ integration: APPROACHING on signal presence,
+    # BREACHED when formalization-into-state-security language is detected.
+    foreign_fighter_active = foreign_fighter_count >= 2
+    ff_formalized = _scan(['hts'], [
+        'defense ministry', 'integrated into', 'military rank',
+        'officer corps', 'appointed', 'national army', 'armed forces'
+    ]) and foreign_fighter_count >= 1
+
+    # Syria-into-Lebanon / Hezbollah disarmament: APPROACHING on signal presence,
+    # BREACHED when explicit Syrian-role / disarmament language is detected.
+    syria_lebanon_active = syria_lebanon_count >= 1
+    syrleb_explicit = _scan(['us_envoy', 'hts', 'israel'], [
+        'disarm hezbollah', 'syrian forces lebanon', 'syria enter lebanon'
     ])
 
     triggered = []
@@ -360,6 +399,26 @@ def _score_red_lines(scan_data):
             **next(r for r in RED_LINES if r['id'] == 'druze_armed_uprising'),
             'status':  'APPROACHING',
             'trigger': f'{len(druze_signals)} Druze/Suwayda signals -- armed mobilization language detected',
+        })
+
+    # ── Foreign-fighter / ex-AQ integration ──
+    if foreign_fighter_active or ff_formalized:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'foreign_fighter_integration'),
+            'status':  'BREACHED' if ff_formalized else 'APPROACHING',
+            'trigger': (
+                f'{foreign_fighter_count} foreign-fighter/ex-AQ signals + formalization-into-state-security language'
+                if ff_formalized else
+                f'{foreign_fighter_count} foreign-fighter/ex-AQ integration signals -- legitimacy watch'
+            ),
+        })
+
+    # ── Syria-into-Lebanon / Hezbollah disarmament ──
+    if syria_lebanon_active:
+        triggered.append({
+            **next(r for r in RED_LINES if r['id'] == 'syria_lebanon_pressure'),
+            'status':  'BREACHED' if syrleb_explicit else 'APPROACHING',
+            'trigger': f'{syria_lebanon_count} Syria-Lebanon / Hezbollah-disarmament signals -- regional friction watch',
         })
 
     # ── Normalization signal (blue -- informational) ──
@@ -495,6 +554,9 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     druze        = len(scan_data.get('druze_signals', []))
     theatre      = scan_data.get('theatre_score', 0)
     hezbollah_nexus = scan_data.get('hezbollah_nexus_count', 0)
+    gulf_contest_count    = scan_data.get('gulf_contest_count', 0)
+    foreign_fighter_count = scan_data.get('foreign_fighter_count', 0)
+    syria_lebanon_count   = scan_data.get('syria_lebanon_count', 0)
 
     delta = scan_data.get('delta', {}) or {}
     delta_dir    = delta.get('direction', 'stable')
@@ -510,11 +572,18 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     iran_expelled        = iran_level <= 1
 
     # ── Scenario label ──
-    if breached_count >= 2 or factional >= 4 or isis_vec >= 4:
+    # CRITICAL = collapse-level (severity-3) breach, OR a broad multi-front breach.
+    # Severity-2 stress signals (foreign-fighter, Syria-Lebanon, Druze, Israel-ground)
+    # escalate to ELEVATED but do NOT, on their own, read as transition collapse.
+    sev3_breached = sum(
+        1 for r in red_lines_triggered
+        if r['status'] == 'BREACHED' and r.get('severity', 0) >= 3
+    )
+    if sev3_breached >= 1 or breached_count >= 3 or factional >= 4 or isis_vec >= 4:
         scenario       = 'CRITICAL -- Transition Collapse Risk'
         scenario_color = '#dc2626'
         scenario_icon  = '🔴'
-    elif breached_count == 1 or factional >= 2 or turkey_level >= 3:
+    elif breached_count >= 1 or factional >= 2 or turkey_level >= 3:
         scenario       = 'ELEVATED -- Transition Stress Signals'
         scenario_color = '#f97316'
         scenario_icon  = '🟠'
@@ -582,6 +651,50 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
             f'In Syria context, a falling score is analytically positive.'
         )
 
+    # ── Contested-arena synthesis (Turkey + Gulf + Israel + absent Iran) ──
+    external_stakes = []
+    if turkey_level >= 2:
+        external_stakes.append('Turkey most embedded (security establishment, anti-SDF posture)')
+    if gulf_contest_count >= 1:
+        external_stakes.append(f'Gulf capital ({gulf_contest_count} signals) competing for reconstruction influence')
+    if israel_vec >= 2:
+        external_stakes.append('Israel holding the south and striking under a tacit understanding')
+
+    if len(external_stakes) >= 2:
+        arena = ('Taken together, Syria reads as a CONTESTED post-Assad arena rather than a '
+                 'single-patron state -- ' + '; '.join(external_stakes) + '.')
+        if iran_expelled:
+            arena += ' Iran expelled.'
+        arena += (' These external stakes overlap and partly rival each other -- consistent with a '
+                  'transition whose external alignment is not yet settled.')
+        situation_parts.append(arena)
+    elif gulf_contest_count >= 1:
+        situation_parts.append(
+            f'Gulf reconstruction engagement detected ({gulf_contest_count} signals) -- '
+            'Saudi/Qatari/Emirati capital competing with Turkish influence over the shape of '
+            'post-Assad Syria. Reconstruction financing is the primary lever of external '
+            'influence now that the military phase has receded.'
+        )
+
+    # ── Foreign-fighter / ex-AQ legitimacy ──
+    if foreign_fighter_count >= 2:
+        situation_parts.append(
+            f'Foreign-fighter / ex-AQ integration signals detected ({foreign_fighter_count}). '
+            'The HTS core emerged from the al-Qaeda Syrian affiliate; foreign fighters (Uyghur, '
+            'Central Asian, Arab) reportedly being folded into the new defense ministry would '
+            'institutionalize an ex-jihadist force as the state army -- the central legitimacy '
+            'question for Western recognition and sanctions relief.'
+        )
+
+    # ── Syria-into-Lebanon / Hezbollah disarmament ──
+    if syria_lebanon_count >= 1:
+        situation_parts.append(
+            f'Syria-Lebanon / Hezbollah-disarmament signals detected ({syria_lebanon_count}). '
+            'US pressure for Syria to assist Hezbollah disarmament or assert a Lebanon role is '
+            'opposed by both Beirut and Jerusalem -- a dynamic that historically precedes '
+            'Syrian-Lebanese friction.'
+        )
+
     # ── Key indicators ──
     indicators = []
 
@@ -632,8 +745,24 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
             '(4) any Iranian re-entry attempt.'
         )
 
-    # ── Watch list ──
-    watch_items = [
+    # ── Watch list (dynamic: active dimensions surface first) ──
+    watch_items = []
+    if foreign_fighter_count >= 2:
+        watch_items.append(
+            'Foreign-fighter integration -- folding of foreign jihadist units into the defense '
+            'ministry; legitimacy and Western-recognition risk'
+        )
+    if syria_lebanon_count >= 1:
+        watch_items.append(
+            'Syria-Lebanon pressure -- US push for a Syrian role in Hezbollah disarmament; '
+            'Beirut and Jerusalem both opposed'
+        )
+    if gulf_contest_count >= 1 or turkey_level >= 2:
+        watch_items.append(
+            'Gulf-Turkey reconstruction contest -- competing external influence over the '
+            'post-Assad order; reconstruction financing as the lever'
+        )
+    watch_items += [
         'HTS governance delivery -- constitution, elections, minority rights signals',
         'Iranian re-entry attempt -- any IRGC/proxy signals in Syria immediately escalatory',
         'ISIS activity in Deir ez-Zor and Syrian desert -- primary exploitation zone',
