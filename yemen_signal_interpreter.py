@@ -413,6 +413,96 @@ def _match_historical(scan_data):
     return matches[:3]
 
 
+def _build_action_reads(scan_data, red_lines_triggered):
+    """
+    Head-on, estimative read on the two founding questions of this tracker:
+      (1) Are signals consistent with a move toward Bab el-Mandeb closure?
+      (2) Are signals consistent with direct strikes on Israel?
+    Convergence framing only -- describes what the signals are consistent with
+    and what they have historically preceded; the reader completes the inference.
+    No probabilities, no dates, no 'will'.
+    """
+    actors         = scan_data.get('actors', {})
+    maritime_level = scan_data.get('maritime_level', 0)
+    strike_level   = scan_data.get('direct_strike_level', 0)
+    iran_level     = actors.get('iran', {}).get('escalation_level', 0)
+
+    mandeb_lang   = _check_mandeb_language(scan_data)
+    hormuz_signal = _check_hormuz_from_iran(scan_data) or _get_iran_crosstheater(scan_data)
+    dual          = mandeb_lang and (hormuz_signal or iran_level >= 2)
+
+    lebanon_conditional = any(
+        'lebanon' in (ct.get('phrase', '') or '').lower()
+        for ct in scan_data.get('conditional_threats', [])
+    )
+    ballistic_breached = any(
+        r['id'] == 'ballistic_at_israel' and r['status'] == 'BREACHED'
+        for r in red_lines_triggered
+    )
+
+    # ── Question 1: Bab el-Mandeb / Red Sea closure ──
+    if maritime_level >= 4 and mandeb_lang:
+        bab_read = (f'Maritime signals at L{maritime_level} with closure-framing language present -- '
+                    'consistent with a move toward effective closure of the strait.')
+        if dual:
+            bab_read += (' An Iran-Hormuz co-signal is active -- consistent with a coordinated '
+                         'dual-chokepoint strategy across the Red Sea and the Gulf.')
+        bab_color = '#dc2626'
+    elif maritime_level >= 3:
+        bab_read = (f'Maritime signals at L{maritime_level} -- elevated Red Sea pressure, consistent '
+                    'with harassment and interdiction short of a formal closure declaration.')
+        if dual:
+            bab_read += ' Iran-Hormuz pressure is also active -- the dual-chokepoint pattern is forming.'
+        bab_color = '#f97316'
+    elif maritime_level >= 2:
+        bab_read = (f'Maritime signals at L{maritime_level} -- rising, but below closure-convergence. '
+                    'Watch for closure-framing language and an Iran-Hormuz co-signal.')
+        bab_color = '#f59e0b'
+    else:
+        bab_read = ('No closure-convergence signals this cycle -- Bab el-Mandeb traffic-threat '
+                    'posture at baseline.')
+        bab_color = '#6b7280'
+
+    # ── Question 2: Direct strikes on Israel ──
+    if strike_level >= 4 or ballistic_breached:
+        isr_read = (f'Direct-strike posture at L{strike_level} -- consistent with an active '
+                    'ballistic/drone campaign against Israeli or regional targets.')
+        isr_color = '#dc2626'
+    elif strike_level >= 3:
+        isr_read = (f'Direct-strike posture at L{strike_level} -- consistent with a resumption / '
+                    'retaliation posture toward Israel.')
+        if lebanon_conditional:
+            isr_read += (' Conditional "if Lebanon" framing is active -- the posture is tied to the '
+                         'Lebanon tripwire, the historical trigger for Houthi entry.')
+        isr_color = '#f97316'
+    elif strike_level >= 2:
+        isr_read = (f'Direct-strike signals at L{strike_level} -- threat language present but below '
+                    'operational convergence; a rhetorical posture for now.')
+        if lebanon_conditional:
+            isr_read += ' Conditional "if Lebanon" framing is present -- a tripwire to watch.'
+        isr_color = '#f59e0b'
+    else:
+        isr_read = 'No direct-strike convergence this cycle -- posture toward Israel at baseline.'
+        isr_color = '#6b7280'
+
+    return [
+        {
+            'question': 'Bab el-Mandeb / Red Sea closure',
+            'icon':     '\u2693',          # anchor
+            'level':    maritime_level,
+            'read':     bab_read,
+            'color':    bab_color,
+        },
+        {
+            'question': 'Direct strikes on Israel',
+            'icon':     '\U0001f680',      # rocket
+            'level':    strike_level,
+            'read':     isr_read,
+            'color':    isr_color,
+        },
+    ]
+
+
 def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     """Generate Yemen command node assessment."""
     actors          = scan_data.get('actors', {})
@@ -534,7 +624,8 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         assessment_parts.append(
             f'Confidence: {top_match["confidence"]} -- '
             f'{"multiple strong signal matches" if top_match["confidence"] == "High" else "partial signal match; outcome not determinative"}. '
-            f'Historical response window: {top_match["window_hours"]} hours. Analytical estimate only.'
+            f'In that precedent, escalation followed within roughly {top_match["window_hours"]} hours '
+            f'of a comparable signal set -- a historical pattern, not a forecast for the current cycle.'
         )
     elif maritime_level >= 2:
         assessment_parts.append(
@@ -562,6 +653,7 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         'assessment':      ' '.join(assessment_parts),
         'watch_list':      watch_items[:5],
         'dual_chokepoint': dual_chokepoint,
+        'action_reads':    _build_action_reads(scan_data, red_lines_triggered),
         'generated_at':    datetime.now(timezone.utc).isoformat(),
         'confidence_note': (
             'Yemen/Red Sea assessment generated from open-source signal data. '
