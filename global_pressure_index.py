@@ -1869,6 +1869,16 @@ def _narrative_iran_axis_convergence(blufs):
         for t in targets:
             all_targets.setdefault(t, []).append(name)
 
+    # -- Lebanon spoke de-linking (consumes Lebanon's framework fingerprint) --
+    # Mirrors the Syria rupture: 'active' implementation = spoke leaving the Axis,
+    # counted OUT; 'partial' = wobbling (counted, flagged); 'none' (current Stalled
+    # reality) = full proxy. Dormant until Lebanon's framework actually advances.
+    lfp = ct.get('lebanon') if isinstance(ct.get('lebanon'), dict) else {}
+    lebanon_delinking = (str(lfp.get('spoke_delinking', 'none') or 'none').lower()
+                         if _fresh(lfp) else 'none')
+    if lebanon_delinking == 'active' and 'lebanon' in active:
+        del active['lebanon']
+
     n = len(active)
     proxy_level = LADDER[min(n, 5)]
     shared_phrases = {p: t for p, t in all_phrases.items() if len(t) >= 2}
@@ -1935,6 +1945,13 @@ def _narrative_iran_axis_convergence(blufs):
         detail += ("Syria registers active but is read as the SEVERED land bridge, not a live limb -- "
                    "post-2024 its signal reflects forces hostile to Tehran, so it is counted out of the "
                    "activation and surfaced as the broken corridor. ")
+    if lebanon_delinking == 'active':
+        detail += ("Lebanon is read as a DE-LINKING spoke: under the signed Trilateral Framework, "
+                   "implementation signals are advancing, so its front activity is counted OUT of the "
+                   "Axis activation and surfaced as a spoke contracting away from Tehran. ")
+    elif lebanon_delinking == 'partial':
+        detail += ("Lebanon's signed-framework implementation is contested -- the spoke is wobbling: "
+                   "counted in the activation but flagged as a potential off-ramp if implementation advances. ")
     if is_command or iran_level >= 2:
         detail += "Tehran's own posture reads as command-node (hub) rather than a co-equal front. "
     if chokepoint:
