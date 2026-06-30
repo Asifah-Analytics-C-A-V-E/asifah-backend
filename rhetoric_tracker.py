@@ -1996,6 +1996,39 @@ def fetch_nitter_lebanon(days=3):
 # CORE SCAN FUNCTION
 # ========================================
 
+# ============================================================================
+# v1.2.0 FRAMEWORK ARTICLE POOL (Slice 1b)
+# ----------------------------------------------------------------------------
+# The Trilateral Framework signals the interpreter needs -- acceptance/rejection
+# postures, the Berri/Amal swing, Treasury "sticks" -- are often DE-ESCALATORY,
+# so they get squeezed out of the escalation-ranked top_articles (which keeps the
+# first 5, then only escalation >= 3). This dedicated, escalation-BLIND pool
+# collects any article matching framework vocabulary in EN/AR/HE so that
+# _detect_framework_signals() has a reliable feed. Collection-only: it does NOT
+# touch vector/escalation scoring (no double-count). Absence-honest: the pool is
+# empty when no framework articles are present.
+# ============================================================================
+FRAMEWORK_ARTICLE_KEYWORDS = [
+    # -- Framework event / mechanism (EN) --
+    'framework agreement', 'trilateral framework', 'washington agreement',
+    'security annex', 'mcg4l', 'military coordination group',
+    'pilot zone', 'pilot area', 'litani sector', '14-point', '14 point',
+    'disarmament', 'disarm hezbollah', 'hand over weapons', 'lay down arms',
+    'no normalization', 'no normalisation', 'unconditional withdrawal',
+    # -- Key swing actors / sticks (EN) --
+    'berri', 'nabih berri', 'amal movement', 'speaker berri',
+    'frangieh', 'sleiman frangieh', 'treasury', 'ofac', 'sanction',
+    'us sanctions', 'designated', 'designation',
+    # -- Arabic --
+    'اتفاق الإطار', 'الإطار الثلاثي', 'اتفاق واشنطن', 'الملحق الأمني',
+    'نزع السلاح', 'تسليم السلاح', 'لا تطبيع', 'الانسحاب غير المشروط',
+    'بري', 'نبيه بري', 'حركة أمل', 'فرنجية', 'عقوبات', 'عقوبات الخزانة',
+    # -- Hebrew --
+    'הסכם המסגרת', 'מסגרת משולשת', 'פירוז', 'פירוק חיזבאללה',
+    'ברי', 'נביה ברי', 'סנקציות', 'עיצומים',
+]
+
+
 def run_rhetoric_scan(days=3):
     """
     Execute full Lebanon rhetoric scan.
@@ -2045,8 +2078,24 @@ def run_rhetoric_scan(days=3):
 
     total_classified = 0
     coordination_timeline = []
+    framework_articles = []   # v1.2.0 (Slice 1b): escalation-blind framework pool
 
     for article in articles:
+        # v1.2.0 (Slice 1b): escalation-blind framework pool -- runs BEFORE actor
+        # classification so framework articles are caught even when they don't
+        # match an actor keyword. The de-escalatory acceptance / Berri / sanctions
+        # signals that the escalation-ranked top_articles squeezes out live here.
+        # Collection-only -- no vector/escalation scoring impact.
+        _fw_text = (f"{article.get('title') or ''} {article.get('description') or ''} "
+                    f"{article.get('content') or ''}").lower()
+        if any(_fk in _fw_text for _fk in FRAMEWORK_ARTICLE_KEYWORDS):
+            framework_articles.append({
+                'title':     article.get('title', '')[:160],
+                'url':       article.get('url', ''),
+                'source':    article.get('source', 'Unknown'),
+                'published': article.get('publishedAt', ''),
+            })
+
         actors = classify_actor(article)
         if not actors:
             continue
@@ -2355,6 +2404,15 @@ def run_rhetoric_scan(days=3):
         result['turkey_lebanon_vector']       = 'dormant'
         result['turkey_lebanon_vector_stage'] = 0
         result['turkey_mediation_active']     = False
+
+    # v1.2.0 (Slice 1b): escalation-blind framework article pool for the
+    # interpreter (newest first, capped). Feeds _detect_framework_signals so the
+    # acceptance / Berri / sanctions signals are not lost to the top_articles cap.
+    try:
+        framework_articles.sort(key=lambda a: a.get('published', '') or '', reverse=True)
+    except Exception:
+        pass
+    result['framework_articles'] = framework_articles[:30]
 
     # Signal interpretation -- So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
