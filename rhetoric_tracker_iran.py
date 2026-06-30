@@ -1672,6 +1672,18 @@ def _compute_proxy_activation_index():
             if v.get('level', 0) >= 2
         }
 
+        # -- Lebanon spoke de-linking (consumes the framework fingerprint) --
+        # When Lebanon's signed-framework implementation is genuinely advancing, the
+        # spoke is LEAVING the Axis arena -- its loud rhetoric reflects the disarmament
+        # debate, not Iran-proxy coordination. Mirror the Syria ruptured-corridor logic:
+        #   'active'  -> de-linking spoke, counted OUT (surfaced, not counted)
+        #   'partial' -> counted but flagged wobbling (potential off-ramp)
+        #   'none'    -> full proxy (CURRENT Stalled reality -- Hezbollah rejects)
+        leb_fp = fresh_proxies.get('lebanon', {})
+        lebanon_delinking = str(leb_fp.get('spoke_delinking', 'none') or 'none').lower()
+        if lebanon_delinking == 'active' and 'lebanon' in elevated_proxies:
+            del elevated_proxies['lebanon']
+
         n = len(elevated_proxies)
         if n == 0:
             level = 0
@@ -1725,6 +1737,12 @@ def _compute_proxy_activation_index():
             'syria_ruptured': syria_ruptured,
             'syria_status': ('severed land bridge -- active but counted OUT of Axis activation'
                              if syria_ruptured else 'no fresh ruptured-corridor signal'),
+            'lebanon_delinking': lebanon_delinking,
+            'lebanon_status': {
+                'active':  'framework implementing -- de-linking spoke, counted OUT of Axis activation',
+                'partial': 'framework contested -- counted but spoke wobbling (potential off-ramp)',
+                'none':    'framework stalled/rejected -- full active proxy',
+            }.get(lebanon_delinking, 'full active proxy'),
             'shared_phrases': list(shared_phrases.keys())[:5],
             'shared_targets': list(shared_targets.keys())[:5],
             'synchronized_language': len(shared_phrases) > 0,
