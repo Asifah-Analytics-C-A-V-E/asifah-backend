@@ -1730,6 +1730,9 @@ def _compute_proxy_activation_index():
             'synchronized_language': len(shared_phrases) > 0,
             'shared_target_convergence': len(shared_targets) > 0,
             'n_elevated': n,
+            'disclaimer': ('CONVERGENCE indicator, NOT a probability of action. '
+                           'Simultaneous proxy elevation indicates co-activation; it '
+                           'does not predict whether or when kinetic action will occur.'),
         }
 
         print(f"[Iran Rhetoric] 🔗 Proxy Activation Index: L{level} "
@@ -1777,7 +1780,7 @@ GRIEVANCE_TAGS = {
     },
     'gaza_solidarity': {
         'label':          'Gaza Solidarity Front',
-        'subject_theater': None,        # No Gaza proxy tracker — no exclusion
+        'subject_theater': 'gaza',       # Gaza proxy slice now exists (Jun 2026) -- exclude self from its own solidarity count
         'icon':           '🇵🇸',
         'patterns': [
             'gaza', 'palestine', 'palestinian', 'rafah', 'al-aqsa', 'aqsa',
@@ -2144,6 +2147,7 @@ def _write_crosstheater_signal(result):
             },
             'specificity_score': result.get('specificity_score', 0),
             'proxy_detail': result.get('proxy_activation_detail', {}),
+            'ceasefire_trajectory': result.get('ceasefire_trajectory', {}),
             # ── v1.2.0 Axis fingerprint (SPLIT — April 2026) ──
             # Written from Iran's perspective: what Iran is RECEIVING.
             # Severity levels (0-5) per partner:
@@ -3092,6 +3096,144 @@ def _detect_deescalation_context(articles, diplomatic_max_raw):
 
 
 # ============================================
+# CEASEFIRE TRAJECTORY (bidirectional 60-day-window read, Jun 2026)
+# --------------------------------------------------------------------
+# The MOU machinery above tracks the off-ramp's MATURITY (forward only). During
+# a bumpy 60-day ceasefire the honest read is BIDIRECTIONAL: weigh consolidation
+# (MOU maturing / milestones delivered) against breach (fraying / going hot) from
+# the SAME evidence, and surface a lean both ways. Estimative voice only --
+# 'indicates', 'consistent with', 'historically precedes'. No probabilities, no
+# dates, no 'will'. CONVERGENCE indicator, not a forecast.
+# ============================================
+CEASEFIRE_BREACH_TRIGGERS = [
+    'ceasefire violated', 'ceasefire breach', 'ceasefire collapse', 'truce collapses',
+    'truce breaks down', 'talks collapse', 'talks break down', 'negotiations collapse',
+    'walks away from talks', 'deal collapses', 'mou collapse', 'deal in jeopardy',
+    'iran resumes enrichment', 'resumes enrichment', 'snapback', 'reimpose sanctions',
+    'strikes resume', 'israel strikes iran', 'us strikes iran', 'war resumes', 'back to war',
+    'iran retaliates', 'iran vows revenge', 'iran threatens retaliation',
+    'iran attacks ship', 'iran seizes tanker', 'attack on shipping', 'tanker seized',
+    'iran strikes vessel', 'cargo ship attacked', 'hormuz mining',
+    'israel will not leave lebanon', 'israel strikes lebanon',
+    'irgc threatens', 'iran threatens to resume',
+]
+CEASEFIRE_CONSOLIDATION_TRIGGERS = [
+    'ceasefire holds', 'truce holds', 'ceasefire extended', 'ceasefire extension',
+    'talks progress', 'negotiations advance', 'diplomatic breakthrough', 'breakthrough in talks',
+    'prisoner exchange', 'prisoner swap', 'hostage release',
+    'sanctions relief', 'sanctions waiver', 'sanctions lifted', 'hormuz reopened',
+    'reconstruction fund', 'funds released', 'frozen funds released',
+    'withdrawal begins', 'forces withdrawn', 'israeli withdrawal', 'us withdrawal',
+    'mou signed', 'framework signed', 'deal signed', 'iran us agreement', 'agreement reached',
+    'de-escalation', 'off-ramp',
+]
+
+_CEASEFIRE_DISCLAIMER = (' This is a CONVERGENCE indicator, NOT a probability of action; '
+                         'the reader completes the inference.')
+
+
+def _compute_ceasefire_trajectory(articles, deesc_ctx, escalation_level,
+                                  regional_level, strike_severity):
+    """Bidirectional 60-day-ceasefire read. Weighs CONSOLIDATION (MOU maturing /
+    milestones delivered) against BREACH (fraying / going hot) from the same
+    article pool, and returns an estimative lean both ways. Always returns a dict;
+    lean='quiet' when neither side carries signal."""
+    pool = [((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+            for a in (articles or [])]
+
+    def _hits(triggers):
+        c = 0
+        for t in pool:
+            if any(kw in t for kw in triggers):
+                c += 1
+        return c
+
+    breach_hits = _hits(CEASEFIRE_BREACH_TRIGGERS)
+    consol_hits = _hits(CEASEFIRE_CONSOLIDATION_TRIGGERS)
+
+    maturity   = deesc_ctx.get('maturity', 'none')
+    milestones = deesc_ctx.get('milestones', []) or []
+    flags      = deesc_ctx.get('contradiction_flags', []) or []
+    contra     = deesc_ctx.get('contradiction_active', False)
+    MATURITY_WEIGHT = {'none': 0, 'framework': 1, 'signed': 2, 'implementing': 3}
+
+    forward = MATURITY_WEIGHT.get(maturity, 0) + len(milestones) + min(consol_hits, 3)
+
+    breach = len(flags) + min(breach_hits, 3)
+    if contra:
+        breach += 1
+    if regional_level >= 4:                       # Hormuz/Gulf attack vocabulary
+        breach += 1
+    if strike_severity in ('high', 'critical'):   # acute pre-strike convergence
+        breach += 2
+    elif strike_severity == 'elevated':
+        breach += 1
+    if escalation_level >= 5:                      # active conflict resuming
+        breach += 1
+
+    net = forward - breach
+    if forward == 0 and breach == 0:
+        lean = 'quiet'
+    elif net >= 3:
+        lean = 'consolidating'
+    elif net >= 1:
+        lean = 'holding'
+    elif net <= -3:
+        lean = 'breach_risk'
+    elif net <= -1:
+        lean = 'fraying'
+    else:  # net == 0 with signal on at least one side
+        lean = 'strained' if (forward > 0 and breach > 0) else ('holding' if forward else 'fraying')
+
+    flag_txt = ', '.join(x.replace('_', ' ') for x in flags)
+    ms_txt   = ', '.join(x.replace('_', ' ') for x in milestones)
+
+    if lean == 'consolidating':
+        headline = 'Ceasefire trajectory: CONSOLIDATING'
+        detail = ('Pattern indicates the US-Iran MOU track maturing'
+                  + (' -- delivered milestones (%s)' % ms_txt if ms_txt else '')
+                  + '. Consolidation signals are outpacing breach signals this cycle.')
+    elif lean == 'holding':
+        headline = 'Ceasefire trajectory: HOLDING'
+        detail = ('Pattern is consistent with an off-ramp that is present but not yet delivering -- '
+                  'consolidation signals modestly outweigh breach signals.')
+    elif lean == 'strained':
+        headline = 'Ceasefire trajectory: STRAINED (bumpy road)'
+        detail = ('Consolidation AND breach signals are active simultaneously'
+                  + (' (breach drivers: %s)' % flag_txt if flag_txt else '')
+                  + '. The 60-day track is contested -- a pattern consistent with a ceasefire that '
+                    'could mature or break from the same evidence.')
+    elif lean == 'fraying':
+        headline = 'Ceasefire trajectory: FRAYING'
+        detail = ('Breach signals'
+                  + (' (%s)' % flag_txt if flag_txt else '')
+                  + ' are outpacing consolidation -- consistent with a ceasefire under increasing '
+                    'strain, the pattern that has historically preceded a return to kinetic exchange.')
+    elif lean == 'breach_risk':
+        headline = 'Ceasefire trajectory: BREACH-RISK'
+        detail = ('Multiple signals that have historically preceded a ceasefire collapse are active '
+                  'simultaneously'
+                  + (' (%s)' % flag_txt if flag_txt else '')
+                  + '; the consolidation signal is faint by comparison.')
+    else:  # quiet
+        headline = 'Ceasefire trajectory: QUIET'
+        detail = 'No fresh ceasefire-track signal in either direction this cycle.'
+
+    return {
+        'lean':                  lean,
+        'forward_signal':        forward,
+        'breach_signal':         breach,
+        'net':                   net,
+        'maturity':              maturity,
+        'breach_drivers':        flags,
+        'consolidation_drivers': milestones,
+        'headline':              headline,
+        'detail':                detail + _CEASEFIRE_DISCLAIMER,
+        'disclaimer':            _CEASEFIRE_DISCLAIMER.strip(),
+    }
+
+
+# ============================================
 # MAIN SCAN
 # ============================================
 def run_iran_rhetoric_scan(days=3):
@@ -3174,6 +3316,15 @@ def run_iran_rhetoric_scan(days=3):
               f"composite={strike_window_state.get('composite_score')}, "
               f"signals={strike_window_state.get('active_signal_count', 0)}")
 
+    # ── Ceasefire trajectory (bidirectional 60-day-window read, Jun 2026) ──
+    ceasefire_trajectory = _compute_ceasefire_trajectory(
+        articles, deesc_ctx, max_level, max_regional,
+        strike_window_state.get('severity'))
+    if ceasefire_trajectory['lean'] not in ('quiet', 'holding'):
+        print(f"[Iran Rhetoric] (ceasefire) trajectory={ceasefire_trajectory['lean']} "
+              f"(forward={ceasefire_trajectory['forward_signal']}, "
+              f"breach={ceasefire_trajectory['breach_signal']})")
+
     # Theatre specificity
     all_specs = theatre_summary.get('all_specificity_scores', [])
     theatre_specificity = round(sum(all_specs) / len(all_specs), 1) if all_specs else 0
@@ -3220,6 +3371,7 @@ def run_iran_rhetoric_scan(days=3):
         'ceasefire_level':           theatre_summary['diplomatic_max'],
         'ceasefire_label':           ESCALATION_LEVELS.get(theatre_summary['diplomatic_max'], {}).get('label', 'Baseline'),
         'diplomatic_track_active':   theatre_summary['diplomatic_max'] >= 2,
+        'ceasefire_trajectory':      ceasefire_trajectory,
         'diplomatic_modifier':       {0:0, 1:-1, 2:-3, 3:-6, 4:-10, 5:-15}.get(theatre_summary['diplomatic_max'], 0),
         'diplomatic_label_detailed': {
             0: 'Quiet',
