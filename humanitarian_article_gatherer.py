@@ -239,6 +239,20 @@ HUMANITARIAN_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=%22disease+X%22+OR+%22pandemic+preparedness%22+OR+%22zoonotic+spillover%22&hl=en&gl=US&ceid=US:en", 0.95),
     # Africa health system + vaccine cold-chain (Phase 2 readiness)
     ("https://news.google.com/rss/search?q=%22health+system%22+collapse+Africa+OR+%22vaccine+shortage%22+Africa&hl=en&gl=US&ceid=US:en", 0.95),
+    # ─── v1.5.0 (Jul 1, 2026) NATURAL DISASTER FEEDS ───
+    # GDACS -- UN/EC Global Disaster Alert & Coordination System. THE canonical
+    # multi-hazard alert feed (earthquakes, tsunamis, floods, cyclones, volcanoes,
+    # droughts). Standard RSS <item> structure; alert color is in title/description.
+    ("https://www.gdacs.org/xml/rss.xml", 1.2),
+    # ReliefWeb DISASTERS feed (distinct from the general /updates feed above --
+    # this one is disaster-typed: EQ, FL, TC, VO, etc.)
+    ("https://reliefweb.int/disasters/rss.xml", 1.15),
+    # IFRC / Red Cross disaster-response coverage (DREF + emergency appeals)
+    ("https://news.google.com/rss/search?q=IFRC+OR+%22Red+Cross%22+disaster+response+emergency+appeal&hl=en&gl=US&ceid=US:en", 0.95),
+    # Named-hazard watch queries (broad backstop for events USGS/GDACS lead on)
+    ("https://news.google.com/rss/search?q=earthquake+OR+tsunami+magnitude+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=flooding+OR+cyclone+OR+typhoon+OR+hurricane+disaster+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=%22volcanic+eruption%22+OR+landslide+disaster+2026&hl=en&gl=US&ceid=US:en", 0.9),
 ]
 
 
@@ -290,6 +304,11 @@ GDELT_HUMANITARIAN_QUERIES = [
     # Pandemic-prep + spillover watch
     ("disease X pandemic preparedness 2026",     'eng'),
     ("zoonotic spillover outbreak 2026",         'eng'),
+    # ─── v1.5.0 (Jul 1, 2026) NATURAL DISASTER GDELT QUERIES ───
+    ("earthquake tsunami disaster 2026",         'eng'),
+    ("flooding cyclone typhoon disaster 2026",   'eng'),
+    ("volcanic eruption landslide disaster 2026",'eng'),
+    ("Venezuela earthquake disaster 2026",       'eng'),
 ]
 
 
@@ -475,6 +494,102 @@ def fetch_all_gdelt():
 
 
 # ============================================================
+# USGS EARTHQUAKE FETCH (structured GeoJSON -> article-shaped)  [v1.5.0]
+# ============================================================
+# USGS is the canonical global seismic authority. We pull the "significant"
+# earthquakes GeoJSON (magnitude + felt + PAGER-impact weighted) plus the M4.5+
+# weekly feed, and convert each event into an article-shaped dict so the
+# convergence detector classifies it exactly like any other source. Rich fields
+# -- magnitude, USGS PAGER alert (green/yellow/orange/red), tsunami flag, place --
+# are baked into the title + description so the natural_disaster keyword + high-
+# intensity markers fire correctly (e.g. 'magnitude 6', 'tsunami warning',
+# 'pager orange'). The place string usually carries the country name, which the
+# detector's country matcher needs; mid-ocean events without a country drop out.
+USGS_FEEDS = [
+    ('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson', 'significant'),
+    ('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson',          'M4.5+week'),
+]
+USGS_MIN_MAG = 5.0   # humanitarian relevance starts ~M5-6; ignore minor events
+
+
+def fetch_usgs_earthquakes():
+    """Fetch USGS significant + M4.5+ quakes; convert to keyword-rich article dicts."""
+    all_articles = []
+    seen_ids = set()
+    for feed_url, tag in USGS_FEEDS:
+        try:
+            resp = requests.get(
+                feed_url, timeout=GDELT_TIMEOUT,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"},
+            )
+            if resp.status_code != 200:
+                print(f"[humanitarian_gatherer] USGS {tag} HTTP {resp.status_code}")
+                continue
+            payload = resp.json()
+            for feat in (payload.get('features') or []):
+                fid = feat.get('id')
+                if fid in seen_ids:
+                    continue
+                seen_ids.add(fid)
+                props = feat.get('properties') or {}
+                mag = props.get('mag')
+                if mag is None:
+                    continue
+                # The 'significant' feed is USGS-curated for impact (a shallow M4.8
+                # under a city can qualify) -- keep all of it. The raw M4.5+ feed is
+                # noisier, so apply the humanitarian-relevance magnitude floor there.
+                if tag != 'significant' and mag < USGS_MIN_MAG:
+                    continue
+                place    = props.get('place') or 'unknown location'
+                alert    = (props.get('alert') or '').lower()   # PAGER: green/yellow/orange/red
+                tsunami  = props.get('tsunami', 0)
+                url      = props.get('url') or ''
+                mag_str  = f"{mag:.1f}"
+
+                # Keyword-rich text so the natural_disaster matcher + high-intensity
+                # markers fire. We deliberately write both "M6.3" and "magnitude 6.3".
+                title = f"M{mag_str} earthquake - {place}"
+                parts = [f"A magnitude {mag_str} earthquake struck {place}."]
+                if alert in ('orange', 'red'):
+                    parts.append(f"USGS PAGER {alert} alert issued -- significant casualties and damage likely; "
+                                 f"search and rescue operation expected.")
+                elif alert in ('green', 'yellow'):
+                    parts.append(f"USGS PAGER {alert} alert.")
+                if tsunami:
+                    parts.append("Tsunami warning evaluated for this event.")
+                if mag >= 6.0:
+                    parts.append("Major earthquake; disaster response and humanitarian assessment likely.")
+                description = ' '.join(parts)
+
+                weight = 1.0
+                if mag >= 7.0 or alert == 'red':
+                    weight = 1.3
+                elif mag >= 6.0 or alert == 'orange':
+                    weight = 1.15
+
+                published = ''
+                if props.get('time'):
+                    try:
+                        published = datetime.fromtimestamp(props['time'] / 1000, tz=timezone.utc).isoformat()
+                    except Exception:
+                        published = ''
+
+                all_articles.append({
+                    'title':       title[:300],
+                    'url':         url,
+                    'published':   published,
+                    'description': description[:500],
+                    'source':      f"USGS/{tag}",
+                    'weight':      weight,
+                })
+        except Exception as e:
+            print(f"[humanitarian_gatherer] USGS {tag} error: {str(e)[:80]}")
+        time.sleep(0.3)
+    print(f"[humanitarian_gatherer] USGS total: {len(all_articles)} significant quakes (>=M{USGS_MIN_MAG})")
+    return all_articles
+
+
+# ============================================================
 # BRAVE SEARCH FETCH (with caching to preserve quota)
 # ============================================================
 def _fetch_brave_query(query, force_refresh=False):
@@ -599,6 +714,7 @@ def run_gather():
     all_articles = []
     metrics = {
         'rss_count':              0,
+        'usgs_count':             0,
         'gdelt_count':            0,
         'brave_subregion_count':  0,
         'brave_fallback_count':   0,
@@ -612,6 +728,14 @@ def run_gather():
         all_articles.extend(rss_articles)
     except Exception as e:
         print(f"[humanitarian_gatherer] RSS phase exception: {e}")
+
+    # Step 1.5: USGS structured earthquake feed (significant + M4.5+ quakes) [v1.5.0]
+    try:
+        usgs_articles = fetch_usgs_earthquakes()
+        metrics['usgs_count'] = len(usgs_articles)
+        all_articles.extend(usgs_articles)
+    except Exception as e:
+        print(f"[humanitarian_gatherer] USGS phase exception: {e}")
 
     # Step 2: GDELT humanitarian queries
     try:
@@ -662,7 +786,7 @@ def run_gather():
     elapsed = (datetime.now(timezone.utc) - start_ts).total_seconds()
     print(f"[humanitarian_gatherer] === SCAN COMPLETE in {elapsed:.1f}s ===")
     print(f"[humanitarian_gatherer] Total articles: {len(deduped)} "
-          f"(RSS={metrics['rss_count']}, GDELT={metrics['gdelt_count']}, "
+          f"(RSS={metrics['rss_count']}, USGS={metrics['usgs_count']}, GDELT={metrics['gdelt_count']}, "
           f"BraveSub={metrics['brave_subregion_count']}, BraveFB={metrics['brave_fallback_count']}, "
           f"deduped={metrics['duplicate_count']})")
 
@@ -788,6 +912,7 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
             'module':           __module_id__,
             'version':          __version__,
             'rss_feeds_count':  len(HUMANITARIAN_RSS_FEEDS),
+            'usgs_feeds_count': len(USGS_FEEDS),
             'gdelt_queries':    len(GDELT_HUMANITARIAN_QUERIES),
             'brave_subregions': len(BRAVE_SUBREGION_QUERIES),
             'brave_configured': bool(BRAVE_API_KEY),
@@ -824,6 +949,6 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__   = '1.0.0'
+__version__   = '1.5.0'
 __module_id__ = 'humanitarian_article_gatherer'
 print(f'[Humanitarian Article Gatherer] Module loaded -- v{__version__}')
