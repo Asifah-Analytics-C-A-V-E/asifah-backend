@@ -26,7 +26,7 @@ ARCHITECTURE:
   pressure_type classifier picks up the humanitarian tags
   automatically — no GPI logic changes needed. Today.
 
-SIGNAL CATEGORIES (7):
+SIGNAL CATEGORIES (8):
   1. FOOD_PRICE_CRISIS    -- bread/vegetable/rice price surges, food shortages
   2. FUEL_ENERGY_CRISIS   -- fuel shortages, blackouts, panic buying
   3. FERTILIZER_SCARCITY  -- planting season crisis, urea shortages
@@ -35,12 +35,20 @@ SIGNAL CATEGORIES (7):
   6. CURRENCY_COLLAPSE    -- currency crashes, banking collapses, reserves drain
   7. HEALTH_EMERGENCY     -- Ebola/Marburg/cholera/mpox outbreaks, WHO PHEIC declarations,
                              pandemic warnings, disease surveillance failures (v1.4.0, May 2026)
+  8. NATURAL_DISASTER     -- earthquakes/tsunamis/floods/cyclones/volcanoes/landslides/wildfires;
+                             fed by USGS + GDACS + ReliefWeb disaster feed (v1.5.0, Jul 2026)
 
 CONVERGENCE THRESHOLDS:
   1-2 countries active                  -> BASELINE       (L0-L1)
   3-5 countries active                  -> FORMING        (L3)
   6-9 countries active                  -> ACTIVE         (L4)
   10+ countries OR 4+ categories        -> GLOBAL         (L5)
+
+ACUTE SINGLE-EVENT ELEVATION (v1.5.0):
+  A high-severity acute signal (natural_disaster / health_emergency) elevates the
+  region on its own -- the breadth math would otherwise bury a single catastrophe
+  at baseline. One catastrophic event -> ACUTE (L4); a COMPOUND event (2+ hazard
+  families, e.g. quake + tsunami) or multiple simultaneous catastrophes -> L5.
 
 Author: RCGG / Asifah Analytics
 """
@@ -267,6 +275,74 @@ SIGNAL_CATEGORIES = {
             'health system collapse', 'hospitals overwhelmed',
         ],
     },
+
+    # ─────────────────────────────────────────────────────────────
+    # v1.5.0 (Jul 1, 2026) -- NATURAL DISASTER CATEGORY
+    # ─────────────────────────────────────────────────────────────
+    # Sudden-onset natural hazards: earthquakes, tsunamis, floods, tropical
+    # cyclones, volcanic eruptions, landslides, wildfires. Unlike the slow-burn
+    # categories (food/displacement/currency), a single catastrophic disaster in
+    # ONE country is a Global Pressure event on its own -- so this category feeds
+    # the ACUTE severity floor in aggregate_convergence (single-event elevation),
+    # and a COMPOUND event (quake + tsunami, etc.) elevates further. Fed by USGS
+    # (structured quake GeoJSON), GDACS multi-hazard alerts, and ReliefWeb's
+    # disaster feed via the gatherer. Routes to the GPI humanitarian axis exactly
+    # like every other category (no GPI change).
+    # ─────────────────────────────────────────────────────────────
+    'natural_disaster': {
+        'label':       'Natural Disaster',
+        'icon':        '🌋',
+        'description': 'Earthquakes, tsunamis, floods, cyclones, volcanic eruptions, landslides, and wildfires driving sudden humanitarian need',
+        'keywords': [
+            # ── Seismic ──
+            'earthquake', 'quake struck', 'quake hit', 'strong earthquake',
+            'powerful earthquake', 'major earthquake', 'magnitude earthquake',
+            'earthquake magnitude', 'aftershock', 'aftershocks', 'seismic',
+            'tremor', 'earthquake epicenter', 'earthquake epicentre',
+            'earthquake death toll', 'quake death toll', 'earthquake survivors',
+            'trapped under rubble', 'buildings collapsed',
+            # ── Tsunami ──
+            'tsunami', 'tsunami warning', 'tsunami alert', 'tsunami waves', 'tidal wave',
+            # ── Flood ──
+            'flooding', 'flash flood', 'flash floods', 'severe flooding',
+            'catastrophic flooding', 'monsoon floods', 'flood waters', 'floodwaters',
+            'deadly floods', 'record flooding', 'dam collapse', 'dam burst',
+            'dam failure', 'levee breach', 'glacial lake outburst', 'inundation',
+            # ── Tropical storm / cyclone ──
+            'cyclone', 'tropical cyclone', 'hurricane', 'typhoon', 'super typhoon',
+            'storm surge', 'tropical storm', 'made landfall',
+            'category 4 hurricane', 'category 5 hurricane',
+            'category 4 storm', 'category 5 storm',
+            # ── Volcanic ──
+            'volcanic eruption', 'volcano erupts', 'volcano erupted', 'volcanic ash',
+            'ashfall', 'lava flow', 'pyroclastic', 'volcano alert',
+            # ── Landslide / mudslide ──
+            'landslide', 'landslides', 'mudslide', 'mudflow', 'rockslide', 'debris flow',
+            # ── Wildfire ──
+            'wildfire', 'wildfires', 'bushfire', 'forest fire', 'wildfire evacuations',
+            # ── Drought declared as disaster ──
+            'drought emergency', 'drought disaster', 'drought state of emergency',
+            # ── Disaster-response framing ──
+            'natural disaster', 'disaster zone', 'disaster declared',
+            'state of emergency declared', 'state of disaster',
+            'disaster relief', 'search and rescue operation', 'humanitarian disaster',
+            'gdacs red alert', 'gdacs orange alert', 'red alert issued',
+        ],
+        'high_intensity_markers': [
+            # Magnitude bands (major / great quakes)
+            'magnitude 6', 'magnitude 7', 'magnitude 8', 'magnitude 9',
+            # Confirmed catastrophic hazards
+            'tsunami warning', 'tsunami alert', 'dam collapse', 'dam burst',
+            'dam failure', 'category 4 hurricane', 'category 5 hurricane',
+            'super typhoon', 'volcanic eruption', 'pyroclastic',
+            # Human-toll language
+            'thousands killed', 'hundreds killed', 'thousands displaced',
+            'mass casualties', 'death toll rises', 'death toll climbs',
+            'trapped under rubble', 'state of emergency declared', 'state of disaster',
+            # USGS PAGER + GDACS alert escalation
+            'pager orange', 'pager red', 'gdacs red alert', 'gdacs orange alert',
+        ],
+    },
 }
 
 
@@ -416,6 +492,50 @@ COUNTRY_PATTERNS = {
     'nicaragua':        ['nicaragua', 'nicaraguan'],
     'argentina':        ['argentina', 'argentinian', 'argentine'],
 
+    # ─── DISASTER-PRONE SWEEP (Jul 1 2026): seismic arcs, monsoon-flood belts,
+    #     hurricane/cyclone tracks, and Ring-of-Fire volcanic zones. Many of these
+    #     had NO country pattern, so their disaster + humanitarian articles were
+    #     silently dropped at attribution (_extract_country_from_text). This closes
+    #     that gap for ALL categories, not just natural_disaster. ───
+    # -- Latin America + Caribbean (Andean/Caribbean seismic + Atlantic storms) --
+    'venezuela':          ['venezuela', 'venezuelan'],
+    'colombia':           ['colombia', 'colombian'],
+    'mexico':             ['mexico', 'mexican'],
+    'chile':              ['chile', 'chilean'],
+    'peru':               ['peru', 'peruvian'],
+    'ecuador':            ['ecuador', 'ecuadorian', 'ecuadorean'],
+    'bolivia':            ['bolivia', 'bolivian'],
+    'brazil':             ['brazil', 'brazilian'],
+    'paraguay':           ['paraguay', 'paraguayan'],
+    'uruguay':            ['uruguay', 'uruguayan'],
+    'panama':             ['panama', 'panamanian'],
+    'costa_rica':         ['costa rica', 'costa rican'],
+    'dominican_republic': ['dominican republic'],
+    'puerto_rico':        ['puerto rico', 'puerto rican'],
+    'trinidad_tobago':    ['trinidad and tobago'],
+    'dominica':           ['dominica'],
+    'bahamas':            ['bahamas', 'bahamian'],
+    # -- Europe / Mediterranean (Aegean-Anatolian seismic + Etna/Iceland volcanic) --
+    'turkey':             ['turkey', 'turkish', 'turkiye', 'türkiye'],
+    'greece':             ['greece', 'greek'],
+    'italy':              ['italy', 'italian'],
+    'iceland':            ['iceland', 'icelandic'],
+    'portugal':           ['portugal', 'portuguese'],
+    # -- South / Central Asia (Himalayan belt + monsoon floods) --
+    'pakistan':           ['pakistan', 'pakistani'],
+    'india':              ['india', 'indian'],
+    # -- East Asia + Pacific (Ring of Fire, typhoon track) --
+    'japan':              ['japan', 'japanese'],
+    'china':              ['china', 'chinese'],
+    'taiwan':             ['taiwan', 'taiwanese'],
+    'south_korea':        ['south korea', 'south korean'],
+    'papua_new_guinea':   ['papua new guinea'],
+    'vanuatu':            ['vanuatu'],
+    'fiji':               ['fiji', 'fijian'],
+    'tonga':              ['tonga', 'tongan'],
+    'solomon_islands':    ['solomon islands'],
+    'new_zealand':        ['new zealand'],
+
     # ─── TRACKED COUNTRIES: listed so we can dedupe vs regional BLUFs ───
     # Note: These ARE captured in their own Asifah trackers — humanitarian
     # signals from these still fire here but are flagged is_tracked_country=True
@@ -454,6 +574,11 @@ TRACKED_COUNTRIES = {
     'iran',
     'cuba',
     'gaza', 'gaza_north', 'khan_younis', 'rafah',
+    # Disaster-prone countries that ALSO have full Asifah trackers (Jul 1 2026):
+    # flagged so their disaster/humanitarian signals still count toward convergence
+    # but are deprioritized vs genuinely novel (untracked) countries in the sort.
+    'venezuela', 'turkey', 'china', 'taiwan', 'japan', 'india', 'pakistan',
+    'chile', 'peru',
 }
 
 # Country-name length sort: match longest first to avoid sub-string collisions.
@@ -655,6 +780,40 @@ def _severity_to_level(severity):
     return {1: 3, 2: 4, 3: 5}.get(severity, 3)
 
 
+# ── Acute single-event elevation (Jul 1 2026) ──
+# Slow-burn categories (food / displacement / currency) are BREADTH-driven: many
+# weak signals across many countries is the story, and the country-count tiers
+# below are the right lens. ACUTE categories are the opposite -- one catastrophic
+# earthquake, tsunami, or outbreak in a SINGLE country is a Global Pressure event
+# on its own, and the breadth math alone would bury it at baseline (1 country).
+# So a high-severity acute signal FLOORS the region level (single-event elevation);
+# a COMPOUND event -- one signal spanning 2+ distinct hazard families, e.g.
+# earthquake + tsunami -- or multiple simultaneous acute catastrophes floors it
+# higher. This keeps the sensor honest: the dial should read high when a
+# catastrophe actually happens, not only when several happen at once.
+ACUTE_CATEGORIES = {'natural_disaster', 'health_emergency'}
+
+_DISASTER_HAZARD_FAMILIES = {
+    'seismic':   ('earthquake', 'quake', 'aftershock', 'seismic', 'magnitude', 'tremor'),
+    'tsunami':   ('tsunami', 'tidal wave'),
+    'flood':     ('flood', 'inundation', 'dam collapse', 'dam burst', 'dam failure', 'levee'),
+    'storm':     ('cyclone', 'hurricane', 'typhoon', 'storm surge', 'tropical storm'),
+    'volcanic':  ('volcano', 'volcanic', 'eruption', 'lava', 'ashfall', 'pyroclastic'),
+    'landslide': ('landslide', 'mudslide', 'mudflow', 'rockslide', 'debris flow'),
+    'wildfire':  ('wildfire', 'bushfire', 'forest fire'),
+}
+
+def _disaster_families(matched_keywords):
+    """Return the set of distinct hazard families present in a signal's matched keywords.
+    Two or more families in one signal (e.g. quake + tsunami) = a compound catastrophe."""
+    joined = ' '.join(matched_keywords or []).lower()
+    fams = set()
+    for fam, toks in _DISASTER_HAZARD_FAMILIES.items():
+        if any(tok in joined for tok in toks):
+            fams.add(fam)
+    return fams
+
+
 # ============================================================
 # CONVERGENCE AGGREGATION
 # ============================================================
@@ -733,6 +892,35 @@ def aggregate_convergence(signals):
             f'(below convergence threshold of {CONVERGENCE_FORMING_MIN})'
         )
 
+    # ── Acute single-event elevation floor ──
+    # A high-severity acute signal (catastrophic disaster / outbreak) elevates the
+    # region regardless of how many OTHER countries are firing. Compound hazards
+    # (quake + tsunami in one signal) or multiple simultaneous catastrophes floor
+    # to global. This runs AFTER the breadth tier so it can only raise, never lower.
+    acute_high = [s for s in signals
+                  if s.get('category') in ACUTE_CATEGORIES
+                  and s.get('severity', 0) >= SEVERITY_HIGH]
+    if acute_high:
+        compound = [s for s in acute_high
+                    if len(_disaster_families(s.get('matched_keywords'))) >= 2]
+        lead = acute_high[0]
+        lead_country = lead.get('country_label') or lead.get('country', '').replace('_', ' ').title()
+        lead_cat = SIGNAL_CATEGORIES.get(lead.get('category'), {}).get('label', lead.get('category', 'disaster'))
+        if compound:
+            acute_floor, fams = 5, ', '.join(sorted(_disaster_families(compound[0].get('matched_keywords'))))
+            acute_label = (f'ACUTE COMPOUND DISASTER -- {lead_country}: converging hazards ({fams}) '
+                           f'present in the same event; single-event elevation')
+        elif len(acute_high) >= 2:
+            acute_floor = 5
+            acute_label = (f'ACUTE MULTI-EVENT -- {len(acute_high)} catastrophic disaster/outbreak '
+                           f'signals active simultaneously; single-event elevation')
+        else:
+            acute_floor = 4
+            acute_label = (f'ACUTE EVENT -- catastrophic {lead_cat.lower()} signal in {lead_country}; '
+                           f'single-event elevation above the breadth threshold')
+        if acute_floor > max_level:
+            max_level, tier, level_label = acute_floor, 'acute', acute_label
+
     # Group signals by country + category
     by_country = {}
     by_category = {}
@@ -792,6 +980,7 @@ def build_humanitarian_bluf(signals, aggregation=None):
         'forming':  '#f59e0b',
         'active':   '#f97316',
         'global':   '#dc2626',
+        'acute':    '#dc2626',   # single catastrophic disaster / outbreak
     }.get(tier, '#6b7280')
 
     # Build canonical signal payload — sorted by severity desc, novel-first
@@ -1442,6 +1631,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.6.2'
+__version__ = '1.7.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
