@@ -1900,6 +1900,16 @@ def _narrative_iran_axis_convergence(blufs):
     is_command    = bool(iran_fp.get('is_command_node'))
     iran_level    = _safe_level(iran_fp.get('level', 0))
 
+    # Venezuela -- Iran EXPEDITIONARY node (Caribbean foothold). Read the hub's
+    # far-node presence from VZ's multi-hub slice; NEVER folded into the regional
+    # proxy count (node_class 'expeditionary' = global reach, not a Levant front).
+    # This is Iran's GLOBAL spread surfacing at the GPI, per the three-altitude rule.
+    vfp = ct.get('venezuela') if isinstance(ct.get('venezuela'), dict) else {}
+    vz_iran_reach = 0
+    if _fresh(vfp) and str(vfp.get('node_class', '')).lower() == 'expeditionary':
+        _vhub = (vfp.get('hub_presence', {}) or {}).get('iran', {}) or {}
+        vz_iran_reach = _safe_level(_vhub.get('level', 0))
+
     converged = (n >= 3) or (uof_level >= 2 and n >= 2)
     if not converged:
         return None
@@ -1952,6 +1962,12 @@ def _narrative_iran_axis_convergence(blufs):
     elif lebanon_delinking == 'partial':
         detail += ("Lebanon's signed-framework implementation is contested -- the spoke is wobbling: "
                    "counted in the activation but flagged as a potential off-ramp if implementation advances. ")
+    if vz_iran_reach >= ACTIVE_LEVEL:
+        detail += ("Iran's reach extends to the Caribbean: Venezuela registers Iranian expeditionary "
+                   "presence (L%d) as a FAR node -- surfaced as global reach, NOT counted in the regional "
+                   "proxy activation. The Axis arena (Levant) and the expeditionary footprint (Caribbean) "
+                   "are distinct reads; together they mark the span of Iran's influence rather than its "
+                   "kinetic weight. " % vz_iran_reach)
     if is_command or iran_level >= 2:
         detail += "Tehran's own posture reads as command-node (hub) rather than a co-equal front. "
     if chokepoint:
