@@ -498,7 +498,7 @@ COUNTRY_PATTERNS = {
     #     silently dropped at attribution (_extract_country_from_text). This closes
     #     that gap for ALL categories, not just natural_disaster. ───
     # -- Latin America + Caribbean (Andean/Caribbean seismic + Atlantic storms) --
-    'venezuela':          ['venezuela', 'venezuelan'],
+    'venezuela':          ['venezuela', 'venezuelan', 'caracas', 'maracaibo', 'carupano', 'carúpano', 'cumana', 'cumaná', 'guiria', 'güiria', 'sucre state'],
     'colombia':           ['colombia', 'colombian'],
     'mexico':             ['mexico', 'mexican'],
     'chile':              ['chile', 'chilean'],
