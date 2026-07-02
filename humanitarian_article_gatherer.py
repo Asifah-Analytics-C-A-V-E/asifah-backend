@@ -78,7 +78,7 @@ LASTRUN_KEY         = 'humanitarian:gatherer:lastrun'
 BRAVE_CACHE_PREFIX  = 'humanitarian:brave:'
 
 # Cache TTLs
-ARTICLES_CACHE_TTL  = 12 * 3600     # 12 hours (matches scan interval)
+ARTICLES_CACHE_TTL  = 14 * 3600     # 14 hours -- outlasts the 12h scan interval so the pool never expires mid-cycle (cold-gap lesson, Jul 2026)
 BRAVE_CACHE_TTL     = 12 * 3600     # 12 hours (preserve Brave quota)
 SCAN_INTERVAL_HOURS = 12
 
