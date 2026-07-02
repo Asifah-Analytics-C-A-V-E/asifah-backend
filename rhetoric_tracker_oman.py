@@ -899,6 +899,7 @@ def _write_crosstheater_signal(result):
         existing['oman'] = {
             'ts':                       datetime.now(timezone.utc).isoformat(),
             'theatre':                  'Oman',
+            'node_class':               'mediation',
             'is_stability_anchor':      True,
             'threat_level':             threat_level,
             'influence_level':          influence_level,
