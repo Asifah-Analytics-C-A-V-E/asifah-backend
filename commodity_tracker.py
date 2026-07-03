@@ -1469,6 +1469,18 @@ COMMODITY_KEYWORDS = {
 #   - Stability page UI — regime-shift badges on commodity tiles
 
 COUNTRY_COMMODITY_EXPOSURE = {
+    'afghanistan': {
+        'wheat':        {'role': 'importer', 'weight': 1.4, 'data_as_of': '2026-06',
+                         'note': "Afghanistan imports the bulk of its wheat and flour (Kazakhstan the dominant supplier, Pakistan secondary) -- domestic production chronically short and drought-exposed. STABILITY LINK: with a collapsed formal economy and an aid architecture under Taliban-era constraint, wheat/flour price shocks transmit directly into acute food insecurity -- the platform's tightest commodity-to-humanitarian coupling. Watch: Kazakh export policy and rail tariffs, Pakistan border-crossing closures (Torkham/Chaman), Black Sea wheat moves repricing Central Asian supply, WFP pipeline funding."},
+        'oil':          {'role': 'importer', 'weight': 0.8,
+                         'note': "Near-total refined-fuel import dependence (Iran, Turkmenistan, Uzbekistan, Russia via traders). Fuel prices set transport and food-distribution costs economy-wide. Watch: Iranian fuel-export policy toward Kabul (doubles as a friction lever), Amu Darya basin crude extraction (Chinese XCAP contract) as an embryonic domestic supply story."},
+        'copper':       {'role': 'producer', 'weight': 0.5, 'data_as_of': '2026-06',
+                         'note': "Mes Aynak (Logar) -- one of the world's largest undeveloped copper deposits, under Chinese MCC lease since 2008 and finally moving toward development under the Emirate. POTENTIAL not production: weight reflects trajectory. STRATEGIC ROLE: extraction is the China wheel's primary economic vector into Kabul. Watch: MCC mobilization milestones, rail/power infrastructure commitments, Taliban revenue-sharing announcements."},
+        'lithium':      {'role': 'producer', 'weight': 0.3,
+                         'note': "Large claimed lithium potential (Ghazni pegmatites and salt-lake brines) -- the 'Saudi Arabia of lithium' framing remains narrative rather than bankable production. Weight reflects headline sensitivity, not output: lithium announcements move the China-engagement and sanctions-workaround stories. Watch: Chinese exploration MOUs, any offtake framework, security incidents around survey teams."},
+        'gold':         {'role': 'producer', 'weight': 0.3,
+                         'note': "Artisanal and small-scale gold (Badakhshan, Takhar) provides local revenue streams, some under Taliban licensing and some smuggled through Central Asian routes. A shadow-economy indicator more than a market mover. Watch: Emirate mining-license announcements, smuggling interdiction reporting on the Tajik border."},
+    },
     'algeria': {
         'phosphate':    {'role': 'producer', 'weight': 0.6, 'data_as_of': '2026-06',
                          'note': "Large phosphate reserves (Bled El Hadba / Tebessa megaproject with Chinese partners) positioning Algeria as an emerging North African phosphate exporter. Pre-ramp; weight reflects potential."},
