@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Saudi Arabia Stability Backend — v0.5.0 (May 29 2026)
+UAE Stability Backend — v0.5.0 (May 29 2026)
 =====================================================
 
 Lives on the ME backend (asifah-backend.onrender.com) alongside Israel, Lebanon,
 Iran, Iraq. This v0.5 ships:
-  - Tadawul TASI index fetcher (Yahoo ^TASI)
-  - Saudi Aramco fetcher (Yahoo 2222.SR)
+  - DFM DFMGI index fetcher (Yahoo ^DFMGI)
+  - ADX General (Abu Dhabi) fetcher (Yahoo ^ADI)
   - Brent crude full Financial Pulse fetcher (Yahoo BZ=F, with sparkline)
-  - Per-tile market_status logic (Tadawul Sun-Thu, Aramco same as Tadawul, Brent ICE 24/5)
+  - Per-tile market_status logic (DFM Mon-Fri, ADX same as DFM, Brent ICE 24/5)
   - Aggregate market_status (open/closed/pre-market/after-hours/partial)
   - Canonical Financial Pulse Card payload assembly
   - Hardened Google News RSS fetcher (curl_cffi + {*} namespace wildcard)
@@ -16,7 +16,7 @@ Iran, Iraq. This v0.5 ships:
 
 v0.5 explicitly does NOT include:
   - Stability vector scoring (deferred to v1.0)
-  - Rhetoric tracker integration (Saudi has no tracker yet)
+  - Rhetoric tracker integration (UAE has no tracker yet)
   - Humanitarian module
   - Knowledge Library content
 
@@ -41,7 +41,7 @@ try:
 except ImportError:
     curl_requests = None
     CURL_CFFI_AVAILABLE = False
-    print("[Saudi Stability] WARNING: curl_cffi not installed — TLS impersonation unavailable")
+    print("[UAE Stability] WARNING: curl_cffi not installed — TLS impersonation unavailable")
 
 
 # ============================================
@@ -52,8 +52,8 @@ UPSTASH_REDIS_URL = (os.environ.get('UPSTASH_REDIS_REST_URL') or os.environ.get(
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN') or os.environ.get('UPSTASH_REDIS_TOKEN', '')
 NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY', '')
 
-CACHE_KEY = 'saudi_stability_v0.5'
-HISTORY_KEY = 'saudi_stability_history'
+CACHE_KEY = 'uae_stability_v0.5'
+HISTORY_KEY = 'uae_stability_history'
 CACHE_TTL = 12 * 3600  # 12 hours
 
 
@@ -77,7 +77,7 @@ def _redis_get(key):
                 except (json.JSONDecodeError, TypeError):
                     return result
     except Exception as e:
-        print(f"[Saudi Stability] Redis GET error: {str(e)[:80]}")
+        print(f"[UAE Stability] Redis GET error: {str(e)[:80]}")
     return None
 
 
@@ -96,7 +96,7 @@ def _redis_set(key, value, ttl=None):
         r = requests.post(url, headers=headers, json=payload, timeout=10)
         return r.status_code == 200
     except Exception as e:
-        print(f"[Saudi Stability] Redis SET error: {str(e)[:80]}")
+        print(f"[UAE Stability] Redis SET error: {str(e)[:80]}")
     return False
 
 
@@ -120,7 +120,7 @@ def _redis_lpush_trim(key, value, max_len=168):
                       timeout=10)
         return r.status_code == 200
     except Exception as e:
-        print(f"[Saudi Stability] Redis LPUSH error: {str(e)[:80]}")
+        print(f"[UAE Stability] Redis LPUSH error: {str(e)[:80]}")
     return False
 
 
@@ -128,17 +128,17 @@ def _redis_lpush_trim(key, value, max_len=168):
 # FINANCIAL PULSE — TILE FETCHERS
 # ============================================
 
-def _fetch_tadawul_index():
+def _fetch_dfm_index():
     """
-    Fetch Tadawul TASI index (^TASI.SR) from Yahoo Finance.
-    The TASI is the main equity benchmark of Saudi Arabia, tracking ~200+ stocks.
+    Fetch DFM DFMGI index (^DFMGI) from Yahoo Finance.
+    The DFMGI is the main equity benchmark of UAE, tracking ~200+ stocks.
     Returns Financial Pulse-shaped dict.
-    v0.5.1 — Saudi Financial Pulse (May 30 2026) — corrected ticker to ^TASI.SR.
+    v0.5.1 — UAE Financial Pulse (May 30 2026) — corrected ticker to ^DFMGI.
     """
-    print("[Saudi Stability] Fetching Tadawul TASI (^TASI.SR)...")
-    TASI_LAST_KNOWN_KEY = 'tasi_last_known'
+    print("[UAE Stability] Fetching DFM DFMGI (^DFMGI)...")
+    DFMGI_LAST_KNOWN_KEY = 'tasi_last_known'
     try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETASI.SR"
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EDFMGI"
         r = requests.get(url, params={'interval': '1d', 'range': '1mo'},
                          timeout=10,
                          headers={'User-Agent': 'Mozilla/5.0 (AsifahAnalytics/1.0)'})
@@ -164,9 +164,9 @@ def _fetch_tadawul_index():
                             })
                 except Exception:
                     pass
-                print(f"[Saudi Stability] TASI: {price:,.2f} ({change_pct:+.2f}%)")
+                print(f"[UAE Stability] DFMGI: {price:,.2f} ({change_pct:+.2f}%)")
                 payload = {
-                    'index': 'TASI',
+                    'index': 'DFMGI',
                     'value': round(float(price), 2),
                     'change_pct_24h': round(change_pct, 3),
                     'trend': 'rising' if change_pct > 0.3 else ('falling' if change_pct < -0.3 else 'flat'),
@@ -176,7 +176,7 @@ def _fetch_tadawul_index():
                 }
                 # Cache for last-known fallback (7-day TTL)
                 try:
-                    _redis_set(TASI_LAST_KNOWN_KEY, {
+                    _redis_set(DFMGI_LAST_KNOWN_KEY, {
                         'value': payload['value'],
                         'change_pct_24h': payload['change_pct_24h'],
                     }, ttl=7 * 24 * 3600)
@@ -184,14 +184,14 @@ def _fetch_tadawul_index():
                     pass
                 return payload
     except Exception as e:
-        print(f"[Saudi Stability] TASI fetch error: {str(e)[:80]}")
+        print(f"[UAE Stability] DFMGI fetch error: {str(e)[:80]}")
 
     # Last-known fallback
     try:
-        cached = _redis_get(TASI_LAST_KNOWN_KEY)
+        cached = _redis_get(DFMGI_LAST_KNOWN_KEY)
         if cached:
             return {
-                'index': 'TASI',
+                'index': 'DFMGI',
                 'value': cached.get('value'),
                 'change_pct_24h': cached.get('change_pct_24h', 0),
                 'trend': 'unknown',
@@ -204,7 +204,7 @@ def _fetch_tadawul_index():
         pass
 
     return {
-        'index': 'TASI',
+        'index': 'DFMGI',
         'value': None,
         'change_pct_24h': 0,
         'trend': 'unknown',
@@ -214,18 +214,18 @@ def _fetch_tadawul_index():
     }
 
 
-def _fetch_aramco_stock():
+def _fetch_adx_index():
     """
-    Fetch Saudi Aramco stock (2222.SR) from Yahoo Finance.
-    Aramco is the world's largest oil company by revenue, ~98% state-owned by
-    Saudi government / PIF, and the single most important Saudi-specific equity
-    signal. Saudi Vision 2030 anchor.
-    v0.5.0 — Saudi Financial Pulse (May 29 2026).
+    Fetch ADX General (Abu Dhabi) stock (^ADI) from Yahoo Finance.
+    ADX is the world's largest oil company by revenue, ~98% state-owned by
+    UAE government / PIF, and the single most important UAE-specific equity
+    signal. UAE Vision 2030 anchor.
+    v0.5.0 — UAE Financial Pulse (May 29 2026).
     """
-    print("[Saudi Stability] Fetching Saudi Aramco (2222.SR)...")
-    ARAMCO_LAST_KNOWN_KEY = 'aramco_last_known'
+    print("[UAE Stability] Fetching ADX General (Abu Dhabi) (^ADI)...")
+    ARAMCO_LAST_KNOWN_KEY = 'adx_last_known'
     try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/2222.SR"
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EADI"
         r = requests.get(url, params={'interval': '1d', 'range': '1mo'},
                          timeout=10,
                          headers={'User-Agent': 'Mozilla/5.0 (AsifahAnalytics/1.0)'})
@@ -251,7 +251,7 @@ def _fetch_aramco_stock():
                             })
                 except Exception:
                     pass
-                print(f"[Saudi Stability] Aramco: SAR {price:.2f} ({change_pct:+.2f}%)")
+                print(f"[UAE Stability] ADX: SAR {price:.2f} ({change_pct:+.2f}%)")
                 payload = {
                     'index': 'ARAMCO',
                     'value': round(float(price), 2),
@@ -270,7 +270,7 @@ def _fetch_aramco_stock():
                     pass
                 return payload
     except Exception as e:
-        print(f"[Saudi Stability] Aramco fetch error: {str(e)[:80]}")
+        print(f"[UAE Stability] ADX fetch error: {str(e)[:80]}")
 
     # Last-known fallback
     try:
@@ -306,9 +306,9 @@ def _fetch_brent_full():
     Note: ME backend may already have a _fetch_brent_price() that returns a tuple.
     This function returns the FULL Financial Pulse tile shape with sparkline.
     Distinct from the tuple-style fetcher used by older stability scoring.
-    v0.5.0 — Saudi Financial Pulse (May 29 2026).
+    v0.5.0 — UAE Financial Pulse (May 29 2026).
     """
-    print("[Saudi Stability] Fetching Brent Crude full (BZ=F)...")
+    print("[UAE Stability] Fetching Brent Crude full (BZ=F)...")
     BRENT_LAST_KNOWN_KEY = 'brent_full_last_known'
     try:
         url = "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F"
@@ -337,7 +337,7 @@ def _fetch_brent_full():
                             })
                 except Exception:
                     pass
-                print(f"[Saudi Stability] Brent: ${price:.2f} ({change_pct:+.2f}%)")
+                print(f"[UAE Stability] Brent: ${price:.2f} ({change_pct:+.2f}%)")
                 payload = {
                     'index': 'BRENT',
                     'value': round(float(price), 2),
@@ -356,7 +356,7 @@ def _fetch_brent_full():
                     pass
                 return payload
     except Exception as e:
-        print(f"[Saudi Stability] Brent fetch error: {str(e)[:80]}")
+        print(f"[UAE Stability] Brent fetch error: {str(e)[:80]}")
 
     # Last-known fallback
     try:
@@ -390,23 +390,23 @@ def _fetch_brent_full():
 # MARKET STATUS COMPUTATIONS
 # ============================================
 
-def _compute_market_status_tadawul():
+def _compute_market_status_dfm():
     """
-    Tadawul (Saudi Stock Exchange) hours:
-      Sun-Thu, 10:00-15:00 Arabian Standard Time (AST = UTC+3, no DST).
+    DFM (UAE Stock Exchange) hours:
+      Mon-Fri, 10:00-15:00 Arabian Standard Time (AST = UTC+3, no DST).
       Friday/Saturday: closed.
       Pre-open auction: 09:30-10:00.
     """
-    saudi_tz = timezone(timedelta(hours=3))
-    now_saudi = datetime.now(saudi_tz)
-    weekday = now_saudi.weekday()  # Mon=0 ... Sun=6
-    minutes = now_saudi.hour * 60 + now_saudi.minute
+    uae_tz = timezone(timedelta(hours=4))   # GST (UTC+4)
+    now_uae = datetime.now(uae_tz)
+    weekday = now_uae.weekday()  # Mon=0 ... Sun=6
+    minutes = now_uae.hour * 60 + now_uae.minute
 
-    # Friday=4, Saturday=5: weekend, market closed
-    if weekday in (4, 5):
+    # Saturday=5, Sunday=6: weekend (UAE moved to Mon-Fri trading, Jan 2022)
+    if weekday in (5, 6):
         return 'closed'
 
-    # Trading days (Sun-Thu)
+    # Trading days (Mon-Fri)
     if 570 <= minutes < 600:    # 09:30-10:00 pre-open auction
         return 'pre-market'
     if 600 <= minutes <= 900:   # 10:00-15:00 main session
@@ -474,24 +474,24 @@ def _compute_market_status_aggregate(statuses):
 # FINANCIAL PULSE CARD ASSEMBLY
 # ============================================
 
-def build_saudi_financial_pulse(tadawul_data, aramco_data, brent_data):
+def build_uae_financial_pulse(dfm_data, adx_data, brent_data):
     """
-    Assemble the canonical Financial Pulse Card payload for Saudi Arabia.
+    Assemble the canonical Financial Pulse Card payload for UAE.
 
-    Three tiles: Tadawul TASI, Saudi Aramco, Brent Crude.
+    Three tiles: DFM DFMGI, ADX General (Abu Dhabi), Brent Crude.
     Per-tile market_status + aggregate card-level status.
     All three tiles use STANDARD polarity (rising = good, falling = stress).
 
-    Note on Aramco market_status: Aramco trades on Tadawul, so its hours
-    match the Tadawul session.
+    Note on ADX market_status: ADX trades on DFM, so its hours
+    match the DFM session.
 
-    v0.5.0 — Saudi Financial Pulse Card (May 29 2026).
+    v0.5.0 — UAE Financial Pulse Card (May 29 2026).
     """
-    tadawul_status = _compute_market_status_tadawul()
-    aramco_status  = tadawul_status  # Aramco trades on Tadawul, same hours
+    dfm_status = _compute_market_status_dfm()
+    adx_status  = dfm_status  # ADX trades on DFM, same hours
     brent_status   = _compute_market_status_brent()
 
-    aggregate = _compute_market_status_aggregate([tadawul_status, aramco_status, brent_status])
+    aggregate = _compute_market_status_aggregate([dfm_status, adx_status, brent_status])
 
     def _tier(chg):
         """Standard polarity tier: rising = good, falling = stress."""
@@ -500,34 +500,34 @@ def build_saudi_financial_pulse(tadawul_data, aramco_data, brent_data):
         if chg >= 2:   return 'rally'
         return 'stable'
 
-    # Tadawul tile
-    tasi_chg = tadawul_data.get('change_pct_24h', 0) or 0
+    # DFM tile
+    tasi_chg = dfm_data.get('change_pct_24h', 0) or 0
     tasi_tile = {
-        'name':           'Tadawul TASI',
-        'ticker':         'TASI',
-        'value':          tadawul_data.get('value'),
+        'name':           'DFM DFMGI',
+        'ticker':         'DFMGI',
+        'value':          dfm_data.get('value'),
         'change_pct_24h': tasi_chg,
-        'trend':          tadawul_data.get('trend', 'flat'),
+        'trend':          dfm_data.get('trend', 'flat'),
         'tier':           _tier(tasi_chg),
-        'source':         tadawul_data.get('source', 'Yahoo Finance'),
-        'market_status':  tadawul_status,
-        'timestamp':      tadawul_data.get('timestamp'),
-        'sparkline':      tadawul_data.get('sparkline', []),
+        'source':         dfm_data.get('source', 'Yahoo Finance'),
+        'market_status':  dfm_status,
+        'timestamp':      dfm_data.get('timestamp'),
+        'sparkline':      dfm_data.get('sparkline', []),
     }
 
-    # Saudi Aramco tile
-    aramco_chg = aramco_data.get('change_pct_24h', 0) or 0
-    aramco_tile = {
-        'name':           'Saudi Aramco',
-        'ticker':         '2222.SR',
-        'value':          aramco_data.get('value'),
-        'change_pct_24h': aramco_chg,
-        'trend':          aramco_data.get('trend', 'flat'),
-        'tier':           _tier(aramco_chg),
-        'source':         aramco_data.get('source', 'Yahoo Finance'),
-        'market_status':  aramco_status,
-        'timestamp':      aramco_data.get('timestamp'),
-        'sparkline':      aramco_data.get('sparkline', []),
+    # ADX General (Abu Dhabi) tile
+    adx_chg = adx_data.get('change_pct_24h', 0) or 0
+    adx_tile = {
+        'name':           'ADX General (Abu Dhabi)',
+        'ticker':         '^ADI',
+        'value':          adx_data.get('value'),
+        'change_pct_24h': adx_chg,
+        'trend':          adx_data.get('trend', 'flat'),
+        'tier':           _tier(adx_chg),
+        'source':         adx_data.get('source', 'Yahoo Finance'),
+        'market_status':  adx_status,
+        'timestamp':      adx_data.get('timestamp'),
+        'sparkline':      adx_data.get('sparkline', []),
     }
 
     # Brent Crude tile
@@ -546,13 +546,13 @@ def build_saudi_financial_pulse(tadawul_data, aramco_data, brent_data):
     }
 
     return {
-        'country':        'SA',
-        'card_label':     'Saudi Arabia Financial Pulse',
+        'country':        'AE',
+        'card_label':     'UAE Financial Pulse',
         'market_status':  aggregate,
         'last_refreshed': datetime.now(timezone.utc).isoformat(),
         'tiles': {
             'TADAWUL': tasi_tile,
-            'ARAMCO':  aramco_tile,
+            'ARAMCO':  adx_tile,
             'BRENT':   brent_tile,
         },
     }
@@ -568,7 +568,7 @@ def _fetch_google_news_rss(query, label, max_items=15):
        - Firefox UA fallback on 403
        - curl_cffi TLS impersonation on persistent 403
        - {*} namespace wildcard XML parser
-    v1.5.2 (May 29 2026) — baked in from start for Saudi.
+    v1.5.2 (May 29 2026) — baked in from start for UAE.
     """
     articles = []
     encoded = urllib.parse.quote(query)
@@ -599,7 +599,7 @@ def _fetch_google_news_rss(query, label, max_items=15):
         resp = requests.get(url, timeout=(5, 15), headers=headers, allow_redirects=True)
         # Tier 2: Firefox UA on 403
         if resp.status_code == 403:
-            print(f"[Saudi Stability] GNews '{label}': HTTP 403 — retrying with Firefox UA")
+            print(f"[UAE Stability] GNews '{label}': HTTP 403 — retrying with Firefox UA")
             firefox_headers = dict(headers)
             firefox_headers['User-Agent'] = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) '
                                               'Gecko/20100101 Firefox/130.0')
@@ -611,7 +611,7 @@ def _fetch_google_news_rss(query, label, max_items=15):
             resp = requests.get(url, timeout=(5, 15), headers=firefox_headers, allow_redirects=True)
         # Tier 3: curl_cffi TLS impersonation
         if resp.status_code == 403 and CURL_CFFI_AVAILABLE:
-            print(f"[Saudi Stability] GNews '{label}': HTTP 403 — retrying with curl_cffi TLS impersonation")
+            print(f"[UAE Stability] GNews '{label}': HTTP 403 — retrying with curl_cffi TLS impersonation")
             try:
                 time.sleep(0.8)
                 cc_resp = curl_requests.get(url, impersonate='chrome',
@@ -623,11 +623,11 @@ def _fetch_google_news_rss(query, label, max_items=15):
                             self.content = cc.content
                             self.text = cc.text
                     resp = _CCWrapper(cc_resp)
-                    print(f"[Saudi Stability] GNews '{label}': curl_cffi rescued")
+                    print(f"[UAE Stability] GNews '{label}': curl_cffi rescued")
                 else:
-                    print(f"[Saudi Stability] GNews '{label}': curl_cffi also got HTTP {cc_resp.status_code}")
+                    print(f"[UAE Stability] GNews '{label}': curl_cffi also got HTTP {cc_resp.status_code}")
             except Exception as cc_err:
-                print(f"[Saudi Stability] GNews '{label}': curl_cffi error {str(cc_err)[:100]}")
+                print(f"[UAE Stability] GNews '{label}': curl_cffi error {str(cc_err)[:100]}")
         if resp.status_code == 200:
             root = ET.fromstring(resp.content)
             # {*} wildcard namespace parser
@@ -650,9 +650,9 @@ def _fetch_google_news_rss(query, label, max_items=15):
                         'content':     title_el.text.strip(),
                         'language':    'en',
                     })
-        print(f"[Saudi Stability] GNews '{label}': {len(articles)} articles")
+        print(f"[UAE Stability] GNews '{label}': {len(articles)} articles")
     except Exception as e:
-        print(f"[Saudi Stability] GNews error: {str(e)[:80]}")
+        print(f"[UAE Stability] GNews error: {str(e)[:80]}")
     return articles
 
 
@@ -660,39 +660,38 @@ def _fetch_google_news_rss(query, label, max_items=15):
 # MAIN SCAN ORCHESTRATOR
 # ============================================
 
-def run_saudi_stability_scan():
-    """Full Saudi stability scan. v0.5: economic indicators only.
+def run_uae_stability_scan():
+    """Full UAE stability scan. v0.5: economic indicators only.
     Returns the canonical payload with financial_pulse + articles.
     """
     scan_start = time.time()
-    print(f"\n[Saudi Stability] Starting scan at {datetime.now(timezone.utc).isoformat()}")
+    print(f"\n[UAE Stability] Starting scan at {datetime.now(timezone.utc).isoformat()}")
 
     # Fetch live financial indicators
-    tadawul = _fetch_tadawul_index()
-    aramco  = _fetch_aramco_stock()
+    dfm = _fetch_dfm_index()
+    adx  = _fetch_adx_index()
     brent   = _fetch_brent_full()
 
     # Build canonical Financial Pulse Card payload
-    financial_pulse = build_saudi_financial_pulse(tadawul, aramco, brent)
+    financial_pulse = build_uae_financial_pulse(dfm, adx, brent)
 
     # Fetch articles (light scan; v0.5 doesn't score them, just surfaces them)
     all_articles = []
     queries = [
-        ('Saudi Arabia oil OPEC Vision 2030', 'GNews:Saudi Economy'),
-        ('Saudi Arabia MBS Crown Prince royal', 'GNews:Saudi Leadership'),
-        ('Saudi Arabia Iran Hormuz Aramco attack', 'GNews:Saudi Threat'),
-        ('Saudi Arabia Yemen Houthi ceasefire', 'GNews:Saudi Yemen'),
-        ('Saudi Arabia US relations Trump Riyadh', 'GNews:US-Saudi'),
-        ('Saudi Aramco earnings dividend production', 'GNews:Aramco'),
-        ('Saudi Arabia IMEC corridor Red Sea pipeline rail', 'GNews:IMEC West-West'),
-        ('Tadawul Saudi stock market TASI', 'GNews:Tadawul Market'),
+        ('UAE Israel defense cooperation weapons training', 'GNews:UAE-Israel Axis'),
+        ('UAE Iran relations trade Dubai', 'GNews:UAE-Iran Dual'),
+        ('ADNOC OPEC UAE oil production', 'GNews:ADNOC Oil'),
+        ('UAE Abraham Accords normalization', 'GNews:Accords'),
+        ('DP World Jebel Ali UAE ports shipping', 'GNews:UAE Ports Hub'),
+        ('UAE economy Dubai Abu Dhabi investment', 'GNews:UAE Economy'),
+        ('UAE drone missile attack Houthi intercept', 'GNews:UAE Threat'),
     ]
     for query, label in queries:
         try:
             all_articles.extend(_fetch_google_news_rss(query, label))
             time.sleep(0.3)
         except Exception as e:
-            print(f"[Saudi Stability] GNews error {label}: {str(e)[:60]}")
+            print(f"[UAE Stability] GNews error {label}: {str(e)[:60]}")
 
     # Deduplicate articles by URL
     seen = set()
@@ -707,8 +706,8 @@ def run_saudi_stability_scan():
 
     result = {
         'success':           True,
-        'country':           'SA',
-        'country_name':      'Saudi Arabia',
+        'country':           'AE',
+        'country_name':      'United Arab Emirates',
         'scanned_at':        datetime.now(timezone.utc).isoformat(),
         'scan_duration_sec': scan_time,
 
@@ -716,15 +715,15 @@ def run_saudi_stability_scan():
         'financial_pulse':   financial_pulse,
 
         # Individual tile data (also exposed top-level for convenience)
-        'tadawul':           tadawul,
-        'aramco':            aramco,
+        'dfm':           dfm,
+        'adx':            adx,
         'brent':             brent,
 
         # Articles
         'articles':          deduped[:60],
         'total_articles':    len(deduped),
 
-        'version': '0.5.2-saudi-stability',
+        'version': '1.0.0-uae-stability',
     }
 
     # Cache to Redis
@@ -733,14 +732,14 @@ def run_saudi_stability_scan():
     # Lightweight history snapshot
     _redis_lpush_trim(HISTORY_KEY, {
         'ts':             datetime.now(timezone.utc).isoformat(),
-        'tasi_value':     tadawul.get('value'),
-        'aramco_value':   aramco.get('value'),
+        'tasi_value':     dfm.get('value'),
+        'adx_value':   adx.get('value'),
         'brent_value':    brent.get('value'),
         'market_status':  financial_pulse.get('market_status'),
     })
 
-    print(f"[Saudi Stability] Scan complete in {scan_time}s | "
-          f"TASI={tadawul.get('value')} · Aramco={aramco.get('value')} · "
+    print(f"[UAE Stability] Scan complete in {scan_time}s | "
+          f"DFMGI={dfm.get('value')} · ADX={adx.get('value')} · "
           f"Brent={brent.get('value')} · {len(deduped)} articles")
     return result
 
@@ -750,14 +749,14 @@ def run_saudi_stability_scan():
 # ============================================
 
 def _background_loop():
-    print("[Saudi Stability] Background thread started (12h cycle)")
+    print("[UAE Stability] Background thread started (12h cycle)")
     time.sleep(300)   # 5 min stagger after boot (avoid contention with other backends)
     while True:
         try:
-            print("[Saudi Stability] Background refresh triggered")
-            run_saudi_stability_scan()
+            print("[UAE Stability] Background refresh triggered")
+            run_uae_stability_scan()
         except Exception as e:
-            print(f"[Saudi Stability] Background scan error: {str(e)[:120]}")
+            print(f"[UAE Stability] Background scan error: {str(e)[:120]}")
         time.sleep(12 * 3600)
 
 
@@ -765,18 +764,18 @@ def _background_loop():
 # FLASK ENDPOINTS
 # ============================================
 
-def register_saudi_stability_endpoints(app):
-    """Register Saudi stability endpoints on the provided Flask app.
+def register_uae_stability_endpoints(app):
+    """Register UAE stability endpoints on the provided Flask app.
     Endpoints:
-      GET /api/saudi/stability              — full payload (Redis-cached)
-      GET /api/saudi/stability?force=true   — force fresh scan, bypass cache
-      GET /api/saudi/stability/summary      — lightweight cached subset
-      GET /api/saudi/stability/history      — recent history snapshots
+      GET /api/uae/stability              — full payload (Redis-cached)
+      GET /api/uae/stability?force=true   — force fresh scan, bypass cache
+      GET /api/uae/stability/summary      — lightweight cached subset
+      GET /api/uae/stability/history      — recent history snapshots
     """
 
-    @app.route('/api/saudi/stability', methods=['GET'])
-    def api_saudi_stability():
-        """Return full Saudi stability payload. ?force=true bypasses Redis cache."""
+    @app.route('/api/uae/stability', methods=['GET'])
+    def api_uae_stability():
+        """Return full UAE stability payload. ?force=true bypasses Redis cache."""
         force = request.args.get('force', '').lower() == 'true'
 
         if not force:
@@ -787,31 +786,31 @@ def register_saudi_stability_endpoints(app):
 
         # Live scan
         try:
-            result = run_saudi_stability_scan()
+            result = run_uae_stability_scan()
             result['from_cache'] = False
             return jsonify(result)
         except Exception as e:
-            print(f"[Saudi Stability] Scan error: {str(e)[:200]}")
+            print(f"[UAE Stability] Scan error: {str(e)[:200]}")
             return jsonify({'success': False, 'error': str(e)[:200]}), 500
 
-    @app.route('/api/saudi/stability/summary', methods=['GET'])
-    def api_saudi_stability_summary():
+    @app.route('/api/uae/stability/summary', methods=['GET'])
+    def api_uae_stability_summary():
         """Lightweight cached subset — used for header/index pages."""
         cached = _redis_get(CACHE_KEY) or {}
         return jsonify({
             'country':          'SA',
-            'country_name':     'Saudi Arabia',
+            'country_name':     'UAE',
             'scanned_at':       cached.get('scanned_at'),
-            'tadawul':          cached.get('tadawul', {}),
-            'aramco':           cached.get('aramco', {}),
+            'dfm':          cached.get('dfm', {}),
+            'adx':           cached.get('adx', {}),
             'brent':            cached.get('brent', {}),
             'financial_pulse':  cached.get('financial_pulse', {}),
-            'version':          '0.5.0-saudi-stability',
+            'version':          '0.5.0-uae-stability',
         })
 
-    @app.route('/api/saudi/stability/history', methods=['GET'])
-    def api_saudi_stability_history():
-        """Return Saudi stability history for trend chart."""
+    @app.route('/api/uae/stability/history', methods=['GET'])
+    def api_uae_stability_history():
+        """Return UAE stability history for trend chart."""
         history = _redis_get(HISTORY_KEY)
         if not isinstance(history, list):
             history = []
@@ -825,4 +824,4 @@ def register_saudi_stability_endpoints(app):
     t = threading.Thread(target=_background_loop, daemon=True)
     t.start()
 
-    print("[Saudi Stability] ✅ Endpoints registered: /api/saudi/stability (+ /summary, /history)")
+    print("[UAE Stability] ✅ Endpoints registered: /api/uae/stability (+ /summary, /history)")
