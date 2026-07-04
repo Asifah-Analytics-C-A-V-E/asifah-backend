@@ -1179,9 +1179,13 @@ except Exception as e:
 from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
 from israel_stability import register_israel_stability_endpoints
-from saudi_stability  import register_saudi_stability_endpoints  # v0.5.0 May 29 2026
+from saudi_stability  import register_saudi_stability_endpoints  # v0.5.2 Jul 2026
+from qatar_stability  import register_qatar_stability_endpoints  # v1.0.0 Jul 2026
+from uae_stability    import register_uae_stability_endpoints    # v1.0.0 Jul 2026
 register_israel_stability_endpoints(app)
-register_saudi_stability_endpoints(app)   # v0.5.0 May 29 2026
+register_saudi_stability_endpoints(app)   # v0.5.2 Jul 2026
+register_qatar_stability_endpoints(app)   # v1.0.0 Jul 2026
+register_uae_stability_endpoints(app)     # v1.0.0 Jul 2026
 # Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
 if SYRIA_HUMANITARIAN_AVAILABLE:
     register_syria_humanitarian_endpoints(app)
