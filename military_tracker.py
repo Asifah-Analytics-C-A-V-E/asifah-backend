@@ -310,6 +310,9 @@ MILITARY_ACTORS = {
             'carrier strike group', 'uss ', 'us navy gulf', 'us navy middle east',
             'amphibious ready group', 'us destroyer', 'us cruiser',
             'us submarine mediterranean', 'us submarine gulf',
+            'us submarine north atlantic', 'us submarine arctic', 'us attack submarine norway',
+            'giuk gap', 'p-8 poseidon keflavik', 'p-8 iceland', 'keflavik deployment',
+            'us navy norwegian sea', 'ice exercise', 'icex', 'us submarine under ice',
             'bomber task force', 'b-1 lancer', 'b-2 spirit', 'b-52 middle east',
             'f-35 deployment middle east', 'f-22 deployment', 'usaf deploys',
             'kc-135', 'kc-46', 'aerial refueling middle east',
@@ -510,6 +513,19 @@ MILITARY_ACTORS = {
             'iaf strike iran', 'iaf long range strike',
             # Navy
             'israeli navy', 'israel submarine', 'israeli corvette',
+            # -- Defense exports / security cooperation (Jul 2026: the Israel-shares-tech story) --
+            'israel arms deal', 'israeli arms sale', 'israel defense export',
+            'israel weapons export', 'israeli defense contract',
+            'rafael contract', 'elbit contract', 'iai contract',
+            'israel aerospace industries deal', 'elbit systems deal',
+            'israel arms uae', 'israel weapons uae', 'israel trains uae',
+            'israeli trainers gulf', 'israel gulf defense cooperation',
+            'israel uae defense', 'israel uae military cooperation',
+            'israel bahrain defense', 'israel morocco defense',
+            'israel azerbaijan arms', 'israel india defense deal',
+            'barak air defense sale', 'barak-8 export', 'david sling export',
+            'iron dome sale', 'iron dome export', 'arrow 3 export', 'arrow-3 germany',
+            'israeli air defense transfer', 'israel radar sale',
             'israel naval blockade', 'israel red sea',
             # Air defense systems
             'iron dome deployment', 'david sling', 'arrow battery',
@@ -1177,7 +1193,15 @@ MILITARY_ACTORS = {
         'weight': 0.7,
         'feeds_into': ['regional_tension'],
         'keywords': [
-            'russian navy mediterranean', 'russian warship mediterranean',
+            'russian navy mediterranean',
+            # -- Arctic / Northern Fleet subsurface (Jul 2026) --
+            'northern fleet', 'russian submarine atlantic', 'russian submarine arctic',
+            'russian submarine norwegian sea', 'russian sub greenland',
+            'yasen class', 'yasen-m', 'severodvinsk submarine', 'kazan submarine',
+            'borei class', 'borei-a', 'knyaz vladimir',
+            'kola peninsula', 'gadzhiyevo', 'severomorsk',
+            'russian navy giuk', 'bear island exercise', 'barents sea exercise',
+            'russia bastion defense', 'kalibr arctic', 'russian warship mediterranean',
             'russian submarine mediterranean', 'russia med fleet',
             'tartus naval base', 'hmeimim air base', 'russia syria deployment',
             'russian forces syria', 'russian air force syria',
@@ -1324,6 +1348,11 @@ MILITARY_ACTORS = {
             'iran attacks emirates', 'iran bombards uae',
             'dubai attack', 'dubai missile', 'dubai drone',
             'abu dhabi attack', 'abu dhabi missile', 'abu dhabi drone',
+            # -- Israel security cooperation, receiving side (Jul 2026) --
+            'uae israel defense', 'uae israeli weapons', 'uae israeli training',
+            'uae buys israeli', 'uae israeli air defense', 'uae barak',
+            'edge group rafael', 'edge group elbit', 'uae israel exercise',
+            'uae israel joint', 'emirati israeli defense', 'uae spyder',
             'us embassy dubai', 'us embassy dubai hit',
             'us embassy abu dhabi', 'uae shelter',
             'al dhafra attack', 'al dhafra missile', 'al dhafra struck',
@@ -1805,7 +1834,11 @@ MILITARY_ACTORS = {
         'weight': 0.5,
         'feeds_into': ['regional_tension'],
         'keywords': [
-            'cyprus military', 'cyprus defense', 'cyprus defence',
+            'cyprus military',
+            # -- Subsurface / GIUK watch (Jul 2026) --
+            'submarine near greenland', 'submarine greenland waters', 'pituffik',
+            'thule submarine', 'denmark strait submarine', 'greenland sea submarine',
+            'russian sub denmark strait', 'sosus', 'undersea cable arctic', 'cyprus defense', 'cyprus defence',
             'cyprus base', 'cyprus british base',
             'akrotiri base', 'raf akrotiri', 'akrotiri attack',
             'akrotiri drone', 'akrotiri strike',
@@ -4713,6 +4746,7 @@ CROSS_AMPLIFIER_PAIRS = {
     'us_cuba_active':       {'actors': ['us', 'cuba'],            'min_level': 'elevated'},
     'us_panama_active':     {'actors': ['us', 'panama'],          'min_level': 'elevated'},
     'us_greenland_active':  {'actors': ['us', 'greenland'],       'min_level': 'elevated'},
+    'israel_uae_defense':   {'actors': ['israel', 'uae'],          'min_level': 'elevated'},
 }
 
 LEVEL_RANK = {'normal': 0, 'elevated': 1, 'high': 2, 'surge': 3}
