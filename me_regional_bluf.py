@@ -127,6 +127,9 @@ TRACKER_KEYS = {
     'syria':   ('rhetoric:syria:latest',     'syria_rhetoric_cache'),
     'iraq':    ('rhetoric:iraq:latest',      'iraq_rhetoric_cache'),
     'oman':    ('rhetoric:oman:latest',      None),  # v2.0: dual-axis stability anchor
+    'qatar':        ('rhetoric:qatar:latest',        None),  # v1.0 Jul 2026: mediation class
+    'saudi_arabia': ('rhetoric:saudi_arabia:latest', None),  # v1.0 Jul 2026: friction + detente shim
+    'uae':          ('rhetoric:uae:latest',          None),  # v1.0 Jul 2026: aligned hub
 }
 
 THEATRE_FLAGS = {
@@ -137,6 +140,9 @@ THEATRE_FLAGS = {
     'syria':   '\U0001f1f8\U0001f1fe',
     'iraq':    '\U0001f1ee\U0001f1f6',
     'oman':    '\U0001f1f4\U0001f1f2',  # v2.0: Oman flag 🇴🇲
+    'qatar':        '\U0001f1f6\U0001f1e6',
+    'saudi_arabia': '\U0001f1f8\U0001f1e6',
+    'uae':          '\U0001f1e6\U0001f1ea',
 }
 
 ESCALATION_LABELS = {
@@ -591,11 +597,21 @@ def _legacy_get_theatre_level(data, theatre):
         if score >= 10: return 1
         return 0
     else:
+        # Composite-family trackers (Gulf trio, Jul 2026): map composite_level -> 0-5 int
+        if 'theatre_escalation_level' not in data and 'composite_level' in data:
+            _comp_map = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4}
+            return _comp_map.get(str(data.get('composite_level', 'low')).lower(), 0)
         return data.get('theatre_escalation_level',
                data.get('theatre_level', 0))
 
 
 def _legacy_get_theatre_score(data, theatre):
+    # Composite-family trackers score 0-10; ME rollup expects ~0-100
+    if 'theatre_score' not in data and 'rhetoric_score' not in data and 'composite_score' in data:
+        try:
+            return round(float(data.get('composite_score', 0)) * 10, 1)
+        except Exception:
+            return 0
     return data.get('theatre_score',
            data.get('rhetoric_score', 0))
 
@@ -1026,6 +1042,8 @@ THEATRE_DISPLAY_NAMES = {
     'oman':       'Oman',
     'syria':      'Syria',
     'saudi':      'Saudi Arabia',
+    'saudi_arabia': 'Saudi Arabia',
+    'qatar':      'Qatar',
     'uae':        'the UAE',
     'jordan':     'Jordan',
     'turkey':     'Turkey',
