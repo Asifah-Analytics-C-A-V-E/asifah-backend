@@ -807,7 +807,7 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
         sigs.append({'level': sev, 'type': 'tripwire', 'priority': 10,
                      'category': 'tripwire', 'theatre': 'saudi_arabia',
                      'pressure_type': 'kinetic',
-                     'short_text': f"\U0001f1e6\U0001f1eb SAUDI ARABIA tripwire: {str(name).replace('_',' ')}",
+                     'short_text': f"\U0001f1f8\U0001f1e6 SAUDI ARABIA tripwire: {str(name).replace('_',' ')}",
                      'long_text':  f"SAUDI ARABIA tripwire fired: {str(name).replace('_',' ')} -- "
                                    f"pattern-level escalation event this scan window."})
     # friction+detente dual-signal read: iran_saudi elevated WITH detente vocabulary
@@ -828,8 +828,8 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
             sigs.append({'level': lvl, 'type': 'actor_signal', 'priority': 7,
                          'category': 'actor_signal', 'theatre': 'saudi_arabia',
                          'pressure_type': 'kinetic',
-                         'short_text': f"\U0001f1e6\U0001f1eb {akey.replace('_',' ').title()} at {lvl.upper()}",
-                         'long_text':  f"SAUDI ARABIA actor {akey.replace('_',' ')} scanning at {lvl} -- "
+                         'short_text': f"\U0001f1f8\U0001f1e6 {akey.replace('_',' ').title()} at {lvl.upper()}",
+                         'long_text':  f"SAUDI ARABIA actor {ACTORS.get(akey, {}).get('name', akey)} scanning at {lvl} -- "
                                        f"elevated statement tempo/severity versus baseline."})
     sigs.sort(key=lambda x: -x.get('priority',0))
 
@@ -844,26 +844,17 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
     so_what = []
     _esc = ('elevated', 'high', 'surge')
     _sw = {
-        'kinetic_inbound': "Kinetic-inbound vector is {lvl} -- Houthi/Iran-file signal tempo at this level has "
-                           "historically preceded strike cycles on Saudi territory; watch intercept announcements "
-                           "and Abha/Jeddah airport advisories as the 72-hour tells.",
-        'energy_infrastructure': "Energy-infrastructure vector is {lvl} -- facility/pipeline signal volume at this "
-                           "tempo reads against the Abqaiq 2019 precedent; watch Petroline/Yanbu throughput reporting "
-                           "and Aramco security statements.",
-        'normalization_watch': "Normalization vector is {lvl} -- Accords-file signal tempo rising; each cycle of "
-                           "signature language historically moves the holdout-to-signature drift axis. Watch "
-                           "US-brokered package reporting and Palestinian-state precondition language.",
-        'domestic_transformation': "Domestic-transformation vector is {lvl} -- Royal Court/Vision 2030 signal volume "
-                           "elevated; watch decree cadence and giga-project re-scoping as fiscal-pressure tells.",
+        'kinetic_inbound': "Kinetic-inbound at {lvl}. What it means: strike-cycle tempo at this level has historically added a risk premium to Brent within the same week and repriced war-risk insurance on Gulf and Red Sea routings. Abqaiq 2019 is the anchor precedent -- one facility strike halved output in a day. Who feels it first: crude buyers, tanker insurers, Saudi air-defense procurement. Confirmation gauges: Brent tile on the stability page, intercept-announcement cadence, Abha/Jeddah airport advisories.",
+        'energy_infrastructure': "Energy-infrastructure at {lvl}. What it means: facility/pipeline signal tempo transmits to Brent and refined-product cracks within days if sustained; the East-West Petroline to Yanbu is the bypass that caps the Hormuz-closure scenario at roughly 5M bpd. IMEC corridor signals ride this vector as the counter-BRI story. Who feels it: crude importers globally, then downstream fuel markets. Confirmation gauges: Brent + Aramco tiles, Petroline throughput reporting.",
+        'normalization_watch': "Normalization-watch at {lvl}. What it means: signature-language cycles at this tempo have historically moved the whole regional realignment picture -- a Saudi-Israel deal would reprice defense pacts, Israeli market access, and the Palestinian file simultaneously; talks collapsing re-anchors the holdout position. Who feels it: every ME desk at once. Confirmation gauges: US-brokered package reporting, Palestinian-state precondition language.",
+        'domestic_transformation': "Domestic-transformation at {lvl}. What it means: Vision 2030 re-scoping and decree tempo at this level reads as fiscal pressure -- PIF is a mega-allocator, so deployment shifts transmit into global asset markets (tech, sports, infrastructure) within quarters. Succession signals ride this vector at maximum weight. Who feels it: PIF portfolio sectors, expat labor markets, contractors. Confirmation gauges: giga-project milestone reporting, budget statements, the Tadawul tile.",
     }
     for _vec, _lvl in (vector_levels or {}).items():
         if _lvl in _esc and _vec in _sw:
             so_what.append({'weight': 0.9, 'bullet': _sw[_vec].format(lvl=str(_lvl).upper())})
     if not so_what:
         so_what.append({'weight': 0.3, 'bullet':
-            "All four vectors at baseline this scan. Baseline for a friction-tier node still means the detente "
-            "shim is load-bearing: Iran friction runs against the Beijing-2023 normalization track, and the "
-            "Accords drift axis stays live. Quiet is a posture, not an absence."})
+            "All four vectors at baseline this scan. Baseline for a friction-tier node still means the detente shim is load-bearing: Iran friction runs against the Beijing-2023 normalization track, and the Accords drift axis stays live. Quiet is a posture, not an absence."})
     so_what.sort(key=lambda b: -b['weight'])
     return sigs[:8], ' '.join(parts), so_what[:6]
 

@@ -767,8 +767,8 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
         sigs.append({'level': sev, 'type': 'tripwire', 'priority': 10,
                      'category': 'tripwire', 'theatre': 'qatar',
                      'pressure_type': 'kinetic',
-                     'short_text': f"\U0001f1e6\U0001f1eb QATAR ARABIA tripwire: {str(name).replace('_',' ')}",
-                     'long_text':  f"QATAR ARABIA tripwire fired: {str(name).replace('_',' ')} -- "
+                     'short_text': f"\U0001f1f6\U0001f1e6 QATAR tripwire: {str(name).replace('_',' ')}",
+                     'long_text':  f"QATAR tripwire fired: {str(name).replace('_',' ')} -- "
                                    f"pattern-level escalation event this scan window."})
     # mediation-tempo read: the off-ramp sensor (tempo, not threat)
     _med = (actor_summaries or {}).get('qatar_mofa_mediation', {})
@@ -787,8 +787,8 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
             sigs.append({'level': lvl, 'type': 'actor_signal', 'priority': 7,
                          'category': 'actor_signal', 'theatre': 'qatar',
                          'pressure_type': 'kinetic',
-                         'short_text': f"\U0001f1e6\U0001f1eb {akey.replace('_',' ').title()} at {lvl.upper()}",
-                         'long_text':  f"QATAR ARABIA actor {akey.replace('_',' ')} scanning at {lvl} -- "
+                         'short_text': f"\U0001f1f6\U0001f1e6 {akey.replace('_',' ').title()} at {lvl.upper()}",
+                         'long_text':  f"QATAR actor {ACTORS.get(akey, {}).get('name', akey)} scanning at {lvl} -- "
                                        f"elevated statement tempo/severity versus baseline."})
     sigs.sort(key=lambda x: -x.get('priority',0))
 
@@ -803,27 +803,17 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
     so_what = []
     _esc = ('elevated', 'high', 'surge')
     _sw = {
-        'mediation_activity': "Mediation-activity vector is {lvl} -- for a mediation-class node this reads as TEMPO, "
-                           "not threat: active Doha channels have historically preceded regional off-ramps. The Iran "
-                           "wheel consumes this as the containment counterweight.",
-        'gcc_cohesion': "GCC-cohesion vector is {lvl} -- intra-Gulf signal tempo rising against the 2017-2021 "
-                           "blockade precedent; rift vocabulary here is never noise. Watch summit language and "
-                           "land-border/airspace reporting.",
-        'gas_infrastructure': "Gas-infrastructure vector is {lvl} -- North Field/Ras Laffan signal volume elevated; "
-                           "any incident is a global LNG event by construction (EU supply exposure). Watch NFE "
-                           "milestone reporting and Hormuz transit advisories.",
-        'base_posture': "Base-posture vector is {lvl} -- Al Udeid/Turkish-garrison signal tempo elevated; threats "
-                           "against the US anchor are an escalation class of their own. Watch CENTCOM posture "
-                           "statements and force-protection advisories.",
+        'mediation_activity': "Mediation-activity at {lvl}. What it means: for a mediation-class node this is TEMPO, not threat -- active Doha channels have historically preceded regional off-ramps (Iran files, Gaza rounds, hostage exchanges). The analyst read: escalation elsewhere WITH Doha channels active has historically stayed contained; the same escalation with channels quiet is the no-exit pattern. Who feels it: every open ME negotiation simultaneously. Confirmation gauges: shuttle-visit reporting, joint-statement cadence, the mediation_active fingerprint feeding the Iran wheel.",
+        'gcc_cohesion': "GCC-cohesion at {lvl}. What it means: intra-Gulf rift vocabulary at this tempo reads against the 2017-2021 blockade precedent -- last time it closed Qatar's only land border for four years, rerouted food supply through Iran and Turkey, and put the Al Udeid hosting question in play. Who feels it: Qatari supply corridors, GCC summit politics, US basing calculus. Confirmation gauges: land-border/airspace reporting, summit language, Hamad Port volume signals.",
+        'gas_infrastructure': "Gas-infrastructure at {lvl}. What it means: Qatar ships roughly a fifth of global LNG and every cargo transits Hormuz -- signal tempo here transmits to TTF (the EU benchmark) and JKM (the Asia benchmark) within days, EU storage-refill math within weeks, and power costs for import-dependent industry (Japan, Korea, Taiwan -- semiconductor fabs included) within a quarter. A North Field incident is a global energy event by construction. Who feels it first: EU utilities, Asian spot buyers, fertilizer producers (gas is the feedstock). Confirmation gauges: the TTF tile on the Qatar stability page is the live demand-side tell; Ras Laffan operations reporting.",
+        'base_posture': "Base-posture at {lvl}. What it means: threat tempo against Al Udeid -- CENTCOM's forward HQ -- is an escalation class of its own; historically it forces theater-wide force-protection changes and puts every US regional operation on a different footing. Turkish-garrison signals ride this vector as the alliance-guarantee read. Who feels it: US regional operations, Gulf basing politics, embassy advisories. Confirmation gauges: regional NOTAM clusters, CENTCOM posture statements, evacuation-advisory language.",
     }
     for _vec, _lvl in (vector_levels or {}).items():
         if _lvl in _esc and _vec in _sw:
             so_what.append({'weight': 0.9, 'bullet': _sw[_vec].format(lvl=str(_lvl).upper())})
     if not so_what:
         so_what.append({'weight': 0.3, 'bullet':
-            "All four vectors at baseline this scan. For the mediation node, baseline quiet cuts both ways: no "
-            "collapse signals, but channel tempo is the off-ramp sensor -- escalation elsewhere WITH Doha quiet "
-            "would be the pattern that removes the exit. Tempo, not threat."})
+            "All four vectors at baseline this scan. For the mediation node, baseline quiet cuts both ways: no collapse signals, but channel tempo is the off-ramp sensor -- escalation elsewhere WITH Doha quiet would be the pattern that removes the exit. Tempo, not threat."})
     so_what.sort(key=lambda b: -b['weight'])
     return sigs[:8], ' '.join(parts), so_what[:6]
 
@@ -961,11 +951,11 @@ def _build_qatar_signal_text(theatre_level, theatre_score, vector_levels, actor_
                  3: 'Direct Threat', 4: 'Coercion', 5: 'Active Crisis'}
     label = label_map.get(theatre_level, 'Monitoring')
 
-    short = f"🇶🇦 QATAR ARABIA L{theatre_level} {label} — {vectors_brief}"
+    short = f"🇶🇦 QATAR L{theatre_level} {label} — {vectors_brief}"
     if len(short) > 120:
         short = short[:117] + '...'
 
-    long_parts = [f"🇶🇦 QATAR ARABIA at L{theatre_level} {label} (theatre score {theatre_score}/100)."]
+    long_parts = [f"🇶🇦 QATAR at L{theatre_level} {label} (theatre score {theatre_score}/100)."]
     if vectors_active:
         long_parts.append(f"Active vectors: {vectors_brief}.")
     if actors_active:

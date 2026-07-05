@@ -765,8 +765,8 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
         sigs.append({'level': sev, 'type': 'tripwire', 'priority': 10,
                      'category': 'tripwire', 'theatre': 'uae',
                      'pressure_type': 'kinetic',
-                     'short_text': f"\U0001f1e6\U0001f1eb UAE ARABIA tripwire: {str(name).replace('_',' ')}",
-                     'long_text':  f"UAE ARABIA tripwire fired: {str(name).replace('_',' ')} -- "
+                     'short_text': f"\U0001f1e6\U0001f1ea UAE tripwire: {str(name).replace('_',' ')}",
+                     'long_text':  f"UAE tripwire fired: {str(name).replace('_',' ')} -- "
                                    f"pattern-level escalation event this scan window."})
     # dual-polarity read: iran_uae_dual elevated -- name which track is driving
     _iran = (actor_summaries or {}).get('iran_uae_dual', {})
@@ -786,8 +786,8 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
             sigs.append({'level': lvl, 'type': 'actor_signal', 'priority': 7,
                          'category': 'actor_signal', 'theatre': 'uae',
                          'pressure_type': 'kinetic',
-                         'short_text': f"\U0001f1e6\U0001f1eb {akey.replace('_',' ').title()} at {lvl.upper()}",
-                         'long_text':  f"UAE ARABIA actor {akey.replace('_',' ')} scanning at {lvl} -- "
+                         'short_text': f"\U0001f1e6\U0001f1ea {akey.replace('_',' ').title()} at {lvl.upper()}",
+                         'long_text':  f"UAE actor {ACTORS.get(akey, {}).get('name', akey)} scanning at {lvl} -- "
                                        f"elevated statement tempo/severity versus baseline."})
     sigs.sort(key=lambda x: -x.get('priority',0))
 
@@ -802,26 +802,17 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
     so_what = []
     _esc = ('elevated', 'high', 'surge')
     _sw = {
-        'kinetic_inbound': "Kinetic-inbound vector is {lvl} -- intercept/threat signal tempo at this level reads "
-                           "against the Jan 2022 Abu Dhabi precedent; watch air-defense activation reporting and "
-                           "Fujairah anchorage advisories.",
-        'israel_axis': "Israel-axis vector is {lvl} -- defense-cooperation signal tempo rising (EDGE-Rafael channel, "
-                           "training, transfers); the Accords-goes-kinetic story deepening. The MIL tracker's "
-                           "israel_uae_defense amplifier pairs with this read.",
-        'iran_dual': "Iran dual-track vector is {lvl} -- on a MIXED-POLARITY spoke, the question is which track "
-                           "drives it: friction (drones, threats) or lifeline (Dubai trade). Divergence between the "
-                           "kinetic and commercial tracks is itself the tell.",
-        'economic_hub': "Economic-hub vector is {lvl} -- ports/energy signal volume elevated; watch Jebel Ali "
-                           "operations reporting, war-risk premiums on UAE calls, and ADNOC guidance.",
+        'kinetic_inbound': "Kinetic-inbound at {lvl}. What it means: intercept/threat tempo at this level reads against the Jan 2022 Abu Dhabi precedent -- strikes on UAE soil historically reprice aviation routings, tourism-sector risk, and war-risk premiums at Fujairah within days. Who feels it: Gulf carriers, hull insurers, Dubai's services economy. Confirmation gauges: air-defense activation reporting, Fujairah anchorage advisories, the DFM/ADX tiles.",
+        'israel_axis': "Israel-axis at {lvl}. What it means: defense-cooperation tempo (the EDGE-Rafael channel, air-defense transfers, training) at this level is the Accords-goes-kinetic story deepening -- it integrates Gulf air defense with Israeli systems and reprices the regional deterrence read against Iran. Who feels it: Tehran's targeting calculus, Gulf procurement pipelines, the normalization file region-wide. Confirmation gauges: deal announcements, joint-exercise reporting, the MIL tracker's israel_uae_defense amplifier.",
+        'iran_dual': "Iran dual-track at {lvl}. What it means: this spoke carries friction and lifeline simultaneously -- the analyst question is WHICH track drives the tempo. Lifeline holding (Dubai trade, flights, diaspora finance) while kinetics spike has historically read as contained; commercial rupture alongside kinetic escalation is the confirmation-via-commerce pattern that precedes broader break. Who feels it: Dubai's re-export economy, Iranian consumer markets, sanctions desks. Confirmation gauges: flight-schedule signals, trade-volume reporting, divergence between kinetic and commercial story counts.",
+        'economic_hub': "Economic-hub at {lvl}. What it means: Jebel Ali is the region's largest port on a DP World network spanning six continents -- disruption signals here transmit into global logistics costs, not just Gulf ones. War-risk premiums on UAE port calls are the fastest repricing channel; DMCC gold flows double as sanctions-pressure weather. Who feels it: global shippers, gold markets, ADNOC crude buyers. Confirmation gauges: war-risk premium reporting, Jebel Ali operations statements, the Gold x Transit Hub card.",
     }
     for _vec, _lvl in (vector_levels or {}).items():
         if _lvl in _esc and _vec in _sw:
             so_what.append({'weight': 0.9, 'bullet': _sw[_vec].format(lvl=str(_lvl).upper())})
     if not so_what:
         so_what.append({'weight': 0.3, 'bullet':
-            "All four vectors at baseline this scan. Baseline for the aligned hub still means both Iran tracks "
-            "running simultaneously -- friction and lifeline -- and the Israel defense axis compounding quietly. "
-            "Divergence between kinetic and commercial rhetoric remains the standing tell."})
+            "All four vectors at baseline this scan. Baseline for the aligned hub still means both Iran tracks running simultaneously -- friction and lifeline -- and the Israel defense axis compounding quietly. Divergence between kinetic and commercial rhetoric remains the standing tell."})
     so_what.sort(key=lambda b: -b['weight'])
     return sigs[:8], ' '.join(parts), so_what[:6]
 
@@ -953,11 +944,11 @@ def _build_uae_signal_text(theatre_level, theatre_score, vector_levels, actor_su
                  3: 'Direct Threat', 4: 'Coercion', 5: 'Active Crisis'}
     label = label_map.get(theatre_level, 'Monitoring')
 
-    short = f"🇦🇪 UAE ARABIA L{theatre_level} {label} — {vectors_brief}"
+    short = f"🇦🇪 UAE L{theatre_level} {label} — {vectors_brief}"
     if len(short) > 120:
         short = short[:117] + '...'
 
-    long_parts = [f"🇦🇪 UAE ARABIA at L{theatre_level} {label} (theatre score {theatre_score}/100)."]
+    long_parts = [f"🇦🇪 UAE at L{theatre_level} {label} (theatre score {theatre_score}/100)."]
     if vectors_active:
         long_parts.append(f"Active vectors: {vectors_brief}.")
     if actors_active:
