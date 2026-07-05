@@ -306,6 +306,9 @@ try:
 except Exception as e:
     register_uae_rhetoric_routes = None
     print(f"[ME Backend] ⚠️ UAE rhetoric module not available: {e}")
+
+try:
+    from rhetoric_tracker_iran import register_iran_rhetoric_routes
     print("[ME Backend] ✅ Iran rhetoric (command node) module loaded")
 except Exception as e:
     register_iran_rhetoric_routes = None
