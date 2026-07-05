@@ -287,7 +287,25 @@ except Exception as e:
     _butterfly_tb.print_exc()
 
 try:
-    from rhetoric_tracker_iran import register_iran_rhetoric_routes
+    from rhetoric_tracker_saudi_arabia import register_saudi_rhetoric_routes
+    print("[ME Backend] ✅ Saudi rhetoric (friction+detente) module loaded")
+except Exception as e:
+    register_saudi_rhetoric_routes = None
+    print(f"[ME Backend] ⚠️ Saudi rhetoric module not available: {e}")
+
+try:
+    from rhetoric_tracker_qatar import register_qatar_rhetoric_routes
+    print("[ME Backend] ✅ Qatar rhetoric (mediation class) module loaded")
+except Exception as e:
+    register_qatar_rhetoric_routes = None
+    print(f"[ME Backend] ⚠️ Qatar rhetoric module not available: {e}")
+
+try:
+    from rhetoric_tracker_uae import register_uae_rhetoric_routes
+    print("[ME Backend] ✅ UAE rhetoric (aligned hub) module loaded")
+except Exception as e:
+    register_uae_rhetoric_routes = None
+    print(f"[ME Backend] ⚠️ UAE rhetoric module not available: {e}")
     print("[ME Backend] ✅ Iran rhetoric (command node) module loaded")
 except Exception as e:
     register_iran_rhetoric_routes = None
@@ -1284,6 +1302,13 @@ if register_iran_rhetoric_routes:
 
 if register_israel_rhetoric_routes:
     register_israel_rhetoric_routes(app)
+
+if register_saudi_rhetoric_routes:
+    register_saudi_rhetoric_routes(app)
+if register_qatar_rhetoric_routes:
+    register_qatar_rhetoric_routes(app)
+if register_uae_rhetoric_routes:
+    register_uae_rhetoric_routes(app)
 
 # ── IRAN STRIKE WINDOW endpoints (May 22 2026) ──
 # Endpoints registered:
