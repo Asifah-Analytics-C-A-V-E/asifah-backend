@@ -840,7 +840,32 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
                  else "All four vectors at baseline this scan.")
     parts.append("Friction-tier node with detente shim: Iran friction vs Beijing-2023 "
                  "normalization track; Accords drift on the Israel axis -- convergence read, not prediction.")
-    return sigs[:8], ' '.join(parts), []
+        # --- Fallback So-What bullets (v1: interpreter-less; vector-level driven) ---
+    so_what = []
+    _esc = ('elevated', 'high', 'surge')
+    _sw = {
+        'kinetic_inbound': "Kinetic-inbound vector is {lvl} -- Houthi/Iran-file signal tempo at this level has "
+                           "historically preceded strike cycles on Saudi territory; watch intercept announcements "
+                           "and Abha/Jeddah airport advisories as the 72-hour tells.",
+        'energy_infrastructure': "Energy-infrastructure vector is {lvl} -- facility/pipeline signal volume at this "
+                           "tempo reads against the Abqaiq 2019 precedent; watch Petroline/Yanbu throughput reporting "
+                           "and Aramco security statements.",
+        'normalization_watch': "Normalization vector is {lvl} -- Accords-file signal tempo rising; each cycle of "
+                           "signature language historically moves the holdout-to-signature drift axis. Watch "
+                           "US-brokered package reporting and Palestinian-state precondition language.",
+        'domestic_transformation': "Domestic-transformation vector is {lvl} -- Royal Court/Vision 2030 signal volume "
+                           "elevated; watch decree cadence and giga-project re-scoping as fiscal-pressure tells.",
+    }
+    for _vec, _lvl in (vector_levels or {}).items():
+        if _lvl in _esc and _vec in _sw:
+            so_what.append({'weight': 0.9, 'bullet': _sw[_vec].format(lvl=str(_lvl).upper())})
+    if not so_what:
+        so_what.append({'weight': 0.3, 'bullet':
+            "All four vectors at baseline this scan. Baseline for a friction-tier node still means the detente "
+            "shim is load-bearing: Iran friction runs against the Beijing-2023 normalization track, and the "
+            "Accords drift axis stays live. Quiet is a posture, not an absence."})
+    so_what.sort(key=lambda b: -b['weight'])
+    return sigs[:8], ' '.join(parts), so_what[:6]
 
 
 def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global):

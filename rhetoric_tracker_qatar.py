@@ -799,7 +799,33 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
                  else "All four vectors at baseline this scan.")
     parts.append("Mediation-class node: mediation activity reads as tempo, not threat -- "
                  "collapse is the pressure event. Convergence read, not prediction.")
-    return sigs[:8], ' '.join(parts), []
+        # --- Fallback So-What bullets (v1: interpreter-less; vector-level driven) ---
+    so_what = []
+    _esc = ('elevated', 'high', 'surge')
+    _sw = {
+        'mediation_activity': "Mediation-activity vector is {lvl} -- for a mediation-class node this reads as TEMPO, "
+                           "not threat: active Doha channels have historically preceded regional off-ramps. The Iran "
+                           "wheel consumes this as the containment counterweight.",
+        'gcc_cohesion': "GCC-cohesion vector is {lvl} -- intra-Gulf signal tempo rising against the 2017-2021 "
+                           "blockade precedent; rift vocabulary here is never noise. Watch summit language and "
+                           "land-border/airspace reporting.",
+        'gas_infrastructure': "Gas-infrastructure vector is {lvl} -- North Field/Ras Laffan signal volume elevated; "
+                           "any incident is a global LNG event by construction (EU supply exposure). Watch NFE "
+                           "milestone reporting and Hormuz transit advisories.",
+        'base_posture': "Base-posture vector is {lvl} -- Al Udeid/Turkish-garrison signal tempo elevated; threats "
+                           "against the US anchor are an escalation class of their own. Watch CENTCOM posture "
+                           "statements and force-protection advisories.",
+    }
+    for _vec, _lvl in (vector_levels or {}).items():
+        if _lvl in _esc and _vec in _sw:
+            so_what.append({'weight': 0.9, 'bullet': _sw[_vec].format(lvl=str(_lvl).upper())})
+    if not so_what:
+        so_what.append({'weight': 0.3, 'bullet':
+            "All four vectors at baseline this scan. For the mediation node, baseline quiet cuts both ways: no "
+            "collapse signals, but channel tempo is the off-ramp sensor -- escalation elsewhere WITH Doha quiet "
+            "would be the pattern that removes the exit. Tempo, not threat."})
+    so_what.sort(key=lambda b: -b['weight'])
+    return sigs[:8], ' '.join(parts), so_what[:6]
 
 
 def _write_qatar_fingerprints(actor_levels, vector_scores, tripwires_global):

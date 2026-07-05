@@ -798,7 +798,32 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
                  else "All four vectors at baseline this scan.")
     parts.append("Aligned-hub node: Israel axis + dual-polarity Iran spoke -- divergence "
                  "between kinetic and commercial tracks is the tell. Convergence read, not prediction.")
-    return sigs[:8], ' '.join(parts), []
+        # --- Fallback So-What bullets (v1: interpreter-less; vector-level driven) ---
+    so_what = []
+    _esc = ('elevated', 'high', 'surge')
+    _sw = {
+        'kinetic_inbound': "Kinetic-inbound vector is {lvl} -- intercept/threat signal tempo at this level reads "
+                           "against the Jan 2022 Abu Dhabi precedent; watch air-defense activation reporting and "
+                           "Fujairah anchorage advisories.",
+        'israel_axis': "Israel-axis vector is {lvl} -- defense-cooperation signal tempo rising (EDGE-Rafael channel, "
+                           "training, transfers); the Accords-goes-kinetic story deepening. The MIL tracker's "
+                           "israel_uae_defense amplifier pairs with this read.",
+        'iran_dual': "Iran dual-track vector is {lvl} -- on a MIXED-POLARITY spoke, the question is which track "
+                           "drives it: friction (drones, threats) or lifeline (Dubai trade). Divergence between the "
+                           "kinetic and commercial tracks is itself the tell.",
+        'economic_hub': "Economic-hub vector is {lvl} -- ports/energy signal volume elevated; watch Jebel Ali "
+                           "operations reporting, war-risk premiums on UAE calls, and ADNOC guidance.",
+    }
+    for _vec, _lvl in (vector_levels or {}).items():
+        if _lvl in _esc and _vec in _sw:
+            so_what.append({'weight': 0.9, 'bullet': _sw[_vec].format(lvl=str(_lvl).upper())})
+    if not so_what:
+        so_what.append({'weight': 0.3, 'bullet':
+            "All four vectors at baseline this scan. Baseline for the aligned hub still means both Iran tracks "
+            "running simultaneously -- friction and lifeline -- and the Israel defense axis compounding quietly. "
+            "Divergence between kinetic and commercial rhetoric remains the standing tell."})
+    so_what.sort(key=lambda b: -b['weight'])
+    return sigs[:8], ' '.join(parts), so_what[:6]
 
 
 def _write_uae_fingerprints(actor_levels, vector_scores, tripwires_global):
