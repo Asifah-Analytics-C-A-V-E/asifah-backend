@@ -38,6 +38,7 @@ Author: RCGG / Asifah Analytics
 import os
 import json
 import traceback
+import re
 from datetime import datetime, timezone
 import requests
 
@@ -2942,6 +2943,55 @@ def _build_axis_quota_signals(bluf):
 # ============================================================
 # MAIN BUILD FUNCTION
 # ============================================================
+# ============================================================
+# CANONICAL-TERM NORMALIZATION (Jul 2026)
+# .title() on dynamic names and source inconsistency mangle acronyms/proper
+# nouns in generated prose (ARAMCO->Aramco, DRC->Drc, ISKP->Iskp). This final
+# pass restores canonical casing over GPI prose only. Extend CANONICAL_TERMS as
+# new cases surface. Casing only -- first-reference spell-out is a separate feature.
+# ============================================================
+CANONICAL_TERMS = {
+    'aramco': 'ARAMCO',
+    'drc':    'DRC',
+    'iskp':   'ISKP',
+    # add more here as identified, e.g. 'uae': 'UAE', 'opec': 'OPEC'
+}
+_CANONICAL_RX = [(re.compile(r'\b' + re.escape(k) + r'\b', re.IGNORECASE), v)
+                 for k, v in CANONICAL_TERMS.items()]
+
+_PROSE_KEYS = {'headline', 'detail', 'short_text', 'long_text', 'text',
+               'narrative', 'bluf', 'summary', 'situation', 'assessment'}
+
+def _normalize_terms(text):
+    """Restore canonical acronym/proper-noun casing in a single prose string."""
+    if not isinstance(text, str) or not text:
+        return text
+    for rx, repl in _CANONICAL_RX:
+        text = rx.sub(repl, text)
+    return text
+
+def _normalize_payload_terms(obj):
+    """Recursively normalize canonical terms across the GPI payload's prose.
+    Normalizes string values under a known prose key OR any multi-word string
+    (prose has spaces; ids/colors/categories/urls do not), so structured
+    fields like ids and hex colors are left untouched."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, str):
+                if k in _PROSE_KEYS or ' ' in v:
+                    obj[k] = _normalize_terms(v)
+            else:
+                _normalize_payload_terms(v)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, str):
+                if ' ' in item:
+                    obj[i] = _normalize_terms(item)
+            else:
+                _normalize_payload_terms(item)
+    return obj
+
+
 def build_gpi(force=False):
     """Build the full GPI synthesis."""
     if not force:
@@ -3038,6 +3088,9 @@ def build_gpi(force=False):
             'regions_total':   len(REGIONAL_BLUF_ENDPOINTS),
             'data_completeness': data_completeness,   # v3.1 honesty rollup
         }
+
+        # Canonical-term normalization (Jul 2026): fix acronym casing (ARAMCO/DRC/ISKP)
+        _normalize_payload_terms(result)
 
         _redis_set(GPI_CACHE_KEY, result)
         # Also cache the lightweight level-only payload
