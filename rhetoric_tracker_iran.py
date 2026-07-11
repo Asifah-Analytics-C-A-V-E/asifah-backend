@@ -2209,6 +2209,20 @@ def _write_crosstheater_signal(result):
             'iran_regime_signals_active':  result.get('regime_signals', {}).get('active_count', 0),
         }
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
+
+        # ── Rim Emission Pass (Jul 2026): canonical hub-agnostic key ──
+        # Iran predates the canonical schema (collective registry only). The
+        # Russia wheel reads crosstheater:iran:fingerprint -- promote the same
+        # registry slice. node_class = aligned_partner (Shahed pipeline,
+        # sanctions-evasion axis); is_command_node rides along.
+        try:
+            _canon = dict(existing.get('iran', {}))
+            _canon['country'] = 'iran'
+            _canon['node_class'] = 'aligned_partner'
+            _redis_set('crosstheater:iran:fingerprint', _canon)
+            print('[Iran Rhetoric] Canonical spoke fingerprint written (crosstheater:iran:fingerprint)')
+        except Exception as _ce:
+            print(f'[Iran Rhetoric] Canonical fingerprint write failed: {_ce}')
         print(f"[Iran Rhetoric] ✅ Command node fingerprint written (is_command_node: True)")
         if salalah_targeted or duqm_logistics_active or oman_diplomatic_active:
             print(f"[Iran Rhetoric] 🇴🇲 Oman signals: salalah={salalah_targeted}, "
