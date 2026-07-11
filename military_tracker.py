@@ -253,7 +253,7 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary'],
+        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary', 'kazakhstan'],
         'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Greece/Aegean, Cyprus, Caucasus'
     },
     'middle_east': {
@@ -1993,10 +1993,40 @@ MILITARY_ACTORS = {
             'yerevan military', 'zvartnots',
             'armenia evacuation', 'armenia corridor iran',
             'lachin', 'artsakh military',
+            'zangezur corridor', 'crossroads of peace',
+            'armenia azerbaijan peace treaty', 'eu monitoring mission armenia',
             'Армения военный', 'Ереван армия',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=armenia+military+OR+yerevan+OR+defense+OR+CSTO+OR+border&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=zangezur+OR+armenia+azerbaijan+peace+OR+syunik&hl=en&gl=US&ceid=US:en',
+            'https://www.azatutyun.am/api/zrqiteuuir',
+        ]
+    },
+
+    'kazakhstan': {
+        'name': 'Kazakhstan',
+        'flag': '🇰🇿',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'kazakhstan military', 'kazakh army', 'kazakhstan defense',
+            'kazakhstan defence', 'kazakhstan mobilization',
+            'baikonur', 'baikonur cosmodrome', 'russia baikonur',
+            'kazakhstan csto', 'csto kazakhstan', 'csto exercise',
+            'kazakhstan russia exercise', 'kazakhstan russia military',
+            'kazakhstan china military', 'kazakhstan china exercise',
+            'caspian flotilla', 'kazakhstan caspian',
+            'kazakhstan border russia', 'kazakhstan border china',
+            'kazakhstan unrest', 'kazakhstan protests military',
+            'tokayev military', 'astana military', 'almaty unrest',
+            'kazakhstan air defense', 'kazakhstan drone',
+            'Казахстан военный', 'Казахстан армия', 'ОДКБ Казахстан',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=kazakhstan+military+OR+baikonur+OR+CSTO+OR+tokayev&hl=en&gl=US&ceid=US:en',
         ]
     },
   
