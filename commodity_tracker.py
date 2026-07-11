@@ -2097,6 +2097,14 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'nickel':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 nickel producer (~12% global); Nickel Asia + Global Ferronickel + Dinapigue Mining. Surigao + Palawan mines. Philippines-Indonesia together = ~60% global nickel. Marcos Jr. administration considering Indonesian-style export ban for downstream processing investment. Watch: DENR mining-policy announcements, Nickel Asia (NAC.PS) earnings, Marcos Jr. industry plans."},
     },
+    'poland': {
+        'silver':       {'role': 'producer', 'weight': 1.2, 'rank': 2, 'data_as_of': '2026-07',
+                         'note': "Top-tier global silver producer via KGHM Polska Miedz -- one of the world's largest silver miners (Glogow/Lubin copper-silver ores), routinely #1-2 in refined silver output alongside Mexico. Silver is dual-natured: industrial (photovoltaics, electronics) + monetary hedge, so Polish output matters to both cycles. STABILITY LINK: KGHM is state-controlled and a fiscal pillar; strikes or energy-cost shocks at Polish smelters move global silver supply. Watch: KGHM production reports, Polish energy prices (smelting cost base), zloty moves, EU industrial-policy shifts."},
+        'copper':       {'role': 'producer', 'weight': 0.8, 'data_as_of': '2026-07',
+                         'note': "KGHM is Europe's largest copper producer (~top-10 global) from the Legnica-Glogow belt, plus international assets (Sierra Gorda, Chile). Copper is the electrification bellwether, and Poland is the EU's only major primary producer -- strategic weight in EU critical-raw-materials autonomy debates. Watch: KGHM output/strikes, EU CRMA sourcing rules, energy costs."},
+        'wheat':        {'role': 'transit', 'weight': 0.9, 'data_as_of': '2026-07',
+                         'note': "FLOW, NOT STOCK: Poland is the primary overland corridor for Ukrainian grain (rail transshipment + Baltic ports Gdansk/Gdynia) since Black Sea disruption -- and the epicenter of the EU-Ukraine grain-glut political conflict (farmer blockades, import bans, border protests). A Polish border closure is a food-corridor event with Ukraine-solidarity and EU-cohesion spillovers. STABILITY LINK: farmer protests are a live domestic-politics pressure valve. Watch: border-crossing status (Dorohusk/Medyka), Polish farmer-union actions, EU import-quota decisions, Baltic port grain volumes."},
+    },
     'russia': {
         'wheat':        {'role': 'producer', 'weight': 1.5, 'rank': 1, 'data_as_of': '2026-06',
                          'note': "World's #1 wheat EXPORTER (~45M t in 2024-25); Black Sea (Novorossiysk) the gateway. Russian export taxes/quotas + Black Sea security move global wheat directly. Watch: export-quota/tax changes, Black Sea shipping risk, harvest size."},
