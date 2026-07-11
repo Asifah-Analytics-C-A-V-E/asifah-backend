@@ -1795,6 +1795,13 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'natural_gas':  {'role': 'transit',           'weight': 0.8, 'data_as_of': '2026-06',
                          'note': "Emerging South-East Europe gas gateway: the Trans Adriatic Pipeline (TAP) lands Azeri Shah Deniz gas en route to Italy; the Revithoussa LNG terminal and the new Alexandroupoli FSRU (offshore northern Greece) import LNG for onward flow into the Balkans; and the Greece-Bulgaria IGB interconnector links the network northward. Greece's role is corridor / regasification, not production. Watch: Alexandroupoli FSRU throughput, Revithoussa send-out, TAP flows, IGB utilization."},
     },
+    'greenland': {
+        'rare_earths':  {'role': 'producer', 'weight': 1.2, 'data_as_of': '2026-07',
+                         'regime_flags': ['critical_minerals_contested', 'us_strategic_interest'],
+                         'note': "POTENTIAL, NOT PRODUCTION -- but the geology is world-class: Kvanefjeld (Kuannersuit) and Tanbreez in the south are among the largest undeveloped rare-earth deposits on Earth. Kvanefjeld is FROZEN by the 2021 uranium-mining ban (the deposit is uranium-bearing; Chinese-linked Shenghe Resources holds a stake in operator Energy Transition Minerals), while Tanbreez advances under US-aligned Critical Metals Corp -- making Greenland the physical square where the US, China, and the EU critical-minerals contest actually lands. Renewed US acquisition/security pressure keeps strategic attention pinned. STABILITY LINK: mining politics IS Greenlandic politics -- the 2021 election turned on Kvanefjeld, and every REE headline re-energizes the independence-vs-Denmark debate and the US-Denmark alliance friction. Watch: Tanbreez permitting/offtake milestones, uranium-ban politics in Inatsisartut, US/Denmark security statements, Chinese stake movements, EU Critical Raw Materials Act engagement."},
+        'gold':         {'role': 'producer', 'weight': 0.3, 'data_as_of': '2026-07',
+                         'note': "Nalunaq (Amaroq Minerals) restarted -- small output, but Greenland's only active metals mine and the symbolic reopening of the mining economy after a decade dormant. A sentiment bellwether for whether extraction in Greenland is investable at all. Watch: Amaroq production ramp, new exploration-license tempo, Greenland government royalty/permitting posture."},
+    },
     'guinea': {
         'bauxite':      {'role': 'producer',          'weight': 1.5, 'rank': 2,
                          'regime_flags': ['belt_and_road_anchor'],
