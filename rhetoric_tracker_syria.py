@@ -92,6 +92,50 @@ HISTORY_KEY               = 'rhetoric:syria:history'
 BASELINE_KEY              = 'rhetoric_baseline:syria'
 CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'  # shared
 
+
+# ============================================================
+# CANONICAL SPOKE FINGERPRINT (Rim Emission Pass -- Jul 2026)
+# node_class = ruptured_node: post-Assad, Russia's Syria corridor (Tartus /
+# Khmeimim) is severed-to-uncertain -- the wheel reads a phantom limb, not a
+# live spoke. PLUS the convergence slice: Syria is the square where THREE
+# hubs (Turkey / Iran / Russia) press simultaneously -- the triple-meddle
+# read the Regional BLUFs and GPI should surface. Hub-agnostic key: the
+# Russia wheel reads it today; Turkey/Iran wheels read the SAME key later.
+# ============================================================
+
+def _write_canonical_spoke_fingerprint(result):
+    actors = result.get('actors') or {}
+    def _alvl(aid):
+        a = actors.get(aid) or {}
+        return a.get('escalation_level', a.get('level', 0))
+    tk, ir = _alvl('sna'), _alvl('iran_proxies')
+    ru = max(_alvl('russia'), _alvl('russia_syria'))   # absence-honest 0 if no Russia actor
+    il = _alvl('israel')
+    hubs = {'turkey': tk, 'iran': ir, 'russia': ru}
+    active = [h for h, l in hubs.items() if l >= 2]
+    fingerprint = {
+        'ts':          datetime.now(timezone.utc).isoformat(),
+        'country':     'syria',
+        'node_class':  'ruptured_node',
+        'level':       result.get('theatre_level', 0),
+        'score':       result.get('theatre_score', result.get('rhetoric_score', 0)),
+        'rupture': {
+            'corridor_status': 'severed_uncertain',   # Tartus/Khmeimim post-Assad
+            'russia_level':    ru,
+        },
+        'convergence': {
+            'turkey_level': tk, 'iran_level': ir, 'russia_level': ru,
+            'israel_level': il,
+            'hubs_active':  active,
+            'triple_meddle': len(active) == 3,
+        },
+    }
+    try:
+        _redis_set('crosstheater:syria:fingerprint', fingerprint)
+        print('[Syria Rhetoric] Canonical spoke fingerprint written (crosstheater:syria:fingerprint)')
+    except Exception as e:
+        print(f'[Syria Rhetoric] Canonical fingerprint write failed: {e}')
+
 RHETORIC_CACHE_TTL = 13 * 3600  # 13h -- covers 12h scan cycle + 1h buffer
 
 _rhetoric_running = False
@@ -1696,6 +1740,7 @@ def run_syria_rhetoric_scan(days=3):
     # Save to both keys
     _redis_set(RHETORIC_CACHE_KEY, result)
     _redis_set(RHETORIC_CACHE_KEY_LEGACY, result)
+    _write_canonical_spoke_fingerprint(result)   # Rim Emission Pass
 
     # History snapshot
     try:
@@ -1785,6 +1830,7 @@ def run_syria_rhetoric_scan(days=3):
     # Re-save with enriched fields
     _redis_set(RHETORIC_CACHE_KEY, result)
     _redis_set(RHETORIC_CACHE_KEY_LEGACY, result)
+    _write_canonical_spoke_fingerprint(result)   # Rim Emission Pass
 
     print(f"[Syria Rhetoric] ✅ v2.0 complete in {scan_time}s — "
           f"Level: {result['theatre_escalation_label']} ({max_level}) | "
