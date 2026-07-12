@@ -2025,7 +2025,7 @@ def _narrative_turkey_regional_convergence(blufs):
     single hot spot. Fires when >=3 theaters are active (L2+), OR >=2 active spanning
     BOTH a projection theater AND a peripheral one. Otherwise stays silent.
     """
-    PERIPHERY_SPOKES = ['greece', 'cyprus', 'azerbaijan']  # spoke:turkey:<c> writers (Israel arrives via the self-slice, block 3)
+    PERIPHERY_SPOKES = ['greece', 'cyprus', 'azerbaijan', 'armenia']  # spoke:turkey:<c> writers (Israel arrives via the self-slice, block 3; armenia joined Jul 12 2026 -- normalization-track polarity)
     ACTIVE_LEVEL     = 2     # L2+ = concrete moves, not declaratory rhetoric
     REL_LABEL = {
         'peer_rivalry': 'rivalry', 'rivalry': 'rivalry',
