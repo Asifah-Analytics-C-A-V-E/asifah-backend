@@ -131,6 +131,23 @@ _scan_lock    = threading.Lock()
 
 _redis_client = None
 
+# ── TEMPO BASELINE EMITTER (v1.0 -- Jul 12, 2026) ────────────────────────
+# Writes raw daily counts + CORPUS HEALTH to the shared Redis bus. The engine
+# (tempo_baseline.py, ME backend) does all the maths; this is a dumb write.
+#
+# WHY THE CORPUS DENOMINATOR MATTERS: _detect_silence_anomalies() below cannot
+# currently tell "Hezbollah said nothing" from "our RSS feeds died." If the
+# feeds go down, statement_count falls to zero and it announces "Unusual quiet
+# -- possible operational security." The engine refuses that call when the
+# corpus is sick. Same idea, honest denominator.
+try:
+    from tempo_baseline import emit_counts as _tempo_emit
+    TEMPO_EMIT_AVAILABLE = True
+except ImportError:
+    TEMPO_EMIT_AVAILABLE = False
+    _tempo_emit = None
+
+
 def _init_redis():
     global _redis_client
     if _redis_client is not None:
@@ -2421,6 +2438,29 @@ def run_rhetoric_scan(days=3):
     # ── Actor baselines + silence anomalies ──
     baselines = _update_actor_baselines(actor_results)
     result['silence_anomalies'] = _detect_silence_anomalies(actor_results, baselines)
+
+    # ── TEMPO EMITTER — Hezbollah actor slice ──
+    # Hezbollah CLAIMS its operations, so it is a mode='actor' target: silence
+    # from a claiming actor is the signal. We emit the actor slice, not the
+    # theatre -- because the question was never "did Lebanon go quiet," it was
+    # "did Hezbollah go quiet."
+    if TEMPO_EMIT_AVAILABLE:
+        try:
+            _hez = actor_results.get('hezbollah', {}) or {}
+            _arts = result.get('articles_analyzed') or result.get('total_articles') or 0
+            _sources_seen = len({(a.get('source') or '') for a in (result.get('articles') or [])
+                                 if a.get('source')})
+            _tempo_emit(
+                'hezbollah',
+                streams={'statements': _hez.get('statement_count', 0)},
+                corpus={
+                    'articles':      _arts,
+                    'sources_live':  _sources_seen,
+                    'sources_total': len(RHETORIC_RSS_FEEDS),
+                },
+            )
+        except Exception as _e:
+            print(f"[Lebanon Rhetoric] Tempo emit failed (non-fatal): {str(_e)[:100]}")
 
     # ── Delta ──
     result['delta'] = _compute_delta()
