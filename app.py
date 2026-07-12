@@ -362,6 +362,20 @@ try:
 except Exception as e:
     CONVERGENCE_DETECTOR_AVAILABLE = False
     print(f"[ME Backend] Convergence detector not available: {e}")
+
+# Tempo Baseline Engine (v1.0 -- Jul 12, 2026)
+# Generic actor/tape baseline engine. Lives HERE (primary backend) because the
+# algorithm is shared; the DATA is local and arrives via the shared Upstash Redis
+# bus, so no proxy is needed. Unblocks "Quiet Before Storm" platform-wide.
+# Adding a new target (DPRK, IRGC, Greenland) = one line in TEMPO_REGISTRY.
+try:
+    from tempo_baseline import register_tempo_endpoints, compute_all as tempo_compute_all
+    TEMPO_AVAILABLE = True
+    print("[ME Backend] ✅ Tempo baseline engine loaded")
+except Exception as e:
+    TEMPO_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ Tempo baseline engine not available: {e}")
+
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
@@ -1339,6 +1353,34 @@ if CONVERGENCE_ENDPOINTS_AVAILABLE:
 if CONVERGENCE_DETECTOR_AVAILABLE:
     register_convergence_detector_endpoints(app)
     print("[ME Backend] Convergence detector registered: /api/cax/probe")
+
+# Tempo Baseline Engine -- /api/tempo/*
+if TEMPO_AVAILABLE:
+    register_tempo_endpoints(app)
+    print("[ME Backend] ✅ Tempo baseline registered: /api/tempo/registry, "
+          "/api/tempo/<target>, /api/tempo/compute, /debug/tempo")
+
+
+# Tempo baseline daily recompute — cross-worker locked, same pattern as the
+# commodity/humanitarian/military loops.
+if TEMPO_AVAILABLE:
+    import threading as _tempo_threading
+    import time as _tempo_time
+
+    def _tempo_refresh_loop():
+        _tempo_time.sleep(300)   # let the boot settle
+        while True:
+            try:
+                results = tempo_compute_all()
+                ready = [t for t, r in results.items() if r.get('ready')]
+                print(f"[Tempo] Daily recompute: {len(ready)}/{len(results)} targets ready "
+                      f"-> {ready if ready else 'none yet (emitters still filling the tape)'}")
+            except Exception as e:
+                print(f"[Tempo] Refresh loop error: {str(e)[:120]}")
+            _tempo_time.sleep(6 * 3600)   # 4x daily
+
+    _tempo_threading.Thread(target=_tempo_refresh_loop, daemon=True).start()
+    print("[ME Backend] ✅ Tempo baseline refresh loop started (6h cycle)")
 
 
 # ──────────────────────────────────────────────────────────────
