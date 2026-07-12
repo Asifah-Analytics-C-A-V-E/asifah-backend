@@ -653,6 +653,17 @@ def _score_specificity(text):
 # ============================================
 # REDIS HELPERS
 # ============================================
+# ── TEMPO BASELINE EMITTER (v1.0 -- Jul 12, 2026) ────────────────────────
+# Raw daily counts + corpus health to the shared Redis bus. The engine
+# (tempo_baseline.py, ME backend) owns the maths and the corpus-health guard.
+try:
+    from tempo_baseline import emit_counts as _tempo_emit
+    TEMPO_EMIT_AVAILABLE = True
+except ImportError:
+    TEMPO_EMIT_AVAILABLE = False
+    _tempo_emit = None
+
+
 def _redis_get(key):
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
         return None
@@ -1514,6 +1525,27 @@ def run_houthi_rhetoric_scan(days=3):
     # ── Baseline + silence detection ──
     baselines = _update_actor_baselines(actor_results)
     result['silence_anomalies'] = _detect_silence_anomalies(actor_results, baselines)
+
+    # ── TEMPO EMITTER — Houthi actor slice ──
+    # The Houthis claim maritime operations, usually fast. A lengthening
+    # time-to-claim, or a drop in claim cadence after high tempo, is signal.
+    # mode='actor' in the registry.
+    if TEMPO_EMIT_AVAILABLE:
+        try:
+            _hou = actor_results.get('houthis', {}) or {}
+            _sources_seen = len({(a.get('source') or '') for a in (articles or [])
+                                 if a.get('source')})
+            _tempo_emit(
+                'houthis',
+                streams={'statements': _hou.get('statement_count', 0)},
+                corpus={
+                    'articles':      len(articles or []),
+                    'sources_live':  _sources_seen,
+                    'sources_total': len(RHETORIC_RSS_FEEDS),
+                },
+            )
+        except Exception as _e:
+            print(f"[Yemen Rhetoric] Tempo emit failed (non-fatal): {str(_e)[:100]}")
 
     # ── v2.1: Signal interpretation (so_what, red_lines, historical_matches) ──
     # Wraps in try/except so a bad interpretation never breaks the scan.
