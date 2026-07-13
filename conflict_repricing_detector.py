@@ -256,6 +256,82 @@ THEATER_CONFIG = {
                            'defense_spread:escalation', 'oil:peace']},
         ],
     },
+
+    # ════════════════════════════════════════════════════════════════════
+    # KOREA (v0.5.0 -- Jul 12 2026) -- the first mode='habituation' theater
+    # ════════════════════════════════════════════════════════════════════
+    # WHY THIS THEATER CANNOT USE THE OFF-RAMP SCHEMA:
+    # Israel and europe_ukraine both ask "does informed capital price the peace
+    # as durable?" That question requires a peace. Korea has none: the war never
+    # ended. It has been an ARMISTICE since 1953. There is no ceasefire to
+    # corroborate or contradict, so an off-ramp read here would be measuring a
+    # thing that does not exist -- and would report its absence as calm.
+    #
+    # WHAT REPLACES IT:
+    # The KOSPI has been shot at so many times it stopped flinching. The "Korea
+    # discount" is a named, measured phenomenon: a missile test that once moved
+    # Seoul now moves it a tenth of a percent. So the question inverts --
+    #
+    #     HAS THE MARKET GONE NUMB, AND WHAT DOES IT TAKE TO WAKE IT?
+    #
+    # And that is not a cute framing. It is the SAME VARIABLE the rhetoric
+    # tracker's leverage-integrity instrument measures, read from the other end.
+    # Pyongyang's whole strategy depends on provocations still buying attention.
+    # The tape is the scoreboard for whether they do. A test that moves nothing
+    # means the leverage has decayed -- and by the tracker's own inverted read,
+    # THAT is the dangerous condition, because a sidelined DPRK escalates to be
+    # noticed. Two independent sensors, opposite ends, same variable. Convergence
+    # in the doctrinal sense, not the decorative one.
+    'korea': {
+        'display': 'Korea',
+        'flag': '\U0001F1F0\U0001F1F7',      # ROK -- the market that pays, not the one that shouts
+        'mode': 'habituation',
+        'rhetoric_key': 'rhetoric:dprk:latest',
+        'rhetoric_label': 'DPRK provocation',
+        # No off-ramp fields (contradiction_front / structural_alternative): there
+        # is no off-ramp. Their absence is the point, not an oversight.
+        'instruments': [
+            {'id': 'broad', 'name': 'South Korea ETF (EWY)', 'ticker': 'EWY',
+             'role': 'broad risk', 'peace_direction': 'up'},
+            {'id': 'fx', 'name': 'the won', 'ticker': 'KRW=X',
+             'role': 'FX risk premium', 'peace_direction': 'down'},  # USD/KRW down = won stronger
+            {'id': 'defense_spread', 'name': 'defense (Hanwha Aerospace) vs the broad index',
+             'ticker': '012450.KS', 'spread_vs': 'EWY',
+             'role': 'defense demand', 'peace_direction': 'down'},
+            # Fourth leg is REGIONAL CONTAGION, not a war-premium commodity. Korea
+            # has no Brent. What it has is a neighbour: a missile over Japan drives
+            # safe-haven flight into the yen. If Seoul flinches and Tokyo does not,
+            # the market has read the event as a local Korean story.
+            {'id': 'regional_contagion', 'name': 'the yen (safe-haven flight)',
+             'ticker': 'JPY=X',
+             'role': 'regional contagion', 'peace_direction': 'up'},  # USD/JPY up = yen weaker = no flight
+        ],
+        'phrasing': {
+            'broad': ('South Korean equities are firming',
+                      'South Korean equities are weakening'),
+            'fx': ('the won is weakening', 'the won is strengthening'),
+            'defense_spread': ('Korean defense (Hanwha) is outperforming the broad index',
+                               'Korean defense (Hanwha) is underperforming the broad index'),
+            'regional_contagion': ('the yen is weakening (no safe-haven flight)',
+                                   'the yen is strengthening (safe-haven flight)'),
+        },
+        'leg_names': {'broad': 'Korean equities', 'fx': 'the won',
+                      'defense_spread': 'defense demand',
+                      'regional_contagion': 'regional contagion'},
+        # Episode seeds. NOTE: numbness is SIGNATURE-LESS by construction -- an
+        # all-flat tape produces an empty vote set, which cannot Jaccard-match
+        # anything. That is correct and worth stating: the habituation read does
+        # not lean on the episode library the way the off-ramp theaters do. The
+        # library here exists to remember the FLINCHES, so we can see how far the
+        # present has drifted from them.
+        'episodes': [
+            {'id': 'sep_2017_sixth_test', 'date': 'Sep 2017',
+             'regime': 'market_flinch',
+             'label': 'the Sep 2017 sixth-nuclear-test selloff (when Seoul still flinched)',
+             'signature': ['broad:escalation', 'fx:escalation',
+                           'defense_spread:escalation', 'regional_contagion:escalation']},
+        ],
+    },
 }
 
 
@@ -269,8 +345,56 @@ _MATURITY_PHRASE = {
 }
 
 
+_PROVOCATION_PHRASE = {
+    'nuclear_test':   'a nuclear test',
+    'icbm':           'an ICBM launch',
+    'satellite':      'a satellite launch',
+    'irbm':           'an IRBM launch',
+    'srbm':           'short-range launches',
+    'cruise':         'cruise-missile launches',
+    'sub_threshold':  'sub-threshold provocation',
+}
+
+
+def _read_provocation(cfg):
+    """HABITUATION MODE: read the DPRK provocation fingerprint, not an off-ramp.
+
+    Absence-honest in two DIFFERENT ways, and the distinction is load-bearing:
+      - feed_missing = the tracker has never written. We know NOTHING. Say so.
+      - No provocation this cycle = the tracker wrote, and it is genuinely quiet.
+    Collapsing these would let a dead tracker masquerade as a calm peninsula --
+    the same class of error as a dead RSS feed masquerading as an actor's silence.
+    """
+    fp = _redis_get(cfg['rhetoric_key'])
+    if not fp:
+        return {'feed_missing': True, 'active': False, 'maturity': 'none',
+                'maturity_phrase': 'rhetoric feed pending',
+                'contradiction_active': False, 'diplomatic_max_raw': None,
+                'provocation_class': None, 'provocation_phrase': None}
+    pclass = fp.get('provocation_class') or None
+    return {
+        'feed_missing': False,
+        'active': bool(fp.get('provocation_active')),
+        'provocation_class': pclass,
+        'provocation_phrase': _PROVOCATION_PHRASE.get(pclass, pclass or 'a provocation'),
+        'leverage_integrity': fp.get('leverage_integrity'),
+        'maturity': 'none',
+        'maturity_phrase': 'n/a -- armistice, not ceasefire',
+        'contradiction_active': False,
+        'diplomatic_max_raw': None,
+    }
+
+
 def _read_offramp(cfg):
-    """Pull the de-escalation fingerprint for this theater's rhetoric key."""
+    """Pull the de-escalation fingerprint for this theater's rhetoric key.
+
+    Mode dispatch (v0.5.0): habituation theaters (Korea) read a provocation
+    fingerprint instead. Using the wrong reader produces confident nonsense --
+    an off-ramp read on a war that never ended would report the permanent
+    absence of a ceasefire as calm.
+    """
+    if cfg.get('mode') == 'habituation':
+        return _read_provocation(cfg)
     fp = _redis_get(cfg['rhetoric_key']) or {}
     maturity = fp.get('de_escalation_maturity') or 'none'
     return {
@@ -364,6 +488,27 @@ def _classify(scored, offramp):
     if len(available) < COHERENCE_MIN:
         return 'insufficient_data', peace, esc
 
+    # ── HABITUATION MODE (Korea) ──
+    # We are not asking whether the market believes a peace. We are asking
+    # whether it still REACTS. The finding lives in the pairing of a live
+    # provocation against a tape that did not move.
+    if offramp.get('mode') == 'habituation' or offramp.get('provocation_phrase') is not None \
+            or offramp.get('feed_missing'):
+        if offramp.get('feed_missing'):
+            return 'rhetoric_pending', peace, esc
+        moved = len(peace) + len(esc)
+        if offramp['active']:
+            # A provocation fired. Did anyone flinch?
+            if len(esc) >= COHERENCE_MIN and len(peace) == 0:
+                return 'market_alert', peace, esc      # the tape woke up
+            if moved == 0:
+                return 'numb', peace, esc              # THE headline finding
+            return 'partial_flinch', peace, esc        # some legs moved, not coherent
+        # No provocation this cycle.
+        if moved >= COHERENCE_MIN:
+            return 'unattributed_move', peace, esc     # something moved it; not Pyongyang
+        return 'quiet', peace, esc
+
     peace_coherent = len(peace) >= COHERENCE_MIN and len(esc) == 0
     esc_coherent = len(esc) >= COHERENCE_MIN and len(peace) == 0
 
@@ -405,7 +550,78 @@ def _observed_pattern(scored, vote_kind, cfg):
 # ------------------------------------------------------------
 # The estimative prose builder (the locked output contract)
 # ------------------------------------------------------------
+def _build_habituation_read(cfg, state, scored, offramp, peace, esc):
+    """HABITUATION PROSE (Korea). Estimative, precedent-anchored, no forecast."""
+    d = cfg['display']
+    prov = offramp.get('provocation_phrase') or 'a provocation'
+
+    if state == 'rhetoric_pending':
+        return (f"Market read ({d}): the DPRK rhetoric feed has not yet written a "
+                f"provocation fingerprint, so the tape cannot be read against it this "
+                f"cycle. Absence of a feed is not evidence of a quiet peninsula. "
+                f"{DISCLAIMER}")
+
+    if state == 'numb':
+        lev = offramp.get('leverage_integrity')
+        lev_txt = (f" The rhetoric layer reads leverage integrity at {lev}/100."
+                   if lev is not None else "")
+        return (f"Market read ({d}): {prov.capitalize()} registered in the rhetoric "
+                f"layer this cycle, and not one of the four instruments moved beyond "
+                f"threshold. The tape did not flinch. This is consistent with informed "
+                f"capital having priced DPRK provocation as structural noise -- the "
+                f"pattern the 'Korea discount' names -- rather than as a change in "
+                f"condition.{lev_txt} Note the direction of that read: a provocation "
+                f"that buys no attention is a provocation that bought no leverage, and "
+                f"the historical pattern is that Pyongyang escalates when it is being "
+                f"negotiated around, not when it is being courted. A numb tape is not "
+                f"the same thing as a calm one. {DISCLAIMER}")
+
+    if state == 'market_alert':
+        observed = _observed_pattern(scored, 'escalation', cfg)
+        return (f"Market read ({d}): {prov.capitalize()} registered in the rhetoric "
+                f"layer, and the tape moved with it -- {observed}. This is a departure "
+                f"from the habituated baseline: informed capital is pricing this event "
+                f"as a change in condition rather than as routine. Deviation from "
+                f"numbness is the signal here, and it is consistent either with an "
+                f"event that differed in kind from the routine, or with a market "
+                f"assumption that has broken. {DISCLAIMER}")
+
+    if state == 'partial_flinch':
+        legs = (cfg.get('leg_names') or {})
+        moved = [legs.get(s['id'], s['id']) for s in scored
+                 if s['vote'] in ('peace', 'escalation')]
+        joined = ', '.join(moved[:-1]) + ' and ' + moved[-1] if len(moved) > 1 else moved[0]
+        return (f"Market read ({d}): {prov.capitalize()} registered, and the tape moved "
+                f"only partially -- {joined} responded while the remaining instruments "
+                f"held flat. Not coherent enough to read as a repricing, but not the "
+                f"full numbness of the habituated baseline either. A partial flinch. "
+                f"{DISCLAIMER}")
+
+    if state == 'unattributed_move':
+        observed = _observed_pattern(scored, 'escalation' if len(esc) >= len(peace)
+                                     else 'peace', cfg)
+        return (f"Market read ({d}): no DPRK provocation in the rhetoric layer this "
+                f"cycle, yet {observed}. This movement is NOT attributable to the "
+                f"peninsula on the evidence available -- Korean assets carry global "
+                f"semiconductor and trade exposure that moves them for reasons that "
+                f"have nothing to do with Pyongyang. Reported, not attributed. "
+                f"{DISCLAIMER}")
+
+    if state == 'quiet':
+        return (f"Market read ({d}): no DPRK provocation in the rhetoric layer and no "
+                f"coherent movement across the instruments this cycle. Baseline. "
+                f"{DISCLAIMER}")
+
+    if state == 'insufficient_data':
+        return (f"Market read ({d}): insufficient live market data this cycle to read "
+                f"the tape against the rhetoric layer. {DISCLAIMER}")
+
+    return f"Market read ({d}): no coherent read this cycle. {DISCLAIMER}"
+
+
 def build_market_read(cfg, state, scored, offramp, peace, esc):
+    if cfg.get('mode') == 'habituation':
+        return _build_habituation_read(cfg, state, scored, offramp, peace, esc)
     d = cfg['display']
     label = cfg['rhetoric_label']
     mat = offramp['maturity_phrase']
