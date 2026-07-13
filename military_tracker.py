@@ -970,10 +970,24 @@ MILITARY_ACTORS = {
     'north_korea': {
         'name': 'North Korea',
         'flag': '🇰🇵',
-        'tier': 2,
+        # TIER BUMP (Jul 12 2026): 2 -> 1, weight 0.7 -> 0.9.
+        # Tier here tracks KINETIC ACTIVITY, not importance -- which is why China
+        # (0.6) and Russia (0.7) sit at tier 2 while Sudan and Wagner sit at tier 1.
+        # The 0.7/tier-2 rating was calibrated when the DPRK was a SUPPLIER of
+        # shells. It is now a COMBATANT: ~10-15k troops committed to Kursk, dead in
+        # the thousands, and a state memorial whose walls carry 2,288 names. That is
+        # the Sudan/Wagner band, so it gets the Sudan/Wagner weight. Only the US
+        # carries 1.0.
+        'tier': 1,
         'theatre': 'asia_pacific',
-        'weight': 0.7,
-        'feeds_into': ['regional_tension'],
+        'weight': 0.9,
+        # ROLLUP FIX (Jul 12 2026): russia_proxy_pressure added.
+        # This is the change with teeth. Wagner feeds russia_proxy_pressure. Sudan
+        # feeds russia_proxy_pressure. The country that sent an army corps to fight
+        # Russia's war did not -- so every DPRK combat signal was landing in
+        # 'regional_tension' (i.e. read as a Korean Peninsula story) and the
+        # Russia-proxy rollup was structurally blind to its largest proxy.
+        'feeds_into': ['regional_tension', 'russia_proxy_pressure'],
         'keywords': [
             # Missile / launch events (broad)
             'north korea missile', 'dprk missile', 'north korea launches',
@@ -1030,9 +1044,87 @@ MILITARY_ACTORS = {
             'north korea weapons export', 'dprk weapons transfer',
             'north korea sanctions violation', 'north korea arms',
             'north korea russia weapons', 'dprk russia military',
+            # ══ EXPEDITIONARY FOOTPRINT (Jul 12 2026) ══
+            # The gap that mattered most: the DPRK's most under-watched export is
+            # LABOR. Where its workers and engineers appear, tunnels appear --
+            # Hezbollah's network in Lebanon, the Gaza tunnels, now Kursk
+            # reconstruction. Labor presence x malign-actor co-location is a
+            # military-infrastructure transfer signal, and we had ZERO sensors on it.
+            'north korean workers', 'dprk workers', 'north korean laborers',
+            'dprk laborers', 'north korean engineers', 'dprk engineers',
+            'north korean overseas workers', 'dprk overseas labor',
+            'north korea tunnel', 'dprk tunnel', 'north korean tunnel',
+            'tunnel construction north korea', 'north korea underground facility',
+            'north korean advisers', 'dprk advisers', 'north korea military advisers',
+            'north korea hezbollah', 'dprk hezbollah',
+            'north korea hamas', 'dprk hamas',
+            'north korea syria', 'north korea africa', 'dprk africa',
+            'north korean workers russia', 'dprk workers russia',
+            'north korea reconstruction russia', 'north korea kursk rebuild',
+
+            # ══ LEADERSHIP / PURGE WATCH ══
+            # Pyongyangology. Who is in frame, who vanished, who speaks for Kim.
+            'kim yo jong', 'kim yo-jong', 'kim ju ae', 'kim ju-ae',
+            'choe son hui', 'choe son-hui', 'pak jong chon', 'ri pyong chol',
+            'jo yong won', 'kim tok hun', 'kim jong sik',
+            'north korea purge', 'dprk purge', 'north korea executed',
+            'north korea execution', 'north korea official removed',
+            'north korea demoted', 'north korea reshuffle',
+            'north korea politburo', 'workers party plenum',
+            'central military commission', 'north korea succession',
+            'kim jong un daughter', 'north korea heir',
+            '김여정', '김주애', '최선희', '노동당 전원회의',
+
+            # ══ TEST LOCATION + TYPE GRANULARITY ══
+            # Location is the AUDIENCE. A lofted ICBM is addressed to Washington;
+            # an SRBM into the East Sea is addressed to Seoul and Tokyo; Sohae is
+            # prestige. Punggye-ri tunnel 3 is the Black Swan.
+            'sohae', 'sohae satellite launching station', 'tongchang-ri',
+            'punggye-ri tunnel', 'punggye-ri reactivation',
+            'seventh nuclear test', '7th nuclear test',
+            'north korea satellite launch', 'dprk satellite',
+            'north korea reconnaissance satellite', 'north korea spy satellite',
+            'sinpo', 'north korea lofted', 'lofted trajectory',
+            'north korea hypersonic', 'dprk hypersonic',
+            'north korea cruise missile', 'north korea solid-fuel',
+
+            # ══ LEVERAGE DECAY / SIDELINING TELLS ══
+            # The inverted read: the DPRK escalates when its leverage DECAYS, not
+            # when it peaks. A test is a RELEVANCE signal -- the way Pyongyang
+            # forces itself back onto an agenda it has been left off. So the
+            # dangerous condition is being negotiated AROUND, and these are the
+            # words that show it happening.
+            'north korea sidelined', 'pyongyang sidelined',
+            'north korea excluded', 'north korea snubbed',
+            'kim skips', 'kim absent', 'kim did not attend',
+            'north korea russia rift', 'dprk russia tension',
+            'north korea troops withdrawal', 'north korea troops return',
+            'russia aid north korea', 'russia oil north korea',
+            'north korea food aid russia', 'north korea missile technology russia',
+
+            # ══ ILLICIT FLOWS ══
+            # Where the commodity story actually lives. Sanctions severed the DPRK's
+            # reserves from any market, so there is no price to track -- only flows.
+            'north korea coal smuggling', 'dprk coal', 'ship-to-ship transfer',
+            'north korea sanctions evasion', 'dprk sanctions evasion',
+            'north korea oil cap', 'north korea illicit',
+            'lazarus group', 'north korea crypto theft', 'dprk crypto',
+
+            # ══ CHINA BORDER + FOOD SECURITY ══
+            # Famine is not only a humanitarian sensor here -- it is a LEVERAGE
+            # variable. A hungrier DPRK needs its patrons more.
+            'yalu river', 'tumen river', 'north korea china border',
+            'north korea defector', 'dprk defector', 'north korea china trade',
+            'north korea famine', 'dprk famine', 'north korea food shortage',
+            'north korea food crisis', 'north korea harvest',
+
+            # ══ IRAN DYAD ══
+            'north korea iran', 'dprk iran', 'north korea iran missile',
+
             # Korean language signals
             '북한 미사일', '북한 핵', '김정은', '조선인민군',
             '북한 도발', '북한 발사', '탄도미사일',
+            '북한 노동자', '북한 기술자', '풍계리', '동창리',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=north+korea+OR+dprk+OR+kim+jong+un+military+missile&hl=en&gl=US&ceid=US:en',
