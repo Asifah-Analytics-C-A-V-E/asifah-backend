@@ -367,12 +367,14 @@ def _read_provocation(cfg):
     """
     fp = _redis_get(cfg['rhetoric_key'])
     if not fp:
-        return {'feed_missing': True, 'active': False, 'maturity': 'none',
+        return {'mode': 'habituation',
+                'feed_missing': True, 'active': False, 'maturity': 'none',
                 'maturity_phrase': 'rhetoric feed pending',
                 'contradiction_active': False, 'diplomatic_max_raw': None,
                 'provocation_class': None, 'provocation_phrase': None}
     pclass = fp.get('provocation_class') or None
     return {
+        'mode': 'habituation',
         'feed_missing': False,
         'active': bool(fp.get('provocation_active')),
         'provocation_class': pclass,
@@ -492,8 +494,7 @@ def _classify(scored, offramp):
     # We are not asking whether the market believes a peace. We are asking
     # whether it still REACTS. The finding lives in the pairing of a live
     # provocation against a tape that did not move.
-    if offramp.get('mode') == 'habituation' or offramp.get('provocation_phrase') is not None \
-            or offramp.get('feed_missing'):
+    if offramp.get('mode') == 'habituation':
         if offramp.get('feed_missing'):
             return 'rhetoric_pending', peace, esc
         moved = len(peace) + len(esc)
