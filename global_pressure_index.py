@@ -2382,7 +2382,14 @@ def _build_global_top_signals(blufs, narratives):
             signals.append({
                 'priority':      int(sig.get('priority', 5) or 5) - 2,  # demote vs. narratives
                 'category':      sig.get('category', 'regional'),
-                'theatre':       region,
+                # v3.2 grouping fix (Jul 16 2026): PRESERVE the country theatre the
+                # regional BLUF emitted ('iran', 'lebanon'...) instead of stamping
+                # the region over it. Stamping 'me'/'europe' here destroyed country
+                # provenance for every downstream consumer -- it's why All Vectors
+                # couldn't group by country while the per-axis cards could. The
+                # region lives in its own field now.
+                'theatre':       sig.get('theatre') or region,
+                'region':        region,
                 'level':         sig.get('level', 0),
                 'icon':          sig.get('icon', '\u2022'),
                 'color':         sig.get('color', '#6b7280'),
