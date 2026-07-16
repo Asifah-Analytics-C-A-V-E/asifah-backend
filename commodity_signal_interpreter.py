@@ -152,6 +152,7 @@ COUNTRY_TO_REGION = {
     'poland':        'europe',
     'hungary':       'europe',
     'belarus':       'europe',
+    'moldova':       'europe',
     'greenland':     'europe',
     'denmark':       'europe',
     'netherlands':   'europe',

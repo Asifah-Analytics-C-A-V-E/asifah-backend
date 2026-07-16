@@ -2003,6 +2003,23 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'oil':          {'role': 'producer',          'weight': 1.2,
                          'note': "OPEC member with ~1.2M bpd capacity when stable, but output is chronically disrupted by the East-West institutional split (NOC / Tripoli versus LNA / Haftar-controlled eastern fields and terminals). Recurring blockades and force-majeure declarations at El Sharara (largest field) and El Feel, plus the eastern-crescent terminals (Es Sider, Ras Lanuf, Zueitina, Brega), make Libyan supply one of the most disruption-prone signals in the oil complex — a textbook conflict-to-supply-shock convergence pattern. Light sweet Es Sider crude competes with Mediterranean and West African grades into Europe. CONVERGENCE LINK: Libyan production-halt announcements have historically preceded short-cycle Brent risk-premium moves and frequently track the LNA / GNU political cycle rather than market fundamentals. Watch: NOC force-majeure notices, El Sharara / Es Sider status, LNA-NOC revenue-distribution disputes, eastern-terminal loadings (Kpler / tanker tracking)."},
     },
+    'moldova': {
+        # ── Energy import-dependence (the Moldovan pressure chain) ──
+        # Moldova is an agricultural EXPORTER but an acute ENERGY importer, and
+        # energy is where its stability actually lives. The tariff->inflation->
+        # protest chain is the most reliable pressure transmission in Moldovan
+        # politics, and Moscow pulls it deliberately (energy blackmail is in the
+        # stability baseline). The Jan 1 2025 end of Russian gas transit through
+        # Ukraine collapsed the Transnistria/Cuciurgan supply and forced Chisinau
+        # onto costly Romanian/EU electricity imports.
+        'natural_gas':  {'role': 'consumer', 'weight': 1.4, 'data_as_of': '2026-06',
+                         'note': "Historic ~100% dependence on Russian gas via Gazprom/Moldovagaz; the Cuciurgan (MGRES) plant in Transnistria generated the large majority of right-bank electricity on Russian gas until the Jan 1 2025 end of Ukraine transit. Chisinau now imports electricity from Romania/EU at far higher cost. Watch: Moldovagaz debt dispute, Cuciurgan fuel source, winter tariff cycles, Gazprom cutoff threats."},
+        'oil':          {'role': 'consumer', 'weight': 1.0, 'data_as_of': '2026-06',
+                         'note': "Full import dependence on refined fuels; no domestic refining. Diesel/gasoline price shocks feed directly into transport and agricultural input costs, amplifying the food-price transmission the country's own harvest would otherwise buffer."},
+        # ── Agricultural exporter (the buffer, and a minor exporter-stress read) ──
+        'wheat':        {'role': 'producer', 'weight': 0.6, 'data_as_of': '2026-06',
+                         'note': "Net wheat/corn/sunflower exporter — agriculture is ~10% of GDP and a large share of exports. Exporter-stress is minor vs. the energy import-stress, but a bad harvest removes the one cushion against imported energy/food inflation. Watch: drought years, EU market-access terms, Black Sea logistics (Moldovan grain routes through Romanian/Ukrainian ports)."},
+    },
     'malaysia': {
         'semiconductors': {'role': 'producer',           'weight': 1.3, 'rank': 3,
                          'note': "Penang -- the 'Silicon Valley of the East' -- is a global center of gravity for semiconductor back-end (assembly, packaging, test), handling on the order of ~13% of the world's chip packaging (Intel, AMD, Infineon, Bosch). Malaysia owns the back-end of the chip chain the way Taiwan owns the front-end. Watch: Penang capex, US-China packaging-tariff spillover, flood/grid disruption to the cluster."},

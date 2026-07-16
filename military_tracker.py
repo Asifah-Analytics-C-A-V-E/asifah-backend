@@ -1297,6 +1297,17 @@ MILITARY_ACTORS = {
             'russian submarine mediterranean', 'russia med fleet',
             'tartus naval base', 'hmeimim air base', 'russia syria deployment',
             'russian forces syria', 'russian air force syria',
+            # -- Transnistria / OGRF garrison (Jul 2026): Russia's westernmost
+            # forward-deployed force. Same structural-blindness lesson as DPRK --
+            # do not let the platform be blind to a Russian garrison because it
+            # sits inside a country with no army of its own. These read as
+            # RUSSIA posture, correctly, not Moldova posture.
+            'russian troops transnistria', 'russian forces transnistria',
+            'operational group of russian forces', 'ogrf transnistria',
+            'cobasna ammunition', 'cobasna depot', 'colbasna',
+            'russian peacekeepers moldova', 'russian peacekeepers transnistria',
+            'transnistria military', 'tiraspol garrison', 'security zone dniester',
+            'russian troops moldova', 'transnistria mobilization',
             'russian warship', 'russian destroyer', 'russian frigate',
             'russian submarine', 'russia black sea fleet',
             'russia naval exercise', 'russian aircraft carrier',
