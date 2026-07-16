@@ -1,7 +1,7 @@
 """
 ============================================================
 ASIFAH ANALYTICS -- DIPLOMATIC CONVERGENCE GATHERER
-Slice 1 (engine) v1.0.0 -- July 2026
+Slice 1 (engine) v1.1.0 -- rolling 24h window -- July 2026
 ============================================================
 Backbone:    GDELT 2.0 Events (CAMEO-coded, georeferenced) -- the SAME pipe
              the kinetic gatherer drinks from, read for a different signal
@@ -59,7 +59,11 @@ from datetime import datetime, timezone, date
 # ============================================================
 GDELT_LASTUPDATE_URL = 'http://data.gdeltproject.org/gdeltv2/lastupdate.txt'
 GDELT_EXPORT_FMT     = 'http://data.gdeltproject.org/gdeltv2/%s.export.CSV.zip'
-GDELT_WINDOW_FILES   = 8              # most recent ~2h of global events per scan
+GDELT_WINDOW_FILES   = 96             # most recent ~24h of global events per scan (v1.1)
+ROLLING_CHECKPOINT   = 12             # write partial results every N files (~3h of tape)
+                                      # so the endpoint shows the scan revealing itself
+                                      # on a rolling basis instead of going dark for
+                                      # the full pull. Rachel's requirement, Jul 16.
 GDELT_HTTP_TIMEOUT   = 20
 
 DIPCONV_CACHE_KEY    = 'diplomatic:convergence:latest'
@@ -163,6 +167,14 @@ WATCH_PAIRS = {
     frozenset({'EGY', 'ETH'}): 'Egypt-Ethiopia -- GERD Nile file',
     frozenset({'TUR', 'GRC'}): 'Turkey-Greece -- Aegean file',
     frozenset({'USA', 'VEN'}): 'US-Venezuela -- sanctions / prisoner-channel file',
+    # v1.1 additions (Jul 16 2026). CAMEO actor codes diverge from ISO for some
+    # of these (Cambodia=CAM not KHM, Morocco=MOR not MAR, Kosovo=KSV) --
+    # verify against live rows via /debug after first scan and correct if a
+    # pair never fires despite live news.
+    frozenset({'ETH', 'ERI'}): 'Ethiopia-Eritrea -- border remilitarization / Assab access file',
+    frozenset({'THA', 'CAM'}): 'Thailand-Cambodia -- temple-border / Preah Vihear file',
+    frozenset({'SRB', 'KSV'}): 'Serbia-Kosovo -- normalization / north-Kosovo file',
+    frozenset({'ALG', 'MOR'}): 'Algeria-Morocco -- Western Sahara / severed-relations file',
 }
 
 # ============================================================
@@ -462,24 +474,55 @@ def detect_convergences(events):
 # ============================================================
 # GATHER + CACHE
 # ============================================================
-def run_gather():
-    started = time.time()
-    events = _gather_events()
+def _build_payload(events, files_done, files_total, started):
     convergences = detect_convergences(events)
     active = [c for c in convergences if not c['suppressed'] and c['score'] > 0]
-    payload = {
+    return {
         'convergences':      convergences[:20],
         'active_count':      len(active),
         'top_band':          active[0]['band'] if active else 'quiet',
         'total_events':      len(events),
         'watch_pairs':       len(WATCH_PAIRS),
-        'window_files':      GDELT_WINDOW_FILES,
+        'window_files':      files_total,
+        # ROLLING SCAN (v1.1): the endpoint never goes dark during the 24h
+        # pull. partial=True means "picture still developing" -- honest about
+        # an incomplete window, per absence-honest doctrine.
+        'scan_progress':     {'files_done': files_done, 'files_total': files_total,
+                              'partial': files_done < files_total,
+                              'elapsed_s': round(time.time() - started, 1)},
         'generated_at':      datetime.now(timezone.utc).isoformat(),
         'disclaimer':        CONVERGENCE_DISCLAIMER,
     }
-    _redis_set(DIPCONV_CACHE_KEY, payload)
+
+
+def run_gather():
+    import gc
+    started = time.time()
+    urls = _recent_export_urls(GDELT_WINDOW_FILES)
+    events, seen = [], set()
+    payload = None
+    for i, url in enumerate(urls, 1):
+        for row in _fetch_event_file(url):
+            ev = _parse_event_row(row)
+            if not ev:
+                continue
+            k = (ev['code'], ev['actor1_cc'], ev['actor2_cc'], ev['dest_fips'], ev['day'])
+            if k in seen:
+                continue
+            seen.add(k)
+            events.append(ev)
+        if i % ROLLING_CHECKPOINT == 0 or i == len(urls):
+            payload = _build_payload(events, i, len(urls), started)
+            _redis_set(DIPCONV_CACHE_KEY, payload)
+            gc.collect()   # release the raw rows between checkpoints (Europe lesson)
+            print(f"[dipconv_gatherer] rolling checkpoint {i}/{len(urls)}: "
+                  f"{len(events)} events, {payload['active_count']} active, "
+                  f"top band {payload['top_band']}")
+    if payload is None:   # zero urls (lastupdate fetch failed) -- honest empty
+        payload = _build_payload(events, 0, 0, started)
+        _redis_set(DIPCONV_CACHE_KEY, payload)
     print(f"[dipconv_gatherer] gather complete in {round(time.time()-started,1)}s: "
-          f"{len(events)} diplomatic events, {len(active)} active convergences, "
+          f"{len(events)} diplomatic events, {payload['active_count']} active convergences, "
           f"top band {payload['top_band']}")
     return payload
 
@@ -548,4 +591,4 @@ def register_diplomatic_convergence_endpoints(app, start_scheduler=True):
     print('[dipconv_gatherer] Routes registered: /api/diplomatic-convergence, '
           '/api/diplomatic-convergence/debug')
 
-print('[dipconv_gatherer] Module loaded -- Slice 1 (engine) v1.0.0')
+print('[dipconv_gatherer] Module loaded -- Slice 1 (engine) v1.1.0 -- rolling 24h window')
