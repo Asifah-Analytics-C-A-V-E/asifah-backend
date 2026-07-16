@@ -2209,6 +2209,80 @@ def detect_deescalation(text):
     return False
 
 
+SOCIAL_SOURCE_HINTS = (
+    'r/', 'reddit', 'bluesky', 'bsky', 'telegram', 'nitter',
+    'social', 'mirror'
+)
+
+EXPANDED_PRESSURE_SIGNALS = {
+    'kinetic': {
+        'weight': 1.8,
+        'phrases': [
+            'air strike', 'airstrike', 'missile strike', 'drone strike',
+            'rocket fire', 'cross-border fire', 'shelling', 'artillery',
+            'ballistic missile', 'suicide drone', 'uav attack',
+            'intercepts', 'explosion', 'explosions', 'clashes',
+            'Ù‚ØµÙ', 'ØµÙˆØ§Ø±ÙŠØ®', 'Ø§Ø´ØªØ¨Ø§ÙƒØ§Øª', 'Ø·Ø§Ø¦Ø±Ø© Ù…Ø³ÙŠØ±Ø©',
+            '×ª×§×™×¤×”', '×˜×™×œ×™×', '×›×˜×‘', 'Ø­Ù…Ù„Ù‡', 'Ù…ÙˆØ´Ú©',
+        ],
+    },
+    'mobilization': {
+        'weight': 1.2,
+        'phrases': [
+            'mobilization', 'reserve call-up', 'troop movement',
+            'carrier strike group', 'air defense', 'evacuation order',
+            'embassy drawdown', 'ordered departure', 'state of emergency',
+            'reinforcements', 'deployment', 'readiness drill',
+            'ØªØ¹Ø¨Ø¦Ø©', 'Ø¥Ø¬Ù„Ø§Ø¡', 'Ø­Ø§Ù„Ø© Ø§Ù„Ø·ÙˆØ§Ø±Ø¦',
+            '×’×™×•×¡ ×ž×™×œ×•××™×', '×¤×™× ×•×™', 'Ø¨Ø³ÛŒØ¬', 'ØªØ®Ù„ÛŒÙ‡',
+        ],
+    },
+    'structural': {
+        'weight': 0.8,
+        'phrases': [
+            'fuel shortage', 'food shortage', 'blackout', 'power outage',
+            'currency collapse', 'bank run', 'port closure', 'border closure',
+            'mass displacement', 'refugees', 'cholera', 'famine',
+            'Ø£Ø²Ù…Ø© Ø§Ù„ØºØ°Ø§Ø¡', 'Ù†Ø²ÙˆØ­', 'Ù„Ø§Ø¬Ø¦ÙŠÙ†', 'Ø§Ù†Ù‚Ø·Ø§Ø¹ Ø§Ù„ÙƒÙ‡Ø±Ø¨Ø§Ø¡',
+            '×”×¤×¡×§×ª ×—×©×ž×œ', 'Ù‚Ø­Ø·ÛŒ', 'Ø¢ÙˆØ§Ø±Ú¯ÛŒ',
+        ],
+    },
+}
+
+
+def _article_source_name(article):
+    source = article.get('source', 'Unknown')
+    if isinstance(source, dict):
+        return source.get('name', 'Unknown')
+    return str(source or 'Unknown')
+
+
+def _is_social_source(source_name):
+    source_lower = (source_name or '').lower()
+    return any(hint in source_lower for hint in SOCIAL_SOURCE_HINTS)
+
+
+def _calibrated_source_weight(source_name, source_weight):
+    if not _is_social_source(source_name):
+        return source_weight
+    # Social APIs are useful tripwires, but should need corroboration to move a country.
+    if 'telegram' in source_name.lower():
+        return min(source_weight, 0.55)
+    return min(source_weight, 0.42)
+
+
+def detect_expanded_pressure_signals(text):
+    """Return additive pressure bonus and labels from multilingual pressure phrases."""
+    text_lower = (text or '').lower()
+    labels = []
+    bonus = 0.0
+    for label, config in EXPANDED_PRESSURE_SIGNALS.items():
+        if any(phrase.lower() in text_lower for phrase in config['phrases']):
+            labels.append(label)
+            bonus += config['weight']
+    return min(bonus, 3.0), labels
+
+
 def detect_diplomatic_signals(articles):
     """
     Scan articles for official diplomatic action signals (OD, embassy closure, etc.).
@@ -2355,13 +2429,15 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
         content = article.get('content', '')
         full_text = f"{title} {description} {content}"
         
-        source_name = article.get('source', {}).get('name', 'Unknown')
+        source_name = _article_source_name(article)
         published_date = article.get('publishedAt', '')
         
         # Calculate article weight components
         time_decay = calculate_time_decay(published_date, current_time)
-        source_weight = get_source_weight(source_name)
+        source_weight = _calibrated_source_weight(source_name, get_source_weight(source_name))
         severity_multiplier = detect_keyword_severity(full_text)
+        pressure_bonus, pressure_labels = detect_expanded_pressure_signals(full_text)
+        severity_multiplier = min(severity_multiplier + pressure_bonus, 8.0)
         is_deescalation = detect_deescalation(full_text)
         
         # NEW: Apply leadership multiplier if present
@@ -2397,6 +2473,8 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
             'source_weight': source_weight,
             'time_decay': round(time_decay, 3),
             'severity': severity_multiplier,
+            'pressure_signals': pressure_labels,
+            'is_social_source': _is_social_source(source_name),
             'deescalation': is_deescalation,
             'contribution': round(article_contribution, 2),
             'title': title[:100]  # Truncate for display
@@ -2425,6 +2503,16 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
         momentum_multiplier = 1.0
     
     weighted_score *= momentum_multiplier
+
+    unique_sources = len(set(d['source'] for d in article_details))
+    social_signal_count = sum(1 for d in article_details if d.get('is_social_source'))
+    non_social_signal_count = len(article_details) - social_signal_count
+    pressure_signal_count = sum(1 for d in article_details if d.get('pressure_signals'))
+    source_diversity_bonus = min(5.0, max(0, unique_sources - 3) * 0.4)
+    social_corroboration_bonus = 0.0
+    if social_signal_count and non_social_signal_count >= 2:
+        social_corroboration_bonus = min(4.0, social_signal_count * 0.35)
+    weighted_score += source_diversity_bonus + social_corroboration_bonus
     
     # ========================================
     # FINAL PROBABILITY CALCULATION
@@ -2566,6 +2654,12 @@ def calculate_threat_probability(articles, days_analyzed=7, target='iran'):
             'recent_articles_48h': recent_articles,
             'older_articles': older_articles,
             'weighted_score': round(weighted_score, 2),
+            'source_diversity_bonus': round(source_diversity_bonus, 2),
+            'social_corroboration_bonus': round(social_corroboration_bonus, 2),
+            'unique_sources': unique_sources,
+            'social_signal_count': social_signal_count,
+            'non_social_signal_count': non_social_signal_count,
+            'pressure_signal_count': pressure_signal_count,
             'momentum_multiplier': momentum_multiplier,
             'deescalation_count': deescalation_count,
             'adaptive_multiplier': 0.8,
