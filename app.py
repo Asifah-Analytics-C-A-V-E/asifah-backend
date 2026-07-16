@@ -189,6 +189,14 @@ except ImportError:
     print("[ME Backend] Kinetic Activity Gatherer not available")
 
 try:
+    from diplomatic_convergence_gatherer import register_diplomatic_convergence_endpoints
+    DIPCONV_GATHERER_AVAILABLE = True
+    print("[ME Backend] Diplomatic Convergence Gatherer loaded")
+except ImportError:
+    DIPCONV_GATHERER_AVAILABLE = False
+    print("[ME Backend] Diplomatic Convergence Gatherer not available")
+
+try:
     from food_price_pulse import register_food_price_pulse_endpoints
     FOOD_PULSE_AVAILABLE = True
     print("[ME Backend] Food Price Pulse loaded")
@@ -1278,6 +1286,15 @@ if WORLDBANK_GATHERER_AVAILABLE:
 if KINETIC_GATHERER_AVAILABLE:
     register_kinetic_endpoints(app, start_scheduler=True)
     print("[ME Backend] Kinetic Activity Gatherer routes registered: /api/kinetic-activity, /debug")
+
+# Diplomatic Convergence Gatherer -- convergent-official-travel detector
+# (diplomatic sibling of the kinetic gatherer; same GDELT CAMEO pipe, visit/
+# meet event classes, watch-pair gated, multilateral-calendar suppressed).
+# Registered BEFORE GPI so _narrative_diplomatic_convergence can read its
+# Redis key (diplomatic:convergence:latest). 12h daemon, cross-worker lock.
+if DIPCONV_GATHERER_AVAILABLE:
+    register_diplomatic_convergence_endpoints(app, start_scheduler=True)
+    print("[ME Backend] Diplomatic Convergence routes registered: /api/diplomatic-convergence, /debug")
 
 # Food Price Pulse -- coverage-first WFP staple price monitor (economic
 # sibling of the kinetic gatherer). Weekly scan, cross-worker lock built in.
