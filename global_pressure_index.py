@@ -2992,6 +2992,110 @@ def _normalize_payload_terms(obj):
     return obj
 
 
+# ============================================================
+# THEATRE GROUPING + CONVERGENCE SYNTHESIS  (v3.2, Jul 15 2026)
+# ============================================================
+# Sidequest 2+3: five separate Iran signals as five separate cards is five
+# true statements hiding one compound truth. This pass groups top_signals by
+# THEATRE (country), attaches the axis pills present in the group, and writes
+# ONE dynamic synthesis line that reads the whole story -- the convergence-at-
+# country-level read the platform exists to make. Global/regional/multi-hub
+# signals stay UNGROUPED by design (they are already synthesis products).
+# Additive + non-breaking: emitted as `grouped_signals` alongside the intact
+# `top_signals`, so existing consumers keep working until the frontend opts in.
+
+# theatres that are synthesis products, not countries -- never grouped
+_UNGROUPED_THEATRES = frozenset({
+    'global', 'regional', 'asia', 'europe', 'middle east', 'middle_east',
+    'western hemisphere', 'wha', 'africa', 'the western hemisphere',
+})
+
+_AXIS_ORDER = ['kinetic', 'economic', 'diplomatic', 'humanitarian']
+
+def _synthesize_theatre_group(theatre, sigs):
+    """One dynamic line reading a country's WHOLE story this scan.
+
+    Voice rules (canon): estimative, precedent-anchored where possible, never
+    'will'. Multi-axis simultaneity IS the read -- name the axes, name the
+    loudest signal on each, and say what stacking means. Single-axis groups
+    get a narrower multiple-signals read.
+    """
+    by_axis = {}
+    for sg in sigs:
+        ax = (sg.get('pressure_type') or 'kinetic').lower()
+        by_axis.setdefault(ax, []).append(sg)
+    axes = [a for a in _AXIS_ORDER if a in by_axis]
+    for a in by_axis:                      # any nonstandard axis tags trail
+        if a not in axes:
+            axes.append(a)
+    peak = max((_safe_level(sg.get('level', 0)) for sg in sigs), default=0)
+    name = theatre.upper()
+
+    if len(axes) >= 2:
+        # the compound read: name each axis with its loudest signal fragment
+        frags = []
+        for a in axes:
+            loudest = max(by_axis[a], key=lambda sg: _safe_level(sg.get('level', 0)))
+            frag = (loudest.get('short_text') or '')[:70].rstrip(' .;')
+            frags.append(f"{a} ({frag})" if frag else a)
+        return (f"{name} is running pressure on {len(axes)} axes simultaneously this scan -- "
+                + '; '.join(frags) + ". "
+                f"Multi-axis simultaneity at the country level is the compound read: "
+                f"separate signals on separate channels converging on one theatre is "
+                f"historically a stronger indicator than any single channel at the same level.")
+    else:
+        ax = axes[0] if axes else 'kinetic'
+        n = len(sigs)
+        return (f"{name}: {n} distinct {ax} signals active in the same window (peak L{peak}). "
+                f"Breadth on a single axis reads as sustained pressure, not an isolated event.")
+
+def _group_signals_by_theatre(top_signals):
+    """Bucket top_signals by theatre. Returns (grouped, passthrough).
+
+    grouped: list of {theatre, display, peak_level, axes, pills, signal_count,
+             synthesis, signals[]} sorted by peak level desc then count.
+    passthrough: global/regional/synthesis signals, order preserved.
+    Groups form at >=2 signals; singletons stay in passthrough (a group of one
+    is just a card with extra steps).
+    """
+    buckets, passthrough, order = {}, [], []
+    for sg in top_signals or []:
+        th = str(sg.get('theatre') or sg.get('region') or '').strip().lower()
+        if not th or th in _UNGROUPED_THEATRES or '+' in th:
+            passthrough.append(sg)
+            continue
+        if th not in buckets:
+            buckets[th] = []
+            order.append(th)
+        buckets[th].append(sg)
+
+    grouped = []
+    for th in order:
+        sigs = buckets[th]
+        if len(sigs) < 2:
+            passthrough.extend(sigs)       # singleton -- render as before
+            continue
+        axes_present = []
+        for sg in sigs:
+            ax = (sg.get('pressure_type') or 'kinetic').lower()
+            if ax not in axes_present:
+                axes_present.append(ax)
+        axes_sorted = [a for a in _AXIS_ORDER if a in axes_present] + \
+                      [a for a in axes_present if a not in _AXIS_ORDER]
+        peak = max((_safe_level(sg.get('level', 0)) for sg in sigs), default=0)
+        grouped.append({
+            'theatre':      th,
+            'display':      th.title(),
+            'peak_level':   peak,
+            'axes':         axes_sorted,           # the pills
+            'signal_count': len(sigs),
+            'synthesis':    _synthesize_theatre_group(th, sigs),
+            'signals':      sigs,                  # full originals for peel-off by pill
+        })
+    grouped.sort(key=lambda g: (g['peak_level'], g['signal_count']), reverse=True)
+    return grouped, passthrough
+
+
 def build_gpi(force=False):
     """Build the full GPI synthesis."""
     if not force:
@@ -3082,6 +3186,12 @@ def build_gpi(force=False):
             'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
             'narratives':      narratives,
             'top_signals':     top_signals,
+            # v3.2 (Jul 2026): theatre-grouped view -- countries with 2+ signals
+            # collapse into one banner with axis pills + a convergence synthesis
+            # line; global/regional/synthesis signals pass through ungrouped.
+            # Additive: top_signals is untouched, frontends opt in.
+            'grouped_signals': dict(zip(('groups', 'ungrouped'),
+                                        _group_signals_by_theatre(top_signals))),
             'pressure_axes':   pressure_axes,    # v2.2 — multi-axis stack payload
             'regional_cards':  regional_cards,
             'regions_live':    len(blufs),
