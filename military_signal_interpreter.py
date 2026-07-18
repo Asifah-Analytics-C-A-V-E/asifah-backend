@@ -107,7 +107,8 @@ REGIONAL_BASELINE_TEMPLATES = {
         'context_actors': ['nigeria', 'somalia', 'sudan', 'libya', 'mali',
                            'djibouti', 'drc', 'wagner_africa', 'niger',
                            'burkina_faso', 'ethiopia', 'kenya',
-                           'central_african_republic'],
+                           'central_african_republic', 'chad', 'mozambique',
+                           'madagascar', 'equatorial_guinea', 'guinea'],
     },
 }
 
@@ -200,6 +201,11 @@ COUNTRY_DISPLAY = {
     'kenya':                    'Kenya',
     'djibouti':                 'Djibouti',
     'central_african_republic': 'the Central African Republic',
+    'chad':                     'Chad',
+    'mozambique':               'Mozambique',
+    'madagascar':               'Madagascar',
+    'equatorial_guinea':        'Equatorial Guinea',
+    'guinea':                   'Guinea',
     'wagner_africa':            'Wagner / Africa Corps',
 }
 
@@ -595,6 +601,41 @@ def build_evacuation_prose(scan_result):
 # TOP SIGNALS — CANONICAL SCHEMA (for GPI consumption)
 # ============================================================
 
+# ============================================================
+# WARLORD / NON-STATE-ARMED INSTABILITY (Africa convergence layer)
+# ============================================================
+# The military interpreter's contribution to the warlord x humanitarian x health
+# convergence read. GDELT (kinetic axis) sees WHERE armed events happen; this
+# registry names WHO -- the warlord/militia actors whose elevation is the
+# instability half of a compound (e.g. CODECO instability + Ebola in Ituri).
+# Emitted as category 'mil_warlord_instability' into top_signals so the regional
+# BLUF and GPI can compose it with the humanitarian/health axes.
+WARLORD_INSTABILITY_ACTORS = {
+    'sudan':                    'RSF / SAF (Janjaweed lineage) -- Darfur, El Fasher siege',
+    'drc':                      'CODECO / ADF / Wazalendo / M23 -- Ituri & Kivus (Ebola-zone overlap)',
+    'central_african_republic': 'CPC coalition (ex-Seleka / anti-balaka / UPC / 3R)',
+    'mali':                     'JNIM / ISGS + Dozo & ethnic militias',
+    'burkina_faso':             'JNIM / ISGS + Koglweogo & VDP auxiliaries',
+    'niger':                    'ISGS / JNIM + community militias (three-borders)',
+    'somalia':                  'al-Shabaab / ISIS-Somalia',
+    'mozambique':               'ISCAP / Ansar al-Sunna -- Cabo Delgado',
+    'nigeria':                  'Boko Haram / ISWAP + bandit militias',
+    'chad':                     'FACT rebels + Lake Chad ISWAP',
+    'madagascar':               'Dahalo armed banditry',
+    'guinea':                   'junta security forces / opposition crackdown',
+}
+# Health/humanitarian-overlap flag: actors whose theatres coincide with active
+# Ebola/Marburg/health-emergency zones -- the convergence detector reads these
+# as the kinetic half of a warlord x health compound.
+WARLORD_HEALTH_OVERLAP = frozenset({
+    'drc',                       # Ituri/N.Kivu -- Ebola Bundibugyo PHEIC zone
+    'sudan',                     # famine + cholera + Ebola-strain risk
+    'central_african_republic',  # mpox + measles + displacement
+    'equatorial_guinea',         # Marburg 2023 history
+    'mozambique',                # cholera + Cabo Delgado displacement
+})
+
+
 def build_top_signals(scan_result):
     """
     Build a canonical-schema signals list compatible with the WHA / ME / Asia
@@ -637,6 +678,36 @@ def build_top_signals(scan_result):
             'short_text': f"🪖 {tmpl['display']}: {COUNTRY_LEVEL_PHRASES.get(lvl)}",
             'long_text':  (f"{tmpl['display']} at {lvl} — {active_count} actors "
                             f"above baseline."),
+        })
+
+    # 1b. WARLORD / NON-STATE-ARMED INSTABILITY (per Africa actor, elevated+).
+    #     The named-actor military instability signal -- the convergence layer's
+    #     kinetic half for the warlord x humanitarian x health compound read.
+    africa_group = _safe_dict(theatre_groupings.get('africa'))
+    africa_actors = _safe_dict(africa_group.get('actors'))
+    for actor_id, group_desc in WARLORD_INSTABILITY_ACTORS.items():
+        ad = _safe_dict(africa_actors.get(actor_id))
+        lvl = ad.get('alert_level', 'normal')
+        rank = COUNTRY_LEVEL_RANK.get(lvl, 0)
+        if rank < 1:    # elevated+ only
+            continue
+        health_overlap = actor_id in WARLORD_HEALTH_OVERLAP
+        # Health overlap raises priority: this is the convergence-critical case.
+        base_pri = 9 + rank + (2 if health_overlap else 0)
+        overlap_tag = (' | HEALTH-EMERGENCY ZONE OVERLAP -- read against '
+                       'humanitarian axis for compound risk' if health_overlap else '')
+        signals.append({
+            'priority':    base_pri,
+            'category':    'mil_warlord_instability',
+            'theatre':     actor_id,
+            'level':       rank,
+            'level_name':  lvl,
+            'icon':        '☠️' if health_overlap else '🔫',
+            'color':       '#b91c1c' if (rank >= 2 or health_overlap) else '#f59e0b',
+            'health_overlap': health_overlap,
+            'short_text':  f"🔫 {_country_display(actor_id)}: armed-group instability {lvl.upper()}",
+            'long_text':   (f"{_country_display(actor_id)} non-state-armed instability at "
+                            f"{lvl} -- {group_desc}.{overlap_tag}"),
         })
 
     # 2. Chokepoint signals (contested+ only — Option C strategy)

@@ -177,6 +177,14 @@ FIPS_TO_COUNTRY = {
     'CH': 'China',        'TW': 'Taiwan',       'KN': 'North Korea',
     'CG': 'DR Congo',     'ET': 'Ethiopia',     'SO': 'Somalia',
     'ML': 'Mali',         'UV': 'Burkina Faso', 'LY': 'Libya',
+    # ── Africa expansion (Jul 2026): warlord + Ebola-risk states that were
+    #    missing, so GDELT conflict events finally bucket to the country
+    #    instead of falling back to an un-canonicalizable location name. ──
+    'CT': 'Central African Republic', 'CD': 'Chad',
+    'EK': 'Equatorial Guinea',        'MZ': 'Mozambique',
+    'MA': 'Madagascar',               'GV': 'Guinea',
+    'CF': 'Congo',        'CM': 'Cameroon',     'UG': 'Uganda',
+    'RW': 'Rwanda',       'CN': 'Comoros',      'TZ': 'Tanzania',
     'PK': 'Pakistan',     'AF': 'Afghanistan',  'VE': 'Venezuela',
     'CO': 'Colombia',     'MX': 'Mexico',       'HA': 'Haiti',
     'EG': 'Egypt',        'JO': 'Jordan',       'TU': 'Turkey',

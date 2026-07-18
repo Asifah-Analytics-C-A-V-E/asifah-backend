@@ -399,6 +399,8 @@ COUNTRY_PATTERNS = {
     # Mozambique + Cabo Delgado (active insurgency)
     'mozambique':       ['mozambique', 'mozambican'],
     'cabo_delgado':     ['cabo delgado', 'palma mozambique'],
+    # Equatorial Guinea (Marburg outbreak 2023 -- health-axis coverage)
+    'equatorial_guinea': ['equatorial guinea', 'malabo', 'bata equatorial'],
     # ─── v1.4.0 (May 23 2026) Africa health/displacement expansion ───
     # Uganda (Ebola history, largest refugee host in Africa, Marburg risk)
     'uganda':           ['uganda', 'ugandan'],

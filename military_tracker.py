@@ -2700,6 +2700,12 @@ MILITARY_ACTORS = {
             'mopti mali', 'segou mali military', 'sikasso mali',
             'koulikoro military', 'kayes military', 'timbuktu military',
             'farabougou', 'boni mali', 'bandiagara military',
+            # ── Traditional / ethnic self-defense militias (warlord layer) ──
+            'dozo hunters mali', 'dozo militia', 'donso hunters', 'dan na ambassagou',
+            'dana ambassagou', 'dogon militia mali', 'fulani militia mali',
+            'ogossagou massacre', 'ethnic militia mali', 'self-defense militia mali',
+            'imghad tuareg militia', 'gatia mali', 'plateforme mali',
+            'wagner auxiliary mali', 'wagner local proxies mali',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=mali+military+OR+wagner+mali+OR+mali+sahel&hl=en&gl=US&ceid=US:en',
@@ -2752,6 +2758,11 @@ MILITARY_ACTORS = {
             # CFA franc exit / French withdrawal aftermath
             'niger cfa franc exit', 'niger french withdrawal complete',
             'niger eu sanctions', 'niger usaid suspension military',
+            # ── Community / ethnic self-defense + auxiliaries (warlord layer) ──
+            'niger self-defense militia', 'niger community militia',
+            'tuareg militia niger', 'fulani militia niger', 'ethnic militia niger',
+            'niger vigilante group', 'wagner auxiliary niger',
+            'niger local proxy forces', 'zarma militia', 'djerma self-defense',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=niger+military+OR+niger+coup+OR+niger+sahel&hl=en&gl=US&ceid=US:en',
@@ -2800,6 +2811,12 @@ MILITARY_ACTORS = {
             # AES + regional integration
             'aes burkina deployment', 'aes joint force',
             'burkina mali joint operations',
+            # ── Traditional / community self-defense (warlord layer) ──
+            'koglweogo', 'koglweogo militia', 'burkina self-defense group',
+            'dozo burkina', 'burkina ethnic militia', 'rugga fulani burkina',
+            'vdp massacre', 'vdp recruitment burkina', 'vdp auxiliary',
+            'karma massacre vdp', 'zaongo massacre', 'nadiagou',
+            'wagner auxiliary burkina', 'burkina local proxy forces',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=burkina+faso+military+OR+burkina+junta&hl=en&gl=US&ceid=US:en',
@@ -2855,6 +2872,15 @@ MILITARY_ACTORS = {
             # Wazalendo militias (FARDC-allied)
             'wazalendo', 'wazalendo drc', 'patriotic resistance forces',
             'apcls', 'maï-maï drc', 'mai mai drc',
+            # ── Ituri warlords + Ebola-zone overlap (convergence-critical) ──
+            'codeco', 'codeco militia', 'codeco ituri', 'lendu militia',
+            'zaire militia ituri', 'hema lendu conflict', 'ituri massacre',
+            'adf drc', 'allied democratic forces', 'adf ituri', 'adf beni',
+            'beni massacre', 'north kivu adf', 'islamic state central africa drc',
+            # Ebola / health-emergency military overlap (Ituri/N.Kivu are Ebola zones)
+            'drc ebola military', 'ebola quarantine drc military',
+            'ituri ebola response military', 'ebola zone conflict drc',
+            'health workers attacked drc', 'ebola response suspended conflict',
             # Mineral war / cobalt / coltan dimension
             'rubaya coltan', 'rubaya mines', 'm23 coltan',
             'm23 minerals tax', 'rwanda smuggling minerals',
@@ -3296,21 +3322,198 @@ MILITARY_ACTORS = {
     'central_african_republic': {
         'name': 'Central African Republic',
         'flag': '🇨🇫',
-        'tier': 3,
+        'tier': 2,
         'theatre': 'africa',
-        'weight': 0.5,
-        'feeds_into': ['russia_proxy_pressure'],
+        'weight': 0.7,
+        'feeds_into': ['russia_proxy_pressure', 'great_power_competition'],
         'keywords': [
+            # National forces + government
             'car military', 'central african republic military',
-            'faca central african', 'far',
+            'faca central african', 'faca car', 'car armed forces',
+            'touadera car', 'faustin-archange touadera', 'touadera',
+            'bangui military', 'car presidential guard',
+            # Wagner / Africa Corps — CAR is the ORIGINAL Wagner model state
             'car wagner', 'wagner car', 'wagner central african',
-            'car russian mercenaries', 'africa corps car',
-            'bangui military', 'touadera car',
-            'car rebels', 'car civil war',
-            'car coalition patriots change',
+            'car russian mercenaries', 'africa corps car', 'wagner bangui',
+            'wagner presidential guard car', 'russian instructors car',
+            'wagner touadera bodyguard', 'wagner car withdrawal',
+            'africa corps central african republic',
+            # Wagner mining / finance nexus (the payment model)
+            'ndassima gold mine', 'ndassima wagner', 'car gold wagner',
+            'wagner diamonds car', 'midas resources car', 'lobaye invest',
+            'wagner mining concessions car', 'car diamond smuggling russia',
+            'bois rouge car', 'wagner timber car',
+            # 2023 constitutional referendum (Wagner-engineered third term)
+            'car constitutional referendum', 'touadera third term',
+            'car 2023 referendum wagner', 'car term limits removed',
+            # Armed groups / warlords — CPC coalition + constituents
+            'car rebels', 'car civil war', 'car coalition patriots change',
+            'coalition of patriots for change', 'cpc car', 'cpc rebels',
+            'anti-balaka', 'anti balaka car', 'ex-seleka', 'seleka car',
+            'upc car', 'union for peace central africa', 'ali darassa',
+            '3r rebels car', 'return reclamation rehabilitation',
+            'fprc car', 'mpc car', 'noureddine adam',
+            'francois bozize', 'bozize rebels', 'car former president rebels',
+            # Key regions / flashpoints
+            'bria car', 'bambari car', 'bangassou car', 'bossangoa',
+            'birao car', 'obo car', 'vakaga car', 'haut-mbomou',
+            'car cameroon border', 'car chad border', 'car sudan border',
+            'car drc border spillover',
+            # Regional patron competition + UN
+            'minusca', 'minusca car', 'un mission central african republic',
+            'rwanda troops car', 'rwanda car deployment',
+            'car sudan rsf spillover', 'car refugees sudan',
+            # French / Western exit
+            'france car withdrawal', 'car france rupture', 'car us sanctions wagner',
+            'faca central african', 'far',
         ],
         'rss_feeds': [
-            'https://news.google.com/rss/search?q=central+african+republic+military+OR+car+wagner&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=central+african+republic+military+OR+car+wagner+OR+bangui&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=cpc+car+OR+anti-balaka+OR+ndassima+wagner&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'chad': {
+        'name': 'Chad',
+        'flag': '🇹🇩',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.6,
+        'feeds_into': ['russia_proxy_pressure', 'sahel_instability'],
+        'keywords': [
+            # National forces + post-Deby transition
+            'chad military', 'chadian army', 'ant chad', 'chad armed forces',
+            'mahamat deby', 'mahamat idriss deby', 'deby chad', 'chad junta',
+            'chad transitional council', 'chad presidential guard', 'dgssie chad',
+            "n'djamena military", 'ndjamena military',
+            # Russia / Wagner drift
+            'chad russia military', 'chad wagner', 'wagner chad', 'russia chad ties',
+            'chad russia cooperation', 'chad moscow visit',
+            # US / France exit
+            'us withdraws chad', 'us forces chad withdrawal', 'chad us military exit',
+            'france chad withdrawal', 'chad france military rupture',
+            'chad ends military agreement', 'chad french base',
+            # Sudan-RSF spillover (the UAE weapons corridor)
+            'chad sudan border', 'amdjarass chad', 'uae chad sudan corridor',
+            'chad rsf weapons', 'chad sudan refugees', 'chad darfur refugees',
+            'chad rsf support', 'chad wadai', 'adre crossing chad',
+            # Boko Haram / Lake Chad
+            'chad boko haram', 'lake chad basin', 'chad iswap',
+            'chad multinational joint task force', 'mnjtf chad',
+            # Rebel groups
+            'fact chad', 'front change concorde tchad', 'chad rebels',
+            'chad northern rebels', 'chad libya border rebels',
+            'wagner chad rebels libya',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=chad+military+OR+mahamat+deby+OR+chad+russia&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=chad+sudan+border+OR+amdjarass+OR+fact+chad&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'mozambique': {
+        'name': 'Mozambique',
+        'flag': '🇲🇿',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.55,
+        'feeds_into': ['russia_proxy_pressure', 'humanitarian_cascade'],
+        'keywords': [
+            # National forces + Cabo Delgado insurgency
+            'mozambique military', 'mozambique armed forces', 'fadm mozambique',
+            'cabo delgado', 'cabo delgado insurgency', 'mozambique isis',
+            'islamic state mozambique', 'iscap mozambique', 'ansar al-sunna mozambique',
+            'al-shabaab mozambique', 'mozambique jihadist', 'palma attack',
+            'mocimboa da praia', 'macomia attack', 'mueda mozambique',
+            # Foreign forces / Wagner history
+            'wagner mozambique', 'wagner cabo delgado', 'russia mozambique',
+            'rwanda mozambique deployment', 'rwanda troops cabo delgado',
+            'samim mozambique', 'sadc mission mozambique', 'samim withdrawal',
+            # TotalEnergies LNG (the strategic stake)
+            'total lng mozambique', 'mozambique lng force majeure',
+            'afungi lng', 'mozambique gas project security',
+            # Post-election unrest (2024-2025)
+            'mozambique election unrest', 'mozambique protests venancio mondlane',
+            'mondlane mozambique', 'frelimo mozambique', 'mozambique post-election violence',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=cabo+delgado+OR+mozambique+insurgency&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=mozambique+lng+security+OR+iscap+mozambique&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'madagascar': {
+        'name': 'Madagascar',
+        'flag': '🇲🇬',
+        'tier': 3,
+        'theatre': 'africa',
+        'weight': 0.4,
+        'feeds_into': ['russia_proxy_pressure'],
+        'keywords': [
+            'madagascar military', 'madagascar armed forces', 'madagascar coup',
+            'andry rajoelina', 'rajoelina madagascar', 'madagascar political crisis',
+            # Russia influence (2018 election-interference precedent)
+            'russia madagascar', 'wagner madagascar', 'russia madagascar election',
+            'prigozhin madagascar', 'madagascar russia cooperation',
+            'madagascar russia mining', 'madagascar chromite russia',
+            # Instability drivers
+            'madagascar dahalo', 'dahalo bandits', 'madagascar cattle raiders',
+            'madagascar south famine', 'madagascar drought crisis',
+            'antananarivo protest', 'madagascar unrest',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=madagascar+military+OR+madagascar+russia+OR+rajoelina&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'equatorial_guinea': {
+        'name': 'Equatorial Guinea',
+        'flag': '🇬🇶',
+        'tier': 3,
+        'theatre': 'africa',
+        'weight': 0.4,
+        'feeds_into': ['russia_proxy_pressure', 'great_power_competition'],
+        'keywords': [
+            'equatorial guinea military', 'equatorial guinea armed forces',
+            'obiang equatorial guinea', 'teodoro obiang', 'teodorin obiang',
+            'malabo military', 'equatorial guinea coup',
+            # Russia / China base competition (the Atlantic-port story)
+            'russia equatorial guinea', 'wagner equatorial guinea',
+            'russia equatorial guinea security', 'russia malabo',
+            'china equatorial guinea base', 'china atlantic base bata',
+            'bata port china', 'us equatorial guinea base concern',
+            'equatorial guinea russia security pact',
+            # Regime security
+            'equatorial guinea presidential guard', 'equatorial guinea mercenaries',
+            'equatorial guinea coup plot',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=equatorial+guinea+military+OR+equatorial+guinea+russia+OR+china+bata&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'guinea': {
+        'name': 'Guinea',
+        'flag': '🇬🇳',
+        'tier': 3,
+        'theatre': 'africa',
+        'weight': 0.4,
+        'feeds_into': ['sahel_instability'],
+        'keywords': [
+            'guinea military', 'guinea junta', 'guinea coup', 'guinea armed forces',
+            'mamadi doumbouya', 'doumbouya guinea', 'guinea cnrd',
+            'conakry military', 'guinea transition', 'guinea special forces',
+            # Russia / resource competition (bauxite / Simandou)
+            'guinea russia military', 'russia guinea', 'guinea rusal',
+            'guinea bauxite russia', 'simandou guinea', 'guinea china mining security',
+            # Instability
+            'guinea protest crackdown', 'guinea fndc', 'guinea opposition crackdown',
+            'guinea coup plot', 'guinea junta consolidation',
+            # NOTE: 'guinea' also matches Guinea-Bissau / Equatorial Guinea in feeds;
+            # keyword pairs above are Conakry-Guinea specific to reduce bleed.
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=guinea+conakry+military+OR+doumbouya+OR+guinea+junta&hl=en&gl=US&ceid=US:en',
         ]
     },
 
