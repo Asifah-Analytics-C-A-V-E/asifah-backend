@@ -1012,6 +1012,44 @@ def _write_crosstheater_signal(result):
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
         print(f"[Libya Rhetoric] ✅ Cross-theater fingerprint written")
+
+        # ── DUAL-WRITE: canonical per-key spoke for the Russia wheel ──
+        # The Europe/Russia wheel reads per-country keys
+        # (crosstheater:<country>:fingerprint), NOT the ME shared dict. Libya is
+        # a DUAL-WHEEL node -- Turkey reads it via turkey:theater_footprints
+        # (spoke #1), and Russia must read it here. node_class documents the
+        # taxonomy tier; SURFACE-ONLY, no polarity wired into any score (that is
+        # a wheel scoping decision, not plumbing). Africa Corps east / Tobruk
+        # naval-base pursuit are the Russia-wheel read.
+        actors_fp = result.get('actors', {})
+        _russia_lvl = actors_fp.get('russia_africacorps', {}).get('max_escalation_level', 0)
+        _turkey_lvl = actors_fp.get('turkey_libya', {}).get('max_escalation_level', 0)
+        _interp = result.get('interpretation', {}) or {}
+        _sw = _interp.get('so_what', {}) or {}
+        canonical_fp = {
+            'ts':            datetime.now(timezone.utc).isoformat(),
+            'country':       'libya',
+            'theatre':       'Libya',
+            'node_class':    'expeditionary_client',  # Russia acts THROUGH Libya-east (Africa Corps)
+            'dual_wheel':    True,                     # also a Turkey node (west)
+            'level':         result.get('theatre_escalation_level', 0),
+            'score':         result.get('rhetoric_score', 0),
+            'theatre_score': result.get('rhetoric_score', 0),
+            # Russia-wheel slices
+            'africacorps_level':     _russia_lvl,
+            'africacorps_naval_gap': _sw.get('africacorps_naval_gap', False),
+            'russia_directing':      _sw.get('russia_directing', False),
+            # Turkey-wheel context (so the wheel sees the dual nature)
+            'turkey_level':          _turkey_lvl,
+            'turkey_projecting':     _sw.get('turkey_projecting', False),
+            'dual_wheel_friction':   _sw.get('dual_wheel_friction', False),
+            # diplomatic posture
+            'diplomatic_active':     result.get('diplomatic_track_active', False),
+            'diplomatic_label':      result.get('diplomatic_label_detailed', 'Quiet'),
+        }
+        _redis_set('crosstheater:libya:fingerprint', canonical_fp, ttl=8 * 3600)
+        print(f"[Libya Rhetoric] ✅ Canonical spoke written "
+              f"(crosstheater:libya:fingerprint, node_class=expeditionary_client, dual_wheel)")
     except Exception as e:
         print(f"[Libya Rhetoric] Cross-theater write error: {e}")
 
