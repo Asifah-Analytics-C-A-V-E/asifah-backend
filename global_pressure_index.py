@@ -112,6 +112,7 @@ GLOBAL_LEVEL_LABELS = {
     3: 'ELEVATED',
     4: 'INCIDENT',
     5: 'ACTIVE CONFLICT',
+    6: 'RED-LINE BREACH',
 }
 
 GLOBAL_LEVEL_COLORS = {
@@ -121,6 +122,7 @@ GLOBAL_LEVEL_COLORS = {
     3: '#f97316',   # orange
     4: '#ef4444',   # red
     5: '#dc2626',   # dark red
+    6: '#991b1b',   # deepest red -- red-line breach beyond active conflict
 }
 
 # Cache
