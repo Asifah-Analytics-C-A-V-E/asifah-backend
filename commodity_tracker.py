@@ -45,6 +45,13 @@ ARCHITECTURE NOTES:
 CHANGELOG:
   v1.0.0 - Initial release. 11 commodities, 5 country mappings,
            full backend wiring matching military_tracker pattern.
+  v1.6.0 - Jul 18 2026 Africa expansion: graphite + gum_arabic commodity
+           types (potash-pattern, no spot price); 7 new countries (Mali,
+           Burkina Faso, Niger, Sudan, CAR, Mozambique, Madagascar);
+           graphite worldwide sweep (CN/BR/US/KR/EU); gum_arabic to
+           Nigeria; Guinea notes refreshed post-election; keyword nets
+           extended (gold/diamonds/lithium/natural_gas/coal); 8 African
+           commodity-jawboning leaders added to KNOWN_SPEAKERS.
 
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
@@ -259,6 +266,41 @@ COMMODITY_TYPES = {
         'top_producers':  ['china', 'russia', 'australia', 'usa', 'canada', 'south_africa'],
         'top_consumers':  ['china', 'india', 'usa', 'eu', 'central banks'],
     },
+    'graphite': {
+        'name': 'Graphite',
+        'icon': '⚫',
+        'tier': 2,
+        'category': 'industrial',
+        'has_spot_price': False,    # NO PUBLIC SPOT PRICE (flake/spherical priced by grade, opaque)
+        'yahoo_ticker': None,
+        'yahoo_proxies': ['NVX'],   # Novonix (NASDAQ, synthetic anode) as soft sentiment proxy
+        'unit': 'production volume + export-control cycle',
+        'description': 'Natural graphite is the dominant lithium-ion battery ANODE material (~95g+ per kWh) with the most concentrated processing chain of any battery input: China produces ~77% of natural graphite and refines 90%+ of anode-grade spherical graphite. Beijing imposed export PERMITS on graphite products Dec 1 2023 (dual-use framing) -- an ACTIVE regime lever, exercised alongside gallium/germanium controls. Non-China supply: Mozambique (Balama, world largest natural graphite mine, Syrah Resources) + Madagascar (Molo + legacy flake) + Brazil + Tanzania. US is 100% NET IMPORT RELIANT (USGS critical mineral); IRA/DOE financing the ex-China anode chain (Syrah Vidalia LA, Anovion, Novonix). No public spot price -- tracked via export-control events, mine uptime (Balama force-majeure cycles), offtake announcements, USGS volumes.',
+        'chokepoints': [
+            'china export permits', 'balama', 'spherical graphite',
+            'anode processing', 'heilongjiang', 'nacala corridor',
+        ],
+        'top_producers':  ['china', 'mozambique', 'madagascar', 'brazil'],
+        'top_consumers':  ['china', 'usa', 'south_korea', 'japan', 'eu'],
+    },
+    'gum_arabic': {
+        'name': 'Gum Arabic',
+        'icon': '🌿',
+        'tier': 3,
+        'category': 'agricultural',
+        'has_spot_price': False,    # NO PUBLIC SPOT PRICE (trade-house negotiated)
+        'yahoo_ticker': None,
+        'yahoo_proxies': [],
+        'unit': 'export flow + conflict-corridor signals',
+        'description': 'Gum arabic (acacia gum, food additive E414) is the most geographically concentrated soft commodity on Earth: Sudan supplies ~66-80% of world exports from the Kordofan/Darfur gum belt, with Chad + Nigeria the only material alternates. Irreplaceable emulsifier/stabilizer for soft drinks (Coca-Cola, PepsiCo), confectionery, pharma, and cosmetics -- buyers historically maintain strategic stockpiles precisely because of Sudanese instability (a US sanctions CARVE-OUT existed for it for decades). The 2023- war moved the trade into smuggling corridors via Chad, Egypt, and South Sudan, with RSF taxation of the gum belt. Belgium-diamonds-class structural role: tiny market, absolute concentration. No spot price -- tracked via export-corridor events, gum-belt control changes, buyer inventory reporting.',
+        'chokepoints': [
+            'kordofan', 'port sudan', 'el obeid',
+            'gum belt', 'chad border corridor',
+        ],
+        'top_producers':  ['sudan', 'nigeria'],
+        'top_consumers':  ['usa', 'eu'],
+    },
+
     'lithium': {
         'name': 'Lithium',
         'icon': '🔋',
@@ -946,6 +988,25 @@ COMMODITY_KEYWORDS = {
         '黄金', '黄金储备', '黄金价格',
         # Arabic
         'الذهب', 'أسعار الذهب',
+            # Sahel / Sudan war-gold (Jul 2026 Africa expansion)
+        'loulo-gounkoto', 'loulo gounkoto', 'barrick mali', 'mali gold',
+        'sudan gold', 'rsf gold', 'darfur gold', 'jebel amer',
+        'burkina faso gold', 'sopamib', 'nordgold', 'ndassima',
+        'artisanal gold sahel', 'gold smuggling uae',
+    ],
+    'graphite': [
+        'graphite', 'natural graphite', 'flake graphite', 'spherical graphite',
+        'graphite anode', 'anode material', 'battery anode',
+        'china graphite exports', 'graphite export controls', 'graphite export permits',
+        'syrah resources', 'balama graphite', 'balama mine',
+        'molo graphite', 'nextsource', 'novonix', 'anovion', 'vidalia anode',
+        'graphite mining', 'anode-grade graphite', 'synthetic graphite',
+    ],
+    'gum_arabic': [
+        'gum arabic', 'acacia gum', 'acacia senegal', 'e414',
+        'gum arabic exports', 'sudan gum arabic', 'gum belt',
+        'kordofan gum', 'hashab', 'talha gum',
+        'gum arabic supply', 'gum arabic shortage', 'gum arabic smuggling',
     ],
     'lithium': [
         'lithium', 'lithium prices', 'lithium carbonate', 'lithium hydroxide',
@@ -960,6 +1021,8 @@ COMMODITY_KEYWORDS = {
         'litio', 'litio chile', 'litio argentina', 'litio bolivia',
         # Chinese
         '锂', '碳酸锂', '锂电池',
+            # Mali lithium (Jul 2026 Africa expansion)
+        'goulamina', 'mali lithium', 'bougouni lithium', 'kodal',
     ],
     'natural_gas': [
         'natural gas', 'lng', 'liquefied natural gas',
@@ -975,6 +1038,9 @@ COMMODITY_KEYWORDS = {
         'природный газ', 'газпром', 'газопровод', 'спг',
         # Chinese
         '天然气', '液化天然气',
+            # Mozambique Rovuma (Jul 2026 Africa expansion)
+        'rovuma', 'mozambique lng', 'cabo delgado lng', 'coral sul',
+        'coral norte', 'afungi', 'totalenergies mozambique',
     ],
     'nickel': [
         # Producers / state actors
@@ -1352,6 +1418,9 @@ COMMODITY_KEYWORDS = {
         'алмазы', 'алроса', 'якутские алмазы',
         # French (DRC, francophone Africa)
         'diamants', 'diamants bruts',
+            # CAR conflict-diamond node (Jul 2026 Africa expansion)
+        'central african republic diamonds', 'car diamonds', 'diamville',
+        'kimberley process car', 'bangui diamonds',
     ],
     'sulfur': [
         'sulfur', 'sulphur', 'sulfur prices', 'sulphur prices',
@@ -1393,6 +1462,8 @@ COMMODITY_KEYWORDS = {
         'powder river basin', 'coal mine', 'coal-fired power', 'qinhuangdao',
         'coal futures', 'thermal coal demand', 'coking coal benchmark',
         'indonesia coal', 'australia coal exports', 'china coal', 'coal india',
+            # Mozambique coking coal (Jul 2026 Africa expansion)
+        'moatize', 'mozambique coal', 'nacala corridor',
     ],
     'tantalum': [
         'tantalum', 'coltan', 'tantalite', 'ta2o5', 'tantalum capacitor',
@@ -1598,7 +1669,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #4 manganese producer (~2-3 Mt/yr). Vale Mineração + Buritirama Mineração operations in Pará + Minas Gerais. Steel-grade ore primarily; also growing battery-grade interest. Less concentrated geologically than South Africa Kalahari but stable supply. Watch: Vale quarterly base metals segment, port logistics through Itaqui + Santos."},
         'bauxite':      {'role': 'producer',          'weight': 1.1, 'rank': 4,
                          'note': "World's #4 bauxite producer (~30 Mt/yr); Porto Trombetas (Mineração Rio do Norte, MRN — Vale+BHP+Rio Tinto+South32+Hydro JV) in Pará is the largest operation. Norsk Hydro Paragominas + Alunorte alumina refinery (Barcarena). Brazilian bauxite + alumina industry is significant Atlantic-basin counterweight to Guinea + Australia. Watch: MRN production, Norsk Hydro Brazil segment results."},
-    },
+            'graphite':     {'role': 'producer',          'weight': 0.9, 'rank': 3,
+                         'note': "World #3 natural graphite producer (Minas Gerais flake district; Nacional de Grafite among the largest ex-China producers) -- a quiet but material leg of the non-China anode diversification story. Watch: expansion announcements, Western offtake deals, energy-cost competitiveness."},
+},
     'canada': {
         'gold':         {'role': 'producer', 'weight': 1.0, 'data_as_of': '2026-06',
                          'note': "Top-5 global gold producer (Quebec + Ontario; Canadian Malartic, Detour). Stable Western-aligned ounces; gold at all-time highs in 2025-26 on central-bank buying + geopolitics."},
@@ -1684,7 +1757,10 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #2 phosphate producer (~90 Mt/yr rock + significant DAP/MAP processing). Yunnan + Guizhou + Hubei provinces dominant. STRUCTURAL: China imposed phosphate export quotas/taxes starting 2021 to prioritize domestic agricultural use — reduced global DAP/MAP availability and structurally elevated Indian + Brazilian + Southeast Asian phosphate prices. Yuntianhua + Hubei Yihua + Wengfu Group major operators. Watch: MOFCOM phosphate export quota announcements, China customs DAP/MAP export data, OCP-China phosphate trade flow."},
         'bauxite':      {'role': 'consumer',          'weight': 1.5, 'rank': 1,
                          'note': "World's #1 bauxite importer (~140 Mt/yr) AND world's #1 alumina + aluminum producer (~57% global aluminum, ~55% global alumina). Domestic bauxite resources insufficient quality — ~55% of bauxite imported from Guinea (Boké region via Chinese-funded rail + port), ~20% Australia, ~10% Indonesia (when not banned). Chalco + Chinalco + Hongqiao + Weiqiao major operators. STRATEGIC VULNERABILITY: Guinea coup risk + Indonesia export-policy whiplash + Australian relations cycle expose Chinese aluminum smelter feedstock to political volatility. Watch: Chinese bauxite import customs data, Guinea Boké throughput, Indonesia bauxite export-policy announcements."},
-    },
+            'graphite':     {'role': 'producer',          'weight': 1.4, 'rank': 1,
+                         'regime_flags': ['export_controls_active'],
+                         'note': "🥇 ~77% of world natural graphite production AND 90%+ of anode-grade spherical graphite processing -- the single most concentrated node in the battery supply chain. Export PERMITS imposed Dec 1 2023 under dual-use rules (alongside gallium/germanium) and exercised as an active statecraft lever in US-China tech friction. Every ex-China anode project (Syrah/Vidalia, Novonix, Anovion, Korean/Japanese anode makers) is priced against Beijing's permit posture. Watch: MOFCOM permit-approval tempo, spherical-graphite export volumes, additions to the dual-use control list."},
+},
     'cuba': {
         'oil':          {'role': 'consumer',          'weight': 1.4,
                          'note': "🚨 ACUTE IMPORT DEPENDENCY: Cuba imports ~75-80% of oil consumption (~100,000 bpd). Venezuela primary supplier under PetroCaribe + Petrocaribe-successor framework; Russia + Mexico (modest) secondary. POST-MADURO TRANSITION (Jan 3 2026): With Maduro captured + Rodriguez interim government in Caracas, the Venezuela-Cuba oil-for-services barter framework is the most exposed bilateral arrangement on the continent. Cuba sent ~22,000 medical professionals to Venezuela in exchange for ~70,000-90,000 bpd discounted oil shipments — that arrangement's future is now contingent on US-Rodriguez negotiations. CRITICAL ANALYTICAL SIGNAL: If Rodriguez govt redirects Venezuelan crude toward US refiners (Trump's 'oil is beginning to flow' Apr 2026 framing), Cuban energy security collapses within weeks-to-months. Watch: PDVSA shipments to Cienfuegos + Matanzas, Cubapetróleo (CUPET) inventory levels, Cienfuegos refinery utilization (Russian Soviet-era 65k bpd capacity), Russian Rosneft cargo continuity, blackout duration data from Havana."},
@@ -1768,7 +1844,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "🌾 EU sugar producer ~16-17 MMT/yr from sugar beet (France + Germany + Poland + UK); historically self-sufficient + small net exporter. EU sugar quota system ended Sept 2017 — production now market-based, EU competitiveness vs Brazilian cane sugar tightened. CAP support for beet farmers + ACP-EPA preferential cane imports from African/Caribbean/Pacific countries. Watch: EU Sugar Observatory, beet harvest forecasts, ACP-Pacific cane import volumes."},
         'phosphate':    {'role': 'consumer',          'weight': 1.0,
                          'note': "Major phosphate fertilizer consumer (~5-7 Mt/yr DAP/MAP equivalent); near-zero domestic phosphate rock production (some Finnish + minor Belgian sources). Morocco (OCP) + Russia (Phosagro pre-sanctions) + Tunisia primary suppliers. EU Critical Raw Materials Act (2024) added phosphate rock as strategic material. NOTE on Western Sahara: certain EU court rulings (most recently 2024) have held that contracts requiring Western Sahara provenance be treated separately from Moroccan-proper sourcing — the EU is the jurisdiction where OCP's combined Morocco/Western-Sahara output is most actively litigated. Watch: Yara + ICL Group phosphate trade flows, EU Critical Raw Materials Act implementation."},
-    },
+            'graphite':     {'role': 'consumer',          'weight': 0.9,
+                         'note': "Natural graphite is on the EU Critical Raw Materials Act strategic list with 2030 extraction/processing/diversification targets -- the bloc's battery buildout is exposed to the same Chinese permit gate as the US, with fewer domestic alternatives moving. Watch: CRMA strategic-project designations, EU-China trade-defense actions touching anode materials."},
+},
     'france': {
         'uranium':      {'role': 'consumer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 uranium consumer; ~70% of French electricity from nuclear (~56 reactors operated by EDF). Orano (formerly Areva) provides full fuel cycle: La Hague reprocessing + Tricastin enrichment + Melox MOX fabrication. Niger uranium supply traditionally critical (~20% of French imports historically) — disrupted by 2023 Niger coup; pivot to Kazakhstan + Canada + Australia accelerated. Macron's 2022 nuclear renaissance announcement (6 new EPR2 reactors) raises uranium demand trajectory. Watch: Niger uranium status, Orano-Kazatomprom contracts, EDF reactor availability."},
@@ -1805,9 +1883,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
     'guinea': {
         'bauxite':      {'role': 'producer',          'weight': 1.5, 'rank': 2,
                          'regime_flags': ['belt_and_road_anchor'],
-                         'note': "🥇 World's #2 bauxite producer (~25% of global supply, ~110 Mt/yr) and the SINGLE most important non-Chinese supplier — China imports ~55% of its bauxite from Guinea via Boké region. SMB Winning Consortium (Société Minière de Boké, Chinese+Singaporean+Guinean JV) is the largest operator; CBG (Compagnie des Bauxites de Guinée, Alcoa+Rio Tinto+Halco JV) the Western-aligned alternative; EGA Guinea (Emirates Global Aluminium) is third major. BELT-AND-ROAD HEAVY FOOTPRINT: Chinese-funded Boké-Conakry railway + Kamsar port + Conakry container port — same resource-leverage playbook as DRC cobalt. COUP RISK: Doumbouya led Sept 2021 coup against Conde — briefly disrupted bauxite shipments and spiked alumina prices ~10% in a week. Transition timeline unresolved. Watch: SMB/CBG/EGA output, Conakry port throughput, Doumbouya succession signals."},
+                         'note': "🥇 World's #2 bauxite producer (~25% of global supply, ~110 Mt/yr) and the SINGLE most important non-Chinese supplier — China imports ~55% of its bauxite from Guinea via Boké region. SMB Winning Consortium (Société Minière de Boké, Chinese+Singaporean+Guinean JV) is the largest operator; CBG (Compagnie des Bauxites de Guinée, Alcoa+Rio Tinto+Halco JV) the Western-aligned alternative; EGA Guinea (Emirates Global Aluminium) is third major. BELT-AND-ROAD HEAVY FOOTPRINT: Chinese-funded Boké-Conakry railway + Kamsar port + Conakry container port — same resource-leverage playbook as DRC cobalt. POLITICAL SETTLEMENT: Doumbouya's Sept 2021 coup briefly disrupted bauxite shipments and spiked alumina ~10% in a week; the transition RESOLVED via the Dec 2025 election -- Doumbouya sworn in Jan 2026, AU sanctions lifted, with a 14-year constitutional runway. Single-leader supply concentration is now the risk shape (one man, ~25% of world bauxite, ~55% of China's imports). Watch: SMB/CBG/EGA output, Conakry port throughput, mining-code fiscal renegotiations, Conakry street stability."},
         'iron_ore':     {'role': 'producer',          'weight': 1.2,
-                         'note': "SIMANDOU MEGAPROJECT — world's largest untapped high-grade iron ore deposit (Simandou Mountains, southeast Guinea). Rio Tinto (Simandou South blocks 3-4) + SMB Winning Consortium / WCS (blocks 1-2) developing in parallel; total potential ~120 Mt/yr at high-grade (~65% Fe). First production scheduled late 2025/2026, ramp to full capacity 2027-2028. RESHAPES GLOBAL IRON ORE: when fully online, materially undercuts Australian (Pilbara) + Brazilian (Vale Carajás) dominance and reduces China's exposure to Australian supply concentration. Trans-Guinea Railway (650km) + Morebaya deepwater port being built simultaneously. Watch: first commercial shipments, railway commissioning, Rio Tinto guidance, China-Conakry political alignment."},
+                         'note': "SIMANDOU MEGAPROJECT — world's largest high-grade iron ore deposit -- IN PRODUCTION since late 2025 (first ore shipped) and the centerpiece of Doumbouya's 'Simandou 2040' program (Simandou Mountains, southeast Guinea). Rio Tinto (Simandou South blocks 3-4) + SMB Winning Consortium / WCS (blocks 1-2) developing in parallel; total potential ~120 Mt/yr at high-grade (~65% Fe). First production scheduled late 2025/2026, ramp to full capacity 2027-2028. RESHAPES GLOBAL IRON ORE: when fully online, materially undercuts Australian (Pilbara) + Brazilian (Vale Carajás) dominance and reduces China's exposure to Australian supply concentration. Trans-Guinea Railway (650km) + Morebaya deepwater port being built simultaneously. Watch: first commercial shipments, railway commissioning, Rio Tinto guidance, China-Conakry political alignment."},
         'gold':         {'role': 'producer',          'weight': 0.8,
                          'note': "Guinea is Africa's #4 gold producer (~85 t/yr); AngloGold Ashanti + Société Anonyme de Guinée + Russian Nordgold + Chinese SOE Hyperdynamics. Artisanal sector substantial. Russian gold-mining presence (Nordgold, Severnaya Aurora) gives Moscow indirect leverage. Watch: AngloGold output guidance, Russian-affiliated mine status post-coup."},
         'diamonds':     {'role': 'producer',          'weight': 0.4,
@@ -2066,7 +2144,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Africa's #1 LNG exporter; Nigeria LNG (NLNG) Bonny Island plant operates 6 trains (~22 MMTPA capacity), Train 7 under construction (~30 MMTPA total). Eni + Shell + TotalEnergies + NNPC ownership. Major EU + India + Japan + South Korea supplier. Trans-Saharan Gas Pipeline Nigeria-Niger-Algeria-Europe revived as discussion item post-Ukraine war. Watch: NLNG Train 7 commissioning, Niger Delta gas-flaring data, EU LNG tender results."},
         'gold':         {'role': 'producer',          'weight': 0.4,
                          'note': "Modest gold producer (~1 tonne/yr formal sector); large artisanal sector (Zamfara state in particular) operates outside Kimberley-style traceability. Bandit-controlled gold mining in Zamfara/Kaduna funds insecurity in Nigeria's northwest. Watch: CBN gold-reserves disclosures, Zamfara security operations, artisanal mining concession reform."},
-    },
+            'gum_arabic':   {'role': 'producer',          'weight': 0.8,
+                         'note': "Alternate-supplier tier (with Chad) behind Sudan's ~70-80% dominance -- Nigerian gum (Borno/Yobe belt) gains structural weight precisely when Sudan's war chokes the primary channel, though the producing belt overlaps Boko Haram/ISWAP territory. Watch: export-volume responses to Sudan disruptions, northeast security radius around the gum belt."},
+},
     'panama': {
         'oil':          {'role': 'transit',           'weight': 1.2,
                          'note': "Panama Canal transit: ~6% of global seaborne trade by value, ~3% of crude oil + significant LNG, soybean, corn, copper concentrate flow. 2023-25 drought reduced daily transit slots from ~36 to ~24, raising auction prices to record ~$4M per slot. Trans-Panama Pipeline (Petroterminal) bypasses canal for crude. Watch: Gatun Lake water levels, ACP slot auctions, Trump-era canal sovereignty rhetoric (Mulino administration response)."},
@@ -2210,7 +2290,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': '~99% imported; Middle East dependency; SK Energy + GS Caltex refineries; major refined product exporter'},
         'uranium':      {'role': 'consumer',          'weight': 0.9,
                          'note': 'Major nuclear power user (~26 reactors, ~30% of electricity); KEPCO domestic build + UAE Barakah export contract; nuclear fuel imports'},
-    },
+            'graphite':     {'role': 'consumer',          'weight': 1.0,
+                         'note': "Anode-manufacturing heavyweight (POSCO Future M) with deep exposure to Chinese spherical-graphite permits -- Seoul's battery chain is the canary for Beijing's graphite-control enforcement. Watch: POSCO Future M sourcing announcements, Korea-China permit friction, IRA-compliant sourcing shifts."},
+},
     'taiwan': {
         'silicon':      {'role': 'consumer', 'weight': 1.5, 'rank': 1,
                          'note': "Demand center of gravity: TSMC's fabs consume the wafers, HPQ crucibles, and polysilicon-derived silicon at the leading edge -- the strategic prize of the entire chain. Cross-strait disruption transmits directly to global chip + silicon-feedstock supply."},
@@ -2318,7 +2400,9 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "World's #3 phosphate producer (~22 Mt/yr); Mosaic + Nutrien operations in Florida (Central Florida phosphate district) + North Carolina (Aurora). USA is largely self-sufficient + modest exporter. Major DAP/MAP producer for domestic + Latin American + Asian markets. Florida phosphate-mining environmental compliance + radioactive byproduct (phosphogypsum) regulation are ongoing operational variables. Watch: Mosaic (NYSE:MOS) results, Nutrien Phosphate segment, USGS phosphate production reports."},
         'diamonds':     {'role': 'consumer',          'weight': 1.4, 'rank': 1,
                          'note': "🥇 World's #1 DIAMOND CONSUMER MARKET (~$26-30B annual retail diamond + diamond-jewelry sales, ~50% of global retail value). LAB-GROWN DIAMOND DISPLACEMENT: lab-grown share of US engagement-ring market climbed to ~50% by 2025 — the steepest natural-vs-synthetic substitution shift in jewelry history. Direct existential pressure on Botswana + Russian + Canadian rough producer economies. G7 SANCTIONS ENFORCEMENT: US implements the G7 Russian-diamond ban via OFAC + Customs/Border Protection; Belgian Antwerp cert node serves as primary verification path; secondary Botswana node coming online. Tiffany + Signet + Jared + retail jewelry sector primary commercial actors. Watch: Signet Jewelers (NYSE:SIG) earnings, GIA grading volume, lab-grown vs natural mix data, OFAC Russian-diamond seizure announcements."},
-    },
+            'graphite':     {'role': 'consumer',          'weight': 1.1,
+                         'note': "100% NET IMPORT RELIANT on natural graphite (USGS critical mineral) while building the largest ex-China anode demand base (EV/battery plants). IRA + DOE/DFC financing anchors the alternative chain: Syrah Vidalia (LA), Anovion, Novonix -- all priced against Chinese export-permit posture and Mozambican/Malagasy mine uptime. Watch: DOE loan actions, Section 301/tariff moves on Chinese anode material, domestic synthetic-graphite capacity milestones."},
+},
     'venezuela': {
         'oil':          {'role': 'sanctions_target',  'weight': 1.5, 'rank': 1,
                          'note': "🚨 CRITICAL HEADLINE: Venezuela holds world's LARGEST proven oil reserves (~303 billion barrels per OPEC) — but ~95% is extra-heavy crude from Orinoco Belt, expensive to refine, requires specialized facilities (Gulf Coast US, China CNPC Maoming). Production collapsed from ~3.2M bpd (2008 peak) to ~700-900k bpd (2024) via mismanagement + sanctions + PDVSA brain drain. POST-MADURO TRANSITION (Jan 3 2026): US captured Maduro; Delcy Rodriguez interim govt; Trump quoted Apr 2026 'the oil is beginning to flow' — signaling US oil major re-entry under transactional alignment. Chevron OFAC license expansions expected. STRATEGIC ANALYTICAL QUESTION: Was the January 2026 US raid timed to secure Venezuelan crude redundancy ahead of potential Hormuz disruption? Watch: PDVSA monthly export volumes (Reuters/Bloomberg shipping data), Chevron + Repsol + ENI license expansions, Russian Rosneft cargo continuity post-Rodriguez, Chinese CNPC Maoming refinery feedstock mix, Jose terminal tanker traffic. [VERIFY: Peter's pushback noted — reserve QUALITY (Orinoco extra-heavy ~8.5° API) materially constrains how much of 303B 'proven' reserves are economically extractable at current price decks vs. Saudi/Permian light sweet]."},
@@ -2344,6 +2428,71 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Among the world's top-three rice exporters (~7-8 MMT/yr), centered on the Mekong Delta. A direct beneficiary when India restricts exports - Vietnamese export prices spiked to multi-year highs during the 2023-24 India ban. Structural vulnerability: Mekong Delta salinity intrusion, upstream Chinese and Lao dam operations, and climate stress on the delta. Watch: Vietnam Food Association export-price quotes, Mekong Delta salinity/drought reports, India export-policy spillover, Philippines import tenders (Vietnam's largest customer)."},
         'coffee':       {'role': 'producer',          'weight': 1.1, 'rank': 2,
                          'note': "World's #2 coffee producer overall and the #1 robusta producer, concentrated in the Central Highlands (Dak Lak). A major export-earnings driver. Robusta prices hit record highs in 2024 on Vietnamese drought - Vietnamese weather is now a top global robusta price signal. Watch: Central Highlands rainfall/drought, VICOFA export figures, robusta-arabica spread, aging-tree replanting and productivity trends."},
+    },
+
+    # ────────────────────────────────────────────────────────────
+    # AFRICA EXPANSION — Jul 18 2026 (Sahel gold belt, Sudan war
+    # economy, Niger uranium, CAR mercenary-finance node, Mozambique
+    # gas/graphite, Madagascar graphite/nickel)
+    # ────────────────────────────────────────────────────────────
+    'mali': {
+        'gold':         {'role': 'producer',          'weight': 1.4,
+                         'regime_flags': ['resource_nationalization_active'],
+                         'note': "Africa's #2-3 gold producer (~65t/yr industrial + large artisanal), and ground zero of the continent's state-vs-miner confrontation. Junta seized ~3t of gold stock from Barrick's Loulo-Gounkoto complex (Jan 2025), jailed executives, and placed the mine -- ~14% of Barrick's global output -- under provisional state administration (2025); Barrick pursues ICSID arbitration. 2023 mining code raises state + local stakes to up to 35% and enabled sweeping back-tax campaigns (Resolute CEO detained Nov 2024, ~$160M settlement; B2Gold Fekola + Allied + Hummingbird renegotiated). Wagner/Africa Corps compensated partly via gold concessions and artisanal-site control (Intahaka). JNIM taxes artisanal production across contested zones -- gold funds the state, the Russians, AND the insurgency simultaneously. Watch: Loulo-Gounkoto output under state administration, Barrick arbitration milestones, new Africa Corps concession grants, junta back-tax targets."},
+        'lithium':      {'role': 'producer',          'weight': 1.0,
+                         'regime_flags': ['belt_and_road_anchor'],
+                         'note': "Goulamina (Ganfeng Lithium, Chinese-controlled) shipped first spodumene concentrate Dec 2024 -- Mali's entry into the battery chain and a Belt-and-Road resource anchor mirroring Guinea's bauxite playbook. Bougouni (Kodal/Hainan JV) follows. Junta applies the same rising-state-stake mining code to lithium as to gold. Watch: Goulamina ramp volumes, Bamako-Ganfeng fiscal renegotiation signals, export routing via Senegal/Cote d'Ivoire corridors."},
+    },
+
+    'burkina_faso': {
+        'gold':         {'role': 'producer',          'weight': 1.3,
+                         'regime_flags': ['resource_nationalization_active'],
+                         'note': "Africa's #4-5 gold producer (~55-60t/yr, declining with insecurity) under the continent's most aggressive resource-nationalist junta. Traore created state miner SOPAMIB (2024), which took over the Boungou + Wahgnion mines, and the 2024 mining code raises free-carried state interest with local-ownership mandates -- Western operators (Endeavour, IAMGOLD orbit) divesting while Russian-linked Nordgold stays. JNIM controls or contests wide territory and TAXES artisanal gold sites -- an estimated third of artisanal output is smuggled (Togo/UAE routes), making gold a shared revenue base of state, coup-proofing patronage, and insurgency alike. Watch: SOPAMIB portfolio expansion, further mine seizures/nationalizations, Nordgold footprint, artisanal-corridor interdictions."},
+    },
+
+    'niger': {
+        'uranium':      {'role': 'producer',          'weight': 1.4, 'rank': 7,
+                         'regime_flags': ['resource_nationalization_active'],
+                         'note': "World #7 uranium producer (~4-5% of global output) and historically ~15-25% of EU supply -- the live case of resource nationalization as geopolitics. Post-coup junta blocked exports (2023), stripped Orano of operational control of SOMAIR (Dec 2024), then moved to NATIONALIZE it outright (Jun 2025); Orano pursues international arbitration while ~1,000+ tonnes of yellowcake sit stranded at Arlit. Imouraren mega-deposit permit revoked from Orano (Jun 2024); GoviEx Madaouela permit also revoked. Rosatom courtship ongoing; reporting has flagged Iranian interest in Nigerien uranium (unconfirmed, tracked as rumor-tier). France's fuel chain diversified to Kazakhstan/Canada but the EU-exposure precedent is set. Watch: SOMAIR arbitration, Arlit stockpile movements, Rosatom entry signals, any export-corridor reopening (Benin transit feud)."},
+        'oil':          {'role': 'producer',          'weight': 0.9,
+                         'regime_flags': ['belt_and_road_anchor'],
+                         'note': "Small producer (~90-110k bpd target) whose significance is the PIPELINE: CNPC's Agadem project exports via the ~2,000km Niger-Benin pipeline (first liftings May 2024) -- pure Belt-and-Road petro-politics. Flow repeatedly interrupted by junta-Benin border feuding and rebel sabotage (Patriotic Liberation Front attacks); junta has detained/expelled Chinese oil executives in fiscal renegotiation pressure plays (2025). Watch: pipeline uptime, CNPC-Niamey friction, Benin transit politics, Agadem output guidance."},
+    },
+
+    'sudan': {
+        'gold':         {'role': 'producer',          'weight': 1.3,
+                         'regime_flags': ['conflict_finance_node'],
+                         'note': "Africa's #3 gold producer (~64t official pre-war; true output far higher) and the FINANCING SPINE of Africa's largest war. RSF controls Darfur artisanal fields (Jebel Amer legacy) and smuggling exits; SAF controls Port Sudan refining and formal export channels -- gold bankrolls BOTH sides. An estimated 50-80% of production is smuggled, overwhelmingly to the UAE (Dubai refining hub), with documented Russian channels (Wagner-legacy Meroe Gold / M-Invest structures) tying Sudanese gold to Moscow's sanction-evasion economy -- and to the Port Sudan naval-base negotiation. Belgium-diamonds-class structural role: not a top-5 producer, but a top-tier conflict-finance and sanctions-evasion node. Watch: UAE gold import statistics, Port Sudan export policy shifts, RSF consolidation of Darfur fields, Russian refinery/concession signals."},
+        'gum_arabic':   {'role': 'producer',          'weight': 1.2, 'rank': 1,
+                         'regime_flags': ['conflict_finance_node'],
+                         'note': "🥇 ~66-80% OF WORLD SUPPLY -- the most concentrated soft commodity on Earth, from the Kordofan/Darfur gum belt. Irreplaceable emulsifier (E414) for Coca-Cola, PepsiCo, confectionery, pharma; so strategically odd that US sanctions carved it out for decades. The war rerouted the trade into smuggling corridors (Chad, Egypt, South Sudan) with RSF taxation of the belt; buyers drew down strategic stockpiles in 2023-24 and the supply chain now prices Sudanese territorial control directly. Watch: export-corridor shifts, Kordofan front movements, buyer inventory disclosures, substitute-gum R&D announcements (the demand-destruction tail risk)."},
+    },
+
+    'car': {
+        'gold':         {'role': 'producer',          'weight': 1.0,
+                         'regime_flags': ['conflict_finance_node'],
+                         'note': "Globally small producer whose significance is WHO it finances: the Ndassima mine (Wagner-linked Midas Ressources, assessed $1B+ in gold) is the material base of Russia's Africa Corps presence -- the concession-for-security model in its purest form. US Treasury has repeatedly designated Wagner-linked CAR entities. Artisanal production elsewhere feeds smuggling via Cameroon and the Sudan war economy's tri-border zone. Structural-role qualification (mercenary-finance node), not volume. Watch: Ndassima output/expansion signals, sanctions designations, concession transfers under the Wagner-to-Africa-Corps handover, Vakaga corridor traffic."},
+        'diamonds':     {'role': 'producer',          'weight': 1.0,
+                         'regime_flags': ['conflict_finance_node'],
+                         'note': "THE live conflict-diamond case: under partial Kimberley Process embargo since 2013 (compliant 'green zones' only), with Wagner-linked Diamville (US-sanctioned) documented routing stones to the UAE. Smuggling via Cameroon and Sudan chains persists at scale. Like Belgium in reverse -- a certification-REGIME pressure point rather than a volume producer: what happens to CAR stones tests whether the KP means anything. Watch: KP review decisions on CAR zones, Diamville-successor entities, UAE rough-import anomalies, artisanal-zone control shifts."},
+    },
+
+    'mozambique': {
+        'natural_gas':  {'role': 'producer',          'weight': 1.3,
+                         'regime_flags': ['conflict_supply_coupling'],
+                         'note': "Rovuma Basin holds ~100+ tcf -- a top-10 global gas endowment -- and the platform's TEXTBOOK conflict-commodity coupling. Eni's Coral Sul FLNG has exported since 2022 (insurgent-proof by being offshore) with Coral Norte advancing; TotalEnergies' $20B Mozambique LNG (Afungi) has sat under force majeure since the 2021 Palma attack, with restart preparation under Rwandan force protection -- every N380 corridor ambush reprices the timeline. ExxonMobil's larger Rovuma LNG train is sequenced behind Total's restart confidence. LNG receipts are the state's entire projected fiscal transformation, which makes the insurgency's implicit hostage-taking of the timeline a sovereign-credit variable. Watch: Total force-majeure status, Afungi-perimeter incidents, Coral Norte milestones, ExxonMobil FID signals."},
+        'graphite':     {'role': 'producer',          'weight': 1.2, 'rank': 2,
+                         'regime_flags': ['conflict_supply_coupling'],
+                         'note': "🥈 World's #2 natural graphite producer, anchored by Balama (Syrah Resources) -- the largest natural graphite mine on Earth and the West's principal ex-China anode bet (Syrah's Vidalia LA plant, US DOE/DFC financing, Tesla offtake). Production is chronically interruptible: farmer-protest force majeure (Dec 2024), Cabo Delgado insurgency proximity, and post-election unrest have all halted output -- each stoppage tightens an anode chain China already gates with export permits. Watch: Balama uptime/restart declarations, Syrah offtake + US-support announcements, Nacala/Pemba logistics, protest cycles in Cabo Delgado province."},
+        'coal':         {'role': 'producer',          'weight': 0.9,
+                         'note': "Africa's leading coking-coal exporter via the Moatize complex (post-Vale ownership) and the Nacala rail corridor -- a metallurgical-coal supply thread to Indian and Asian steelmakers. Cyclone exposure and corridor unrest (2024-25 protest roadblocks) are the recurring disruption vectors. Watch: Nacala throughput, Moatize ownership/output guidance, coking-coal benchmark spreads."},
+    },
+
+    'madagascar': {
+        'graphite':     {'role': 'producer',          'weight': 1.1,
+                         'note': "Top-5 world natural graphite producer -- historic flake-graphite district plus the modern Molo mine (NextSource Materials, producing since 2023) feeding the ex-China anode chain. The Oct 2025 military transition adds permitting/political risk to an otherwise structural position: the Jan 2026 lifting of a 16-year mining-permit freeze signals a revenue-hungry transitional government reopening the sector. Watch: Molo ramp + offtakes, permit-regime decisions under the transition, Toamasina export logistics."},
+        'nickel':       {'role': 'producer',          'weight': 0.9,
+                         'note': "Ambatovy (Sumitomo-led) is one of the world's largest lateritic nickel-cobalt operations -- top-10-tier producer of class-1 nickel with cobalt byproduct feeding battery chains -- but chronically financially distressed (debt restructuring 2024) amid the Indonesian-supply nickel price collapse. A solvency failure would be a meaningful class-1 supply event AND a Malagasy fiscal/employment shock in an already fragile transition. Watch: Ambatovy solvency/output guidance, Sumitomo commitment signals, nickel-price threshold behavior."},
     },
 }
 # ============================================================================
@@ -2417,6 +2566,17 @@ KNOWN_SPEAKERS = {
     'kazuo ueda':           {'role': 'central_bank_governor', 'country': 'japan',     'weight': 1.2, 'aliases': ['boj governor ueda']},
     # United Nations (mediator-class -- normative/brokering voice on food, grain, fertilizer)
     'antonio guterres':     {'role': 'un_secretary_general',  'country': 'un',        'weight': 1.2, 'aliases': ['guterres', 'un secretary-general', 'un secretary general', 'secretary-general guterres', 'un chief']},
+    # ── Africa commodity-jawboning tier (added Jul 18 2026) ──
+    # These leaders personally announce mine seizures, export bans, and
+    # concession transfers -- their statements ARE the supply events.
+    'felix tshisekedi':     {'role': 'head_of_state',         'country': 'drc',          'weight': 1.3, 'aliases': ['tshisekedi', 'president tshisekedi']},
+    'ibrahim traore':       {'role': 'head_of_state',         'country': 'burkina_faso', 'weight': 1.2, 'aliases': ['traore', 'captain traore', 'capitaine traore']},
+    'assimi goita':         {'role': 'head_of_state',         'country': 'mali',         'weight': 1.2, 'aliases': ['goita', 'colonel goita', 'general goita']},
+    'abdourahamane tchiani': {'role': 'head_of_state',        'country': 'niger',        'weight': 1.2, 'aliases': ['tchiani', 'tiani', 'general tchiani']},
+    'mamadi doumbouya':     {'role': 'head_of_state',         'country': 'guinea',       'weight': 1.2, 'aliases': ['doumbouya', 'mamady doumbouya', 'general doumbouya']},
+    'abdel fattah al-burhan': {'role': 'head_of_state',       'country': 'sudan',        'weight': 1.1, 'aliases': ['burhan', 'al-burhan', 'general burhan']},
+    'mohamed hamdan dagalo': {'role': 'militia_commander',    'country': 'sudan',        'weight': 1.1, 'aliases': ['hemedti', 'hemeti', 'dagalo', 'hemedti dagalo']},
+    'bola tinubu':          {'role': 'head_of_state',         'country': 'nigeria',      'weight': 1.2, 'aliases': ['tinubu', 'president tinubu']},
 }
 
 # ── LEADER_INTERVENTION_KEYWORDS ─────────────────────────────────────────────
