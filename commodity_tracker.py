@@ -301,6 +301,23 @@ COMMODITY_TYPES = {
         'top_consumers':  ['usa', 'eu'],
     },
 
+    'fishmeal': {
+        'name': 'Fishmeal',
+        'icon': '\U0001F41F',
+        'tier': 3,
+        'category': 'agricultural',
+        'has_spot_price': False,    # NO PUBLIC SPOT PRICE (trade-house negotiated)
+        'yahoo_ticker': None,
+        'yahoo_proxies': [],
+        'unit': 'quota cycle + biomass survey',
+        'description': 'Fishmeal is the top global protein input to aquaculture (farmed salmon/shrimp) and animal feed, and its supply is extraordinarily concentrated in ONE fishery: the Peruvian anchoveta of the Humboldt Current, the largest single-species fishery on Earth. No public spot price -- tracked via Peru IMARPE biomass surveys and PRODUCE quota announcements. The signal event is a SEASON CANCELLATION (e.g. the 2023 first-season closure), which spikes global fishmeal prices and ripples protein-feed costs into farmed-salmon, poultry, and aquaculture worldwide. FOOD-SECURITY frame: this is the trackable core of the viral \'guano collapse\' narrative -- the real leading indicator is the anchoveta quota, not seabird populations (guano is an ecological proxy under phosphate, not a supply source). El Nino warm-water anomalies are the recurring disruption vector.',
+        'chokepoints': [
+            'anchoveta', 'imarpe', 'humboldt current', 'peru fishing quota',
+            'anchoveta season', 'el nino anchoveta', 'peru fishmeal',
+        ],
+        'top_producers':  ['peru'],
+        'top_consumers':  ['china', 'norway', 'chile'],
+    },
     'lithium': {
         'name': 'Lithium',
         'icon': '🔋',
@@ -783,7 +800,7 @@ COMMODITY_TYPES = {
         'yahoo_ticker': 'MOS',           # Mosaic Co
         'yahoo_proxies': ['NTR.TO', 'OCP-MA'],  # Nutrien + OCP Maroc (where listed)
         'unit': 'USD/MT phosphate rock (proxy)',
-        'description': 'Phosphate is the irreplaceable second pillar of global fertilizer (N-P-K: nitrogen, phosphate, potassium). Morocco/Western Sahara reserves = ~70% of global proven reserves — the most geographically concentrated fertilizer input on Earth. OCP Group (Moroccan state-owned, sovereign-controlled) operates Khouribga + Bou Craa mines and is the swing producer for global phosphate trade. NOTE ON SOVEREIGNTY: OCP operates phosphate mines in both Morocco proper and Western Sahara (Bou Craa). Western Sahara political status remains contested; certain EU court rulings have held that contracts requiring Western Sahara provenance be treated separately. The platform reports OCP combined output under Morocco as the operating entity, mirroring official US State Department neutral posture, while noting source provenance distinctions some buyers apply. The other top-5 producers (China, USA Florida + North Carolina, Russia, Jordan) have a fraction of Moroccan reserves. CASCADE LINK: phosphate requires sulfuric acid for processing into DAP/MAP fertilizers — Hormuz sulfur cascade flows directly into phosphate prices. Watch: OCP guidance, Moroccan-EU disputes over Western Sahara provenance, China DAP/MAP export taxes, India phosphate import tenders.',
+        'description': 'Phosphate is the irreplaceable second pillar of global fertilizer (N-P-K: nitrogen, phosphate, potassium). Morocco/Western Sahara reserves = ~70% of global proven reserves — the most geographically concentrated fertilizer input on Earth. OCP Group (Moroccan state-owned, sovereign-controlled) operates Khouribga + Bou Craa mines and is the swing producer for global phosphate trade. NOTE ON SOVEREIGNTY: OCP operates phosphate mines in both Morocco proper and Western Sahara (Bou Craa). Western Sahara political status remains contested; certain EU court rulings have held that contracts requiring Western Sahara provenance be treated separately. The platform reports OCP combined output under Morocco as the operating entity, mirroring official US State Department neutral posture, while noting source provenance distinctions some buyers apply. The other top-5 producers (China, USA Florida + North Carolina, Russia, Jordan) have a fraction of Moroccan reserves. CASCADE LINK: phosphate requires sulfuric acid for processing into DAP/MAP fertilizers — Hormuz sulfur cascade flows directly into phosphate prices. Watch: OCP guidance, Moroccan-EU disputes over Western Sahara provenance, China DAP/MAP export taxes, India phosphate import tenders. \u26A0\uFE0F GUANO SUB-SIGNAL (ecological indicator, NOT material supply): Peruvian seabird guano is the pre-industrial renewable phosphate source, but at modern scale it is a rounding error (single-digit-thousands of tonnes vs. ~50M tonnes/yr of mined rock). Viral framing treats guano-colony collapse as a fertilizer crisis; the platform does NOT. Guano seabird decline is a real ECOLOGICAL proxy for anchoveta stress in the Humboldt Current -- so it reads as a leading indicator for Peru FISHMEAL (food/feed), not for phosphate supply. See peru.fishmeal.',
         'chokepoints': [
             'khouribga', 'bou craa', 'youssoufia', 'gantour',
             'ocp group', 'ocp maroc', 'phosboucraa',
@@ -791,6 +808,7 @@ COMMODITY_TYPES = {
             'aqaba potash', 'arab potash',
             'mosaic florida', 'central florida phosphate',
             'kola peninsula russia', 'phosagro',
+            'guano', 'peruvian guano', 'seabird collapse', 'anchoveta',  # ecological sub-signal (-> fishmeal, not supply)
         ],
         'top_producers':  ['morocco', 'china', 'usa', 'russia', 'jordan', 'tunisia', 'saudi_arabia'],
         'top_consumers':  ['india', 'brazil', 'china', 'usa', 'eu'],
@@ -1007,6 +1025,16 @@ COMMODITY_KEYWORDS = {
         'gum arabic exports', 'sudan gum arabic', 'gum belt',
         'kordofan gum', 'hashab', 'talha gum',
         'gum arabic supply', 'gum arabic shortage', 'gum arabic smuggling',
+    ],
+    'fishmeal': [
+        'fishmeal', 'fish meal', 'anchoveta', 'anchovy peru',
+        'peru fishing quota', 'anchoveta quota', 'anchoveta season',
+        'imarpe', 'peru fishing ban', 'fishing season cancelled peru',
+        'fishmeal price', 'aquaculture feed', 'fish feed shortage',
+        'humboldt current', 'el nino fishing peru', 'peru produce quota',
+        # guano ecological proxy (rolls into fishmeal read, NOT phosphate supply)
+        'guano', 'peruvian guano', 'guano birds', 'seabird collapse',
+        'guano islands', 'cormorant collapse', 'boobies peru',
     ],
     'lithium': [
         'lithium', 'lithium prices', 'lithium carbonate', 'lithium hydroxide',
@@ -2168,6 +2196,8 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': 'World #3 silver producer; Andean polymetallic mining'},
         'copper':       {'role': 'producer',          'weight': 1.3, 'rank': 2,
                          'note': "World's #2 copper producer (~12% global, ~2.4M tonnes/yr); Antamina (BHP+Glencore+Teck+Mitsubishi), Cerro Verde (Freeport), Las Bambas (MMG/Chinese), Antapaccay (Glencore). Political risk: Castillo impeachment (Dec 2022) + Boluarte unrest + ongoing community protests vs Chinese-operated Las Bambas. Strategic alternative to Chilean copper concentration."},
+        'fishmeal':     {'role': 'producer',          'weight': 1.1, 'rank': 1, 'data_as_of': '2026-07',
+                         'note': "\U0001F947 World's largest fishmeal exporter -- the Peruvian anchoveta (Humboldt Current) is the planet's biggest single-species fishery and the top global input to aquaculture + animal feed. FOOD-SECURITY frame, NOT fertilizer: when IMARPE biomass surveys trigger a season CANCELLATION (as in the 2023 first-season closure), global fishmeal prices spike and protein-feed costs ripple into farmed-salmon/poultry/aquaculture worldwide. This is the trackable leading indicator behind the viral 'guano collapse' framing -- the real signal is the quota, filed under food/feed, not the birds. Watch: IMARPE anchoveta biomass surveys, PRODUCE quota announcements/cancellations, El Nino warm-water anomalies, fishing-fleet protests. See also Chile (same Humboldt anchoveta fishery, secondary scale) when built."},
     },
     'philippines': {
         'semiconductors': {'role': 'component_producer', 'weight': 1.1,
