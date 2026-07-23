@@ -237,6 +237,30 @@ except Exception as e:
     _gpi_tb.print_exc()
 
 # ────────────────────────────────────────────────────────────
+# GPI TIME-SERIES — Newsletter Slices 1 & 2 (Jul 23 2026)
+# Slice 1 banks one lean snapshot per UTC day (gpi:history:daily, 12-week cap,
+# no TTL). Slice 2 turns that archive into deltas and streaks. History can only
+# accumulate in wall-clock time -- it cannot be backfilled -- so the writer runs
+# from day one. Endpoints: /api/gpi/snapshot, /api/gpi/history,
+# /api/gpi/delta, /api/gpi/delta/summary
+# ────────────────────────────────────────────────────────────
+try:
+    from gpi_snapshot import register_gpi_snapshot_routes
+    GPI_SNAPSHOT_AVAILABLE = True
+    print("[ME Backend] ✅ GPI snapshot writer loaded")
+except Exception as e:
+    GPI_SNAPSHOT_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ gpi_snapshot not available: {e}")
+
+try:
+    from gpi_delta import register_gpi_delta_routes
+    GPI_DELTA_AVAILABLE = True
+    print("[ME Backend] ✅ GPI delta engine loaded")
+except Exception as e:
+    GPI_DELTA_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ gpi_delta not available: {e}")
+
+# ────────────────────────────────────────────────────────────
 # ECONOMIC ABSORPTION SIGNATURES — "So What" layer for leader
 # commodity interventions (Butterfly Build Phase 1). Static catalog
 # today; Phase 2 rhetoric trackers will populate dynamically.
@@ -1306,6 +1330,20 @@ if FOOD_PULSE_AVAILABLE:
 if GPI_AVAILABLE:
     register_gpi_routes(app)
     print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+
+# GPI time-series -- must register AFTER the GPI itself, since the snapshot
+# writer reads build_gpi() in-process (no HTTP self-call).
+if GPI_SNAPSHOT_AVAILABLE:
+    try:
+        register_gpi_snapshot_routes(app, start_scheduler=True)
+    except Exception as e:
+        print(f"[ME Backend] ⚠️ GPI snapshot registration failed: {e}")
+
+if GPI_DELTA_AVAILABLE:
+    try:
+        register_gpi_delta_routes(app)
+    except Exception as e:
+        print(f"[ME Backend] ⚠️ GPI delta registration failed: {e}")
 
 # Economic Absorption Signatures — register after commodity tracker so leader
 # interventions can be cross-referenced. Phase 2 rhetoric trackers will read
