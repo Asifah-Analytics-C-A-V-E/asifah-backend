@@ -28,6 +28,7 @@ Author: RCGG / Asifah Analytics
 
 import json
 import time
+import threading
 import requests
 from datetime import datetime, timezone
 
@@ -38,7 +39,7 @@ import os
 # If you see this in Render logs, the new code is loaded into the worker.
 # If you DON'T see this, Render is running an older cached version.
 # ════════════════════════════════════════════════════════════════════
-print('[ME BLUF DEPLOY MARKER v2.1.0] Module loaded — Lebanon humanitarian + convergence registry active')
+print('[ME BLUF DEPLOY MARKER v2.2.0] Module loaded — Lebanon humanitarian + convergence registry active')
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -66,6 +67,55 @@ BLUF_CACHE_KEY = 'rhetoric:me:regional_bluf'
 BLUF_CACHE_TTL = 14 * 3600  # 14h -- outlasts any individual tracker TTL
 BLUF_LASTGOOD_TTL   = 7 * 24 * 3600   # 7d ceiling for held last-known-good tracker snapshots (C)
 BLUF_INCOMPLETE_TTL = 30 * 60         # 30min cache when the picture is incomplete (A: don't freeze gaps)
+
+# ── v2.2.0 (Jul 23 2026) SERVE-FAST / REFRESH-BEHIND ─────────────────────
+# The ME BLUF is unusual: it makes OUTBOUND HTTP calls during its own build
+# (the Lebanon humanitarian backend, a separate Render service). A cold or slow
+# dependency could therefore block the endpoint for many seconds -- past the
+# point where the Global Pressure Index gives up waiting, which made the whole
+# Middle East silently vanish from the global picture.
+#
+# Fix: a consumer NEVER waits on a rebuild. If any cached copy exists we return
+# it immediately and refresh in a background thread. Only a genuine cold start
+# (no cache at all) blocks, and ?force=true still blocks by design because an
+# analyst asking for force wants fresh data.
+#
+# A durable last-known-good copy (7d) backstops the 14h working cache, so an
+# expired cache still has something honest to serve while the rebuild runs.
+BLUF_SELF_LASTGOOD_KEY = 'rhetoric:me:regional_bluf:lastgood'
+
+_bluf_rebuild_lock = threading.Lock()
+_bluf_rebuilding   = False
+
+
+def _rebuild_bluf_background():
+    """Run a full BLUF rebuild off the request path."""
+    global _bluf_rebuilding
+    try:
+        print('[ME BLUF] Background rebuild starting (consumer served from cache)')
+        build_regional_bluf(force=True)
+        print('[ME BLUF] Background rebuild complete')
+    except Exception as e:
+        print(f'[ME BLUF] Background rebuild FAILED: {str(e)[:180]}')
+    finally:
+        with _bluf_rebuild_lock:
+            _bluf_rebuilding = False
+
+
+def _kick_background_rebuild():
+    """Start a background rebuild unless one is already running.
+
+    Single-flight: many consumers (GPI, the hub page, a browser refresh) can
+    arrive at once on an expired cache. Without the guard each would spawn its
+    own rebuild and they would stampede the Lebanon backend together.
+    """
+    global _bluf_rebuilding
+    with _bluf_rebuild_lock:
+        if _bluf_rebuilding:
+            return False
+        _bluf_rebuilding = True
+    threading.Thread(target=_rebuild_bluf_background, daemon=True).start()
+    return True
 
 def _lastgood_key(theatre):
     """Durable last-known-good snapshot key for a tracker (C)."""
@@ -714,10 +764,9 @@ def _fetch_lebanon_humanitarian():
     # 2. Cache miss or stale — fetch from Lebanon backend
     try:
         url = f'{LEBANON_HUMANITARIAN_BACKEND}/api/lebanon/humanitarian'
-        # Jul 23 2026: was 15s. This call has graceful stale-cache fallback
-        # below, so a long timeout buys nothing -- it just holds the entire
-        # regional read hostage to one country's humanitarian sub-fetch, past
-        # the point where GPI gives up waiting.
+        # v2.2.0 (Jul 23 2026): was 15s. This call already degrades gracefully
+        # to stale cache below, so a long timeout buys nothing -- it only makes
+        # a rebuild drag. Kept short now that rebuilds run off the request path.
         resp = requests.get(url, timeout=5)
         if resp.status_code != 200:
             print(f'[ME BLUF] Lebanon backend HTTP {resp.status_code}; using stale cache if any')
@@ -1918,13 +1967,16 @@ def build_regional_bluf(force=False):
         'picture_complete':  (len(trackers_missing) == 0),
         'theatre_summary':   theatre_summary,
         'generated_at':      datetime.now(timezone.utc).isoformat(),
-        'version':           '2.1.0',  # bumped for prose_v2 + strike window awareness
+        'version':           '2.2.0',  # bumped for prose_v2 + strike window awareness
         'region':            'middle_east',  # v2.0: GPI-readable
         'top_signals_count': len(top_signals_capped),
     }
 
     _bluf_ttl = BLUF_INCOMPLETE_TTL if (trackers_missing or trackers_stale) else BLUF_CACHE_TTL
     _redis_set(BLUF_CACHE_KEY, result, ttl=_bluf_ttl)
+    # v2.2.0: durable last-known-good so an expired working cache still has an
+    # honest copy to serve instantly while a rebuild runs behind the request.
+    _redis_set(BLUF_SELF_LASTGOOD_KEY, result, ttl=BLUF_LASTGOOD_TTL)
     print(f'[ME BLUF] Built: posture={posture_label}, max_level={max_level}, '
           f'avg_score={avg_score}, signals={len(top_signals_capped)}')
     return result
@@ -1940,9 +1992,48 @@ def register_me_bluf_routes(app):
 
     @app.route('/api/rhetoric/me/bluf', methods=['GET'])
     def me_regional_bluf():
+        """Serve-fast / refresh-behind (v2.2.0).
+
+        A consumer never waits on a rebuild. Order of preference:
+          1. ?force=true          -> block and rebuild (analyst wants fresh)
+          2. fresh cache          -> serve it
+          3. stale cache/lastgood -> serve immediately, rebuild in background
+          4. genuine cold start   -> block (nothing honest to serve yet)
+
+        Why: this endpoint's build makes outbound HTTP calls, so it could
+        previously block long enough for the GPI (8s budget) to abandon it and
+        drop the entire Middle East from the global picture.
+        """
         force = flask_request.args.get('force', 'false').lower() == 'true'
-        result = build_regional_bluf(force=force)
-        return jsonify(result)
+        if force:
+            return jsonify(build_regional_bluf(force=True))
+
+        # 2) fresh working cache
+        cached = _redis_get(BLUF_CACHE_KEY)
+        if cached and cached.get('generated_at'):
+            try:
+                age = (datetime.now(timezone.utc) -
+                       datetime.fromisoformat(cached['generated_at'])).total_seconds()
+                if age < BLUF_CACHE_TTL:
+                    cached['from_cache'] = True
+                    return jsonify(cached)
+            except Exception:
+                pass
+
+        # 3) stale but present -> serve NOW, refresh behind the request
+        stale = cached or _redis_get(BLUF_SELF_LASTGOOD_KEY)
+        if stale and stale.get('generated_at'):
+            refreshing = _kick_background_rebuild()
+            stale['from_cache'] = True
+            stale['stale'] = True                 # absence-honest: say it's stale
+            stale['refreshing'] = bool(refreshing)
+            print(f'[ME BLUF] Served stale copy instantly '
+                  f'(background refresh {"started" if refreshing else "already running"})')
+            return jsonify(stale)
+
+        # 4) genuine cold start -- nothing cached, must build
+        print('[ME BLUF] Cold start -- no cache available, building synchronously')
+        return jsonify(build_regional_bluf(force=False))
 
     @app.route('/debug/me-bluf-version', methods=['GET'])
     def me_bluf_version():
