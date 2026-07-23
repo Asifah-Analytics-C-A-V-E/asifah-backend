@@ -61,7 +61,7 @@ REGIONAL_BLUF_ENDPOINTS = {
     # Until then, fetch returns None and GPI gracefully skips. The convergence
     # registry already has 3 africa-trigger_region entries (cobalt_drc_active,
     # diamonds_sanctions_regime, phosphate_food_security) ready to consume this.
-    # 'africa': os.environ.get('AFRICA_BACKEND_URL', 'https://asifah-africa-backend.onrender.com') + '/api/rhetoric/africa/bluf',
+    'africa': os.environ.get('AFRICA_BACKEND_URL', 'https://asifah-africa-backend.onrender.com') + '/api/rhetoric/africa/bluf',
     # v2.3 (May 17, 2026) — Humanitarian Convergence Detector
     # Pseudo-region: distributed weak-signal aggregation across countries
     # WITHOUT dedicated Asifah trackers. Lives on ME backend; consumed by
