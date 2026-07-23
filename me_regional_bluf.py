@@ -714,7 +714,11 @@ def _fetch_lebanon_humanitarian():
     # 2. Cache miss or stale — fetch from Lebanon backend
     try:
         url = f'{LEBANON_HUMANITARIAN_BACKEND}/api/lebanon/humanitarian'
-        resp = requests.get(url, timeout=15)
+        # Jul 23 2026: was 15s. This call has graceful stale-cache fallback
+        # below, so a long timeout buys nothing -- it just holds the entire
+        # regional read hostage to one country's humanitarian sub-fetch, past
+        # the point where GPI gives up waiting.
+        resp = requests.get(url, timeout=5)
         if resp.status_code != 200:
             print(f'[ME BLUF] Lebanon backend HTTP {resp.status_code}; using stale cache if any')
             return cached  # may be stale but better than nothing
