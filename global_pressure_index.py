@@ -153,8 +153,10 @@ DIPLOMATIC_SIGNAL_PHRASES = ('cessation of hostilities',)
                                 # hostilities' is unambiguous de-escalation language. (We avoid bare
                                 # 'ceasefire' here, since 'ceasefire collapsed' is ESCALATION; the
                                 # 'ceasefire' CATEGORY is already handled by _CATEGORY_AXIS_HINTS.)
-REGIONAL_FETCH_TIMEOUT   = 8    # seconds
-
+REGIONAL_FETCH_TIMEOUT   = 20   # seconds -- Jul 23 2026: was 8, too tight for
+                                # BLUFs that make their own outbound calls during
+                                # build (ME fetches the Lebanon humanitarian
+                                # backend). GPI was abandoning ME mid-rebuild.
 
 # ============================================================
 # REDIS HELPERS
