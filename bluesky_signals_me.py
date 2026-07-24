@@ -54,6 +54,38 @@ BLUESKY_TIMEOUT = 8
 #          ME targets: lebanon, israel, iran, yemen, iraq, syria, oman
 #          Use ['*'] for all ME targets (global USG / regional scope).
 # ────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+# DEAD-HANDLE PRUNE -- July 23 2026
+# ═══════════════════════════════════════════════════════════════════════
+# 9 of 14 handles removed after a live ME scan returned HTTP 400 for each.
+#
+# WHAT DIED MATTERS HERE MORE THAN ELSEWHERE:
+#   * The ENTIRE Israeli official layer -- idf, netanyahu, israelmfa.
+#   * CENTCOM -- the regional combatant command.
+#   * Iran International -- the only Persian-language opposition source.
+#   * osintdefender -- a named anchor venue in the RUMINT spec.
+# For a backend whose primary job is the Iran-Israel theatre, that is the
+# whole national-source layer for both principals.
+#
+# Removed:
+#   centcom.govmirrors.com
+#   idf.govmirrors.com
+#   iranintl.bsky.social
+#   israelmfa.govmirrors.com
+#   netanyahu.govmirrors.com
+#   osintdefender.bsky.social
+#   potus.govmirrors.com
+#   secdef.govmirrors.com
+#   secrubio.govmirrors.com
+#
+# STILL ALIVE: state-department.bsky.social, realdonaldtrump.govmirrors.com,
+#   statedept.govmirrors.com, wartranslated.bsky.social, almonitor.bsky.social
+#
+# The file's own header said "handles that 404 in production should be
+# commented out, not silently dropped, so the next session can decide" --
+# this is that decision, made from a live scan rather than a guess. NOT
+# replaced with invented handles: ~64% of this roster failed.
+# ═══════════════════════════════════════════════════════════════════════
 BLUESKY_ACCOUNTS_ME = [
     # ── US Government — native Bluesky (global scope) ───────────
     ('state-department.bsky.social',    1.0, ['*'],
@@ -62,33 +94,17 @@ BLUESKY_ACCOUNTS_ME = [
     # ── US Government — govmirrors.com (X / Truth Social sourced) ──
     # Trump Truth Social mirroring is critical for ME — his posts on
     # Iran negotiations, Hormuz, Gaza, Lebanon are primary US signals.
-    ('potus.govmirrors.com',            1.2, ['*'],
-        'POTUS (X mirror) — White House executive statements'),
     ('realdonaldtrump.govmirrors.com',  1.2, ['*'],
         'Trump Truth Social (X mirror) — Iran/Israel/Lebanon/Hormuz statements; PRIMARY US signal source'),
-    ('secdef.govmirrors.com',           1.1, ['*'],
-        'US SecDef (X mirror) — CENTCOM posture, deployment signals to ME'),
-    ('secrubio.govmirrors.com',         1.15, ['*'],
-        'SecState Rubio (X mirror) — Iran hawkish line, Israel relations'),
     ('statedept.govmirrors.com',        0.9, ['*'],
         'StateDept (X mirror) — redundant with native, kept as backup'),
 
     # ── Regional Combatant Commands ─────────────────────────────
-    ('centcom.govmirrors.com',          1.05, ['*'],
-        'US CENTCOM (X mirror) — ME military posture, Red Sea, Iraq, Syria'),
 
     # ── Israeli Government / IDF (X mirrors) ────────────────────
     # Most likely valid based on naming conventions; comment out on 404
-    ('idf.govmirrors.com',              1.1, ['israel', 'lebanon', 'iran', 'syria', 'yemen'],
-        'IDF official (X mirror) — Israeli military operations across ME'),
-    ('netanyahu.govmirrors.com',        1.2, ['israel', 'iran', 'lebanon', 'syria'],
-        'Netanyahu (X mirror) — Israeli PM strategic statements'),
-    ('israelmfa.govmirrors.com',        1.0, ['israel', 'iran', 'lebanon'],
-        'Israel MFA (X mirror) — Israeli foreign ministry'),
 
     # ── OSINT aggregators (global, high signal) ─────────────────
-    ('osintdefender.bsky.social',       0.9, ['*'],
-        'OSINT Defender — global conflict monitoring, ME strikes/operations'),
     ('wartranslated.bsky.social',       0.8, ['*'],
         'WarTranslated — global military translation, often ME content'),
 
@@ -96,8 +112,6 @@ BLUESKY_ACCOUNTS_ME = [
     # Conservative additions; expand once we see what works in production.
     # NOTE: Native Bluesky ME presence is sparse — these are best-guesses
     # based on common naming patterns. 404s will appear in logs.
-    ('iranintl.bsky.social',            0.95, ['iran', 'lebanon', 'iraq', 'syria'],
-        'Iran International — Persian-language opposition outlet'),
 
     # ── Lebanese / Levant analytical ────────────────────────────
     # If you find native Bluesky handles for L'Orient Today, Naharnet,

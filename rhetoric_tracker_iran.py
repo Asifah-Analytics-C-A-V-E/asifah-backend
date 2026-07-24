@@ -107,6 +107,17 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('U
 NEWSAPI_KEY         = os.environ.get('NEWSAPI_KEY')
 GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 
+# ── Shared GDELT gateway (Jul 23 2026) ────────────────────────────────
+# Iran runs the widest ME language sweep (eng/ara/fas). Its own comments note
+# "GDELT Farsi errors under load" -- the load being the rest of this backend
+# calling GDELT at the same time. The gateway serialises them.
+try:
+    from gdelt_gateway import gdelt_fetch as _gw_fetch
+    _GDELT_GATEWAY = True
+except ImportError:
+    print("[Iran Rhetoric] gdelt_gateway not available -- using direct GDELT calls")
+    _GDELT_GATEWAY = False
+
 try:
     from telegram_signals import fetch_telegram_signals_iran
     TELEGRAM_AVAILABLE = True
@@ -2672,6 +2683,24 @@ def fetch_rhetoric_articles(days=3):
     for lang, queries in gdelt_queries.items():
         for query in queries:
             try:
+                if _GDELT_GATEWAY:
+                    # Gateway owns retry, pacing and timeout. Iran already used
+                    # a generous 45s here -- the problem was never this call's
+                    # patience, it was a dozen other callers racing it.
+                    for art in _gw_fetch(query, language=lang,
+                                         timespan=f'{days}d', maxrecords=25,
+                                         label=f'iran/{lang}'):
+                        articles.append({
+                            'title': art.get('title', ''),
+                            'url': art.get('url', ''),
+                            'published': art.get('published', ''),
+                            'description': art.get('title', ''),
+                            'source': f'GDELT ({lang})',
+                            'weight': 0.9,
+                        })
+                        gdelt_count += 1
+                    continue
+
                 params = {
                     'query': query, 'mode': 'artlist', 'maxrecords': 25,
                     'timespan': f'{days}d', 'format': 'json', 'sourcelang': lang,

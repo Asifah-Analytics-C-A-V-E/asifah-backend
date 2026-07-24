@@ -4864,8 +4864,38 @@ def fetch_newsapi_articles(query, days=7):
     except Exception:
         return []
 
+# ── Shared GDELT gateway (Jul 23 2026) ────────────────────────────────
+try:
+    from gdelt_gateway import gdelt_fetch as _gw_fetch
+    _GDELT_GATEWAY = True
+except ImportError:
+    print("[ME Backend] gdelt_gateway not available -- using direct GDELT calls")
+    _GDELT_GATEWAY = False
+
+
 def fetch_gdelt_articles(query, days=7, language='eng'):
-    """Fetch articles from GDELT"""
+    """Fetch articles from GDELT -- routed through the shared gateway.
+
+    Note this function previously swallowed every failure silently
+    (`except Exception: return []` with no logging), which is why ME logs
+    showed GDELT errors from the trackers but never from here. The gateway
+    logs what actually happened.
+    """
+    if _GDELT_GATEWAY:
+        _lang_map_gw = {'eng': 'en', 'ara': 'ar', 'heb': 'he', 'fas': 'fa'}
+        _q = f"({query})" if ' OR ' in query else query
+        raw = _gw_fetch(_q, language=language, timespan=f'{days}d',
+                        maxrecords=75, label=f'me/{language}')
+        return [{
+            'title':       a.get('title', ''),
+            'description': a.get('title', ''),
+            'url':         a.get('url', ''),
+            'publishedAt': a.get('published', ''),
+            'source':      {'name': a.get('source') or 'GDELT'},
+            'content':     a.get('title', ''),
+            'language':    _lang_map_gw.get(language, 'en'),
+        } for a in raw]
+
     try:
         wrapped_query = f"({query})" if ' OR ' in query else query
         
