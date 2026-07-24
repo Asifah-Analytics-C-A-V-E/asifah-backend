@@ -274,8 +274,9 @@ REGIONAL_THEATRES = {
         'icon': '🌍',
         'order': 4,
         'actors': ['nigeria', 'somalia', 'mali', 'niger', 'burkina_faso', 'drc',
-                   'sudan', 'libya', 'ethiopia', 'kenya', 'djibouti',
-                   'central_african_republic', 'wagner_africa'],
+                   'sudan', 'south_sudan', 'libya', 'ethiopia', 'kenya', 'djibouti',
+                   'central_african_republic', 'chad', 'mozambique', 'madagascar',
+                   'equatorial_guinea', 'guinea', 'wagner_africa'],
         'description': 'AFRICOM area — Sahel junta belt, Horn of Africa, Lake Chad Basin, Great Lakes (DRC/Rwanda), Sudan civil war, Wagner/Africa Corps footprint'
     },
     'western_hemisphere': {
@@ -472,7 +473,8 @@ MILITARY_ACTORS = {
             'medical relief ship', 'medical treatment facility ship',
             # Pandemic / disease surveillance signals (catches the convergence)
             'ebola outbreak', 'ebola surge', 'ebola cases rising',
-            'ebola response military', 'ebola sudan', 'ebola drc', 'ebola uganda',
+            'ebola response military', 'sudan virus disease', 'sudan ebolavirus',
+            'ebola drc', 'ebola uganda',
             'marburg outbreak', 'marburg virus', 'marburg cases',
             'lassa fever outbreak', 'mpox outbreak', 'mpox cases surge',
             'cholera outbreak africa', 'cholera surge',
@@ -2976,10 +2978,76 @@ MILITARY_ACTORS = {
             'darfur ethnic cleansing 2024', 'darfur masalit massacre',
             'sudan starvation weapon', 'ipc phase 5 sudan',
             'famine declared sudan', 'zamzam famine',
+            # ── Jul 2026 refresh: Kordofan front is now the critical frontline ──
+            'el obeid', 'el-obeid', 'el obeid siege', 'kordofan offensive',
+            'north kordofan military', 'bara kordofan',
+            # Chad-border offensive (Zaghawa villages, cross-border strikes)
+            'um baru', 'tine karnoi', 'zaghawa villages',
+            'rsf chad incursion', 'rsf cross-border chad',
+            # Libya / Haftar tri-border (Jun 2025+)
+            'haftar sudan', 'libya sudan border', 'tri-border sudan',
+            'sudan libya egypt border', 'sahara supply lines sudan',
+            # RSF parallel government + defection wave
+            'rsf parallel government', 'tasis sudan', 'tasis alliance',
+            'nyala government rsf', 'rsf defections', 'sudan shield forces',
+            'abu aqla kaikal',
+            # Drone-war escalation
+            'port sudan drone', 'port sudan drone strike', 'rsf drone strike',
+            'nyala airport strike', 'sudan drone attack',
+            # Peace track (Boulos plan) — de-escalation watch
+            'boulos sudan', 'sudan peace plan', 'sudan truce',
+            'sudan ceasefire talks', 'quad sudan mediation',
+            # Russia state-level plug (base + arms + mining)
+            'sudan russia arms deal', 'russia sudan air defense',
+            'russia sudan mining', 'port sudan agreement',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=sudan+military+OR+sudan+civil+war+OR+rsf+sudan&hl=en&gl=US&ceid=US:en',
             'https://news.google.com/rss/search?q=el+fasher+OR+wad+madani+OR+darfur+rsf&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    # ── South Sudan (Jul 2026): lean coup/collapse-watch actor. Not a
+    # two-army war like Sudan — an elite-fracture petro-state on the brink
+    # (Machar detained, pipeline revenue collapsed, elections Dec 2026).
+    # Also carries the Sudan-war coupling: SPLM-N/RSF operate from South
+    # Sudanese territory into Blue Nile. Full rhetoric-tracker treatment
+    # deferred to its own build (Cuba elite-fracture primitives). ──
+    'south_sudan': {
+        'name': 'South Sudan',
+        'flag': '\U0001f1f8\U0001f1f8',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.6,
+        'feeds_into': ['humanitarian_cascade', 'regional_tension'],
+        'keywords': [
+            # State forces + factions
+            'sspdf', 'south sudan army', 'south sudan military',
+            'splm-io', 'splm in opposition', 'white army south sudan',
+            'white army nuer', 'south sudan clashes',
+            # Kiir / Machar elite fracture
+            'salva kiir', 'riek machar', 'machar house arrest',
+            'machar treason trial', 'kiir machar', 'south sudan coup',
+            # Flashpoints
+            'nasir upper nile', 'nasir south sudan', 'ulang county',
+            'upper nile clashes', 'malakal', 'jonglei violence',
+            'murle pibor', 'juba military', 'juba south sudan',
+            # External forces
+            'unmiss', 'ugandan troops south sudan', 'updf juba',
+            'uganda special forces juba',
+            # Sudan-war coupling (the corridor)
+            'splm-n south sudan', 'blue nile south sudan',
+            'rsf south sudan border', 'sudan south sudan border clash',
+            'abyei clashes', 'heglig',
+            # Petro-state strain
+            'south sudan oil pipeline', 'petrodar pipeline',
+            'south sudan pipeline attack', 'south sudan oil force majeure',
+            # Transition watch
+            'south sudan elections', 'south sudan transition',
+            'south sudan civil war',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=south+sudan+military+OR+kiir+machar+OR+white+army&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -3580,6 +3648,10 @@ MILITARY_ACTORS = {
             # Equatorial Guinea / new theater rumors
             'wagner equatorial guinea', 'wagner gabon',
             'wagner togo', 'wagner ivory coast tension',
+            # Port Sudan hub + Sudan state-level plug (Jul 2026)
+            'africa corps sudan', 'africa corps port sudan',
+            'russia port sudan logistics', 'tobruk africa corps',
+            'africa corps supply route',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=wagner+africa+OR+africa+corps+OR+russia+mercenaries+africa&hl=en&gl=US&ceid=US:en',
@@ -4340,6 +4412,14 @@ LOCATION_MULTIPLIERS = {
     'el-fasher':                3.0,
     'el fashir':                3.0,
     'nyala':                    2.0,
+    'el obeid':                 2.5,   # Critical frontline: RSF siege (2026)
+    'el-obeid':                 2.5,
+    'um baru':                  2.0,   # Chad-border offensive corridor
+    # South Sudan (Jul 2026)
+    'juba military':            2.0,
+    'juba south sudan':         2.0,
+    'nasir upper nile':         2.2,   # White Army / SSPDF flashpoint
+    'malakal':                  2.0,
     # Libya
     'tripoli libya':            2.0,
     'benghazi':                 2.0,
@@ -6158,8 +6238,34 @@ def fetch_all_defense_rss():
 # DATA FETCHING — GDELT
 # ========================================
 
+# ── Shared GDELT gateway (Jul 24 2026) ────────────────────────────────
+# Standing rule: route every GDELT caller through the shared gateway
+# (one serialised, paced lane per process with its own circuit breaker
+# and response cache). Original direct call preserved as the fallback.
+try:
+    from gdelt_gateway import gdelt_fetch as _gw_gdelt_fetch
+    _GDELT_GATEWAY = True
+except ImportError:
+    print("[Military GDELT] gdelt_gateway not available -- using direct GDELT calls")
+    _GDELT_GATEWAY = False
+
+
 def fetch_gdelt_military(query, days=7, language='eng'):
     """Fetch military-related articles from GDELT"""
+    if _GDELT_GATEWAY:
+        # Adapt the gateway's canonical shape into this file's own dialect
+        # (source is a DICT, publishedAt, content, feed_type='gdelt').
+        raw = _gw_gdelt_fetch(query, language=language, timespan=f'{days}d',
+                              maxrecords=50, label=f'military/{language}')
+        return [{
+            'title':       a.get('title', ''),
+            'description': a.get('title', ''),
+            'url':         a.get('url', ''),
+            'publishedAt': a.get('published', ''),
+            'source':      {'name': a.get('source') or 'GDELT'},
+            'content':     a.get('title', ''),
+            'feed_type':   'gdelt'
+        } for a in raw]
     try:
         params = {
             'query': query,
@@ -6366,6 +6472,11 @@ def fetch_all_gdelt_military(days=7):
         'Cyprus evacuation Iran',
         'Cyprus flights cancelled war',
         'UK forces Cyprus reinforcement',
+        # --- Sudan civil war + South Sudan (Jul 2026) ---
+        'Sudan RSF SAF offensive',
+        'El Obeid siege Kordofan',
+        'Sudan drone strike Port Sudan',
+        'South Sudan clashes White Army',
     ]
 
     hebrew_queries = [
@@ -6454,6 +6565,9 @@ def fetch_all_gdelt_military(days=7):
         'إسرائيل صاروخ باليستي إيراني هجوم',
         'القبة الحديدية تل أبيب صاروخ',
         'إسرائيل حرب إيران قصف ضحايا',
+        # --- Sudan civil war (Jul 2026) ---
+        'الدعم السريع الجيش السوداني',
+        'حصار الأبيض كردفان',
     ]
 
     farsi_queries = [
