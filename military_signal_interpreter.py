@@ -93,7 +93,11 @@ REGIONAL_BASELINE_TEMPLATES = {
         'display': 'Africa / AFRICOM',
         'baseline': (
             'AFRICOM AOR baseline. Sudan civil war (SAF vs RSF) at sustained high-intensity '
-            'tempo with IPC Phase 5 famine localized in El Fasher and Zamzam. Sahel jihadist '
+            'tempo: El Fasher under RSF control since Oct 2025, the RSF siege of El Obeid '
+            'in Kordofan now the critical frontline, famine spread beyond Darfur, and a '
+            'US-brokered peace track (Boulos plan) live but unresolved. South Sudan '
+            'teeters on renewed civil war with Machar detained and pipeline oil revenue '
+            'collapsed. Sahel jihadist '
             'pressure (JNIM, ISGS) elevated across Mali, Burkina Faso, and Niger, with AES '
             'confederation consolidating against ECOWAS. Eastern DRC under M23/AFC pressure '
             'following Goma fall (Jan 2025); Romanian and Wagner/Africa Corps mercenary '
@@ -104,7 +108,7 @@ REGIONAL_BASELINE_TEMPLATES = {
             'creates cross-border military quarantine zones. No theatre-wide escalation '
             'signal beyond ongoing baseline humanitarian and security pressures.'
         ),
-        'context_actors': ['nigeria', 'somalia', 'sudan', 'libya', 'mali',
+        'context_actors': ['nigeria', 'somalia', 'sudan', 'south_sudan', 'libya', 'mali',
                            'djibouti', 'drc', 'wagner_africa', 'niger',
                            'burkina_faso', 'ethiopia', 'kenya',
                            'central_african_republic', 'chad', 'mozambique',
@@ -196,6 +200,7 @@ COUNTRY_DISPLAY = {
     'burkina_faso':             'Burkina Faso',
     'drc':                      'the DR Congo',
     'sudan':                    'Sudan',
+    'south_sudan':              'South Sudan',
     'libya':                    'Libya',
     'ethiopia':                 'Ethiopia',
     'kenya':                    'Kenya',
@@ -611,7 +616,8 @@ def build_evacuation_prose(scan_result):
 # Emitted as category 'mil_warlord_instability' into top_signals so the regional
 # BLUF and GPI can compose it with the humanitarian/health axes.
 WARLORD_INSTABILITY_ACTORS = {
-    'sudan':                    'RSF / SAF (Janjaweed lineage) -- Darfur, El Fasher siege',
+    'sudan':                    'RSF / SAF (Janjaweed lineage) -- Darfur, Kordofan / El Obeid siege',
+    'south_sudan':              'White Army / SSPDF factional split (Kiir-Machar) -- Upper Nile & Jonglei',
     'drc':                      'CODECO / ADF / Wazalendo / M23 -- Ituri & Kivus (Ebola-zone overlap)',
     'central_african_republic': 'CPC coalition (ex-Seleka / anti-balaka / UPC / 3R)',
     'mali':                     'JNIM / ISGS + Dozo & ethnic militias',
