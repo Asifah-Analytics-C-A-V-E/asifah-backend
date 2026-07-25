@@ -1,7 +1,7 @@
 """
 spoke_wheel_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.0.0 -- July 24, 2026
+v1.0.2 -- July 25, 2026
 
 One reader for the whole spoke-and-wheel architecture. Give it a hub and it
 returns that hub's rim; give it a country list and it returns what those
@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.0.0'
+__version__ = '1.0.2'
 
 # ============================================================
 # CONFIG
@@ -330,6 +330,44 @@ def _infer_hubs_from_payload(fp):
 # ============================================================
 # RESOLUTION  (the three-convention normalizer)
 # ============================================================
+def _extract_hub_detail(fp, hub):
+    """Pull the hub-SPECIFIC sub-object out of a hub-agnostic fingerprint.
+
+    A canonical `crosstheater:{country}:fingerprint` often carries per-hub
+    blocks with their OWN level:
+
+        somalia -> {'level': 5, 'turkey_spoke': {'level': 2, 'note': ...},
+                                'russia_spoke': {'level': 1, ...}}
+        sudan   -> {'level': 4, 'russia_plug':  {'level': 0, ...}}
+
+    Without this, an emanating read reports the COUNTRY's theatre level as its
+    hub-touch level -- Somalia at L5 would read as a blazing Turkey spoke when
+    its actual Turkey level is 2. Wrong number, confidently displayed, which is
+    worse than no number.
+
+    Returns a merged dict (sub-object level wins) or None when no hub-specific
+    block exists.
+    """
+    if not isinstance(fp, dict):
+        return None
+    candidates = ['%s_spoke' % hub, '%s_plug' % hub, '%s_axis' % hub, '%s_touch' % hub]
+    if hub == 'israel':
+        candidates.append('israel_somaliland')     # Somalia's naming
+    for name in candidates:
+        sub = fp.get(name)
+        if isinstance(sub, dict) and sub:
+            merged = dict(fp)
+            merged['level'] = sub.get('level', 0)
+            merged['hub_block'] = name
+            note = sub.get('note') or sub.get('top_signal') or ''
+            if note:
+                merged['top_signal'] = note
+            if 'active' in sub:
+                merged['hub_active'] = bool(sub.get('active'))
+            return merged
+    return None
+
+
 def _resolve_spoke(hub, country, collective=None):
     """Find (hub, country) across all three conventions. First hit wins.
 
@@ -349,6 +387,11 @@ def _resolve_spoke(hub, country, collective=None):
 
     fp = _redis_get_json('crosstheater:%s:fingerprint' % country)
     if isinstance(fp, dict) and fp:
+        # Prefer the hub-specific block when the fingerprint carries one --
+        # otherwise the country's theatre level masquerades as its hub level.
+        detail = _extract_hub_detail(fp, hub)
+        if detail is not None:
+            return detail, 'canonical_hub_block'
         return fp, 'canonical'
 
     if collective is None:
@@ -574,7 +617,7 @@ def _dormant_note(wheel, hub):
 
 
 def read_emanating(countries, exclude_hubs=(), freshness_hours=DEFAULT_FRESHNESS_HOURS,
-                   lit_threshold=DEFAULT_LIT_THRESHOLD):
+                   lit_threshold=DEFAULT_LIT_THRESHOLD, include_silent=False):
     """OUTBOUND read: which FOREIGN hubs are these countries feeding?
 
     This is the half that rides to the GPI. A region owns certain hubs
@@ -596,8 +639,12 @@ def read_emanating(countries, exclude_hubs=(), freshness_hours=DEFAULT_FRESHNESS
             for country in sorted(spokes & wanted):
                 fp, source = _resolve_spoke(hub, country, collective=collective)
                 st = _spoke_state(fp, source, freshness_hours, lit_threshold)
-                if st['state'] == 'not_reporting':
-                    continue          # do not export gaps as global signal
+                if st['state'] == 'not_reporting' and not include_silent:
+                    # EXPORT path: a gap must never ride to the GPI as signal.
+                    # DISPLAY path (include_silent=True) keeps it, because a
+                    # known relationship that has gone quiet is exactly what the
+                    # dormant panel exists to show.
+                    continue
                 fp = fp or {}
                 out.append({
                     'country': country, 'display': _display(country),
@@ -647,13 +694,36 @@ def build_convergence_panel(resident_hubs, local_countries=(), extra_spokes=None
             if w.get('converged'):
                 panel['any_converged'] = True
 
-        panel['emanating'] = read_emanating(
+        # Read WITH silent entries, then split. `emanating` is the export set
+        # (rides to the GPI); `emanating_silent` is display-only, so a region
+        # with every spoke quiet still renders a dormant panel instead of
+        # vanishing. A card that disappears when nothing is happening cannot
+        # distinguish "quiet" from "broken" for the reader either.
+        _all_eman = read_emanating(
             local_countries, exclude_hubs=resident_hubs,
-            freshness_hours=freshness_hours, lit_threshold=lit_threshold)
+            freshness_hours=freshness_hours, lit_threshold=lit_threshold,
+            include_silent=True)
+        panel['emanating'] = [e for e in _all_eman if e['state'] != 'not_reporting']
+        panel['emanating_silent'] = [e for e in _all_eman if e['state'] == 'not_reporting']
 
         if not resident_hubs:
             panel['subtitle'] = ('No resident hub in this region -- every wheel read here '
                                  'is outbound. Spokes feed hubs that live elsewhere.')
+            lit_n = sum(1 for e in panel['emanating'] if e['state'] == 'lit')
+            if lit_n >= 2:
+                panel['dormant_note'] = ''
+            elif panel['emanating'] or panel['emanating_silent']:
+                panel['dormant_note'] = (
+                    'No multi-hub convergence this cycle. Each spoke rides outward '
+                    'independently; convergence fires only when two or more light at '
+                    'once. Spokes listed as not reporting are silent, not quiet -- '
+                    'they are not emitting, which is a coverage gap rather than a '
+                    'finding about the theatre.')
+            else:
+                panel['dormant_note'] = (
+                    'No outbound spoke relationships discoverable this cycle. Either no '
+                    'tracker in this region emits hub-affinity data yet, or the '
+                    'keyspace is unreadable.')
         else:
             names = ' \u00b7 '.join(_display(h) for h in resident_hubs)
             panel['subtitle'] = '%s hubbed here \u2014 inbound rim reads' % names
