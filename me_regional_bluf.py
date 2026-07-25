@@ -1,7 +1,7 @@
 """
 me_regional_bluf.py
 Asifah Analytics -- ME Backend Module
-v2.0.0  (Apr 26 2026)
+v2.1.0  (Apr 26 2026)
 
 ME Regional BLUF (Bottom Line Up Front) Engine.
 
@@ -663,6 +663,163 @@ def _legacy_get_theatre_level(data, theatre):
             return _comp_map.get(str(data.get('composite_level', 'low')).lower(), 0)
         return data.get('theatre_escalation_level',
                data.get('theatre_level', 0))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SHAPE-DERIVED FIELD READERS  (ported from europe_regional_bluf v3.5.x)
+# ══════════════════════════════════════════════════════════════════════
+# Trackers disagree on field names for the same concepts. Reading one name
+# renders a blank banner for every tracker that chose differently -- which
+# looks like a Redis failure and is really a vocabulary mismatch. Oman is the
+# ME case: a dual-axis stability anchor with NO theatre_score, NO alert_level,
+# NO theatre_label, and articles under `articles_scanned`.
+def _extract_article_count(raw):
+    """Article count across every field name in the wild."""
+    if not isinstance(raw, dict):
+        return 0
+    for field in ('article_count', 'total_articles', 'articles_scanned',
+                  'articles_analyzed', 'articles_count', 'total_signals'):
+        v = raw.get(field)
+        if isinstance(v, int) and v > 0:
+            return v
+    for holder in ('articles_by_source', 'source_counts'):
+        d = raw.get(holder)
+        if isinstance(d, dict):
+            tot = sum(v for v in d.values() if isinstance(v, int))
+            if tot:
+                return tot
+    arts = raw.get('articles')
+    if isinstance(arts, list):
+        return len(arts)
+    return 0
+
+
+_BAND_TO_LEVEL = {
+    'quiet': 0, 'off': 0, 'none': 0, 'dormant': 0, 'baseline': 0, 'normal': 0,
+    'low': 0, 'stable': 0, 'holding': 0, 'alignment': 0, 'unknown': 0,
+    'inactive': 0,
+    'watch': 1, 'rhetorical': 1, 'tilting': 1, 'drifting': 1, 'friction': 1,
+    'approaching': 1,
+    'contested': 2, 'simmering': 2, 'elevated': 2, 'warning': 2, 'strained': 2,
+    'high': 3, 'active': 3, 'fracturing': 3, 'eroding': 3,
+    'acute': 4, 'severe': 4, 'critical': 4, 'breached': 4, 'rupture': 4,
+    'surge': 5, 'conflict': 5, 'war': 5,
+}
+
+_LEVEL_FIELDS_INT   = ('level', 'escalation_level', 'rung', 'threat_level')
+_LEVEL_FIELDS_BAND  = ('band', 'threat_band', 'posture', 'state',
+                       'relationship', 'class', 'tier', 'mode')
+_LEVEL_FIELDS_STAGE = ('stage', 'chain_stage')
+
+_NON_VECTOR_KEYS = {
+    'so_what', 'red_lines', 'green_lines', 'diplomatic_track', 'delta',
+    'interpretation', 'articles_by_source', 'source_counts', 'actor_summaries',
+    'actors', 'rumint', 'dyad_read', 'cross_theater_fingerprints',
+    'cross_theater_signals', 'cross_theater_boosts', 'contradiction_flags',
+    'corpus_health', 'compound_layers', 'compound_convergence', 'levels',
+    'spoke_reads', 'wheel_convergence', 'patron_subtags', 'raw',
+}
+
+# Calendar / clock / window vectors are MULTIPLIERS, never standalone signals
+# (Black Swan master plan, canonical). They may render as pills but must not
+# lift a theatre's level on their own.
+_MULTIPLIER_SUFFIXES = ('_clock', '_calendar', '_window', '_season')
+_MULTIPLIER_NAMES = {'election_clock', 'referendum_clock', 'winter_calendar',
+                     'ramadan_calendar', 'anniversary_window'}
+
+
+def _is_multiplier_vector(name):
+    n = str(name).lower()
+    return n in _MULTIPLIER_NAMES or n.endswith(_MULTIPLIER_SUFFIXES)
+
+
+def _level_from_vector_obj(v):
+    """Read a vector object's level across every dialect. None if it has none."""
+    if not isinstance(v, dict):
+        return None
+    for f in _LEVEL_FIELDS_INT:
+        x = v.get(f)
+        if isinstance(x, bool):
+            continue
+        if isinstance(x, (int, float)):
+            return max(0, min(5, int(x)))
+    candidates = []
+    for f in _LEVEL_FIELDS_BAND:
+        x = v.get(f)
+        if isinstance(x, str) and x.strip():
+            mapped = _BAND_TO_LEVEL.get(x.strip().lower())
+            if mapped is not None:
+                candidates.append(mapped)
+    for f in _LEVEL_FIELDS_STAGE:
+        x = v.get(f)
+        if isinstance(x, (int, float)) and not isinstance(x, bool):
+            candidates.append(max(0, min(5, int(x))))
+        elif isinstance(x, str):
+            digits = ''.join(c for c in x if c.isdigit())
+            if digits:
+                candidates.append(max(0, min(5, int(digits[0]))))
+    act = v.get('active')
+    if isinstance(act, bool):
+        candidates.append(2 if act else 0)
+    return max(candidates) if candidates else None
+
+
+def _extract_vector_levels(raw):
+    """Vector levels from a tidy dict, else derived from payload shape."""
+    if not isinstance(raw, dict):
+        return {}
+    vl = raw.get('vector_levels')
+    if isinstance(vl, dict) and vl:
+        return vl
+    derived = {}
+    for k, v in raw.items():
+        if k in _NON_VECTOR_KEYS or not isinstance(v, dict):
+            continue
+        lvl = _level_from_vector_obj(v)
+        if lvl is not None:
+            derived[k] = lvl
+    if derived:
+        return derived
+
+    # LAST RESORT -- actor-model trackers. Oman, Yemen and the Gulf trio carry
+    # no top-level vector objects at all; their reads live inside `actors`, one
+    # escalation_level per actor. For those trackers the actors ARE the vectors,
+    # so decompose rather than reporting a tracker with nothing to say. Only
+    # reached when no other shape yielded anything.
+    actors = raw.get('actors')
+    if isinstance(actors, dict):
+        for k, v in actors.items():
+            if not isinstance(v, dict):
+                continue
+            lvl = _level_from_vector_obj(v)
+            if lvl is not None:
+                derived[k] = lvl
+    return derived
+
+
+def _peak_signal_level(vector_levels):
+    """Highest level among SIGNAL vectors, excluding calendar multipliers."""
+    sig = {k: v for k, v in (vector_levels or {}).items()
+           if not _is_multiplier_vector(k)}
+    return max(sig.values()) if sig else 0
+
+
+def _extract_display_label(raw):
+    """A tracker's own headline label, across dialects.
+
+    Oman (dual-axis stability anchor) emits `banner_label` / `banner_mode`
+    rather than `theatre_label`, so the hub rendered its default '---' even on
+    a clean 200. Returns '' when the tracker publishes none, letting the
+    canonical ladder supply the word.
+    """
+    if not isinstance(raw, dict):
+        return ''
+    for f in ('theatre_label', 'banner_label', 'scenario', 'alert_label',
+              'composite_label', 'banner_mode', 'alert_level'):
+        v = raw.get(f)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ''
 
 
 def _legacy_get_theatre_score(data, theatre):
@@ -1971,8 +2128,11 @@ def build_regional_bluf(force=False):
             # shipped trackers often don't expose one yet (Oman), which is how
             # they end up invisible or blank on the regional page.
             'display':          THEATRE_DISPLAY_NAMES.get(t, t.replace('_', ' ').title()),
-            'article_count':    (data.get('raw', {}) or {}).get('article_count', 0),
-            'vector_levels':    (data.get('raw', {}) or {}).get('vector_levels', {}) or {},
+            'article_count':    _extract_article_count(data.get('raw', {}) or {}),
+            'vector_levels':    _extract_vector_levels(data.get('raw', {}) or {}),
+            # Oman and the Gulf trio publish their own headline wording; use it
+            # when present so the hub does not fall back to a bare '---'.
+            'tracker_label':    _extract_display_label(data.get('raw', {}) or {}),
             # v2.0 NEW dual-axis fields:
             'threat_level':     threat_lvl,
             'influence_level':  infl_lvl,

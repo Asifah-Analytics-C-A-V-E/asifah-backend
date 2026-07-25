@@ -1099,11 +1099,32 @@ def register_oman_rhetoric_routes(app):
         if not cached:
             return jsonify({'success': False, 'error': 'No data yet'}), 404
         actors = cached.get('actors', {})
+        _threat = cached.get('threat_level', 0)
+        _infl   = cached.get('influence_level', 0)
         return jsonify({
             'success':                True,
-            'threat_level':           cached.get('threat_level', 0),
-            'influence_level':        cached.get('influence_level', 0),
+            'threat_level':           _threat,
+            'influence_level':        _infl,
             'banner_mode':            cached.get('banner_mode', 'QUIET'),
+            # ── Hub-render fields (Jul 25 2026) ────────────────────────────
+            # The ME regional page rendered "L0 --- / -- articles" because this
+            # endpoint published none of the fields a tracker banner needs.
+            # Oman is dual-axis: the DOMINANT of threat/influence is the level
+            # a single badge should show, since a quiet-threat/active-mediation
+            # cycle is not a baseline cycle.
+            'theatre_level':          max(int(_threat or 0), int(_infl or 0)),
+            'theatre_escalation_level': max(int(_threat or 0), int(_infl or 0)),
+            'theatre_label':          cached.get('banner_label')
+                                      or cached.get('banner_mode', 'Quiet'),
+            'theatre_color':          cached.get('banner_color', '#0ea5e9'),
+            'article_count':          cached.get('articles_scanned',
+                                                 cached.get('total_articles', 0)),
+            'total_articles':         cached.get('total_articles', 0),
+            'vector_levels': {
+                k: (v or {}).get('escalation_level', 0)
+                for k, v in (actors or {}).items()
+                if isinstance(v, dict)
+            },
             'mediation_active':       actors.get('mediation_activity',       {}).get('escalation_level', 0) >= 3,
             'salalah_under_threat':   actors.get('external_threats_inbound', {}).get('escalation_level', 0) >= 3,
             'succession_watch_active': actors.get('succession_watch',         {}).get('escalation_level', 0) >= 2,
