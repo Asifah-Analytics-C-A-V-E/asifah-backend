@@ -142,6 +142,58 @@ LEVEL_CACHE_TTL = 12 * 3600
 # ══════════════════════════════════════════════════════════════════════
 # NARRATIVE DECAY ENGINE  (v3.7.0, Jul 25 2026)
 # ══════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════
+# GLOBAL CONVERGENCE PANEL  (spoke & wheel at GPI altitude)
+# ══════════════════════════════════════════════════════════════════════
+# Every regional BLUF reads the hubs resident in ITS region. The GPI is the
+# only altitude that reads them ALL AT ONCE -- which is where the question
+# "are several hubs activating their networks simultaneously?" can finally be
+# asked. A single hub converging is a regional finding; three converging in
+# the same cycle is a global one, and nothing below this layer can see it.
+#
+# Hubs are DISCOVERED, not listed: whatever the keyspace contains gets read,
+# so a hub that comes online later appears with no edit here.
+def _build_global_convergence_panel():
+    """Read every discoverable wheel. Never raises."""
+    if not _WHEEL_READER:
+        return None
+    try:
+        hubs = [h['hub'] for h in _discover_hubs()]
+        if not hubs:
+            return None
+        panel = _build_wheel_panel(
+            resident_hubs=hubs,
+            local_countries=[],      # emanating is a REGIONAL read, not a global one
+            region='global',
+        )
+        wheels = panel.get('resident_wheels', []) or []
+        converged = [w for w in wheels if w.get('converged')]
+        panel['converged_hubs'] = [w.get('hub') for w in converged]
+        panel['converged_count'] = len(converged)
+        panel['wheels_tracked'] = len(wheels)
+        panel['total_lit'] = sum(int(w.get('lit_count', 0) or 0) for w in wheels)
+        if len(converged) >= 2:
+            names = ', '.join(str(w.get('hub', '')).title() for w in converged)
+            panel['global_headline'] = (
+                '%d hubs are converging simultaneously (%s). Multiple networks '
+                'activating in the same cycle is a different read from any one '
+                'of them doing so alone -- it is the pattern that regional '
+                'altitude cannot see.' % (len(converged), names))
+        elif len(converged) == 1:
+            panel['global_headline'] = (
+                'One hub converging (%s). A single wheel activating is a '
+                'regional finding; it rides up on its own merits.'
+                % str(converged[0].get('hub', '')).title())
+        else:
+            panel['global_headline'] = ''
+        panel['subtitle'] = ('%d wheels tracked \u00b7 %d spokes lit'
+                             % (len(wheels), panel['total_lit']))
+        return panel
+    except Exception as e:
+        print(f"[GPI] Convergence panel failed (non-fatal): {str(e)[:140]}")
+        return None
+
+
 def _decay_int(v, default=0):
     """Local int coercion -- this module has _safe_level but no generic int
     helper, and priority is not a 0-5 level so _safe_level would clamp it."""
@@ -151,6 +203,16 @@ def _decay_int(v, default=0):
         return int(v)
     except Exception:
         return default
+
+
+# ── Shared spoke-and-wheel reader (v1.0.6, Jul 25 2026) ──────────────
+try:
+    from spoke_wheel_reader import (build_convergence_panel as _build_wheel_panel,
+                                    discover_hubs as _discover_hubs)
+    _WHEEL_READER = True
+except ImportError:
+    _WHEEL_READER = False
+    print("[GPI] spoke_wheel_reader not available -- convergence panel disabled")
 
 
 DECAY_STATE_KEY = 'gpi:narrative_decay'
@@ -3289,6 +3351,7 @@ def build_gpi(force=False):
                 'global_label':  'UNAVAILABLE',
                 'global_color':  '#6b7280',
                 'bluf':          'GPI unavailable -- no regional BLUFs reachable.',
+                'convergence_panel': None,
                 'narratives':    [],
                 'top_signals':   [],
                 'regional_cards': [],
@@ -3350,6 +3413,7 @@ def build_gpi(force=False):
             'global_color':    GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
             'bluf':            bluf_prose,
             'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
+            'convergence_panel': _build_global_convergence_panel(),
             'narratives':      narratives,
             'top_signals':     top_signals,
             # v3.2 (Jul 2026): theatre-grouped view -- countries with 2+ signals
