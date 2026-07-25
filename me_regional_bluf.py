@@ -32,6 +32,16 @@ import threading
 import requests
 from datetime import datetime, timezone
 
+# ── Shared spoke-and-wheel reader (v1.0.3, Jul 25 2026) ──────────────
+# Byte-identical across ALL backends -- gdelt_gateway.py pattern. Reads the
+# spoke/wheel keyspace straight from shared Redis; no cross-backend HTTP.
+try:
+    from spoke_wheel_reader import build_convergence_panel as _build_wheel_panel
+    _WHEEL_READER = True
+except ImportError:
+    _WHEEL_READER = False
+    print("[ME BLUF] spoke_wheel_reader not available -- convergence panel disabled")
+
 import os
 
 # ════════════════════════════════════════════════════════════════════
@@ -1834,6 +1844,43 @@ def _me_prose_v2_to_blocks(md):
     return blocks
 
 
+# ============================================================
+# CONVERGENCE PANEL  (spoke & wheel -- TWO resident hubs)
+# ============================================================
+# The Middle East HOSTS two hubs. Iran runs the large wheel (Yemen, Lebanon,
+# Iraq, Gaza proxies; Syria ruptured; Oman/Qatar mediation; Azerbaijan,
+# Armenia, Saudi friction). Israel runs a smaller one (Iran/Lebanon/Yemen
+# adversaries, Abraham-Accords normalisation track, the Azerbaijan axis, the
+# Somaliland recognition wildcard).
+#
+# Both read INBOUND across every backend -- Azerbaijan and Armenia sit on
+# Europe, Somalia on Africa -- because Upstash is shared.
+#
+# Meanwhile ME countries feed hubs that live ELSEWHERE: Syria's Turkey and
+# Russia touches, and eventually China/BRI. Those EMANATE out and belong to
+# the global read.
+#
+# NOT modelled here: IMEC vs BRI. Corridor competition is a route-and-chokepoint
+# contest, not a hub radiating to spokes -- forcing it into this panel would
+# misrepresent both. It needs its own component.
+RESIDENT_HUBS = ['iran', 'israel']
+
+
+def _build_convergence_panel():
+    """Bidirectional wheel read for the ME payload. Never raises."""
+    if not _WHEEL_READER:
+        return None
+    try:
+        return _build_wheel_panel(
+            resident_hubs=RESIDENT_HUBS,
+            local_countries=list(TRACKER_KEYS.keys()),
+            region='middle_east',
+        )
+    except Exception as e:
+        print(f"[ME BLUF] Convergence panel failed (non-fatal): {str(e)[:140]}")
+        return None
+
+
 def build_regional_bluf(force=False):
     """
     Build the ME regional BLUF. Reads all SEVEN caches, synthesizes,
@@ -1919,6 +1966,13 @@ def build_regional_bluf(force=False):
             'score':            scores[t],
             'flag':             data.get('flag', THEATRE_FLAGS.get(t, '')),
             'timestamp':        data.get('scanned_at', ''),
+            # v2.x Jul 25 2026 -- lets the hub page render a tracker banner
+            # WITHOUT calling that tracker's own /summary endpoint. Newly
+            # shipped trackers often don't expose one yet (Oman), which is how
+            # they end up invisible or blank on the regional page.
+            'display':          THEATRE_DISPLAY_NAMES.get(t, t.replace('_', ' ').title()),
+            'article_count':    (data.get('raw', {}) or {}).get('article_count', 0),
+            'vector_levels':    (data.get('raw', {}) or {}).get('vector_levels', {}) or {},
             # v2.0 NEW dual-axis fields:
             'threat_level':     threat_lvl,
             'influence_level':  infl_lvl,
@@ -1965,6 +2019,7 @@ def build_regional_bluf(force=False):
         'trackers_stale':    trackers_stale,    # B: served from last-known-good
         'trackers_missing':  trackers_missing,  # B: no live AND no last-known-good
         'picture_complete':  (len(trackers_missing) == 0),
+        'convergence_panel': _build_convergence_panel(),
         'theatre_summary':   theatre_summary,
         'generated_at':      datetime.now(timezone.utc).isoformat(),
         'version':           '2.2.0',  # bumped for prose_v2 + strike window awareness
