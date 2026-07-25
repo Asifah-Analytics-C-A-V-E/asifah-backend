@@ -1,8 +1,15 @@
 """
 global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
-v3.6.0 — May 23 2026 (AFRICA-READY + HUMANITARIAN SCAFFOLDING)
-(prior: v3.5.0 May 21 2026 ENRICHED OUTPUT EDITION; v3.4.x earlier; v2.0.0 April 2026 baseline)
+v3.7.0 — Jul 25 2026 (NARRATIVE DECAY)
+(prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
+
+NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
+said the same thing at the same level for weeks is a standing condition, not a
+topline -- and while it holds a headline slot, something moving cannot. Decay
+keys on MOVEMENT, never on a curated list: a genuine crisis moves and is never
+touched; a static tally yields. Applied at GPI ranking only -- regional BLUFs
+and country pages rank on their own terms.
 
 THE TOP OF THE ANALYTICAL PYRAMID.
 
@@ -132,6 +139,132 @@ LEVEL_CACHE_KEY = 'gpi:level:latest'
 LEVEL_CACHE_TTL = 12 * 3600
 
 # Synthesis tuning
+# ══════════════════════════════════════════════════════════════════════
+# NARRATIVE DECAY ENGINE  (v3.7.0, Jul 25 2026)
+# ══════════════════════════════════════════════════════════════════════
+def _decay_int(v, default=0):
+    """Local int coercion -- this module has _safe_level but no generic int
+    helper, and priority is not a 0-5 level so _safe_level would clamp it."""
+    try:
+        if isinstance(v, bool):
+            return default
+        return int(v)
+    except Exception:
+        return default
+
+
+DECAY_STATE_KEY = 'gpi:narrative_decay'
+DECAY_STATE_TTL = 45 * 24 * 3600      # 45d -- long enough to span a slow crisis
+
+# Scans run ~2x/day. Grace is generous on purpose: a real crisis should never
+# be decayed for having a quiet Tuesday.
+DECAY_GRACE_CYCLES = 6                # ~3 days at 12h cadence -- no penalty
+DECAY_STEPS = (                       # (unchanged_cycles_at_or_above, penalty)
+    (45, 6),                          # ~3+ weeks static -- yields the headline
+    (30, 4),                          # ~2+ weeks static
+    (16, 3),                          # ~1-2 weeks
+    (10, 2),                          # ~5 days
+    (7,  1),                          # ~3.5 days
+)
+DECAY_PRIORITY_FLOOR = 5              # never decay below this -- still visible
+DECAY_RESOLUTION_BONUS = 1            # extra penalty once a level has FALLEN
+
+
+def _decay_fingerprint(sig):
+    """Stable identity for a signal across scans.
+
+    Category + theatre + the opening of the long text. Deliberately NOT the
+    full text: prose that re-renders with a refreshed figure each cycle would
+    otherwise look like a brand-new signal forever and never decay.
+    """
+    try:
+        cat = str(sig.get('category', '') or '').lower()
+        th = str(sig.get('theatre', sig.get('region', '')) or '').lower()
+        txt = str(sig.get('long_text') or sig.get('short_text') or '').lower()
+        txt = ''.join(c for c in txt if c.isalnum() or c == ' ')[:70]
+        return f'{cat}|{th}|{txt}'
+    except Exception:
+        return ''
+
+
+def _apply_narrative_decay(signals):
+    """Lower the priority of signals that have stopped moving.
+
+    Reads/writes one Redis key holding {fingerprint: {level, cycles, first_seen}}.
+    Absence-honest: if Redis is unreachable the signals pass through untouched
+    rather than being silently reordered on incomplete history.
+    """
+    if not signals:
+        return signals
+    try:
+        state = _redis_get(DECAY_STATE_KEY)
+        if not isinstance(state, dict):
+            state = {}
+    except Exception:
+        return signals
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    seen, new_state = set(), {}
+
+    for s in signals:
+        fp = _decay_fingerprint(s)
+        if not fp:
+            continue
+        seen.add(fp)
+        lvl = _safe_level(s.get('level', 0))
+        prev = state.get(fp) if isinstance(state.get(fp), dict) else None
+
+        if prev is None:
+            rec = {'level': lvl, 'cycles': 0, 'first_seen': now_iso, 'fell': False}
+        else:
+            prev_lvl = _safe_level(prev.get('level', 0))
+            if lvl != prev_lvl:
+                # It MOVED. Reset -- this is the mechanism that keeps genuine
+                # crises out of decay without naming any of them.
+                rec = {'level': lvl, 'cycles': 0,
+                       'first_seen': prev.get('first_seen', now_iso),
+                       'fell': bool(lvl < prev_lvl)}
+            else:
+                rec = {'level': lvl,
+                       'cycles': int(prev.get('cycles', 0)) + 1,
+                       'first_seen': prev.get('first_seen', now_iso),
+                       'fell': bool(prev.get('fell'))}
+        new_state[fp] = rec
+
+        cycles = rec['cycles']
+        penalty = 0
+        if cycles >= DECAY_GRACE_CYCLES:
+            for threshold, p in DECAY_STEPS:
+                if cycles >= threshold:
+                    penalty = p
+                    break
+            # A level that has FALLEN and then gone flat is a resolving
+            # condition, not a developing one. Decay it a step faster.
+            if rec['fell'] and penalty:
+                penalty += DECAY_RESOLUTION_BONUS
+
+        if penalty:
+            orig = _decay_int(s.get('priority', 5), 5)
+            s['priority'] = max(DECAY_PRIORITY_FLOOR, orig - penalty)
+            s['_decay_cycles'] = cycles
+            s['_decay_penalty'] = penalty
+            s['_decay_note'] = (
+                'Unchanged for %d scan cycles -- ranked below moving signals. '
+                'Standing condition, not a developing one.' % cycles)
+
+    # Carry forward records for signals absent this cycle so a signal that
+    # blinks out for one scan does not reset its decay clock.
+    for fp, rec in state.items():
+        if fp not in seen and isinstance(rec, dict):
+            new_state[fp] = rec
+
+    try:
+        _redis_set(DECAY_STATE_KEY, new_state, ttl=DECAY_STATE_TTL)
+    except Exception:
+        pass
+    return signals
+
+
 TOP_GLOBAL_SIGNALS_COUNT = 20   # v3.6.0 May 23 2026 — bumped from 15; gives axis-distribution headroom
                                 # for Africa + Arctic + Phase 2 humanitarian (Ebola, displacement) signals
 MIN_SIGNALS_PER_AXIS     = 2    # v3.6.0 May 23 2026 — axis distribution guard. After the top
@@ -686,7 +819,7 @@ def _narrative_china_taiwan_takeover(blufs):
                          'deterrence-gap signals indicate the highest-stakes window in years for a '
                          'Taiwan Strait contingency. Watch for Air Defense Identification Zone (ADIZ) '
                          'violation surges, Taiwan Ministry of National Defense (MND) brevity-language '
-                         'shifts, and US-Japan-Taiwan coalition signaling cadence over next 48-72 hours.'),
+                         'shifts, and US-Japan-Taiwan coalition signaling cadence.')   # static prose: no fixed window,
         }
     return None
 
@@ -1186,7 +1319,7 @@ def _narrative_belt_and_road_resource_leverage(blufs):
             f'When 3+ anchors fire concurrently, the pattern suggests either '
             f'coordinated Western counter-positioning or coordinated host-country '
             f'renegotiation pressure. Watch: Arab-Chinese Cooperation Forum '
-            f'outcomes (June 2026), Lobito Corridor throughput, Indonesian '
+            f'outcomes, Lobito Corridor throughput, Indonesian '
             f'nickel export-policy shifts, DRC-Beijing renegotiation signals. '
             f'CONVERGENCE framing -- not prediction.'
         )
@@ -2439,6 +2572,28 @@ def _build_global_top_signals(blufs, narratives):
     # DIPLOMATIC_SURFACE_CAP diplomatic signals (keep the highest-ranked).
     # Applied to BOTH return paths so the cap holds whether or not the
     # axis-rebalancing branch runs.
+    # ══════════════════════════════════════════════════════════════════════
+    # NARRATIVE DECAY  (Jul 25 2026)
+    # ══════════════════════════════════════════════════════════════════════
+    # The GPI's job is to surface what is CHANGING. A signal that has said the
+    # same thing at the same level for weeks is a standing condition, not a
+    # topline -- and while it holds a headline slot, something moving cannot.
+    #
+    # KEYED ON MOVEMENT, NOT A CURATED LIST. That distinction is the whole
+    # design: a genuinely ongoing crisis MOVES (new strikes, new rounds, new
+    # casualty figures, new diplomatic cadence) and therefore never decays.
+    # Iran/Hormuz, Russia-Ukraine and Israel-Hezbollah stay put on their own
+    # merits. What decays is the static tally -- Lebanon's humanitarian totals
+    # after the June 26 Trilateral Framework and the ceasefire that followed:
+    # the crisis is entirely real, the numbers have simply stopped moving, and
+    # a number that has stopped moving is no longer driving a GLOBAL cycle.
+    #
+    # It still shows at the altitudes where it IS the story -- the ME regional
+    # BLUF and the Lebanon page -- because decay is applied here, at GPI
+    # ranking, and nowhere else.
+    #
+    # Decay never removes a signal. It lowers priority so headline slots go to
+    # movement, with a floor so a standing condition stays visible below.
     def _cap_diplomatic(lst):
         kept, dip_seen = [], 0
         for _s in lst:
