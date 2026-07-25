@@ -1,7 +1,7 @@
 """
 spoke_wheel_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.0.2 -- July 25, 2026
+v1.0.6 -- July 25, 2026
 
 One reader for the whole spoke-and-wheel architecture. Give it a hub and it
 returns that hub's rim; give it a country list and it returns what those
@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.0.2'
+__version__ = '1.0.6'
 
 # ============================================================
 # CONFIG
@@ -140,6 +140,7 @@ HUB_REGISTRY = {
         'title': 'IRAN WHEEL',
         'icon': '\U0001F1EE\U0001F1F7',
         'node_classes': {
+            'israel': 'adversary',
             'yemen': 'proxy', 'lebanon': 'proxy', 'iraq': 'proxy', 'gaza': 'proxy',
             'syria': 'ruptured', 'oman': 'mediation', 'qatar': 'mediation',
             'azerbaijan': 'friction', 'saudi_arabia': 'friction',
@@ -147,24 +148,118 @@ HUB_REGISTRY = {
             'russia': 'peer', 'china': 'peer',
         },
     },
+    # China runs the LARGEST wheel on the platform -- BRI corridors reach three
+    # continents. Populated Jul 25 2026 when Asia went live.
     'china': {
         'title': 'CHINA WHEEL',
         'icon': '\U0001F1E8\U0001F1F3',
         'node_classes': {
+            # First-island-chain / near abroad
+            'taiwan': 'adversary', 'philippines': 'adversary',
+            'japan': 'adversary', 'india': 'adversary',
+            'vietnam': 'friction', 'south_korea': 'friction',
+            'australia': 'friction',
+            # BRI corridors
             'kazakhstan': 'bri_corridor', 'pakistan': 'bri_corridor',
-            'taiwan': 'adversary', 'russia': 'peer', 'iran': 'peer',
-            'dprk': 'client',
+            'myanmar': 'bri_corridor', 'laos': 'bri_corridor',
+            'cambodia': 'bri_corridor', 'sri_lanka': 'bri_corridor',
+            'afghanistan': 'bri_corridor',
+            # Resource / influence clients
+            'iran': 'peer', 'russia': 'peer', 'dprk': 'client',
+            'venezuela': 'resource_client', 'sudan': 'resource_client',
+            'drc': 'resource_client', 'zimbabwe': 'resource_client',
+            'solomon_islands': 'pacific_client', 'kiribati': 'pacific_client',
         },
     },
-    'israel': {'title': 'ISRAEL WHEEL', 'icon': '\U0001F1EE\U0001F1F1', 'node_classes': {}},
-    'dprk':   {'title': 'DPRK WHEEL',   'icon': '\U0001F1F0\U0001F1F5', 'node_classes': {}},
-    'us':     {'title': 'US WHEEL',     'icon': '\U0001F1FA\U0001F1F8', 'node_classes': {}},
+    # Israel runs a SMALLER wheel than Iran -- fewer spokes, but a real one.
+    # Populated Jul 25 2026 when ME went live with two resident hubs.
+    'israel': {
+        'title': 'ISRAEL WHEEL',
+        'icon': '\U0001F1EE\U0001F1F1',
+        'node_classes': {
+            'iran': 'adversary', 'lebanon': 'adversary', 'yemen': 'adversary',
+            'gaza': 'adversary', 'syria': 'ruptured',
+            'azerbaijan': 'aligned_multiplier',
+            'uae': 'normalisation_track', 'bahrain': 'normalisation_track',
+            'morocco': 'normalisation_track', 'saudi_arabia': 'normalisation_track',
+            'somaliland': 'recognition_wildcard', 'somalia': 'recognition_wildcard',
+            'turkey': 'friction', 'egypt': 'cold_peace', 'jordan': 'cold_peace',
+        },
+    },
+    # DPRK runs a SMALL wheel -- a handful of relationships, but real ones.
+    # Its Russia link inverted from client to supplier after Kursk.
+    'dprk': {
+        'title': 'DPRK WHEEL',
+        'icon': '\U0001F1F0\U0001F1F5',
+        'node_classes': {
+            'russia': 'expeditionary_supplier',   # troops to Kursk -- inverted
+            'china': 'patron', 'south_korea': 'adversary',
+            'japan': 'adversary', 'us': 'adversary',
+            'iran': 'proliferation_peer', 'syria': 'proliferation_client',
+        },
+    },
+    # The US wheel is the platform's LAST big build and its most awkward one.
+    # Every other hub projects mainly outward; the US is simultaneously a
+    # security guarantor, a pressure source, and the thing other hubs organise
+    # AGAINST -- so a single "client/adversary" axis fits it badly.
+    #
+    # PROVISIONAL taxonomy (Jul 25 2026), pending a dedicated scoping pass:
+    #   guarantor_ally   -- treaty commitment runs US -> them
+    #   hemispheric_*    -- Monroe-adjacent: partner, adversary, or fragile
+    #   inbound_target   -- the US is applying pressure TO them (Greenland,
+    #                       Panama canal, Mexico border). Same class Russia's
+    #                       wheel uses for Moldova, deliberately: it names the
+    #                       DIRECTION of pressure, not who is virtuous.
+    #   peer_adversary   -- wheel-to-wheel; excluded from rim force-render.
+    'us': {
+        'title': 'US WHEEL',
+        'icon': '\U0001F1FA\U0001F1F8',
+        'node_classes': {
+            # Hemisphere
+            'cuba': 'hemispheric_adversary', 'venezuela': 'hemispheric_adversary',
+            'nicaragua': 'hemispheric_adversary',
+            'colombia': 'hemispheric_partner', 'brazil': 'hemispheric_partner',
+            'chile': 'hemispheric_partner', 'peru': 'hemispheric_partner',
+            'argentina': 'hemispheric_partner', 'ecuador': 'hemispheric_partner',
+            'haiti': 'fragile_state',
+            'mexico': 'inbound_target', 'panama': 'inbound_target',
+            'greenland': 'inbound_target',
+            # Treaty allies
+            'japan': 'guarantor_ally', 'south_korea': 'guarantor_ally',
+            'philippines': 'guarantor_ally', 'australia': 'guarantor_ally',
+            'poland': 'guarantor_ally', 'baltics': 'guarantor_ally',
+            'ukraine': 'security_assistance', 'israel': 'guarantor_ally',
+            'taiwan': 'security_assistance',
+            # Peers -- wheel-to-wheel, excluded from rim force-render
+            'russia': 'peer', 'china': 'peer', 'iran': 'peer', 'dprk': 'peer',
+        },
+    },
 }
 
 # Payload fields that betray hub affinity on a hub-AGNOSTIC canonical
 # fingerprint. Checked when a country writes crosstheater:{c}:fingerprint
 # without saying which wheel it belongs to. Extend freely -- unknown shapes
 # simply do not infer, they never crash.
+# Containers that hold PER-HUB sub-readings rather than being vectors
+# themselves. Greenland nests its whole hub slice under `inbound`:
+#   'inbound': {'us_pressure_level': 2, 'russia_arctic_level': 1, ...}
+# Scanning only top-level keys made Greenland invisible to BOTH the US and
+# Russia wheels despite it being a textbook inbound_target for each.
+_NESTED_HUB_CONTAINERS = ('inbound', 'outbound', 'hub_touches', 'external',
+                          'spokes', 'wheels', 'axes', 'vectors')
+
+# Every hub the platform knows. Matching is TOKEN-based (split on '_'), never
+# substring: 'us' is a substring of 'russia', so `russia_arctic_level` would
+# otherwise register as a US touch.
+_KNOWN_HUBS = ('russia', 'turkey', 'iran', 'china', 'israel', 'dprk', 'us')
+
+
+def _hub_tokens(key):
+    """Hub names appearing as whole tokens in a field name."""
+    toks = set(str(key).lower().replace('-', '_').split('_'))
+    return {h for h in _KNOWN_HUBS if h in toks}
+
+
 _HUB_AFFINITY_HINTS = {
     'russia': ('russia_plug', 'russia_spoke', 'russia_axis', 'russia_iran_axis',
                'wagner', 'africa_corps'),
@@ -173,6 +268,9 @@ _HUB_AFFINITY_HINTS = {
                'unity_of_fronts_level'),
     'china':  ('china_spoke', 'china_axis', 'bri', 'belt_and_road'),
     'israel': ('israel_spoke', 'israel_somaliland'),
+    'us':     ('us_pressure', 'us_posture', 'us_acquisition', 'americom',
+               'africom', 'centcom', 'indopacom', 'southcom', 'monroe'),
+    'dprk':   ('dprk_spoke', 'dprk_axis', 'kursk_corps'),
 }
 
 
@@ -320,10 +418,24 @@ def _infer_hubs_from_payload(fp):
     touches = fp.get('hub_touches')
     if isinstance(touches, dict):
         hubs.update(str(k).lower() for k in touches)
-    flat = ' '.join(str(k).lower() for k in fp.keys())
+    # Explicit hint vocabulary, checked across top-level AND nested keys.
+    scan_keys = [str(k).lower() for k in fp.keys()]
+    for container in _NESTED_HUB_CONTAINERS:
+        sub = fp.get(container)
+        if isinstance(sub, dict):
+            scan_keys.extend(str(k).lower() for k in sub.keys())
+    flat = ' '.join(scan_keys)
     for hub, hints in _HUB_AFFINITY_HINTS.items():
         if any(hint in flat for hint in hints):
             hubs.add(hub)
+
+    # Generic token rule -- catches `us_pressure_level`, `russia_arctic_level`,
+    # `china_dual_track` and every future `{hub}_*` field with no vocabulary
+    # edit. Token-based so 'russia' never registers as a US touch.
+    for k in scan_keys:
+        hubs |= _hub_tokens(k)
+
+    hubs.discard(str(fp.get('country', '')).lower())   # a hub is not its own spoke
     return hubs
 
 
@@ -365,6 +477,35 @@ def _extract_hub_detail(fp, hub):
             if 'active' in sub:
                 merged['hub_active'] = bool(sub.get('active'))
             return merged
+
+    # NESTED per-hub SCALARS. Greenland publishes its hub reads as plain ints
+    # inside `inbound`: {'us_pressure_level': 2, 'russia_arctic_level': 1}.
+    # Without this, Greenland's US touch would report Greenland's OVERALL
+    # level -- the same theatre-level-masquerading-as-hub-level error the
+    # Africa build caught with Somalia.
+    for container in _NESTED_HUB_CONTAINERS:
+        sub = fp.get(container)
+        if not isinstance(sub, dict):
+            continue
+        for k, v in sub.items():
+            if hub not in _hub_tokens(k):
+                continue
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, (int, float)):
+                merged = dict(fp)
+                merged['level'] = max(0, min(5, int(v)))
+                merged['hub_block'] = '%s.%s' % (container, k)
+                merged['top_signal'] = '%s read from %s' % (
+                    str(k).replace('_', ' '), container)
+                return merged
+            if isinstance(v, dict) and v:
+                merged = dict(fp)
+                merged['level'] = _coerce_level(v)
+                merged['hub_block'] = '%s.%s' % (container, k)
+                if v.get('note') or v.get('top_signal'):
+                    merged['top_signal'] = v.get('note') or v.get('top_signal')
+                return merged
     return None
 
 
