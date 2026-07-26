@@ -255,7 +255,8 @@ def write_fingerprint(direction, country_id, target_key, signature_id, metadata=
     Write a single jawboning fingerprint to Redis.
 
     Args:
-      direction:    'command' or 'absorber'
+      direction:    catalog direction -- 'command', 'absorber', 'mediator'
+                    (derived from the catalog, not hardcoded)
       country_id:   originating country (us, india, etc.)
       target_key:   the on_X key from the catalog entry (on_iran, on_gold, etc.)
       signature_id: the full catalog signature id, stored as metadata payload
@@ -780,10 +781,27 @@ def register_jawboning_detector_endpoints(app):
             return '', 200
         try:
             direction = flask_request.args.get('direction')
-            if direction and direction not in ('command', 'absorber'):
+            # FIXED Jul 26 2026. This hardcoded ('command', 'absorber'), so
+            # ?direction=mediator 400'd on signatures that EXIST and FIRE --
+            # the three Guterres food-security signatures were unreachable
+            # through this filter.
+            #
+            # The detector core already gets this right: its comment says it
+            # walks "command, absorber, mediator, and any future class" and
+            # deliberately does not hardcode. The endpoint disagreed with the
+            # engine behind it. Now derived from the catalog, so a new
+            # direction works the moment it is added rather than needing a
+            # second edit here.
+            try:
+                from jawboning_signatures import list_jawboning_signatures
+                _valid = tuple(sorted(list_jawboning_signatures().keys()))
+            except Exception:
+                _valid = ('command', 'absorber', 'mediator')
+            if direction and direction not in _valid:
                 return jsonify({
                     'success': False,
-                    'error':   "direction must be 'command' or 'absorber'",
+                    'error':   "direction must be one of: " + ', '.join(_valid),
+                    'valid_directions': list(_valid),
                 }), 400
             active = list_active_fingerprints(direction=direction)
             return jsonify({

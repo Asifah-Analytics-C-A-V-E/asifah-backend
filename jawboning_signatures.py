@@ -1327,10 +1327,18 @@ def get_signatures_by_direction(direction):
 def get_signature_count():
     """Quick count helper for diagnostics."""
     catalog = list_jawboning_signatures()
+    # FIXED Jul 26 2026. This named only 'command' and 'absorber' while summing
+    # ALL directions into 'total' -- so the catalog reported
+    # {command: 12, absorber: 2, total: 17} and the three MEDIATOR signatures
+    # (Guterres on grain / food security / fertilizer) vanished from the
+    # breakdown while still inflating the total. Now derived from the catalog
+    # so any future direction appears automatically.
+    counts = {d: len(sigs or {}) for d, sigs in catalog.items()}
     return {
-        'command':  len(catalog.get('command', {})),
-        'absorber': len(catalog.get('absorber', {})),
-        'total':    sum(len(d) for d in catalog.values()),
+        **counts,
+        'by_direction': counts,
+        'directions':   sorted(counts.keys()),
+        'total':        sum(counts.values()),
     }
 
 
@@ -1493,7 +1501,26 @@ def register_jawboning_signatures_endpoints(app):
 
 try:
     _hydration_stats = hydrate_catalog_to_redis()
-    print(f"[Jawboning Signatures] ✅ Auto-hydration on import: {_hydration_stats}")
+    # FIXED Jul 26 2026. This printed a checkmark unconditionally -- so a run
+    # with ZERO writes and 18 failures logged identically to a clean hydration.
+    # If Upstash were down at boot, the log said the catalog was fine. A success
+    # marker that does not check the result is worse than no marker: it is a
+    # false negative on the one signal an operator would scan the log for.
+    _ok = bool(_hydration_stats.get('full_blob') or
+               _hydration_stats.get('single_entries'))
+    _fails = _hydration_stats.get('failures') or 0
+    if _ok and not _fails:
+        print(f"[Jawboning Signatures] ✅ Auto-hydration on import: {_hydration_stats}")
+    elif _ok:
+        print(f"[Jawboning Signatures] ⚠️ Auto-hydration PARTIAL "
+              f"({_fails} failure(s)): {_hydration_stats} -- catalog reads may "
+              f"fall back to the static in-module copy.")
+    else:
+        print(f"[Jawboning Signatures] ❌ Auto-hydration FAILED -- 0 writes, "
+              f"{_fails} failure(s): {_hydration_stats}. Redis is unreachable or "
+              f"unconfigured. The static catalog still serves reads, but nothing "
+              f"was cached and cross-process consumers reading Redis directly "
+              f"will find nothing.")
 except Exception as _e:
     print(f"[Jawboning Signatures] ⚠️ Auto-hydration failed: {_e}")
     print(f"[Jawboning Signatures]    Endpoints will fall back to static catalog.")
