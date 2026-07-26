@@ -402,6 +402,89 @@ FEATURE_PRECEDENTS = {
 }
 
 
+# ------------------------------------------------------------
+# FEATURE MEANINGS (Jul 26 2026)
+# ------------------------------------------------------------
+# FEATURE_PRECEDENTS above says WHEN a condition last appeared and WHAT TEST
+# fires it. It does not say what the feature MEANS or why an analyst should
+# care -- so the card read as jargon plus a test condition, useful only to
+# someone who already knew the vocabulary and therefore didn't need the row.
+#
+# These live BACKEND-side deliberately, next to the precedents. Definitions are
+# analytical content, not formatting: they belong wherever the feature is
+# scored, so the page and the engine cannot drift apart, and so the same
+# language reaches the GPI and the newsletter instead of being stranded in one
+# HTML file. (We hit page/backend drift four separate times on Jul 26 alone.)
+FEATURE_MEANINGS = {
+    'valuation_stretch': {
+        'plain': 'Prices are high relative to a DECADE of earnings, not one good year.',
+        'why': ('CAPE smooths the business cycle, so this is not "stocks went up" -- '
+                'it is "stocks are expensive on a long view". Expensive markets are '
+                'not unstable on their own; they are unstable when something else '
+                'breaks, because there is less room to absorb it.'),
+    },
+    'parabolic_momentum': {
+        'plain': 'The rise itself has accelerated beyond its own trend.',
+        'why': ('Price advancing faster than its own two-year trend indicates buying '
+                'driven by the rise rather than by fundamentals. That is a '
+                'self-referential move, and self-referential moves end when the flow '
+                'stops rather than when the news changes.'),
+    },
+    'concentration': {
+        'plain': 'A shrinking group of stocks is carrying the whole index.',
+        'why': ('When the index depends on fewer names, the index becomes a bet on '
+                'those names. Diversification that exists on paper has already stopped '
+                'existing in practice.'),
+    },
+    'breadth_divergence': {
+        'plain': 'The index is at highs while most of its members are not.',
+        'why': ('The headline number and the median stock disagree. Historically the '
+                'median has been right -- the index is the last thing to turn because '
+                'it is weighted toward the winners.'),
+    },
+    'vol_complacency': {
+        'plain': 'The market is pricing very little risk of anything going wrong.',
+        'why': ('Cheap protection is a positioning read, not a safety read. It means '
+                'few participants are hedged, so a shock has to be absorbed by selling '
+                'rather than by insurance already held.'),
+    },
+    'curve_inversion': {
+        'plain': 'Short-term interest rates are above long-term rates.',
+        'why': ('Lenders are being paid more to lend briefly than at length, which '
+                'inverts the normal price of time. It is the single most-cited '
+                'recession precursor, with the longest and most variable lag of '
+                'anything in this list.'),
+    },
+    'leader_rollover': {
+        'plain': 'The stocks that led the boom are falling while the index still holds.',
+        'why': ('Leadership breaks BEFORE the index does, because the index is held up '
+                'by everything else for a while. A rising index can therefore mask a '
+                'market whose engine has already stalled -- which is why this one is '
+                'weighted highest in the composite.'),
+    },
+    'credit_stress': {
+        'plain': 'Riskier borrowers are being charged noticeably more than governments.',
+        'why': ('Credit markets reprice risk before equity markets do, because lenders '
+                'are paid to be early and equity holders are paid to be optimistic. '
+                'Widening spreads while equities hold is the classic disagreement.'),
+    },
+    'thematic_fever': {
+        'plain': 'One story has run far ahead of the rest of the market.',
+        'why': ('Concentration of BELIEF rather than of price. The named 1999 echo is '
+                'specific: vendor financing, where the story was funding its own '
+                'demand. Worth asking of any current theme whether the buyers are '
+                'being financed by the sellers.'),
+    },
+    'global_sync': {
+        'plain': 'Major markets worldwide are near their highs at the same time.',
+        'why': ('Synchronised positioning means no market is positioned to absorb a '
+                'shock for the others. Diversification across geographies stops '
+                'working precisely when it is most needed.'),
+    },
+}
+
+
+
 def _ratio_series(num, den):
     if not num or not den:
         return None
@@ -759,6 +842,24 @@ def similarity_matches(current_active, library, top_n=3):
                        'data_spine': ep.get('data_spine', 'full'),
                        'note': ep.get('note')})
     scored.sort(key=lambda x: -x['similarity_pct'])
+
+    # OVERLAP DETAIL (Jul 26 2026). The percentage alone is not legible: 33%
+    # tells a reader nothing about WHICH features matched. Emitting the shared
+    # and unshared sets lets the frontend draw a grid, and -- more importantly
+    # -- makes a WEAK match look weak. A smoothed price chart of "now vs 1987"
+    # would imply the whole shape matches when only a third of the features do,
+    # which is exactly the eyeball-pattern-matching the estimative discipline
+    # exists to prevent.
+    cur = set(current_active or [])
+    for m in scored[:top_n]:
+        ep_feats = set(m.get('episode_features') or [])
+        m['overlap'] = {
+            'shared':      sorted(cur & ep_feats),
+            'now_only':    sorted(cur - ep_feats),
+            'then_only':   sorted(ep_feats - cur),
+            'shared_n':    len(cur & ep_feats),
+            'union_n':     len(cur | ep_feats),
+        }
     return scored[:top_n]
 
 
@@ -1158,6 +1259,40 @@ def _build_global_majors(data):
     return out
 
 
+def _match_strength(matches):
+    """One honest sentence about how well ANY analog fits.
+
+    Thresholds mirror _build_so_what: below 30% overlap the "closest" episode is
+    closest by default, not by resemblance.
+    """
+    if not matches:
+        return {'level': 'none', 'color': '#6b7280',
+                'text': 'No historical analogs computed this cycle.'}
+    top = matches[0].get('similarity_pct', 0)
+    n_over_30 = sum(1 for m in matches if m.get('similarity_pct', 0) >= 30)
+
+    if top >= 60:
+        return {'level': 'strong', 'color': '#dc2626', 'top_pct': top,
+                'text': (f'STRONG RESEMBLANCE -- the closest episode shares {top:.0f}% '
+                         f'of active features. Read the analog seriously.')}
+    if top >= 40:
+        return {'level': 'moderate', 'color': '#f97316', 'top_pct': top,
+                'text': (f'MODERATE RESEMBLANCE -- {top:.0f}% feature overlap with the '
+                         f'closest episode, and {n_over_30} episode(s) above the 30% '
+                         f'threshold. Suggestive rather than diagnostic.')}
+    if top >= 30:
+        return {'level': 'weak', 'color': '#f59e0b', 'top_pct': top,
+                'text': (f'WEAK RESEMBLANCE -- the closest episode shares only {top:.0f}% '
+                         f'of active features. Present conditions are not well described '
+                         f'by anything in the library; the episodes below are the nearest '
+                         f'available, not close matches.')}
+    return {'level': 'no_analog', 'color': '#6b7280', 'top_pct': top,
+            'text': (f'NO CLOSE ANALOG -- the nearest episode shares just {top:.0f}% of '
+                     f'active features, below the threshold where a comparison carries '
+                     f'meaning. A ~100-year library containing nothing like the present '
+                     f'is a finding in its own right, not a gap.')}
+
+
 # ------------------------------------------------------------
 # CURRENT SCAN
 # ------------------------------------------------------------
@@ -1189,6 +1324,10 @@ def run_scan():
         'active_features': [
             {'name': k, 'weight': FEATURE_WEIGHTS[k],
              'precedent': FEATURE_PRECEDENTS[k],
+             # Plain-language meaning travels WITH the feature so the page, the
+             # GPI and the newsletter all say the same thing.
+             'plain': (FEATURE_MEANINGS.get(k) or {}).get('plain'),
+             'why': (FEATURE_MEANINGS.get(k) or {}).get('why'),
              'detail': detail.get(k)} for k in active],
         'quiet_features': sorted(k for k, v in feats.items() if v is False),
         'features_unavailable': sorted(k for k, v in feats.items() if v is None),
@@ -1202,6 +1341,12 @@ def run_scan():
         # would confirm or deny. The frontend renders the pieces separately and
         # the GPI can consume `headline` alone.
         'so_what': _build_so_what(matches, backtest, active, band),
+        # MATCH STRENGTH (Jul 26 2026). Three analogs listed as a ranked table
+        # reads like three findings. If the best is 33% and the rest are 20%,
+        # the honest headline is that NOTHING in a ~100-year library closely
+        # resembles present conditions -- which is itself a useful read, and
+        # the previous layout implied the opposite.
+        'match_strength': _match_strength(matches),
         'ai_thematic_read': detail.get('thematic_fever'),
         'data_honesty': {
             'sources': sources_ok,
