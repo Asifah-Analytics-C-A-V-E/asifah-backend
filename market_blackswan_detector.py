@@ -90,7 +90,7 @@ import requests
 from datetime import datetime, timezone
 from market_prose import market_disclaimer, analog_tail
 
-VERSION = '1.2.1'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
+VERSION = '1.3.0'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
@@ -1405,6 +1405,21 @@ def run_scan():
     # makes a Taiwan-semiconductor disruption a high-stakes compound read.
     ai = payload.get('ai_thematic_read') or {}
     ai_active = bool(ai and ai.get('z') is not None and ai.get('z') > 2.0)
+    # ── GPI BUNDLE (enriched Jul 26 2026) ──────────────────────────────
+    # WHAT WAS WRONG: `top_analog` was a bare LABEL STRING. At GPI altitude a
+    # 33% match and an 80% match therefore looked identical, so the GPI could
+    # report "closest analog: Black Monday" with full confidence on evidence
+    # this module had already judged thin. The page got a match_strength guard
+    # today; the GPI had none, which is the worse of the two places to lack it.
+    #
+    # The bundle now carries the ANALYST layer (so_what: mechanism + what would
+    # confirm or deny) and the HONESTY layer (match_strength), not just the
+    # score. Deliberately compact -- the GPI reads this every cycle.
+    _top = (payload.get('similarity_matches') or [{}])[0]
+    _ms = payload.get('match_strength') or {}
+    _sw = payload.get('so_what') or {}
+    _gm = payload.get('global_majors') or {}
+    _sync = (_gm.get('_sync') or {})
     _redis_set(GPI_BUNDLE_KEY, {
         'band': band,
         'composite': score,
@@ -1413,7 +1428,44 @@ def run_scan():
         'ai_thematic_active': ai_active,
         'ai_thematic_z': (ai or {}).get('z'),
         'historical_lag_read': payload.get('historical_lag_read'),
-        'top_analog': (payload.get('similarity_matches') or [{}])[0].get('label'),
+
+        # Analog, WITH its strength. A label alone cannot be weighted.
+        'top_analog': _top.get('label'),
+        'top_analog_detail': {
+            'label':          _top.get('label'),
+            'type':           _top.get('type'),
+            'similarity_pct': _top.get('similarity_pct'),
+            'event_month':    _top.get('event_month'),
+            'drawdown':       _top.get('drawdown'),
+            'mechanism':      _top.get('mechanism'),
+            'source_url':     _top.get('source_url'),
+            'data_spine':     _top.get('data_spine'),
+        },
+        # THE GUARD. level: strong | moderate | weak | no_analog.
+        # A GPI consumer must be able to refuse to headline a thin match.
+        'match_strength': {
+            'level':   _ms.get('level'),
+            'top_pct': _ms.get('top_pct'),
+            'text':    _ms.get('text'),
+        },
+        # The analyst read: mechanism + what would confirm or deny it.
+        'so_what': {
+            'headline':   _sw.get('headline'),
+            'body':       _sw.get('body'),
+            'mechanism':  _sw.get('mechanism'),
+            'watch':      _sw.get('watch'),
+            'confidence': _sw.get('confidence'),
+        },
+        # Global index positioning -- lets the GPI see a synchronised world
+        # rather than only a US-derived composite. Feeds feature F10.
+        'global_sync': {
+            'count_near_high': _sync.get('count_near_high'),
+            'near_high':       _sync.get('near_high'),
+            'majors': {k: {'name': v.get('name'),
+                           'change_pct_1m': v.get('change_pct_1m'),
+                           'pct_from_24m_high': v.get('pct_from_24m_high')}
+                       for k, v in _gm.items() if not k.startswith('_')},
+        },
         'disclaimer': DISCLAIMER,
         'updated_at': payload['last_updated'],
     })

@@ -1772,6 +1772,50 @@ def _narrative_market_fragility(blufs):
     lag = frag.get('historical_lag_read')
     disclaimer = frag.get('disclaimer', '')
 
+    # ── ANALOG STRENGTH GUARD (Jul 26 2026) ───────────────────────────────
+    # The bundle previously carried `top_analog` as a bare LABEL, so a 33%
+    # match and an 80% match were indistinguishable at this altitude and the
+    # GPI could headline a thin resemblance with full confidence. The Market
+    # Watch page got this guard today; the GPI is the more important place to
+    # have it, because a GPI signal travels further than a page a reader is
+    # already scrutinising.
+    #
+    # Doctrine: a weak analog is CONTEXT, never a headline.
+    ms = frag.get('match_strength') or {}
+    ms_level = ms.get('level') or 'unknown'
+    ms_pct = ms.get('top_pct')
+    analog = frag.get('top_analog_detail') or {}
+    sw = frag.get('so_what') or {}
+    gsync = frag.get('global_sync') or {}
+
+    analog_is_usable = ms_level in ('strong', 'moderate')
+
+    def _analog_phrase():
+        """One clause about the analog, honest about its weight."""
+        if not analog.get('label'):
+            return ''
+        pct = f'{ms_pct:.0f}%' if isinstance(ms_pct, (int, float)) else 'low'
+        if analog_is_usable:
+            mech = analog.get('mechanism')
+            base = (' The closest historical analog is %s (%s feature overlap)'
+                    % (analog['label'], pct))
+            return base + (' -- mechanism: %s.' % mech if mech else '.')
+        # Thin match: name it, but say plainly that it does not carry weight.
+        return (' No close historical analog: the nearest is %s at only %s feature '
+                'overlap, which is context rather than a fit. Present conditions are '
+                'not well described by anything in a ~100-year library -- itself a '
+                'finding, not a gap.' % (analog['label'], pct))
+
+    def _sync_phrase():
+        """Global positioning -- lets this read see beyond a US-derived composite."""
+        n = gsync.get('count_near_high')
+        if not isinstance(n, int) or n < 3:
+            return ''
+        names = ', '.join(gsync.get('near_high') or [])
+        return (' %d major markets (%s) sit within 5%% of their 24-month highs -- '
+                'synchronised global positioning leaves no market placed to absorb '
+                'a shock on behalf of the others.' % (n, names))
+
     # --- Compound check: AI/semiconductor fever x Taiwan-Strait kinetic ---
     asia = blufs.get('asia')
     tw_kinetic = False
@@ -1806,7 +1850,8 @@ def _narrative_market_fragility(blufs):
                          'Taiwan semiconductor output would strike the exact sector driving market '
                          'fragility: a compound pattern in which an endogenously fragile market '
                          '(the dry forest) co-occurs with the one geopolitical fuse most precisely '
-                         'aimed at it. This is a convergence read of present conditions across two '
+                         'aimed at it.' + _analog_phrase() + _sync_phrase() +
+                         ' This is a convergence read of present conditions across two '
                          'independent layers, not a prediction that either a drawdown or a Taiwan '
                          'contingency will occur. %s'
                          % (band, composite, ('Pattern note: ' + lag) if lag else '')),
@@ -1818,8 +1863,9 @@ def _narrative_market_fragility(blufs):
               'is -- valuation, concentration, and momentum conditions consistent with '
               'historical pre-drawdown patterns -- not whether or when a drawdown occurs. '
               'No kinetic co-occurrence with the AI/semiconductor exposure this cycle; the '
-              'compound read to watch is fragility plus a Taiwan-Strait disruption. %s'
-              % (band, composite, feat_phrase, ('Pattern note: ' + lag) if lag else ''))
+              'compound read to watch is fragility plus a Taiwan-Strait disruption.%s%s %s'
+              % (band, composite, feat_phrase, _analog_phrase(), _sync_phrase(),
+                 ('Pattern note: ' + lag) if lag else ''))
     pr = {'critical': 9, 'high': 11, 'elevated': 13}.get(band, 13)
     return {
         'priority': pr,
@@ -1831,6 +1877,10 @@ def _narrative_market_fragility(blufs):
         'headline': ('Market-fragility convergence reads %s -- %s'
                      % (band_label, feat_phrase)),
         'detail':   detail,
+        # Carried up from the sensor so a GPI reader can CHECK the read rather
+        # than take it. A signal nobody can falsify is a claim, not analysis.
+        'watch':          sw.get('watch'),
+        'analog_quality': ms_level,
     }
 
 
