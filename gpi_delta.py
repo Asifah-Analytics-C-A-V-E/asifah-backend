@@ -377,6 +377,136 @@ def build_delta(days=7):
     return diff
 
 
+# ============================================================
+# WHEEL TRAJECTORY  (v-wheels, Jul 25 2026)
+# ============================================================
+# A tracker emitting "Russia contracting in Mali" states ONE CYCLE. This turns
+# that into "contracting across N of the last M readings" -- which is the claim
+# a pattern-detection product actually rests on.
+#
+# THE LADDER THIS SERVES:
+#   spoke   Russia contracting in Mali          -> a coda on a country page
+#   wheel   contracting in Mali AND Sudan AND
+#           CAR AND Libya                       -> a regional question: WHY?
+#   global  ...AND Ukraine                      -> the pattern earns a NAME
+#
+# This module computes the evidence for that ladder. It does NOT name the
+# pattern -- naming is a GPI-altitude judgement and belongs there, deliberately,
+# so a delta engine can never declare a global trend on its own.
+#
+# The same doctrine guard applies as everywhere else here: a window the archive
+# cannot support is reported as insufficient, never estimated.
+
+TRAJECTORY_MIN_READINGS = 4        # below this, no direction is claimed
+TRAJECTORY_DOMINANCE    = 0.60     # share of readings needed to call a direction
+
+
+def _wheel_pairs(snapshot):
+    """Flatten one snapshot's wheels into {(hub, country): record}."""
+    out = {}
+    for hub, spokes in _d(_d(snapshot).get('wheels')).items():
+        for country, rec in _d(spokes).items():
+            out[(hub, country)] = _d(rec)
+    return out
+
+
+def compute_wheel_trajectory(history, window_days=30):
+    """Direction-over-time per hub-country pair.
+
+    Returns per-pair: the dominant direction across the window, how many
+    readings support it, the level at each end, and whether the archive was
+    deep enough to say so at all.
+
+    NOT-REPORTING readings are EXCLUDED from the denominator rather than
+    counted as 'holding'. A coverage gap is not evidence of stability, and a
+    trend computed over gaps would be fiction -- the same distinction the
+    convergence panel draws between DARK and NOT REPORTING.
+    """
+    hist = [_d(h) for h in _l(history)][:max(1, int(window_days))]
+    if not hist:
+        return {'available': False, 'reason': 'no_history'}
+
+    actual_days = len(hist)
+    sufficient = _window_sufficient(window_days, actual_days)
+
+    tallies = {}
+    for snap in hist:
+        for key, rec in _wheel_pairs(snap).items():
+            if _s(rec.get('s')) == 'not_reporting':
+                continue          # gap, not a reading
+            t = _s(rec.get('t')) or 'holding'
+            slot = tallies.setdefault(key, {'dirs': [], 'levels': [], 'confs': []})
+            slot['dirs'].append(t)
+            slot['levels'].append(_i(rec.get('l')))
+            if rec.get('c'):
+                slot['confs'].append(_s(rec.get('c')))
+
+    pairs = {}
+    for (hub, country), slot in tallies.items():
+        dirs = slot['dirs']
+        n = len(dirs)
+        counts = {}
+        for d in dirs:
+            counts[d] = counts.get(d, 0) + 1
+        top, top_n = max(counts.items(), key=lambda kv: kv[1])
+
+        if n < TRAJECTORY_MIN_READINGS:
+            direction, why = 'insufficient', f'only {n} reading(s) in window'
+        elif top == 'holding':
+            direction, why = 'holding', f'{top_n}/{n} readings holding'
+        elif top_n / n >= TRAJECTORY_DOMINANCE:
+            direction, why = top, f'{top_n}/{n} readings {top}'
+        else:
+            direction, why = 'mixed', f'no direction above {int(TRAJECTORY_DOMINANCE*100)}% ({counts})'
+
+        # Corroboration is carried forward, not averaged away: a run built
+        # entirely on one interested party's claims must stay labelled as such.
+        confs = slot['confs']
+        corroborated = sum(1 for c in confs if c in ('multi_source', 'confirmed_partial'))
+        pairs[f'{hub}:{country}'] = {
+            'hub': hub, 'country': country,
+            'direction': direction, 'basis': why,
+            'readings': n,
+            'level_now': slot['levels'][0] if slot['levels'] else 0,
+            'level_then': slot['levels'][-1] if slot['levels'] else 0,
+            'level_change': (slot['levels'][0] - slot['levels'][-1]) if slot['levels'] else 0,
+            'corroborated_readings': corroborated,
+            'confidence': ('corroborated' if corroborated >= 2
+                           else ('partial' if corroborated == 1 else 'claim_sourced')),
+        }
+
+    # Hub rollup -- the evidence for "is this hub contracting across its rim?"
+    hubs = {}
+    for rec in pairs.values():
+        h = hubs.setdefault(rec['hub'], {
+            'contracting': [], 'expanding': [], 'holding': [],
+            'mixed': [], 'insufficient': []})
+        h.setdefault(rec['direction'], []).append(rec['country'])
+    for hub, h in hubs.items():
+        c, e = len(h['contracting']), len(h['expanding'])
+        h['spokes_measured'] = sum(len(v) for k, v in h.items() if isinstance(v, list))
+        # A multi-spoke directional move is the thing worth surfacing. One
+        # spoke moving is a country story; several moving together is not.
+        h['multi_spoke_move'] = 'contracting' if c >= 2 and c > e else (
+                                'expanding' if e >= 2 and e > c else None)
+    return {
+        'available': True,
+        'window_days': window_days,
+        'actual_days': actual_days,
+        'window_sufficient': sufficient,
+        'window_note': ('' if sufficient else
+                        f'Archive holds {actual_days} day(s); a {window_days}-day '
+                        f'trajectory cannot honestly be claimed from it.'),
+        'pairs': pairs,
+        'hubs': hubs,
+        'doctrine_note': ('Direction is observed persistence across readings, not a '
+                          'projection. Not-reporting cycles are excluded from the '
+                          'denominator -- a coverage gap is not evidence of stability. '
+                          'Naming a cross-region pattern is a GPI-altitude judgement '
+                          'and is deliberately not made here.'),
+    }
+
+
 def build_summary():
     """
     Multi-window summary + streaks. This is the newsletter payload.
@@ -402,6 +532,7 @@ def build_summary():
         },
         'windows': {},
         'streaks': compute_streaks(history) if history else {'available': False},
+        'wheel_trajectory': compute_wheel_trajectory(history, window_days=30),
         'doctrine_note': ('Observed change and observed persistence only. No trend is '
                           'projected forward. Gaps in the archive are reported, never '
                           'interpolated. Convergence, not prediction.'),

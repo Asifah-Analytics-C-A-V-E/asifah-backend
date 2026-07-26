@@ -53,7 +53,7 @@ from datetime import datetime, timezone
 import requests
 
 __version__ = '1.0.0'
-SNAPSHOT_SCHEMA_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION = 2
 
 
 # ============================================================
@@ -65,7 +65,14 @@ UPSTASH_REDIS_TOKEN = (os.environ.get('UPSTASH_REDIS_TOKEN')
                        or os.environ.get('UPSTASH_REDIS_REST_TOKEN') or '')
 
 HISTORY_KEY   = 'gpi:history:daily'
-HISTORY_CAP   = 84                    # 12 weeks of daily snapshots
+HISTORY_CAP   = 400                   # ~13 months of daily snapshots
+# Raised from 84 (12 weeks) on Jul 25 2026. Reason: the wheel-trajectory read
+# below asks "is Russia's influence contracting" -- a claim about a YEAR, not a
+# quarter. A 12-week archive can only ever answer a 12-week question.
+#
+# Retention is the one thing that cannot be fixed retroactively: history you
+# did not keep is gone. Cost is trivial -- ~1.5KB/day with the wheels slice
+# means the full 400-day archive is under a megabyte.
 GPI_CACHE_KEY = 'gpi:global:latest'   # written by global_pressure_index.py
 
 SNAPSHOT_INTERVAL_HOURS = 24
@@ -170,6 +177,58 @@ def signal_identity(sig):
 # ============================================================
 # SNAPSHOT DISTILLATION
 # ============================================================
+def _extract_wheels(g):
+    """Per-hub, per-spoke levels + trajectory from the GPI convergence panel.
+
+    THIS IS THE MEMORY THAT MAKES TRAJECTORY MEAN ANYTHING. A tracker emitting
+    "Russia contracting in Mali" states one cycle. Only an archive can say
+    "contracting for six consecutive weeks" -- and that second sentence is the
+    one a pattern-detection product is actually built on.
+
+    Shape stays deliberately flat and schema-stable, same discipline as the rest
+    of this module: levels and short enums only, no prose, no nested payloads.
+
+        {'russia': {'mali': {'l': 3, 't': 'contracting', 'c': 'multi_source'},
+                    'sudan': {'l': 4, 't': 'holding',    'c': 'no_evidence'}},
+         'china':  {'kazakhstan': {'l': 2, 't': 'expanding', 'c': 'claim_sourced'}}}
+
+    Keys are one character because this record is written daily for 400 days --
+    the difference is real at that multiple, and nothing here is read by a human.
+    """
+    out = {}
+    panel = _d(g.get('convergence_panel'))
+    if not panel:
+        return out
+    for wheel in _l(panel.get('resident_wheels')):
+        w = _d(wheel)
+        hub = _s(w.get('hub'))
+        if not hub or w.get('readable') is False:
+            continue          # absence-honest: an unreadable wheel records nothing
+        spokes = {}
+        for spoke in _l(w.get('spokes')):
+            s = _d(spoke)
+            country = _s(s.get('country'))
+            if not country:
+                continue
+            rec = {'l': _i(s.get('level'))}
+            # State matters as much as level: 'not_reporting' is a coverage gap,
+            # not a quiet spoke, and a trend built over gaps would be fiction.
+            st = _s(s.get('state'))
+            if st and st != 'dark':
+                rec['s'] = st
+            tr = _d(s.get('trajectory'))
+            if not tr and isinstance(s.get('trajectory'), str):
+                rec['t'] = _s(s.get('trajectory'))
+            elif tr:
+                rec['t'] = _s(tr.get('direction'))
+                if tr.get('confidence'):
+                    rec['c'] = _s(tr.get('confidence'))
+            spokes[country] = rec
+        if spokes:
+            out[hub] = spokes
+    return out
+
+
 def build_snapshot(gpi_data, captured_at=None):
     """
     Distill a full GPI payload into the lean, schema-stable snapshot record.
@@ -251,6 +310,8 @@ def build_snapshot(gpi_data, captured_at=None):
         'regions':       regions,
         'signals':       signals,
         'narratives':    narratives,
+        # Wheel state (Jul 25 2026). Enables trajectory-over-time in gpi_delta.
+        'wheels':        _extract_wheels(g),
         'completeness': {
             'regions_live':     _i(completeness.get('regions_live')),
             'regions_expected': _i(completeness.get('regions_expected')),
@@ -260,6 +321,7 @@ def build_snapshot(gpi_data, captured_at=None):
         'counts': {
             'signals':    len(signals),
             'narratives': len(narratives),
+            'wheels':     len(_extract_wheels(g)),
         },
     }
 
