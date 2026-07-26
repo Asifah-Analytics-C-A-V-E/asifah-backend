@@ -1,7 +1,7 @@
 """
 ═══════════════════════════════════════════════════════════════════════
   ASIFAH ANALYTICS — CONVERGENCE REGISTRY ENDPOINTS
-  v1.1.0 (May 23 2026)
+  v1.1.1 (Jul 26 2026)
 ═══════════════════════════════════════════════════════════════════════
 
 HTTP-facing endpoints for convergence_registry.py. Lives on the ME
@@ -196,5 +196,10 @@ def register_convergence_endpoints(app):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)[:200]}), 500
 
-        print("[Convergence Endpoints] ✅ Registered: "
+    # FIXED Jul 26 2026. This print sat at 8-space indentation INSIDE
+    # convergence_by_commodity's except block, and AFTER its return -- so it
+    # was unreachable twice over and this module has never confirmed itself in
+    # a boot log since v1.1.0. Now at function level, where it fires once when
+    # the routes are actually registered.
+    print("[Convergence Endpoints] ✅ Registered: "
           "/api/convergence/all, /<id>, /by-country/<c>, /by-region/<r>, /by-commodity/<c>")
