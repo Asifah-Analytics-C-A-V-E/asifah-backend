@@ -90,7 +90,7 @@ import requests
 from datetime import datetime, timezone
 from market_prose import market_disclaimer, analog_tail
 
-VERSION = '1.0.2'
+VERSION = '1.1.0'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
@@ -1056,6 +1056,83 @@ def _analog_watch(ep_type, ep_id):
 
 
 # ------------------------------------------------------------
+# GLOBAL MAJORS (Jul 26 2026)
+# ------------------------------------------------------------
+# The detector has fetched ^N225, ^GDAXI, ^FTSE and ^BSESN since launch, but
+# consumed them ONLY as feature F10 (global_sync) and never exposed them. The
+# Market Watch frontend already had injectDetectorMajors() waiting on a
+# `global_majors` key that nothing emitted -- so four major indices were pulled
+# every cycle and rendered nowhere.
+#
+# Surfacing them here rather than adding a second fetcher keeps ONE source of
+# truth: the board and the global_sync feature now read the same numbers, so
+# the board cannot disagree with the engine that scores it.
+
+_MAJOR_META = {
+    'n225':   {'name': 'Nikkei 225',  'ticker': '^N225',   'region': 'apac',
+               'note': 'Tokyo. Exporter-heavy -- a weaker yen mechanically lifts it, '
+                       'so read against USD/JPY rather than alone.'},
+    'sensex': {'name': 'BSE Sensex',  'ticker': '^BSESN',  'region': 'apac',
+               'note': 'Mumbai. India\'s domestic-demand benchmark; less '
+                       'export-levered than the other Asian majors.'},
+    'dax':    {'name': 'DAX',         'ticker': '^GDAXI',  'region': 'europe',
+               'note': 'Frankfurt. Industrial and export weighted -- energy input '
+                       'costs and China demand both transmit here first.'},
+    'ftse':   {'name': 'FTSE 100',    'ticker': '^FTSE',   'region': 'europe',
+               'note': 'London. Heavily commodity and overseas-earnings weighted, '
+                       'so it often tracks global rather than UK conditions.'},
+}
+
+
+def _build_global_majors(data):
+    """Expose the four majors the detector already fetches.
+
+    Monthly series only -- these feed a monthly feature engine, so the change
+    figures are month-over-month and 12-month, NOT daily. Labelled as such:
+    presenting a monthly delta as a daily one would be a quiet lie.
+    """
+    out = {}
+    for key, meta in _MAJOR_META.items():
+        series = data.get(key)
+        if not series:
+            continue
+        months = sorted(series.keys())
+        if len(months) < 2:
+            continue
+        last, prev = series[months[-1]], series[months[-2]]
+        yr_ago = series.get(months[-13]) if len(months) >= 13 else None
+        spark = [round(float(series[m]), 2) for m in months[-24:]]
+        peak24 = max(spark) if spark else None
+        out[key] = {
+            'name': meta['name'], 'ticker': meta['ticker'], 'region': meta['region'],
+            'note': meta['note'],
+            'value': round(float(last), 2),
+            'change_pct_1m': round(((last - prev) / prev) * 100, 2) if prev else None,
+            'change_pct_12m': (round(((last - yr_ago) / yr_ago) * 100, 2)
+                               if yr_ago else None),
+            # Distance from the 24-month high is what F10 global_sync keys on --
+            # surfacing it lets the reader see the feature, not just its output.
+            'pct_from_24m_high': (round(((last - peak24) / peak24) * 100, 2)
+                                  if peak24 else None),
+            'within_5pct_of_24m_high': (bool(peak24 and ((peak24 - last) / peak24) <= 0.05)),
+            'sparkline': spark,
+            'cadence': 'monthly',
+            'as_of': months[-1],
+        }
+    if out:
+        near = [v['name'] for v in out.values() if v['within_5pct_of_24m_high']]
+        out['_sync'] = {
+            'count_near_high': len(near),
+            'near_high': near,
+            'note': ('F10 global_sync fires when 3+ majors sit within 5% of their '
+                     '24-month high -- synchronised global positioning, which '
+                     'historically leaves less room for one market to absorb a '
+                     'shock for the others.'),
+        }
+    return out
+
+
+# ------------------------------------------------------------
 # CURRENT SCAN
 # ------------------------------------------------------------
 def run_scan():
@@ -1092,6 +1169,9 @@ def run_scan():
         'multipliers': mults,
         'similarity_matches': matches,
         'historical_lag_read': _lag_prose(matches, backtest),
+        # Four majors the detector already fetched but never exposed. The
+        # Market Watch board consumes this via injectDetectorMajors().
+        'global_majors': _build_global_majors(data),
         # SO-WHAT layer (Jul 26 2026): mechanism + what-happened-next + what
         # would confirm or deny. The frontend renders the pieces separately and
         # the GPI can consume `headline` alone.
