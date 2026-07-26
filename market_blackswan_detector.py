@@ -90,7 +90,7 @@ import requests
 from datetime import datetime, timezone
 from market_prose import market_disclaimer, analog_tail
 
-VERSION = '1.1.0'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
+VERSION = '1.2.0'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
@@ -598,30 +598,30 @@ def compute_composite(features, multipliers):
 # lead times are COMPUTED from data at seed time, never asserted.
 # ------------------------------------------------------------
 EPISODES = [
-    {'id': 'black_monday_1987', 'label': 'Black Monday', 'anchor': '1987-08',
+    {'id': 'black_monday_1987', 'source_url': 'https://www.investopedia.com/terms/b/blackmonday.asp', 'label': 'Black Monday', 'anchor': '1987-08',
      'event_month': '1987-10', 'type': 'crash', 'drawdown': '-34% SPX in weeks',
      'note': 'pre-VIX/pre-FRED-spread era; partial features only'},
-    {'id': 'ltcm_1998', 'label': 'LTCM / Russia default', 'anchor': '1998-06',
+    {'id': 'ltcm_1998', 'source_url': 'https://www.investopedia.com/terms/l/longtermcapital.asp', 'label': 'LTCM / Russia default', 'anchor': '1998-06',
      'event_month': '1998-08', 'type': 'stress_event', 'drawdown': '-19% SPX'},
-    {'id': 'dotcom_2000', 'label': 'Dot-com top', 'anchor': '1999-12',
+    {'id': 'dotcom_2000', 'source_url': 'https://www.investopedia.com/terms/d/dotcom-bubble.asp', 'label': 'Dot-com top', 'anchor': '1999-12',
      'event_month': '2000-03', 'type': 'bubble_burst', 'drawdown': '-49% SPX / -78% IXIC'},
-    {'id': 'nine_eleven_2001', 'label': '9/11 attacks', 'anchor': '2001-08',
+    {'id': 'nine_eleven_2001', 'source_url': 'https://en.wikipedia.org/wiki/Economic_effects_of_the_September_11_attacks', 'label': '9/11 attacks', 'anchor': '2001-08',
      'event_month': '2001-09', 'type': 'exogenous_shock',
      'drawdown': '-12% SPX in 5 sessions',
      'note': 'NULL CASE: exogenous shocks carry no reliable market pre-signal; '
              'the GPI kinetic axis is the lightning watch'},
-    {'id': 'gfc_2008', 'label': 'Global Financial Crisis top', 'anchor': '2007-10',
+    {'id': 'gfc_2008', 'source_url': 'https://www.investopedia.com/terms/g/great-recession.asp', 'label': 'Global Financial Crisis top', 'anchor': '2007-10',
      'event_month': '2007-10', 'type': 'bubble_burst', 'drawdown': '-57% SPX'},
-    {'id': 'downgrade_2011', 'label': 'US debt downgrade', 'anchor': '2011-06',
+    {'id': 'downgrade_2011', 'source_url': 'https://en.wikipedia.org/wiki/August_2011_stock_markets_fall', 'label': 'US debt downgrade', 'anchor': '2011-06',
      'event_month': '2011-08', 'type': 'correction', 'drawdown': '-19% SPX'},
-    {'id': 'china_2015', 'label': 'China deval / yuan shock', 'anchor': '2015-07',
+    {'id': 'china_2015', 'source_url': 'https://en.wikipedia.org/wiki/2015%E2%80%932016_Chinese_stock_market_turbulence', 'label': 'China deval / yuan shock', 'anchor': '2015-07',
      'event_month': '2015-08', 'type': 'correction', 'drawdown': '-12% SPX'},
-    {'id': 'volmageddon_2018', 'label': 'Q4 2018 / vol unwind', 'anchor': '2018-09',
+    {'id': 'volmageddon_2018', 'source_url': 'https://www.investopedia.com/terms/v/volmageddon.asp', 'label': 'Q4 2018 / vol unwind', 'anchor': '2018-09',
      'event_month': '2018-10', 'type': 'correction', 'drawdown': '-20% SPX'},
-    {'id': 'covid_2020', 'label': 'COVID crash', 'anchor': '2020-01',
+    {'id': 'covid_2020', 'source_url': 'https://en.wikipedia.org/wiki/2020_stock_market_crash', 'label': 'COVID crash', 'anchor': '2020-01',
      'event_month': '2020-02', 'type': 'exogenous_shock', 'drawdown': '-34% SPX in 23 sessions',
      'note': 'NULL CASE (exogenous)'},
-    {'id': 'everything_2021', 'label': 'Everything-bubble top', 'anchor': '2021-11',
+    {'id': 'everything_2021', 'source_url': 'https://www.investopedia.com/everything-bubble-5217463', 'label': 'Everything-bubble top', 'anchor': '2021-11',
      'event_month': '2022-01', 'type': 'bubble_burst', 'drawdown': '-25% SPX / -33% IXIC'},
 
     # ════════════════════════════════════════════════════════════════════
@@ -638,7 +638,7 @@ EPISODES = [
     # 1987 already carries. `data_spine: 'partial'` marks them so the prose can
     # say so. Matching on partial features is weaker evidence, and pretending
     # otherwise would be the dishonest option.
-    {'id': 'plaza_1985', 'label': 'Plaza Accord -> Japanese asset bubble',
+    {'id': 'plaza_1985', 'source_url': 'https://www.investopedia.com/terms/p/plaza-accord.asp', 'label': 'Plaza Accord -> Japanese asset bubble',
      'anchor': '1985-09', 'event_month': '1989-12', 'type': 'policy_induced_bubble',
      'drawdown': '-63% Nikkei by Aug 1992 (38,915 -> 14,309)',
      'data_spine': 'partial',
@@ -656,7 +656,7 @@ EPISODES = [
               'watching only equity valuation would have seen a boom, not a '
               'mechanism.')},
 
-    {'id': 'nikkei_1989', 'label': 'Nikkei peak / Lost Decades',
+    {'id': 'nikkei_1989', 'source_url': 'https://www.investopedia.com/terms/l/lost-decade.asp', 'label': 'Nikkei peak / Lost Decades',
      'anchor': '1989-06', 'event_month': '1989-12', 'type': 'bubble_burst',
      'drawdown': '-63% in 32 months; 34 years to regain the 1989 high',
      'data_spine': 'partial',
@@ -668,7 +668,7 @@ EPISODES = [
               'detector to represent a burst whose consequence is stagnation '
               'rather than a V-shaped drawdown.')},
 
-    {'id': 'asia_crisis_1997', 'label': 'Asian financial crisis',
+    {'id': 'asia_crisis_1997', 'source_url': 'https://www.investopedia.com/terms/a/asian-financial-crisis.asp', 'label': 'Asian financial crisis',
      'anchor': '1996-12', 'event_month': '1997-07', 'type': 'contagion',
      'drawdown': 'baht -50% in 6 months; regional equity/currency collapse',
      'data_spine': 'partial',
@@ -685,7 +685,7 @@ EPISODES = [
               'applies to hubs. This is the only cross-country episode in the '
               'library.')},
 
-    {'id': 'carry_unwind_2024', 'label': 'Yen carry-trade unwind',
+    {'id': 'carry_unwind_2024', 'source_url': 'https://www.investopedia.com/terms/c/currencycarrytrade.asp', 'label': 'Yen carry-trade unwind',
      'anchor': '2024-06', 'event_month': '2024-08', 'type': 'stress_event',
      'drawdown': '-12% Nikkei in one session (Aug 5 2024); global equity spillover',
      'data_spine': 'partial',
@@ -699,7 +699,7 @@ EPISODES = [
               'japan-stability.html: STRONG yen + falling equities is this '
               'signature, and it is IMPORTED rather than domestic.')},
 
-    {'id': 'tohoku_2011', 'label': 'Tohoku earthquake / Fukushima',
+    {'id': 'tohoku_2011', 'source_url': 'https://en.wikipedia.org/wiki/2011_T%C5%8Dhoku_earthquake_and_tsunami', 'label': 'Tohoku earthquake / Fukushima',
      'anchor': '2011-01', 'event_month': '2011-03', 'type': 'exogenous_shock',
      'drawdown': '-16% Nikkei in 2 sessions',
      'data_spine': 'partial',
@@ -755,6 +755,7 @@ def similarity_matches(current_active, library, top_n=3):
                        # mechanism/data_spine carry the SO WHAT and the honesty
                        # caveat through to the prose layer.
                        'mechanism': ep.get('mechanism'),
+                       'source_url': ep.get('source_url'),
                        'data_spine': ep.get('data_spine', 'full'),
                        'note': ep.get('note')})
     scored.sort(key=lambda x: -x['similarity_pct'])
@@ -795,10 +796,33 @@ def run_backtest(data, start='1992-01'):
     # the band stays >= elevated; lead = months covered by that run.
     BAND_RANK = {'normal': 0, 'elevated': 1, 'high': 2, 'critical': 3}
     episode_reads = []
+    spine_start = timeline[0]['month'] if timeline else None
     for ep in EPISODES:
         ev = ep['event_month']
         prior = [t for t in timeline if t['month'] < ev]
         if not prior:
+            # OUTSIDE THE DATA SPINE (fixed Jul 26 2026). This previously said
+            # `continue`, which SILENTLY DROPPED the episode from the library
+            # table -- Black Monday 1987 has been invisible since launch for
+            # this reason, and Plaza 1985 / Nikkei 1989 would have vanished the
+            # same way. An episode we cannot backtest is not an episode that
+            # did not happen; dropping it hides a limitation instead of
+            # reporting one. It now appears WITH the reason it has no lead time.
+            episode_reads.append({
+                'id': ep['id'], 'label': ep['label'], 'type': ep['type'],
+                'source_url': ep.get('source_url'),
+                'event_month': ev,
+                'lead_months_at_elevated_plus': None,
+                'peak_band_in_lead_window': None,
+                'band_at_event': None, 'score_at_event': None,
+                'outside_data_spine': True,
+                'expectation': (f'Outside the backtest window -- the feature '
+                                f'series begin {spine_start or "later"}, so this '
+                                f'episode cannot be scored. It is carried for '
+                                f'pattern MATCHING, not lead-time evidence.'),
+                'drawdown': ep.get('drawdown'),
+                'note': ep.get('note'),
+            })
             continue
         lead = 0
         peak_band = 'normal'
@@ -812,6 +836,8 @@ def run_backtest(data, start='1992-01'):
         at_event = by_month.get(ev) or prior[-1]
         episode_reads.append({
             'id': ep['id'], 'label': ep['label'], 'type': ep['type'],
+            'source_url': ep.get('source_url'),
+            'outside_data_spine': False,
             'event_month': ev,
             'lead_months_at_elevated_plus': lead,
             'peak_band_in_lead_window': peak_band,
