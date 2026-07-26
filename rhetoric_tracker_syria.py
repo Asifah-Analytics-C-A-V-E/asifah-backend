@@ -53,6 +53,16 @@ import json
 import threading
 import time
 import requests
+
+# ── Shared trajectory reader (v1.0.0, Jul 25 2026) ────────────────────
+# Byte-identical across ALL backends. Answers the directional question the
+# wheel panel could not: is this hub GAINING or LOSING ground here?
+try:
+    from trajectory_reader import read_multi_hub as _read_multi_hub
+    _TRAJECTORY_AVAILABLE = True
+except ImportError:
+    _TRAJECTORY_AVAILABLE = False
+    print("[Syria Rhetoric] trajectory_reader not available -- no directional read")
 import xml.etree.ElementTree as ET
 import urllib.parse
 from datetime import datetime, timezone, timedelta
@@ -113,6 +123,7 @@ def _write_canonical_spoke_fingerprint(result):
     il = _alvl('israel')
     hubs = {'turkey': tk, 'iran': ir, 'russia': ru}
     active = [h for h, l in hubs.items() if l >= 2]
+    _tj = (result.get('trajectories') or {})
     fingerprint = {
         'ts':          datetime.now(timezone.utc).isoformat(),
         'country':     'syria',
@@ -129,6 +140,25 @@ def _write_canonical_spoke_fingerprint(result):
             'hubs_active':  active,
             'triple_meddle': len(active) == 3,
         },
+        # ── Per-hub spoke blocks WITH DIRECTION (Jul 25 2026) ──
+        # Named `{hub}_spoke` because spoke_wheel_reader._extract_hub_detail
+        # already resolves that pattern -- no reader change needed.
+        'russia_spoke': {'level': ru,
+                         'trajectory': _tj.get('russia', {}).get('direction', 'holding'),
+                         'confidence': _tj.get('russia', {}).get('confidence', 'no_evidence'),
+                         'note': 'Post-Assad: Tartus/Khmeimim status is the read'},
+        'turkey_spoke': {'level': tk,
+                         'trajectory': _tj.get('turkey', {}).get('direction', 'holding'),
+                         'confidence': _tj.get('turkey', {}).get('confidence', 'no_evidence')},
+        'iran_spoke':   {'level': ir,
+                         'trajectory': _tj.get('iran', {}).get('direction', 'holding'),
+                         'confidence': _tj.get('iran', {}).get('confidence', 'no_evidence'),
+                         'note': 'Land-bridge status drives this'},
+        'israel_spoke': {'level': il,
+                         'trajectory': _tj.get('israel', {}).get('direction', 'holding'),
+                         'confidence': _tj.get('israel', {}).get('confidence', 'no_evidence')},
+        'trajectories': _tj,
+        'contested_theatre': _tj.get('_contested', {}),
     }
     try:
         _redis_set('crosstheater:syria:fingerprint', fingerprint)
@@ -1683,6 +1713,34 @@ def run_syria_rhetoric_scan(days=3):
     articles = fetch_rhetoric_articles(days)
     actor_results, theatre_summary = classify_articles(articles)
 
+    # ── TRAJECTORY (Jul 25 2026) ──────────────────────────────────────
+    # Syria carries FOUR hubs. Post-Assad it is the platform's clearest case
+    # of a hub CONTRACTING -- Tartus and Khmeimim are the reference event for
+    # what Russian withdrawal actually looks like, which is why the extra
+    # vocabulary below is basing-specific.
+    _trajectories = {}
+    if _TRAJECTORY_AVAILABLE:
+        try:
+            _trajectories = _read_multi_hub(
+                articles, hubs=['russia', 'turkey', 'iran', 'israel'], country='syria',
+                extra_evidence={
+                    'russia': {'contracting': {'basing_lost': [
+                                   'evacuates tartus', 'tartus withdrawal',
+                                   'khmeimim handover', 'leaves khmeimim',
+                                   'naval facility vacated', 'lease not renewed']},
+                               'expanding': {'new_basing': [
+                                   'tartus renewed', 'khmeimim expanded',
+                                   'russia retains base']}},
+                    'iran':   {'contracting': {'corridor_severed': [
+                                   'land bridge severed', 'corridor cut',
+                                   'irgc withdraws', 'militia disbanded']}},
+                    'turkey': {'expanding': {'new_basing': [
+                                   'turkish base syria', 'buffer zone expanded',
+                                   'joint training agreement']}},
+                })
+        except Exception as _e:
+            print(f"[Syria Rhetoric] Trajectory read failed (non-fatal): {str(_e)[:110]}")
+
     max_factional = theatre_summary['factional_max_level']
     max_strikes   = theatre_summary['israeli_strike_max_level']
     max_isis      = theatre_summary['isis_max_level']
@@ -1704,6 +1762,7 @@ def run_syria_rhetoric_scan(days=3):
         'total_articles': len(articles),
         'theatre': 'Syria',
         'theatre_score': rhetoric_score,
+        'trajectories': _trajectories,
         'theatre_level': max_level,
         'theatre_escalation_level': max_level,
         'theatre_escalation_label': ESCALATION_LEVELS.get(max_level, {}).get('label', 'Unknown'),

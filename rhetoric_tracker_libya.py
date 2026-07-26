@@ -56,6 +56,17 @@ print("[Rhetoric Tracker] Module loading...")
 # IMPORTS
 # ========================================
 import requests
+
+# ── Shared trajectory reader (v1.0.0, Jul 25 2026) ────────────────────
+# Byte-identical across ALL backends. Answers the directional question the
+# wheel panel could not: is this hub GAINING or LOSING ground here?
+# Optional import -- absent file means no trajectory, tracker otherwise intact.
+try:
+    from trajectory_reader import read_multi_hub as _read_multi_hub
+    _TRAJECTORY_AVAILABLE = True
+except ImportError:
+    _TRAJECTORY_AVAILABLE = False
+    print("[Libya Rhetoric] trajectory_reader not available -- no directional read")
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
@@ -1022,6 +1033,7 @@ def _write_crosstheater_signal(result):
         # a wheel scoping decision, not plumbing). Africa Corps east / Tobruk
         # naval-base pursuit are the Russia-wheel read.
         actors_fp = result.get('actors', {})
+        _tj = (result.get('trajectories') or {})
         _russia_lvl = actors_fp.get('russia_africacorps', {}).get('max_escalation_level', 0)
         _turkey_lvl = actors_fp.get('turkey_libya', {}).get('max_escalation_level', 0)
         _interp = result.get('interpretation', {}) or {}
@@ -1039,6 +1051,23 @@ def _write_crosstheater_signal(result):
             'africacorps_level':     _russia_lvl,
             'africacorps_naval_gap': _sw.get('africacorps_naval_gap', False),
             'russia_directing':      _sw.get('russia_directing', False),
+            # ── Per-hub spoke blocks WITH DIRECTION (Jul 25 2026) ──
+            # Named `{hub}_spoke` because spoke_wheel_reader._extract_hub_detail
+            # already resolves that pattern -- no reader change needed.
+            'russia_spoke': {
+                'level':      _russia_lvl,
+                'trajectory': _tj.get('russia', {}).get('direction', 'holding'),
+                'confidence': _tj.get('russia', {}).get('confidence', 'no_evidence'),
+                'note':       'Russia holds Libya-east through Haftar/Africa Corps',
+            },
+            'turkey_spoke': {
+                'level':      _turkey_lvl,
+                'trajectory': _tj.get('turkey', {}).get('direction', 'holding'),
+                'confidence': _tj.get('turkey', {}).get('confidence', 'no_evidence'),
+                'note':       'Turkey holds Libya-west through the GNU',
+            },
+            'trajectories': _tj,
+            'contested_theatre': _tj.get('_contested', {}),
             # Turkey-wheel context (so the wheel sees the dual nature)
             'turkey_level':          _turkey_lvl,
             'turkey_projecting':     _sw.get('turkey_projecting', False),
@@ -1746,6 +1775,7 @@ def _build_empty_result():
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'total_articles': 0,
         'articles_classified': 0,
+        'trajectories': _trajectories,
         'theatre_escalation_level': 0,
         'theatre_escalation_label': 'Monitoring',
         'theatre_escalation_color': '#6b7280',
@@ -1878,6 +1908,30 @@ def run_rhetoric_scan(days=3):
     scan_start = time.time()
 
     articles = fetch_libya_articles(days)
+
+    # ── TRAJECTORY (Jul 25 2026) ──────────────────────────────────────
+    # Libya is DUAL-WHEEL: Russia holds the east through Haftar/Africa Corps,
+    # Turkey the west through the GNU. A single country-level trajectory would
+    # force one answer where there are two wheels -- and the case that matters
+    # most is Russia contracting WHILE Turkey expands, which is a displacement
+    # read rather than two unrelated country stories.
+    _trajectories = {}
+    if _TRAJECTORY_AVAILABLE:
+        try:
+            _trajectories = _read_multi_hub(
+                articles, hubs=['russia', 'turkey'], country='libya',
+                extra_evidence={
+                    'russia': {'contracting': {'basing_lost': [
+                                   'leaves al-jufra', 'evacuates al-khadim',
+                                   'tobruk access lost', 'benghazi drawdown']},
+                               'expanding': {'new_basing': [
+                                   'al-jufra expansion', 'maaten al-sarra',
+                                   'tobruk naval access', 'brak al-shati']}},
+                    'turkey': {'expanding': {'new_basing': [
+                                   'al-watiya', 'misrata base', 'maritime mou']}},
+                })
+        except Exception as _e:
+            print(f"[Libya Rhetoric] Trajectory read failed (non-fatal): {str(_e)[:110]}")
 
     if not articles:
         print("[Rhetoric Scan] No articles fetched, returning empty result")
