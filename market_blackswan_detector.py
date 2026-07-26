@@ -90,7 +90,7 @@ import requests
 from datetime import datetime, timezone
 from market_prose import market_disclaimer, analog_tail
 
-VERSION = '1.2.0'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
+VERSION = '1.2.1'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
@@ -949,6 +949,15 @@ def run_backtest(data, start='1992-01'):
                             if ep['type'] == 'exogenous_shock' else 'partial pre-signal plausible'),
         })
 
+    # CHRONOLOGICAL ORDER (Jul 26 2026). The five non-US episodes were appended
+    # to EPISODES rather than interleaved, so the table read 1987 -> 2022 and
+    # then jumped back to 1989. A reader scanning the 2008 era would stop before
+    # ever reaching the Asian crisis. Sorting here rather than reordering the
+    # EPISODES constant keeps the constant grouped by provenance (US block, then
+    # the non-US additions with their shared caveat) while the OUTPUT reads as
+    # a timeline.
+    episode_reads.sort(key=lambda e: e.get('event_month') or '')
+
     control_reads = []
     for m in CONTROL_MONTHS:
         if m in by_month:
@@ -1097,6 +1106,19 @@ def _build_so_what(matches, backtest, active_features, band):
 
     parts = []
 
+    # 0. MATCH QUALITY, IN THIS BLOCK'S OWN VOICE (Jul 26 2026).
+    # so_what and match_strength sit inches apart on the page. so_what was
+    # opening confidently ("Closest analog: Black Monday") while match_strength
+    # said "not close matches" -- both correct at 33%, but they read as
+    # disagreeing, and the confident one comes first. A thin match is now
+    # flagged HERE, before the mechanism, so the framing arrives before the
+    # content it frames.
+    thin = sim < 45
+    if thin:
+        parts.append(f'Read this as CONTEXT, not as a fit: at {sim:.0f}% feature '
+                     f'overlap the resemblance is thin, and the mechanism below '
+                     f'describes what that episode was rather than what this one is.')
+
     # 1. WHAT THIS PATTERN IS -- type-level meaning.
     type_txt = _TYPE_SO_WHAT.get(top.get('type'))
     if type_txt:
@@ -1128,8 +1150,13 @@ def _build_so_what(matches, backtest, active_features, band):
     watch = _analog_watch(top.get('type'), top.get('id'))
 
     return {
-        'headline': (f'Closest analog: {top.get("label")} '
-                     f'({sim:.0f}% feature overlap, {top.get("type", "").replace("_", " ")}).'),
+        'headline': ((f'Nearest analog (thin match): {top.get("label")} '
+                      f'\u2014 {sim:.0f}% feature overlap, '
+                      f'{top.get("type", "").replace("_", " ")}.')
+                     if thin else
+                     (f'Closest analog: {top.get("label")} '
+                      f'({sim:.0f}% feature overlap, '
+                      f'{top.get("type", "").replace("_", " ")}).')),
         'body': ' '.join(parts),
         'mechanism': mech,
         'watch': watch,
