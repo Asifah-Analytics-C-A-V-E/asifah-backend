@@ -1,7 +1,7 @@
 """
 trajectory_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.0.0 -- July 25, 2026
+v1.0.1 -- July 26, 2026
 
 One reader for the directional question every spoke tracker now has to answer:
 
@@ -69,7 +69,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 
 from datetime import datetime, timezone
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 
 # ============================================================
@@ -164,6 +164,12 @@ CLAIM_SOURCE_HINTS = [
     'unconfirmed', 'revendiqu\u00e9', 'selon', 'alleged',
 ]
 
+# Evidence classes that describe the CLIENT rather than the hub. These are
+# exempt from hub-name gating: the client acting is itself the evidence, and
+# the useful cases are precisely the ones where the hub goes unmentioned.
+CLIENT_SIDE_CLASSES = {'client_hedging', 'expulsion', 'partner_defection',
+                       'agreement_lapsed', 'rival_expelled'}
+
 MIN_CLASSES_FOR_DIRECTION = 1
 VOLUME_BONUS_THRESHOLD    = 4
 
@@ -215,15 +221,23 @@ def read_trajectory(articles, hub='russia', country='', extra_evidence=None):
         text = f"{a.get('title','')} {a.get('description','')}".lower()
         if not text.strip():
             continue
-        # The article must actually be ABOUT this hub. Without this gate, a
-        # generic "vehicles destroyed" headline would register against every
-        # hub the tracker carries.
-        if not any(tok in text for tok in hub_tokens):
-            continue
+        # The article must actually be ABOUT this hub -- otherwise a generic
+        # "vehicles destroyed" headline registers against every hub a tracker
+        # carries.
+        #
+        # EXCEPT for client-side classes. `client_hedging` is definitionally
+        # about the CLIENT shopping for alternatives -- "Bamako in talks over
+        # Turkish drones" is evidence about Russia's position precisely because
+        # it does NOT mention Russia. Requiring the hub to be named would gate
+        # out the single most useful leading indicator we have: a regime whose
+        # survival depends on one patron does not shop casually.
+        hub_named = any(tok in text for tok in hub_tokens)
 
         hit = False
         for direction, classes in vocab.items():
             for cls, phrases in classes.items():
+                if not hub_named and cls not in CLIENT_SIDE_CLASSES:
+                    continue
                 for p in phrases:
                     if p and p in text:
                         found[direction].setdefault(cls, [])
