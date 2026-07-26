@@ -623,6 +623,92 @@ EPISODES = [
      'note': 'NULL CASE (exogenous)'},
     {'id': 'everything_2021', 'label': 'Everything-bubble top', 'anchor': '2021-11',
      'event_month': '2022-01', 'type': 'bubble_burst', 'drawdown': '-25% SPX / -33% IXIC'},
+
+    # ════════════════════════════════════════════════════════════════════
+    # NON-US EPISODES (added Jul 26 2026)
+    # ════════════════════════════════════════════════════════════════════
+    # Every episode above is US-market-internal: valuation stretch, credit
+    # stress, vol unwind, all measured in SPX/IXIC terms. That is a real bias,
+    # not just a coverage gap -- the library could not RECOGNISE a policy-induced
+    # or contagion-shaped bubble, because it had never seen one.
+    #
+    # DATA-SPINE CAVEAT, stated rather than hidden: the feature series behind
+    # this detector are US (SPX, VIX, FRED spreads, CAPE). These episodes are
+    # therefore scored on PARTIAL features -- the same limitation Black Monday
+    # 1987 already carries. `data_spine: 'partial'` marks them so the prose can
+    # say so. Matching on partial features is weaker evidence, and pretending
+    # otherwise would be the dishonest option.
+    {'id': 'plaza_1985', 'label': 'Plaza Accord -> Japanese asset bubble',
+     'anchor': '1985-09', 'event_month': '1989-12', 'type': 'policy_induced_bubble',
+     'drawdown': '-63% Nikkei by Aug 1992 (38,915 -> 14,309)',
+     'data_spine': 'partial',
+     'mechanism': ('coordinated currency intervention -> currency shock -> '
+                   'domestic policy easing in response -> asset bubble -> '
+                   'tightening -> burst'),
+     'note': ('G5 intervened Sept 22 1985 to depreciate the dollar. The yen went '
+              'from ~240/USD to ~120 by 1988. The resulting "endaka" export '
+              'recession pushed the BOJ to cut its discount rate from 5.0% (Jan '
+              '1986) to 2.5% (Feb 1987) -- the lowest in postwar Japanese history '
+              '-- and the Louvre Accord (Feb 1987) gave political cover to HOLD '
+              'it there for two further years. The Nikkei ran 12,598 -> 38,915, '
+              '3.1x in 51 months. THE POINT: the bubble was the POLICY RESPONSE '
+              'to the currency move, not the currency move itself. A detector '
+              'watching only equity valuation would have seen a boom, not a '
+              'mechanism.')},
+
+    {'id': 'nikkei_1989', 'label': 'Nikkei peak / Lost Decades',
+     'anchor': '1989-06', 'event_month': '1989-12', 'type': 'bubble_burst',
+     'drawdown': '-63% in 32 months; 34 years to regain the 1989 high',
+     'data_spine': 'partial',
+     'mechanism': ('terminal-phase asset bubble -> central-bank tightening -> '
+                   'balance-sheet recession -> multi-decade stagnation'),
+     'note': ('The tail the US library has no example of. Every US bubble_burst '
+              'in this library recovered its prior high within a decade; the '
+              'Nikkei took until 2024. Carrying this episode is what allows the '
+              'detector to represent a burst whose consequence is stagnation '
+              'rather than a V-shaped drawdown.')},
+
+    {'id': 'asia_crisis_1997', 'label': 'Asian financial crisis',
+     'anchor': '1996-12', 'event_month': '1997-07', 'type': 'contagion',
+     'drawdown': 'baht -50% in 6 months; regional equity/currency collapse',
+     'data_spine': 'partial',
+     'mechanism': ('currency peg + dollar-funded domestic lending -> reserve '
+                   'depletion defending the peg -> forced float -> capital '
+                   'flight -> contagion to countries with SIMILAR '
+                   'VULNERABILITIES rather than similar geography'),
+     'note': ('Thailand floated the baht July 2 1997 after reserves ran out. The '
+              'tells were visible 12-18 months earlier: current account deficit '
+              'at 8% of GDP, Bangkok office vacancy near 20%, export growth '
+              'already broken by China\'s 1994 devaluation. Contagion then ran '
+              'by VULNERABILITY PROFILE -- Indonesia, Malaysia, Philippines, '
+              'then Korea in Jan 1998 -- which is the same logic the GPI wheel '
+              'applies to hubs. This is the only cross-country episode in the '
+              'library.')},
+
+    {'id': 'carry_unwind_2024', 'label': 'Yen carry-trade unwind',
+     'anchor': '2024-06', 'event_month': '2024-08', 'type': 'stress_event',
+     'drawdown': '-12% Nikkei in one session (Aug 5 2024); global equity spillover',
+     'data_spine': 'partial',
+     'mechanism': ('funding-currency appreciation -> leveraged carry positions '
+                   'unwound -> forced selling in UNRELATED assets -> volatility '
+                   'transmitted globally from a domestic policy move'),
+     'note': ('The recent, live-relevance case. A BOJ rate move plus yen '
+              'strength unwound carry positions and transmitted a Japanese '
+              'policy decision into a worldwide equity drawdown within days. '
+              'Directly connected to the Nikkei/yen divergence read on '
+              'japan-stability.html: STRONG yen + falling equities is this '
+              'signature, and it is IMPORTED rather than domestic.')},
+
+    {'id': 'tohoku_2011', 'label': 'Tohoku earthquake / Fukushima',
+     'anchor': '2011-01', 'event_month': '2011-03', 'type': 'exogenous_shock',
+     'drawdown': '-16% Nikkei in 2 sessions',
+     'data_spine': 'partial',
+     'note': ('NULL CASE, deliberately included. A magnitude-9 earthquake has no '
+              'market pre-signal and never will. It is in the library to keep '
+              'the detector honest about its own limits: when a natural disaster '
+              'moves an index, this module has nothing to say and the GPI '
+              'kinetic and humanitarian axes are the read. Absence of a market '
+              'warning is not absence of risk.')},
 ]
 
 CONTROL_MONTHS = ['1995-06', '2004-06', '2013-06', '2016-06']
@@ -666,6 +752,10 @@ def similarity_matches(current_active, library, top_n=3):
                        'drawdown': ep['drawdown'],
                        'similarity_pct': round(j * 100, 0),
                        'episode_features': ep.get('active_features', []),
+                       # mechanism/data_spine carry the SO WHAT and the honesty
+                       # caveat through to the prose layer.
+                       'mechanism': ep.get('mechanism'),
+                       'data_spine': ep.get('data_spine', 'full'),
                        'note': ep.get('note')})
     scored.sort(key=lambda x: -x['similarity_pct'])
     return scored[:top_n]
@@ -793,6 +883,179 @@ def _lag_prose(matches, backtest):
 
 
 # ------------------------------------------------------------
+# SO-WHAT LAYER (Jul 26 2026)
+# ------------------------------------------------------------
+# _lag_prose above answers "how similar, and how long did that one take."
+# It does NOT answer "so what" -- which is what a desk officer actually needs.
+#
+# The Israeli-defense example is the diagnostic: the page correctly flagged a
+# post-Oct-7 analog and then stopped. The reader was told a pattern MATCHED but
+# never told what the pattern MEANT, so the finding died on the page.
+#
+# THE DISCIPLINE, and it is the whole design constraint:
+#   ALLOWED   -- state what the analog's MECHANISM was, and what interval
+#                elapsed in THAT episode. Both are historical fact.
+#   FORBIDDEN -- project that interval forward. "Historically this configuration
+#                preceded X by N months" is checkable; "expect a correction
+#                within six months" is a forecast wearing a hedge.
+#
+# The difference is not stylistic. The first statement can be falsified against
+# the record; the second cannot be falsified until it is too late to matter.
+
+# What each episode TYPE means for a reader, once matched. This is the layer
+# that turns "33% similar to 1987" into something actionable.
+_TYPE_SO_WHAT = {
+    'bubble_burst': (
+        'Bubble-burst analogs describe a market that repriced its own '
+        'assumptions rather than reacting to an outside event. The tell is that '
+        'the drawdown needed no trigger -- which is why waiting for one is the '
+        'characteristic mistake.'),
+    'policy_induced_bubble': (
+        'Policy-induced analogs are the ones a valuation-only reading MISSES. '
+        'The bubble was the policy RESPONSE to an external shock, not the shock. '
+        'Watch the response, not the shock: currency moves and the central-bank '
+        'reaction to them are the mechanism, and the equity index is downstream '
+        'of both.'),
+    'contagion': (
+        'Contagion analogs spread by VULNERABILITY PROFILE, not geography. The '
+        'question is not "who is near the stressed market" but "who shares its '
+        'funding structure" -- external deficit, dollar-funded domestic lending, '
+        'a defended peg. That is a cross-country convergence read, and it is the '
+        'same logic the GPI applies to hub networks.'),
+    'crash': (
+        'Crash analogs are fast and mechanical -- structure and forced selling '
+        'rather than fundamentals. Lead times are short and pre-signals thin.'),
+    'stress_event': (
+        'Stress-event analogs transmit through POSITIONING rather than '
+        'fundamentals: leverage in one place forces selling somewhere unrelated. '
+        'The affected market is often not the source market, so read the funding '
+        'currency and the crowded trade, not the index that fell.'),
+    'correction': (
+        'Correction analogs resolved without structural damage. Their value is '
+        'as a NEGATIVE control -- they show what elevated readings look like '
+        'when nothing breaks, which is most of the time.'),
+    'exogenous_shock': (
+        'Exogenous analogs are NULL CASES and are in the library on purpose. '
+        'Earthquakes, attacks and pandemics carry no market pre-signal. If the '
+        'closest match is exogenous, the honest read is that this module has '
+        'little to say and the GPI kinetic and humanitarian axes are the watch. '
+        'Absence of a market warning is not absence of risk.'),
+}
+
+
+def _build_so_what(matches, backtest, active_features, band):
+    """The 'so what' a desk officer needs, built from matched analogs.
+
+    Returns a dict, not a string -- the frontend renders the pieces separately
+    and the GPI can consume `headline` alone.
+    """
+    if not matches:
+        return None
+    top = matches[0]
+    leads = {e['id']: e for e in (backtest or {}).get('episode_reads', [])}
+    sim = top.get('similarity_pct', 0)
+
+    # Below 30% overlap the "closest" analog is closest by default, not by
+    # resemblance. Saying so is more useful than naming it.
+    if sim < 30:
+        return {
+            'headline': 'No close historical analog this cycle.',
+            'body': (f'The nearest match ({top.get("label")}) shares only '
+                     f'{sim:.0f}% of active features -- closest by default '
+                     f'rather than by resemblance. Present conditions are not '
+                     f'well described by anything in a ~100-year library, which '
+                     f'is itself worth noting rather than smoothing over.'),
+            'mechanism': None, 'watch': None, 'confidence': 'no_analog',
+        }
+
+    parts = []
+
+    # 1. WHAT THIS PATTERN IS -- type-level meaning.
+    type_txt = _TYPE_SO_WHAT.get(top.get('type'))
+    if type_txt:
+        parts.append(type_txt)
+
+    # 2. THE MECHANISM -- the causal chain of the matched episode. This is the
+    #    single most useful sentence and most analog readouts omit it.
+    mech = top.get('mechanism')
+    if mech:
+        parts.append(f'In {top.get("label")} the chain ran: {mech}.')
+
+    # 3. WHAT HAPPENED NEXT -- historical fact, stated as history.
+    lead = leads.get(top.get('id'), {}).get('lead_months_at_elevated_plus')
+    if lead:
+        parts.append(f'In that episode, comparable readings appeared about '
+                     f'{lead} months before the event ({top.get("drawdown")}). '
+                     f'That is what happened THEN, not a projection.')
+    elif top.get('drawdown'):
+        parts.append(f'That episode resolved as {top.get("drawdown")}.')
+
+    # 4. THE HONESTY CAVEAT -- partial-spine episodes are weaker evidence.
+    if top.get('data_spine') == 'partial':
+        parts.append('Note: this episode is scored on PARTIAL features -- the '
+                     'series behind this detector are US, so a non-US analog '
+                     'matches on fewer dimensions and is weaker evidence than '
+                     'the percentage alone suggests.')
+
+    # 5. WHAT WOULD CONFIRM OR DENY -- turns a read into something checkable.
+    watch = _analog_watch(top.get('type'), top.get('id'))
+
+    return {
+        'headline': (f'Closest analog: {top.get("label")} '
+                     f'({sim:.0f}% feature overlap, {top.get("type", "").replace("_", " ")}).'),
+        'body': ' '.join(parts),
+        'mechanism': mech,
+        'watch': watch,
+        'confidence': ('partial_spine' if top.get('data_spine') == 'partial'
+                       else 'full_spine'),
+        'analog_id': top.get('id'),
+        'similarity_pct': sim,
+    }
+
+
+def _analog_watch(ep_type, ep_id):
+    """Confirm/deny indicators per analog type. A read the reader cannot check
+    is a claim, not an assessment."""
+    by_id = {
+        'plaza_1985': ('CONFIRM: coordinated intervention language from G7/G20 '
+                       'finance channels, a central bank easing INTO currency '
+                       'strength, or an official discount rate cut framed as '
+                       'export defence. DENY: tightening into the currency move, '
+                       'or intervention discussed and declined.'),
+        'asia_crisis_1997': ('CONFIRM: reserve drawdown at a pegged central bank, '
+                             'external deficit past ~6% of GDP, or a second '
+                             'economy with the same funding profile repricing. '
+                             'DENY: reserves rebuilding, or the stressed currency '
+                             'floating without regional follow-through.'),
+        'carry_unwind_2024': ('CONFIRM: funding-currency strength alongside '
+                              'falling equities in UNRELATED markets -- the '
+                              'positioning tell. DENY: currency strength with '
+                              'equities holding, which is ordinary repricing.'),
+        'nikkei_1989': ('CONFIRM: tightening into a late-stage asset move plus '
+                        'credit growth already rolling over. DENY: policy holding '
+                        'while valuations mean-revert on their own.'),
+    }
+    if ep_id in by_id:
+        return by_id[ep_id]
+    by_type = {
+        'bubble_burst': ('CONFIRM: breadth narrowing while the index holds, and '
+                         'leadership rolling over. DENY: breadth broadening, or '
+                         'earnings catching up to price.'),
+        'exogenous_shock': ('Nothing in this module confirms or denies an '
+                            'exogenous event. The GPI kinetic and humanitarian '
+                            'axes are the watch.'),
+        'correction': ('CONFIRM: stress spreading to funding markets. DENY: '
+                       'spreads staying tight -- the ordinary path for a '
+                       'correction analog.'),
+        'contagion': ('CONFIRM: a second economy with a similar funding profile '
+                      'repricing. DENY: stress staying local.'),
+        'stress_event': ('CONFIRM: forced selling in assets unrelated to the '
+                         'source. DENY: the move staying inside its own market.'),
+    }
+    return by_type.get(ep_type)
+
+
+# ------------------------------------------------------------
 # CURRENT SCAN
 # ------------------------------------------------------------
 def run_scan():
@@ -829,6 +1092,10 @@ def run_scan():
         'multipliers': mults,
         'similarity_matches': matches,
         'historical_lag_read': _lag_prose(matches, backtest),
+        # SO-WHAT layer (Jul 26 2026): mechanism + what-happened-next + what
+        # would confirm or deny. The frontend renders the pieces separately and
+        # the GPI can consume `headline` alone.
+        'so_what': _build_so_what(matches, backtest, active, band),
         'ai_thematic_read': detail.get('thematic_fever'),
         'data_honesty': {
             'sources': sources_ok,
