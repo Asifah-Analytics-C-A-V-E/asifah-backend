@@ -236,6 +236,14 @@ except Exception as e:
     print(f"[ME Backend] ⚠️ GPI module not available: {e}")
     _gpi_tb.print_exc()
 
+try:
+    from gpi_tagging_audit import register_gpi_audit_endpoints
+    GPI_AUDIT_AVAILABLE = True
+    print("[ME Backend] ✅ GPI tagging audit loaded")
+except Exception as e:
+    GPI_AUDIT_AVAILABLE = False
+    print(f"[ME Backend] ⚠️ GPI tagging audit not available: {e}")
+
 # ────────────────────────────────────────────────────────────
 # GPI TIME-SERIES — Newsletter Slices 1 & 2 (Jul 23 2026)
 # Slice 1 banks one lean snapshot per UTC day (gpi:history:daily, 12-week cap,
@@ -1330,6 +1338,11 @@ if FOOD_PULSE_AVAILABLE:
 if GPI_AVAILABLE:
     register_gpi_routes(app)
     print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+
+# GPI tagging audit -- diagnostic only, reads build_gpi() in-process.
+# Must register AFTER the GPI itself for the same reason the snapshot does.
+if GPI_AUDIT_AVAILABLE:
+    register_gpi_audit_endpoints(app)
 
 # GPI time-series -- must register AFTER the GPI itself, since the snapshot
 # writer reads build_gpi() in-process (no HTTP self-call).
