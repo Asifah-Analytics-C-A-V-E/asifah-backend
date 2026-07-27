@@ -133,6 +133,208 @@ GLOBAL_LEVEL_COLORS = {
 }
 
 # ══════════════════════════════════════════════════════════════════════
+# COUNTRY TOUCH TAGS (Jul 27 2026)
+# ══════════════════════════════════════════════════════════════════════
+# A signal BELONGS to a theatre. It TOUCHES countries. Those are different
+# relations and the GPI only modelled the first, so cross-theatre references
+# were invisible to grouping.
+#
+# The Jul 27 tagging audit found the cost: four of twenty displayed signals
+# referenced Iran under FOUR different theatre tags --
+#   dual_chokepoint    (global)        names iran, yemen
+#   houthi_fragility   (global)        names iran, yemen
+#   iran_deescalation  (global)        names iran
+#   alignment_drift    (saudi_arabia)  names iran, israel
+# -- so Iran occupied a fifth of the page under five headings, and the
+# grouping logic could not see any of them as related.
+#
+# RE-TAGGING WOULD BE WRONG. A simultaneous Hormuz + Bab el-Mandeb read is a
+# MARITIME signal, not an Iran signal; forcing it into an Iran theatre would
+# lose what it is. So the theatre stays, and a separate `countries` list
+# records what the signal touches. Many-to-many, which is what it always was.
+#
+# Downstream this gives two things: a pill per country on the headline, and a
+# per-country rollup that can gather every signal touching Iran regardless of
+# where it was filed.
+
+COUNTRY_TOUCH_ALIASES = {
+    'united states': 'us', 'usa': 'us', 'u.s.': 'us', 'america': 'us',
+    'north korea': 'dprk', 'south korea': 'south_korea',
+    'saudi arabia': 'saudi_arabia', 'burkina faso': 'burkina_faso',
+    'south sudan': 'south_sudan', 'south africa': 'south_africa',
+    'central african republic': 'car', 'uae': 'uae',
+    'emirates': 'uae', 'united arab emirates': 'uae',
+}
+
+# Word-boundary matched. ' mali' inside 'somalia' and 'car' inside 'carrier'
+# are the traps this exists to avoid -- the same class the Telegram relevance
+# gate documents.
+COUNTRY_TOUCH_TERMS = [
+    'afghanistan', 'algeria', 'armenia', 'azerbaijan', 'bahrain', 'belarus',
+    'brazil', 'burkina faso', 'central african republic', 'chad', 'chile',
+    'china', 'colombia', 'cuba', 'cyprus', 'denmark', 'drc', 'egypt',
+    'ethiopia', 'gaza', 'georgia', 'greece', 'greenland', 'haiti', 'hungary',
+    'india', 'indonesia', 'iran', 'iraq', 'israel', 'japan', 'jordan',
+    'kazakhstan', 'kenya', 'kuwait', 'lebanon', 'libya', 'madagascar', 'mali',
+    'mexico', 'moldova', 'morocco', 'mozambique', 'myanmar', 'niger',
+    'nigeria', 'north korea', 'dprk', 'oman', 'pakistan', 'panama', 'peru',
+    'philippines', 'poland', 'qatar', 'russia', 'rwanda', 'saudi arabia',
+    'somalia', 'south africa', 'south korea', 'south sudan', 'sudan', 'syria',
+    'taiwan', 'tanzania', 'thailand', 'tunisia', 'turkey', 'uae', 'uganda',
+    'ukraine', 'venezuela', 'vietnam', 'yemen', 'united states', 'usa',
+]
+
+# Geographic features that IMPLY a country. Found Jul 27 2026 in testing: the
+# dual_chokepoint signal reads "Hormuz and Bab el-Mandeb simultaneous" and
+# tagged ZERO countries, because chokepoints are not country names. A maritime
+# signal that cannot reach Iran or Yemen is exactly the cross-theatre blindness
+# this whole layer exists to fix.
+#
+# Deliberately conservative: only features whose country attribution is
+# uncontested. Disputed waters are left out -- attributing the South China Sea
+# to one claimant would be an editorial act, not a tagging one.
+GEO_FEATURE_COUNTRIES = {
+    'hormuz':          ['iran', 'oman', 'uae'],
+    'strait of hormuz': ['iran', 'oman', 'uae'],
+    'bab el-mandeb':   ['yemen', 'djibouti'],
+    'bab al-mandab':   ['yemen', 'djibouti'],
+    'red sea':         ['yemen', 'egypt', 'saudi_arabia'],
+    'suez':            ['egypt'],
+    'taiwan strait':   ['taiwan', 'china'],
+    'kerch':           ['russia', 'ukraine'],
+    'black sea':       ['russia', 'ukraine', 'turkey'],
+    'bosphorus':       ['turkey'],
+    'dardanelles':     ['turkey'],
+    'malacca':         ['malaysia', 'indonesia', 'singapore'],
+    'panama canal':    ['panama'],
+    'senkaku':         ['japan', 'china'],
+    'donbas':          ['ukraine'],
+    'crimea':          ['ukraine', 'russia'],
+    'sahel':           ['mali', 'niger', 'burkina_faso'],
+    'liptako-gourma':  ['mali', 'niger', 'burkina_faso'],
+    'gaza strip':      ['gaza', 'israel'],
+    'west bank':       ['israel'],
+    'golan':           ['syria', 'israel'],
+    'kashmir':         ['india', 'pakistan'],
+    'korean peninsula': ['dprk', 'south_korea'],
+}
+
+_GEO_FEATURE_RE = re.compile(
+    r'\b(' + '|'.join(re.escape(t) for t in
+                      sorted(GEO_FEATURE_COUNTRIES, key=len, reverse=True)) + r')\b',
+    re.IGNORECASE)
+
+_COUNTRY_TOUCH_RE = re.compile(
+    r'\b(' + '|'.join(re.escape(t) for t in
+                      sorted(COUNTRY_TOUCH_TERMS, key=len, reverse=True)) + r')\b',
+    re.IGNORECASE)
+
+
+def _norm_country(name):
+    n = str(name or '').strip().lower().replace('-', ' ')
+    return COUNTRY_TOUCH_ALIASES.get(n, n.replace(' ', '_'))
+
+
+def _signal_countries(signal):
+    """Countries a signal TOUCHES. Theatre first, then prose.
+
+    An explicit `countries` list on the signal always wins -- source modules
+    that know their own scope should say so rather than have it inferred from
+    prose, which is a fallback and not a good one.
+    """
+    if not isinstance(signal, dict):
+        return []
+    explicit = signal.get('countries')
+    if isinstance(explicit, (list, tuple)) and explicit:
+        return sorted({_norm_country(c) for c in explicit if c})
+
+    out = set()
+    theatre = signal.get('theatre')
+    # Container theatres are not countries -- tagging them as such would put
+    # 'global' in a country rollup.
+    if theatre and str(theatre).lower() not in (
+            'global', 'worldwide', 'unknown', '', 'regional', 'synthesis'):
+        out.add(_norm_country(theatre))
+
+    text = ' '.join(str(signal.get(k) or '') for k in
+                    ('short_text', 'long_text', 'headline', 'detail'))
+    for m in _COUNTRY_TOUCH_RE.finditer(text):
+        out.add(_norm_country(m.group(1)))
+    # Chokepoints and contested geographies imply countries the prose may never
+    # name. A Hormuz signal is an Iran signal whether or not it says "Iran".
+    for m in _GEO_FEATURE_RE.finditer(text):
+        for c in GEO_FEATURE_COUNTRIES.get(m.group(1).lower(), []):
+            out.add(c)
+    return sorted(out)
+
+
+def _attach_country_tags(signals):
+    """Stamp `countries` onto every signal. Idempotent."""
+    for s in signals or []:
+        if isinstance(s, dict) and not s.get('countries'):
+            s['countries'] = _signal_countries(s)
+    return signals
+
+
+def _build_country_rollup(signals, min_signals=2):
+    """The full picture per country, across theatres.
+
+    Answers "what does the Iran page owe to signals filed elsewhere?" -- which
+    the theatre-keyed grouping structurally cannot, because those signals are
+    not filed under Iran.
+
+    min_signals=2 by default: a country appearing once is already visible in
+    its own signal and does not need a rollup entry.
+    """
+    by_country = {}
+    for s in signals or []:
+        if not isinstance(s, dict):
+            continue
+        for c in (s.get('countries') or []):
+            rec = by_country.setdefault(c, {
+                'country': c, 'signal_count': 0, 'max_level': 0,
+                'axes': set(), 'theatres': set(), 'signals': [],
+                'own_theatre_signals': 0, 'referenced_from_elsewhere': 0,
+            })
+            rec['signal_count'] += 1
+            try:
+                rec['max_level'] = max(rec['max_level'], int(s.get('level') or 0))
+            except (TypeError, ValueError):
+                pass
+            ax = s.get('pressure_type')
+            if ax:
+                rec['axes'].add(ax)
+            th = _norm_country(s.get('theatre') or '')
+            rec['theatres'].add(s.get('theatre') or 'global')
+            if th == c:
+                rec['own_theatre_signals'] += 1
+            else:
+                rec['referenced_from_elsewhere'] += 1
+            if len(rec['signals']) < 8:
+                rec['signals'].append({
+                    'theatre':  s.get('theatre'),
+                    'category': s.get('category'),
+                    'level':    s.get('level'),
+                    'text':     (s.get('short_text') or '')[:110],
+                    'filed_elsewhere': th != c,
+                })
+
+    out = []
+    for c, rec in by_country.items():
+        if rec['signal_count'] < min_signals:
+            continue
+        rec['axes'] = sorted(rec['axes'])
+        rec['theatres'] = sorted(rec['theatres'])
+        # The number that matters: how much of this country's picture lives
+        # OUTSIDE its own theatre. High = the country page is under-reporting.
+        rec['cross_theatre_pct'] = round(
+            rec['referenced_from_elsewhere'] / rec['signal_count'] * 100, 0)
+        out.append(rec)
+    out.sort(key=lambda r: (-r['signal_count'], -r['max_level']))
+    return out
+
+
+# ══════════════════════════════════════════════════════════════════════
 # THEATRE STATE VOCABULARY (Jul 27 2026)
 # ══════════════════════════════════════════════════════════════════════
 # GLOBAL_LEVEL_LABELS above is SCORING language -- "INCIDENT", "ELEVATED".
@@ -3642,7 +3844,11 @@ def build_gpi(force=False):
             'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
             'convergence_panel': _build_global_convergence_panel(),
             'narratives':      narratives,
-            'top_signals':     top_signals,
+            'top_signals':     _attach_country_tags(top_signals),
+            # Per-country view ACROSS theatres (Jul 27 2026). grouped_signals
+            # keys on theatre and therefore cannot see that four separate
+            # signals all touch Iran. This can.
+            'country_rollup':  _build_country_rollup(top_signals),
             # v3.2 (Jul 2026): theatre-grouped view -- countries with 2+ signals
             # collapse into one banner with axis pills + a convergence synthesis
             # line; global/regional/synthesis signals pass through ungrouped.
