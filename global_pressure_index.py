@@ -520,6 +520,10 @@ def _motion_line(full):
             'escalated': esc, 'appeared': app, 'resolved': res, 'quiet': False}
 
 
+# Pre-dedupe signal snapshot, written by _build_global_top_signals each build
+# and read by the tagging audit. Diagnostic only -- nothing analytical reads it.
+_LAST_RAW_SIGNALS = []
+
 # Cache
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -3041,6 +3045,27 @@ def _build_global_top_signals(blufs, narratives):
         s['_tier_boost'] = _tier_boost(s)
         s['_sort_key']   = s['_tier_boost'] + int(s.get('priority', 0) or 0)
 
+    # ── PRE-DEDUPE SNAPSHOT (Jul 27 2026) ─────────────────────────────
+    # The Jul 27 tagging audit could not measure bundling because the GPI
+    # never exposed this list -- it reported "raw 20 -> dedupe 20 -> discarded
+    # 0", which is tautological when the input IS the post-dedupe output.
+    #
+    # Stashed on a module global rather than added to the return signature so
+    # the single call site stays unchanged. Trimmed to the fields an audit
+    # needs: the full objects would double the payload for a diagnostic almost
+    # nobody reads, and _sort_key/_tier_boost are internals that get stripped
+    # from the survivors anyway.
+    global _LAST_RAW_SIGNALS
+    _LAST_RAW_SIGNALS = [{
+        'theatre':       s.get('theatre'),
+        'category':      s.get('category'),
+        'level':         s.get('level'),
+        'priority':      s.get('priority'),
+        'pressure_type': s.get('pressure_type'),
+        'short_text':    (s.get('short_text') or '')[:160],
+        'countries':     s.get('countries'),
+    } for s in signals]
+
     # Dedupe by category+theatre, then apply tier+priority sort.
     # v3.6 (May 23 2026): split into two phases for axis-distribution control.
     seen = set()
@@ -3865,6 +3890,10 @@ def build_gpi(force=False):
             # signals all touch Iran. This can.
             'country_rollup':  _build_country_rollup(
                                    list(top_signals) + list(narratives or [])),
+            # Diagnostic: the signal list BEFORE dedupe and capping. Lets the
+            # tagging audit measure what bundling actually costs -- how many
+            # signals collapsed, and how many slots that freed for others.
+            '_all_signals_raw': list(_LAST_RAW_SIGNALS),
             # v3.2 (Jul 2026): theatre-grouped view -- countries with 2+ signals
             # collapse into one banner with axis pills + a convergence synthesis
             # line; global/regional/synthesis signals pass through ungrouped.
