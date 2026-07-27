@@ -132,6 +132,183 @@ GLOBAL_LEVEL_COLORS = {
     6: '#991b1b',   # deepest red -- red-line breach beyond active conflict
 }
 
+# ══════════════════════════════════════════════════════════════════════
+# THEATRE STATE VOCABULARY (Jul 27 2026)
+# ══════════════════════════════════════════════════════════════════════
+# GLOBAL_LEVEL_LABELS above is SCORING language -- "INCIDENT", "ELEVATED".
+# It answers "how high" and is right for the gauge. It is wrong for the
+# landing page, where "Iran L5" tells a first-time visitor nothing at all.
+#
+# These are STATE descriptions: what a theatre is DOING, phrased so it reads
+# as a finding rather than a score. "Iran: active war footing" is legible to
+# anyone; "Iran L5" is legible only to us.
+#
+# DESIGNED FOR PEACETIME, deliberately. The global level has sat at L5 for so
+# long that the low bands are untested -- so they are written to be INFORMATIVE
+# on the way down, not just placeholders. If Iran fell to L2, "pressure
+# building" is a real read; "L2" is not. A vocabulary that only works during
+# war is a vocabulary that cannot report peace.
+# The platform already models FOUR pressure axes (kinetic, economic,
+# humanitarian, diplomatic -- see NARRATIVE_AXIS_SETS below). A single
+# level-only vocabulary collapses them, and collapses them WRONGLY: a
+# magnitude-9 earthquake that kills thousands is a legitimate L5, but calling
+# it "active war footing" is not imprecise, it is false.
+#
+# Tohoku 2011 is the reference case and it sits in the market library as a
+# deliberate null: exogenous, mass-casualty, no kinetic content whatsoever.
+# The landing page must be able to say "mass-casualty emergency" without
+# implying a war.
+THEATRE_STATE = {
+    'kinetic': {
+        0: 'quiet',
+        1: 'rhetorical signalling',
+        2: 'pressure building',
+        3: 'standoff hardening',
+        4: 'armed incident',
+        5: 'active war footing',
+        6: 'red line breached',
+    },
+    'humanitarian': {
+        0: 'quiet',
+        1: 'early humanitarian indicators',
+        2: 'population pressure building',
+        3: 'humanitarian conditions deteriorating',
+        4: 'acute humanitarian emergency',
+        5: 'mass-casualty humanitarian disaster',
+        6: 'catastrophic humanitarian collapse',
+    },
+    'economic': {
+        0: 'quiet',
+        1: 'market signalling',
+        2: 'cost pressure building',
+        3: 'supply pressure hardening',
+        4: 'acute supply disruption',
+        5: 'economic rupture',
+        6: 'systemic economic breakdown',
+    },
+    'diplomatic': {
+        0: 'quiet',
+        1: 'diplomatic signalling',
+        2: 'diplomatic friction',
+        3: 'diplomatic standoff',
+        4: 'talks collapsed',
+        5: 'diplomatic rupture',
+        6: 'relations severed',
+    },
+}
+
+# Category overrides. Some signals describe a MECHANISM the level and axis
+# together still cannot convey -- a hub losing ground is not "an armed
+# incident" even at L4, and a fuel blockade is not "acute supply disruption"
+# when the point is that a CAPITAL is being strangled.
+CATEGORY_STATE = {
+    'hub_trajectory':         'network position shifting',
+    'economic_siege':         'capital under economic siege',
+    'client_hedging':         'patron dependency loosening',
+    'insurgent_convergence':  'insurgent factions converging',
+    'claiming_actor_silence': 'unusual quiet from a claiming actor',
+    'red_line_breached':      'red line breached',
+    'logistics_corridor':     'supply corridor under pressure',
+    'bloc_cohesion':          'bloc cohesion tested',
+    'market_fragility':       'market fragility elevated',
+    'diplomatic_track':       'diplomatic track active',
+    'displacement':           'mass displacement underway',
+    'famine_risk':            'famine conditions emerging',
+    'disease_outbreak':       'disease outbreak spreading',
+    'natural_disaster':       'natural disaster response underway',
+}
+
+# Signals that predate pressure_type tagging default to kinetic (matching the
+# GPI's own backwards-compat rule), but these categories are unambiguous and
+# are mapped explicitly so an untagged humanitarian signal is never described
+# as a military one.
+CATEGORY_AXIS_HINTS = {
+    'displacement': 'humanitarian', 'famine_risk': 'humanitarian',
+    'disease_outbreak': 'humanitarian', 'natural_disaster': 'humanitarian',
+    'humanitarian_compression': 'humanitarian', 'refugee_flow': 'humanitarian',
+    'economic_siege': 'economic', 'logistics_corridor': 'economic',
+    'market_fragility': 'economic', 'commodity_pressure': 'economic',
+    'diplomatic_track': 'diplomatic', 'mediation': 'diplomatic',
+    'kinetic_tempo': 'kinetic', 'red_line_breached': 'kinetic',
+}
+
+
+def _theatre_state(level, category=None, pressure_type=None):
+    """Plain-language state, resolved by AXIS then level.
+
+    Resolution order, most-specific first:
+      1. category override  -- the mechanism, where it says more than either
+      2. axis + level       -- the normal path
+      3. kinetic + level    -- last resort, matching the GPI's own default
+    """
+    if category and category in CATEGORY_STATE:
+        return CATEGORY_STATE[category]
+    axis = (pressure_type or CATEGORY_AXIS_HINTS.get(category or '')
+            or PRESSURE_KINETIC)
+    if axis not in THEATRE_STATE:
+        axis = PRESSURE_KINETIC
+    try:
+        lv = max(0, min(6, int(level or 0)))
+    except (TypeError, ValueError):
+        lv = 0
+    return THEATRE_STATE[axis][lv]
+
+
+def _headline_signal(full):
+    """The single most useful line for a first-time visitor.
+
+    NOT the level -- the level has been pinned at L5 by sustained global
+    conflict, so it carries no information and trains readers to stop looking.
+    What moves is WHICH theatre leads and WHAT it is doing.
+    """
+    sigs = full.get('top_signals') or []
+    if not sigs:
+        return None
+    top = sigs[0]
+    theatre = (top.get('theatre') or '').replace('_', ' ').title()
+    lvl = top.get('level')
+    # pressure_type is what stops an earthquake reading as a war.
+    axis = top.get('pressure_type')
+    state = _theatre_state(lvl, top.get('category'), axis)
+    return {
+        'theatre':  theatre or 'Global',
+        'level':    lvl,
+        'state':    state,
+        'category': top.get('category'),
+        'axis':     (axis or CATEGORY_AXIS_HINTS.get(top.get('category') or '')
+                     or PRESSURE_KINETIC),
+        # "Iran -- active war footing" rather than "IRAN L5".
+        'line':     (f'{theatre}: {state}' if theatre else state),
+        'full_text': top.get('short_text') or '',
+    }
+
+
+def _motion_line(full):
+    """One sentence about what CHANGED. Motion is the reason to click.
+
+    Reads the delta engine rather than recomputing -- gpi_delta.py already
+    tracks appeared / resolved / escalated with streaks, and it carries the
+    doctrine guard that refuses to call a thin archive a 30-day comparison.
+    """
+    d = full.get('delta') or {}
+    if not d or d.get('available') is False:
+        return None
+    esc = len(d.get('escalated') or [])
+    app = len(d.get('appeared') or [])
+    res = len(d.get('resolved') or [])
+    if not (esc or app or res):
+        return {'text': 'No signal changed band since the last comparison.',
+                'escalated': 0, 'appeared': 0, 'resolved': 0, 'quiet': True}
+    bits = []
+    if esc: bits.append(f'{esc} escalated')
+    if app: bits.append(f'{app} newly appeared')
+    if res: bits.append(f'{res} resolved')
+    window = d.get('window_days')
+    tail = f' in the last {window} days' if window else ''
+    return {'text': ' \u00b7 '.join(bits) + tail,
+            'escalated': esc, 'appeared': app, 'resolved': res, 'quiet': False}
+
+
 # Cache
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -3538,6 +3715,12 @@ def build_gpi_level(force=False):
         'global_level':  full.get('global_level', 0),
         'global_label':  full.get('global_label', ''),
         'global_color':  full.get('global_color', '#6b7280'),
+        # Added Jul 27 2026. The landing page displayed ONLY the level, which
+        # has been pinned at L5 by sustained global conflict -- a gauge at
+        # maximum is a broken gauge. These two fields carry what actually
+        # moves: which theatre leads, and what changed.
+        'headline':      _headline_signal(full),
+        'motion':        _motion_line(full),
         'generated_at':  full.get('generated_at', datetime.now(timezone.utc).isoformat()),
         'success':       full.get('success', False),
     }
