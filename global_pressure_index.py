@@ -2234,7 +2234,7 @@ def _narrative_market_fragility(blufs):
             'headline': ('Market fragility %s AND Taiwan-Strait kinetic signaling -- '
                          'the AI/semiconductor convergence'
                          % band_label),
-            'detail':   ('The Market Watch fragility detector reads %s (composite %s), with the '
+            'detail':   (f'The Market Watch fragility detector reads {band} (composite {composite}), with the '
                          'AI/data-center/semiconductor thematic running hot -- the concentration '
                          'that defines the current market is precisely the sector most exposed to a '
                          'Taiwan-Strait disruption. Simultaneously, the Asia-Pacific theater is '
@@ -2245,8 +2245,7 @@ def _narrative_market_fragility(blufs):
                          'aimed at it.' + _analog_phrase() + _sync_phrase() +
                          ' This is a convergence read of present conditions across two '
                          'independent layers, not a prediction that either a drawdown or a Taiwan '
-                         'contingency will occur. %s'
-                         % (band, composite, ('Pattern note: ' + lag) if lag else '')),
+                         f'contingency will occur. {("Pattern note: " + lag) if lag else ""}'),
         }
 
     # --- Economic-axis fragility surface (no kinetic co-occurrence yet) ---
