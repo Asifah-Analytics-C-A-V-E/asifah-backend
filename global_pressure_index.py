@@ -256,8 +256,17 @@ def _signal_countries(signal):
             'global', 'worldwide', 'unknown', '', 'regional', 'synthesis'):
         out.add(_norm_country(theatre))
 
+    # Narratives carry `regions` (e.g. ['global_market', 'me']) and use
+    # headline/detail where signals use short_text/long_text. Reading all of
+    # them means one extractor serves both populations.
     text = ' '.join(str(signal.get(k) or '') for k in
-                    ('short_text', 'long_text', 'headline', 'detail'))
+                    ('short_text', 'long_text', 'headline', 'detail',
+                     'watch', 'so_what'))
+    for r in (signal.get('regions') or []):
+        rn = _norm_country(r)
+        # Region buckets are not countries; only fold in real ones.
+        if rn in COUNTRY_TOUCH_TERMS or rn in COUNTRY_TOUCH_ALIASES.values():
+            out.add(rn)
     for m in _COUNTRY_TOUCH_RE.finditer(text):
         out.add(_norm_country(m.group(1)))
     # Chokepoints and contested geographies imply countries the prose may never
@@ -3843,12 +3852,19 @@ def build_gpi(force=False):
             'bluf':            bluf_prose,
             'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
             'convergence_panel': _build_global_convergence_panel(),
-            'narratives':      narratives,
+            # Narratives get country tags as well (Jul 27 2026). An earlier pass
+            # tagged only top_signals, so the ECONOMIC card -- whose prose is
+            # narrative-driven and routinely names "China, Brazil, India" or
+            # "Qatar" mid-sentence -- rendered no pills at all. Narratives are
+            # exactly where multi-country prose lives, so they were the worst
+            # place to miss.
+            'narratives':      _attach_country_tags(narratives),
             'top_signals':     _attach_country_tags(top_signals),
             # Per-country view ACROSS theatres (Jul 27 2026). grouped_signals
             # keys on theatre and therefore cannot see that four separate
             # signals all touch Iran. This can.
-            'country_rollup':  _build_country_rollup(top_signals),
+            'country_rollup':  _build_country_rollup(
+                                   list(top_signals) + list(narratives or [])),
             # v3.2 (Jul 2026): theatre-grouped view -- countries with 2+ signals
             # collapse into one banner with axis pills + a convergence synthesis
             # line; global/regional/synthesis signals pass through ungrouped.
