@@ -2528,7 +2528,42 @@ ACTOR_KEYWORDS = {
     'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
                      'netanyahu iran', 'mossad iran', 'israel red line iran',
                      'israel nuclear iran', 'israel sabotage iran',
-                     'ישראל איראן', 'מוסד איראן', 'إسرائيل إيران', 'الموساد إيران'],
+                     'ישראל איראן', 'מוסד איראן', 'إسرائيل إيران', 'الموساد إيران',
+                     # v1.3.0 Hebrew expansion. IRAN_CHANNELS carries four Hebrew-language
+                     # sources (AbuAliExpress, kann_news, amitsegal, ramreports), and Israeli
+                     # channels are consistently first to report strikes inside Iran. Only two
+                     # Hebrew tokens existed here, so that reporting matched almost nothing.
+                     # Geresh/apostrophe forms deliberately omitted: they break string
+                     # literals and Hebrew media uses both spellings anyway.
+                     'איראן',                     # Iran
+                     'טהרן',                      # Tehran
+                     'משמרות המהפכה',             # Revolutionary Guard (IRGC)
+                     'כוח קודס',                  # Quds Force
+                     'תקיפה באיראן',              # strike in Iran
+                     'תקיפות באיראן',             # strikes in Iran
+                     'צה"ל תקף באיראן',           # IDF struck in Iran
+                     'חיל האוויר באיראן',         # air force in Iran
+                     'הפצצה באיראן',              # bombing in Iran
+                     'חיסול באיראן',              # assassination in Iran
+                     'מתקן גרעיני',               # nuclear facility
+                     'הגרעין האיראני',            # the Iranian nuclear programme
+                     'נתנז',                      # Natanz
+                     'פורדו',                     # Fordow
+                     'העשרת אורניום',             # uranium enrichment
+                     'שיגור מאיראן',              # launch from Iran
+                     'מטח מאיראן',                # barrage from Iran
+                     'טילים איראניים',            # Iranian missiles
+                     'כטבם איראני',               # Iranian UAV (no-geresh form)
+                     'איום איראני',               # Iranian threat
+                     'קו אדום איראן',             # red line Iran
+                     'הסכם הגרעין',               # the nuclear deal
+                     'חמינאי',                    # Khamenei
+                     'משטר האייתולות',            # regime of the ayatollahs
+                     'חיזבאללה איראן',            # Hezbollah Iran
+                     'שלוחי איראן',               # Iran proxies
+                     'ציר ההתנגדות',              # axis of resistance
+                     'החותים איראן',              # the Houthis Iran
+                     ],
     'us_iran':      ['us strikes iran', 'centcom iran', 'us iran war',
                      'pentagon iran', 'trump iran', 'trump warns iran',
                      'trump threatens iran', 'trump maximum pressure',

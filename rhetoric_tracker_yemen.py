@@ -143,6 +143,11 @@ MARITIME_TRIGGERS = {
         'mines detonated', 'mine struck ship', 'vessel struck mine',
         'ارسلنا الصاروخ',  # "We sent the missile" Arabic
         'استهدفنا السفينة',  # "We targeted the ship"
+        # v1.3.0 operational Arabic
+        'أغرقنا السفينة',      # "we sank the ship"
+        'تم استهداف السفينة',  # "the ship was targeted"
+        'إصابة السفينة',       # "the ship was hit"
+        'إصابة مباشرة',        # "direct hit"
     ],
     4: [  # Attack Declared / In Progress / Mining
         'launching attack', 'firing on', 'drone strike ship',
@@ -156,6 +161,19 @@ MARITIME_TRIGGERS = {
         'attack on us navy', 'targeting us warship',
         'سنغرق السفن',  # "We will sink ships"
         'حصار البحر الأحمر',  # "Red Sea blockade"
+        # v1.3.0 operational Arabic — the vocabulary of an actual announcement
+        'بيان القوات المسلحة اليمنية',  # "statement of the Yemeni Armed Forces"
+        'عملية عسكرية',                 # "military operation"
+        'عملية نوعية',                  # "qualitative operation" — their term for a significant strike
+        'زورق مفخخ',                    # explosive boat / USV
+        'صاروخ بحري',                   # naval/anti-ship missile
+        'طائرة مسيرة',                  # drone
+        'مسيرات',                       # drones (plural)
+        'سفينة إسرائيلية',              # Israeli ship
+        'سفينة أمريكية',                # American ship
+        'سفينة بريطانية',               # British ship
+        'حاملة الطائرات',               # aircraft carrier
+        'مدمرة أمريكية',                # American destroyer
     ],
     3: [  # Direct Threat — named targets, time-bounded
         'will target ships', 'will sink', 'will mine',
@@ -167,6 +185,12 @@ MARITIME_TRIGGERS = {
         'target lng carriers', 'target oil tankers',
         'no safe passage', 'passage denied',
         'سنستهدف السفن',  # "We will target ships"
+        # v1.3.0
+        'ميناء إيلات',              # Port of Eilat
+        'أم الرشراش',               # Umm al-Rashrash — the Arabic name axis media uses for Eilat
+        'الملاحة الإسرائيلية',       # "Israeli shipping"
+        'السفن المرتبطة بإسرائيل',   # "ships linked to Israel"
+        'منع الملاحة',              # "prevent navigation"
     ],
     2: [  # Warning / Market Signal / Friction Tax
         'red sea warning', 'shipping risk elevated', 'vessels advised',
@@ -185,6 +209,10 @@ MARITIME_TRIGGERS = {
         'gulf of aden', 'arabian sea', 'hodeidah port',
         'البحر الأحمر',  # "Red Sea"
         'باب المندب',  # "Bab el-Mandeb"
+        # v1.3.0 geographic background
+        'خليج عدن',        # Gulf of Aden
+        'ميناء الحديدة',   # Hodeidah port
+        'البحر العربي',    # Arabian Sea
     ],
 }
 
@@ -194,11 +222,29 @@ DIRECT_STRIKE_TRIGGERS = {
         'missile hits tel aviv', 'strike on eilat', 'attack on riyadh',
         'hit abu dhabi', 'us base struck', 'carrier attacked',
         'ballistic missile hits', 'drone hits israel',
+        # v1.3.0 Arabic — strike confirmation language
+        'صاروخ باليستي',        # ballistic missile
+        'استهدفنا تل أبيب',     # "we targeted Tel Aviv"
+        'العمق الإسرائيلي',     # "the Israeli depth/interior"
+        'أصاب الهدف',           # "hit the target"
+        # v1.3.0 Hebrew — Israeli reporting of an impact from Yemen
+        'שיגור מתימן',
+        'טיל מתימן',
+        'נפילה באילת',          # "impact in Eilat"
     ],
     4: [  # Attack Declared
         'launching missiles at israel', 'firing at saudi', 'targeting uae',
         'attack on us forces', 'strike us base', 'houthi fires ballistic',
         'ansar allah launches', 'houthi operation against',
+        # v1.3.0 Arabic — declaration language
+        'أطلقنا صاروخ',          # "we launched a missile"
+        'بيان عسكري',            # "military statement"
+        'عملية عسكرية',          # "military operation"
+        'صاروخ فرط صوتي',        # hypersonic missile
+        'طائرة مسيرة على إسرائيل',
+        # v1.3.0 Hebrew — Israeli alert reporting
+        'אזעקות בדרום',          # "sirens in the south"
+        'כטב"ם מתימן',           # "UAV from Yemen"
     ],
     3: [  # Direct Threat
         'will strike israel', 'threatens tel aviv', 'target eilat',
@@ -208,6 +254,11 @@ DIRECT_STRIKE_TRIGGERS = {
         'retaliate for lebanon', 'avenge lebanon', 'strike israel for lebanon',
         'attack israel over lebanon', 'respond to aggression on lebanon',
         'support operations lebanon', 'isnad lebanon',
+        # v1.3.0 Arabic — named targets
+        'ميناء إيلات',      # Port of Eilat
+        'أم الرشراش',       # Umm al-Rashrash — Arabic name for Eilat used by axis media
+        'سنستهدف',          # "we will target"
+        'تل أبيب',          # Tel Aviv
         'إسناد لبنان',  # "support operations for Lebanon" (military support framing)
         'نصرة للبنان',  # "in support of / coming to the aid of Lebanon"
         'رداً على العدوان على لبنان',  # "in response to the aggression on Lebanon"
@@ -220,6 +271,11 @@ DIRECT_STRIKE_TRIGGERS = {
         # Cross-theater: unity-of-fronts doctrine invoked (escalation framework active)
         'unity of fronts', 'unity of arenas', 'unity of the fronts',
         'وحدة الساحات',  # "unity of the fronts/arenas" — the doctrine itself
+        # v1.3.0 Arabic — posture / warning
+        'جاهزون',        # "we are ready"
+        'الرد قادم',     # "the response is coming"
+        'تحذير أخير',    # "final warning"
+        'بنك الأهداف',   # "target bank"
     ],
     1: [  # Rhetoric
         'resistance', 'axis of resistance', 'solidarity with iran',
@@ -228,6 +284,10 @@ DIRECT_STRIKE_TRIGGERS = {
         'solidarity with lebanon', 'support lebanon', 'stand with lebanon',
         'دعم لبنان',  # "support Lebanon"
         'التضامن مع لبنان',  # "solidarity with Lebanon"
+        # v1.3.0 Arabic — standing slogans (background register, not escalation)
+        'الموت لإسرائيل',   # "death to Israel"
+        'الموت لأمريكا',    # "death to America"
+        'محور المقاومة',    # "axis of resistance"
     ],
 }
 
@@ -439,6 +499,16 @@ ACTOR_KEYWORDS = {
         'hussein al-houthi', 'houthi spokesman', 'houthi military',
         'yahya saree', 'houthi navy', 'houthi air force',
         'الحوثي', 'أنصار الله',
+        # v1.3.0 Arabic operational vocabulary. Primary Houthi channels
+        # (al-Masirah, Ansar Allah, SABA) publish in Arabic first; without
+        # these the tracker sees Yemen discussing Lebanon but misses Yemen
+        # announcing a strike.
+        'يحيى سريع',                      # Yahya Saree — his communique IS the announcement
+        'المتحدث باسم القوات المسلحة',     # "armed forces spokesman"
+        'القوات المسلحة اليمنية',          # self-designation (NOT "Houthi")
+        'عبدالملك الحوثي',                 # Abdulmalik al-Houthi
+        'جماعة أنصار الله',                # "the Ansar Allah group"
+        'أنصار الله اليمن',
     ],
     'usa': [
         'centcom', 'us military', 'us navy', 'pentagon', 'us strikes yemen',
@@ -448,6 +518,18 @@ ACTOR_KEYWORDS = {
     'israel': [
         'israel', 'idf', 'israeli', 'tel aviv', 'eilat', 'haifa',
         'israel responds', 'israel retaliates', 'אנסאר אללה',
+        # v1.3.0 Hebrew. YEMEN_CHANNELS carries AbuAliExpress and kann_news,
+        # both Hebrew-language; previously only one Hebrew token existed here,
+        # so that content ingested and matched nothing.
+        'חותים',            # "Houthis"
+        'תימן',             # "Yemen"
+        'שיגור מתימן',      # "launch from Yemen"
+        'טיל מתימן',        # "missile from Yemen"
+        'כטב"ם',            # UAV — the standard Hebrew media abbreviation
+        'אילת',             # Eilat
+        'ים סוף',           # Red Sea
+        'ספינה',            # ship
+        'נמל אילת',         # Port of Eilat
     ],
     'ksa': [
         'saudi', 'riyadh', 'ksa', 'kingdom of saudi', 'arab coalition',
@@ -481,6 +563,8 @@ YEMEN_REDDIT_KEYWORDS = [
     'houthi', 'ansar allah', 'red sea', 'bab el-mandeb',
     'yemen war', 'houthi missile', 'houthi drone',
     'somaliland israel', 'shipping attack',
+    # v1.3.0
+    'yahya saree', 'yemeni armed forces', 'eilat', 'suez transits',
 ]
 
 
@@ -1693,7 +1777,7 @@ def register_houthi_rhetoric_routes(app):
                 'theatre': 'Yemen / Red Sea',
                 'theatre_score': 0,
                 'theatre_level': 'Scanning...',
-                'version': '1.2.0-yemen-rhetoric-telegram-reddit'
+                'version': '1.3.0-yemen-rhetoric-arabic-hebrew'
             })
 
         result = run_houthi_rhetoric_scan(days=days)
