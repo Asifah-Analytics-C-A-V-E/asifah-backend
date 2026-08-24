@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.2.0'
+__version__ = '1.3.0'
 
 # ============================================================
 # CONFIG
@@ -334,6 +334,20 @@ def region_of(country):
     return COUNTRY_TO_REGION.get(str(country).lower().replace('-', '_'), 'unmapped')
 
 
+def _node_class_mix(detail_by):
+    """Lit spokes grouped by node_class across the whole rim.
+
+    A rim lit on four adversaries reads very differently from one lit on four
+    resource clients, and 'lit_count' cannot tell them apart. This is the
+    vocabulary a narrative needs to say WHAT KIND of reach a hub has.
+    """
+    mix = {}
+    for entries in (detail_by or {}).values():
+        for d in entries:
+            mix.setdefault(d.get('node_class') or 'unclassified', []).append(d['name'])
+    return {k: sorted(v) for k, v in sorted(mix.items(), key=lambda kv: (-len(kv[1]), kv[0]))}
+
+
 def _breadth(spokes):
     """Two-axis breadth for one wheel's rim.
 
@@ -349,7 +363,7 @@ def _breadth(spokes):
     dark. A cold tracker is a coverage gap, not evidence of quiet -- the
     same distinction gpi_delta.compute_wheel_trajectory draws.
     """
-    lit_by, reporting_by, instrumented_by = {}, {}, {}
+    lit_by, reporting_by, instrumented_by, detail_by = {}, {}, {}, {}
     peers_excluded = []
     for sp in spokes or []:
         # PEERS ARE NOT RIM. Iran/China/DPRK on the Russia wheel are
@@ -371,6 +385,16 @@ def _breadth(spokes):
             # acronym table (CAR / DRC / UAE / DPRK), so a breadth roll-up
             # never renders "Car" where the wheel renders "CAR".
             lit_by.setdefault(r, []).append(_display(sp.get('country')))
+            # v1.3.0: carry the CHARACTER of the signal, not only the name.
+            # "8 spokes lit" says reach; "adversary, BRI corridor, resource
+            # client" says what KIND of reach -- which is the analytically
+            # useful half and was being discarded here.
+            detail_by.setdefault(r, []).append({
+                'name': _display(sp.get('country')),
+                'node_class': sp.get('node_class') or 'unclassified',
+                'level': sp.get('level', 0),
+                'top_signal': str(sp.get('top_signal') or '')[:120],
+            })
 
     regions_lit = {r: sorted(v) for r, v in lit_by.items() if v}
     depth_region, depth = '', 0
@@ -394,6 +418,9 @@ def _breadth(spokes):
         'depth_region': depth_region,
         'span': span,
         'regions_lit': regions_lit,
+        'lit_detail': {r: sorted(v, key=lambda d: (-int(d.get('level') or 0), d['name']))
+                       for r, v in detail_by.items() if v},
+        'node_class_mix': _node_class_mix(detail_by),
         'lit_by_region': {r: len(v) for r, v in regions_lit.items()},
         'reporting_by_region': reporting_by,
         'instrumented_by_region': instrumented_by,
@@ -1150,6 +1177,8 @@ def build_convergence_panel(resident_hubs, local_countries=(), extra_spokes=None
                 'depth_region': b.get('depth_region', ''),
                 'span': b.get('span', 0),
                 'regions_lit': b.get('regions_lit', {}),
+                'lit_detail': b.get('lit_detail', {}),
+                'node_class_mix': b.get('node_class_mix', {}),
                 'lit_count': w.get('lit_count', 0),
                 'reporting_total': b.get('reporting_total', 0),
                 'instrumented_total': b.get('instrumented_total', 0),

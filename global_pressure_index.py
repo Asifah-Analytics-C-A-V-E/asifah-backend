@@ -618,6 +618,57 @@ def _build_global_convergence_panel():
 HUB_BREADTH_DEPTH_GATE = 3   # lit spokes inside ONE region
 HUB_BREADTH_SPAN_GATE  = 3   # distinct regions with >=1 lit spoke
 
+_HUB_ACRONYMS = {'us': 'US', 'uae': 'UAE', 'drc': 'DRC',
+                 'car': 'CAR', 'dprk': 'DPRK', 'uk': 'UK'}
+
+# Readable node_class labels. The registry keys are snake_case machine tokens;
+# these are what a reader should actually see in prose.
+_NODE_CLASS_LABEL = {
+    'adversary': 'adversary', 'friction': 'friction',
+    'aligned_multiplier': 'aligned multiplier',
+    'expeditionary_client': 'expeditionary client',
+    'resource_client': 'resource client', 'pacific_client': 'Pacific client',
+    'bri_corridor': 'BRI corridor', 'ruptured': 'ruptured node',
+    'inbound_target': 'inbound-pressure target',
+    'axis_reversal_watch': 'axis-reversal watch',
+    'normalisation_track': 'normalisation track',
+    'recognition_wildcard': 'recognition wildcard',
+    'cold_peace': 'cold peace', 'guarantor_ally': 'treaty ally',
+    'security_assistance': 'security assistance',
+    'hemispheric_adversary': 'hemispheric adversary',
+    'hemispheric_partner': 'hemispheric partner',
+    'fragile_state': 'fragile state', 'turkic_affinity': 'Turkic affinity',
+    'proliferation_peer': 'proliferation peer',
+    'proliferation_client': 'proliferation client',
+    'expeditionary_supplier': 'expeditionary supplier',
+    'proxy': 'proxy', 'mediation': 'mediation track', 'patron': 'patron',
+    'client': 'client', 'peer': 'peer', 'unclassified': 'unclassified',
+}
+
+
+def _hub_label(h):
+    """Hub name for prose. .title() turns 'us' into 'Us' -- this does not."""
+    k = str(h or '').lower().replace('-', '_')
+    return _HUB_ACRONYMS.get(k, k.replace('_', ' ').title())
+
+
+def _nc_label(nc):
+    k = str(nc or 'unclassified').lower()
+    return _NODE_CLASS_LABEL.get(k, k.replace('_', ' '))
+
+
+def _serial(items, conj='and'):
+    """A / A and B / A, B and C -- never 'A and B and C'."""
+    items = [str(i) for i in items if i]
+    if not items:
+        return ''
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return '%s %s %s' % (items[0], conj, items[1])
+    return '%s %s %s' % (', '.join(items[:-1]), conj, items[-1])
+
+
 _REGION_DISPLAY = {'africa': 'Africa', 'europe': 'Europe',
                    'middle_east': 'the Middle East',
                    'asia_pacific': 'Asia-Pacific',
@@ -672,8 +723,10 @@ def _narrative_hub_network_breadth(blufs):
         if not (deep or wide):
             continue
 
-        hub_name    = str(hub).replace('_', ' ').title()
+        hub_name    = _hub_label(hub)
         regions_lit = b.get('regions_lit') or {}
+        nc_mix      = b.get('node_class_mix') or {}
+        lit_detail  = b.get('lit_detail') or {}
         depth_region = _REGION_DISPLAY.get(b.get('depth_region', ''),
                                            b.get('depth_region', ''))
         region_names = [_REGION_DISPLAY.get(r, r) for r in sorted(regions_lit)]
@@ -686,21 +739,49 @@ def _narrative_hub_network_breadth(blufs):
         reporting    = _decay_int(b.get('reporting_total'), 0)
         instrumented = _decay_int(b.get('instrumented_total'), 0)
 
+        # Name the CHARACTER of the reach, not just its size. The two largest
+        # node-class groupings say more than the spoke count does.
+        top_mix = list(nc_mix.items())[:2]
+        mix_phrase = _serial(['%d %s' % (len(v), _nc_label(k)) for k, v in top_mix])
+
         if deep and wide:
             headline = ('%s is lit on %d spokes across %d regions, with %d in %s alone'
                         % (hub_name, lit_total, span, depth, depth_region))
         elif wide:
             headline = ('%s is lit across %d regions simultaneously (%s)'
-                        % (hub_name, span, ', '.join(region_names)))
+                        % (hub_name, span, _serial(region_names)))
         else:
             headline = ('%s is lit on %d spokes concentrated in %s'
                         % (hub_name, depth, depth_region))
+        if mix_phrase:
+            headline += ' — mostly %s' % mix_phrase
 
         detail = ('Influence read, not a kinetic one. %s registers %d lit spokes of %d '
                   'reporting (%d instrumented). '
                   % (hub_name, lit_total, reporting, instrumented))
+        # Per region, name each spoke WITH its relationship class and level, so
+        # a reader can tell an adversary rim from a client rim at a glance.
         for r in sorted(regions_lit):
-            detail += ('%s: %s. ' % (_REGION_DISPLAY.get(r, r), ', '.join(regions_lit[r])))
+            entries = lit_detail.get(r) or []
+            if entries:
+                _rd = _REGION_DISPLAY.get(r, r)
+                _rd = _rd[0].upper() + _rd[1:]   # sentence-initial: "The Western Hemisphere"
+                detail += ('%s — %s. ' % (
+                    _rd,
+                    _serial(['%s (%s, L%d)' % (d['name'], _nc_label(d.get('node_class')),
+                                               _decay_int(d.get('level'), 0))
+                             for d in entries])))
+            else:
+                detail += ('%s: %s. ' % (_REGION_DISPLAY.get(r, r),
+                                         _serial(regions_lit[r])))
+
+        if nc_mix:
+            detail += ('Relationship mix across the lit rim: %s. This is what KIND of reach '
+                       'the count describes -- a rim lit on adversaries reads differently '
+                       'from one lit on resource clients or corridor states, and a spoke '
+                       'total alone cannot distinguish them. '
+                       % _serial(['%s (%s)' % (_nc_label(k), _serial(v))
+                                  for k, v in list(nc_mix.items())[:4]]))
 
         if deep and wide:
             detail += ('This clears both breadth tests at once: several countries inside '
@@ -901,29 +982,35 @@ def _narrative_contested_spoke(blufs):
         if len(hubs) < 2:
             continue
         disp = c.get('display') or c.get('country')
-        hub_names = [str(h).replace('_', ' ').title() for h in hubs]
+        hub_names = [_hub_label(h) for h in hubs]
         max_level = _decay_int(c.get('max_level'), 0)
         c_region = _REGION_DISPLAY.get(c.get('region', ''), c.get('region', ''))
 
-        headline = ('%s is contested: %s wheels lit simultaneously'
-                    % (disp, ' and '.join(hub_names)))
+        # Lead with the relationship classes -- "contested" is the finding, but
+        # WHICH KIND of interest each hub holds is the analytically useful part.
+        _nc = _serial(['%s as %s' % (_hub_label(h.get('hub')),
+                                     _nc_label(h.get('node_class')))
+                       for h in (c.get('hubs') or [])])
+        headline = ('%s is contested: %s wheels lit simultaneously — %s'
+                    % (disp, _serial(hub_names), _nc))
 
         detail = ('%d hubs register %s on their rim in the same cycle -- '
                   % (len(hubs), disp))
         detail += '; '.join(
-            '%s at L%d as %s' % (str(h.get('hub')).title(),
-                                 _decay_int(h.get('level'), 0),
-                                 str(h.get('node_class') or 'unclassified').replace('_', ' '))
+            '%s at L%d as %s%s' % (_hub_label(h.get('hub')),
+                                   _decay_int(h.get('level'), 0),
+                                   _nc_label(h.get('node_class')),
+                                   (' — "%s"' % h['top_signal'][:100]) if h.get('top_signal') else '')
             for h in (c.get('hubs') or []))
         detail += '. '
 
         rel = c.get('mutual_classification') or {}
         if rel:
             detail += ('These hubs classify each other in the platform registry as: %s. '
-                       % '; '.join('%s reads %s as %s'
-                                   % (k.split('_reads_')[0].title(),
-                                      k.split('_reads_')[1].title(), v)
-                                   for k, v in sorted(rel.items())))
+                       % _serial(['%s reads %s as %s'
+                                   % (_hub_label(k.split('_reads_')[0]),
+                                      _hub_label(k.split('_reads_')[1]), _nc_label(v))
+                                   for k, v in sorted(rel.items())]))
         else:
             detail += ('Neither hub carries a classification of the other in the registry, '
                        'so whether this contest is rivalrous or cooperative is UNRESOLVED '
@@ -956,7 +1043,7 @@ def _narrative_contested_spoke(blufs):
                    'a flat denial is the configuration that has historically preceded '
                    'unilateral action against the emplacement rather than against the '
                    'personnel -- the infrastructure is struck before it can be used. '
-                   % (disp, ' or '.join(hub_names)))
+                   % (disp, _serial(hub_names, 'or')))
 
         detail += ('This composite is a CONVERGENCE indicator, NOT a probability of '
                    'action; each wheel is independently sourced and the reader completes '
