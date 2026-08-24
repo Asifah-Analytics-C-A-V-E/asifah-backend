@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.0.6'
+__version__ = '1.1.0'
 
 # ============================================================
 # CONFIG
@@ -245,6 +245,159 @@ HUB_REGISTRY = {
 #   'inbound': {'us_pressure_level': 2, 'russia_arctic_level': 1, ...}
 # Scanning only top-level keys made Greenland invisible to BOTH the US and
 # Russia wheels despite it being a textbook inbound_target for each.
+# ══════════════════════════════════════════════════════════════════════
+# REGION MAP  (v1.1.0, Aug 2026)
+# ══════════════════════════════════════════════════════════════════════
+# Spokes carried a country but never a REGION, so a wheel could report
+# "Russia lit on 3 spokes" without distinguishing:
+#
+#   DEPTH  Mali + Somalia + CAR      -> one region, three countries.
+#          A regional campaign. Africa BLUF should own this.
+#   SPAN   Mali + Cuba + Poland      -> three regions, three countries.
+#          A GLOBAL campaign. Only GPI altitude can see it.
+#
+# Those are different findings and the platform rendered them identically.
+# Regions match the five dashboards, so a breadth read maps 1:1 onto the
+# BLUF that owns it.
+#
+# ABSENCE-HONEST: an unmapped country returns 'unmapped' and is counted in
+# its own bucket -- never silently folded into a real region, and never
+# dropped. An unmapped spoke is a build to-do that stays visible.
+REGIONS = ('africa', 'europe', 'middle_east', 'asia_pacific', 'wha', 'unmapped')
+
+COUNTRY_TO_REGION = {
+    # ---- Africa ----
+    'mali': 'africa', 'niger': 'africa', 'burkina_faso': 'africa',
+    'car': 'africa', 'sudan': 'africa', 'south_sudan': 'africa',
+    'somalia': 'africa', 'somaliland': 'africa', 'drc': 'africa',
+    'ethiopia': 'africa', 'kenya': 'africa', 'nigeria': 'africa',
+    'zimbabwe': 'africa', 'chad': 'africa', 'mozambique': 'africa',
+    'madagascar': 'africa', 'guinea': 'africa', 'djibouti': 'africa',
+    'equatorial_guinea': 'africa', 'south_africa': 'africa',
+    # North Africa sits in AFRICA for breadth even though these trackers are
+    # primary on the ME backend (backend-single-source is a HOSTING decision;
+    # region here is a GEOGRAPHIC one and the two must not be conflated).
+    'libya': 'africa', 'algeria': 'africa', 'morocco': 'africa',
+    'tunisia': 'africa', 'egypt': 'africa', 'mauritania': 'africa',
+
+    # ---- Europe ----
+    'ukraine': 'europe', 'russia': 'europe', 'belarus': 'europe',
+    'poland': 'europe', 'hungary': 'europe', 'moldova': 'europe',
+    'greenland': 'europe', 'cyprus': 'europe', 'greece': 'europe',
+    'baltics': 'europe', 'latvia': 'europe', 'lithuania': 'europe',
+    'estonia': 'europe', 'norway': 'europe', 'denmark': 'europe',
+    'finland': 'europe', 'sweden': 'europe', 'germany': 'europe',
+    'france': 'europe', 'uk': 'europe', 'romania': 'europe',
+    'serbia': 'europe', 'kosovo': 'europe', 'bosnia': 'europe',
+    # Turkey and the Caucasus: geographically contested, assigned to EUROPE
+    # because that is the backend and BLUF that reads them.
+    'turkey': 'europe', 'armenia': 'europe', 'azerbaijan': 'europe',
+    'georgia': 'europe',
+
+    # ---- Middle East ----
+    'iran': 'middle_east', 'iraq': 'middle_east', 'israel': 'middle_east',
+    'lebanon': 'middle_east', 'syria': 'middle_east', 'yemen': 'middle_east',
+    'gaza': 'middle_east', 'jordan': 'middle_east', 'saudi_arabia': 'middle_east',
+    'uae': 'middle_east', 'qatar': 'middle_east', 'kuwait': 'middle_east',
+    'bahrain': 'middle_east', 'oman': 'middle_east',
+
+    # ---- Asia & Pacific ----
+    'china': 'asia_pacific', 'taiwan': 'asia_pacific', 'japan': 'asia_pacific',
+    'south_korea': 'asia_pacific', 'dprk': 'asia_pacific',
+    'india': 'asia_pacific', 'pakistan': 'asia_pacific',
+    'afghanistan': 'asia_pacific', 'kazakhstan': 'asia_pacific',
+    'uzbekistan': 'asia_pacific', 'turkmenistan': 'asia_pacific',
+    'kyrgyzstan': 'asia_pacific', 'tajikistan': 'asia_pacific',
+    'vietnam': 'asia_pacific', 'philippines': 'asia_pacific',
+    'myanmar': 'asia_pacific', 'laos': 'asia_pacific',
+    'cambodia': 'asia_pacific', 'thailand': 'asia_pacific',
+    'indonesia': 'asia_pacific', 'malaysia': 'asia_pacific',
+    'sri_lanka': 'asia_pacific', 'bangladesh': 'asia_pacific',
+    'nepal': 'asia_pacific', 'australia': 'asia_pacific',
+    'new_zealand': 'asia_pacific', 'solomon_islands': 'asia_pacific',
+    'kiribati': 'asia_pacific', 'fiji': 'asia_pacific',
+    'papua_new_guinea': 'asia_pacific',
+
+    # ---- Western Hemisphere ----
+    'us': 'wha', 'canada': 'wha', 'mexico': 'wha', 'cuba': 'wha',
+    'venezuela': 'wha', 'colombia': 'wha', 'brazil': 'wha',
+    'argentina': 'wha', 'chile': 'wha', 'peru': 'wha',
+    'ecuador': 'wha', 'bolivia': 'wha', 'haiti': 'wha',
+    'nicaragua': 'wha', 'panama': 'wha', 'honduras': 'wha',
+    'guatemala': 'wha', 'el_salvador': 'wha', 'guyana': 'wha',
+    'suriname': 'wha', 'paraguay': 'wha', 'uruguay': 'wha',
+}
+
+
+def region_of(country):
+    """Region for a spoke. Unknown -> 'unmapped' (visible, never silent)."""
+    return COUNTRY_TO_REGION.get(str(country).lower().replace('-', '_'), 'unmapped')
+
+
+def _breadth(spokes):
+    """Two-axis breadth for one wheel's rim.
+
+    DEPTH = most lit spokes inside any single region  -> regional campaign
+    SPAN  = how many distinct regions have >=1 lit     -> global campaign
+
+    Both are reported WITH their denominators. Breadth is otherwise
+    confounded with build history: a hub with 18 instrumented spokes will
+    always out-score one with 6, and a raw tally would encode the roadmap
+    as a finding rather than measuring the world.
+
+    NOT-REPORTING spokes are excluded from denominators, never counted as
+    dark. A cold tracker is a coverage gap, not evidence of quiet -- the
+    same distinction gpi_delta.compute_wheel_trajectory draws.
+    """
+    lit_by, reporting_by, instrumented_by = {}, {}, {}
+    for sp in spokes or []:
+        r = sp.get('region') or 'unmapped'
+        instrumented_by[r] = instrumented_by.get(r, 0) + 1
+        if sp.get('state') == 'not_reporting':
+            continue
+        reporting_by[r] = reporting_by.get(r, 0) + 1
+        if sp.get('state') == 'lit':
+            # Use _display, not the caller's 'display' -- it carries the
+            # acronym table (CAR / DRC / UAE / DPRK), so a breadth roll-up
+            # never renders "Car" where the wheel renders "CAR".
+            lit_by.setdefault(r, []).append(_display(sp.get('country')))
+
+    regions_lit = {r: sorted(v) for r, v in lit_by.items() if v}
+    depth_region, depth = '', 0
+    for r, names in regions_lit.items():
+        if len(names) > depth:
+            depth, depth_region = len(names), r
+    span = len(regions_lit)
+
+    unreported = sum(1 for sp in (spokes or []) if sp.get('state') == 'not_reporting')
+    total = len(spokes or [])
+    coverage_note = ''
+    if unreported:
+        coverage_note = (
+            '%d of %d spokes are not reporting this cycle and are excluded from '
+            'these denominators. Breadth measured over a partial rim UNDERSTATES '
+            'reach -- absence here is a coverage gap, not a finding.'
+            % (unreported, total))
+
+    return {
+        'depth': depth,
+        'depth_region': depth_region,
+        'span': span,
+        'regions_lit': regions_lit,
+        'lit_by_region': {r: len(v) for r, v in regions_lit.items()},
+        'reporting_by_region': reporting_by,
+        'instrumented_by_region': instrumented_by,
+        'regions_instrumented': len(instrumented_by),
+        'reporting_total': sum(reporting_by.values()),
+        'instrumented_total': total,
+        'unreported_total': unreported,
+        'coverage_note': coverage_note,
+        'unmapped_spokes': sorted(
+            (sp.get('country') for sp in (spokes or [])
+             if (sp.get('region') or 'unmapped') == 'unmapped'), key=str),
+    }
+
+
 _NESTED_HUB_CONTAINERS = ('inbound', 'outbound', 'hub_touches', 'external',
                           'spokes', 'wheels', 'axes', 'vectors')
 
@@ -699,6 +852,7 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
             out['spokes'].append({
                 'country': country,
                 'display': _display(country),
+                'region': region_of(country),   # v1.1.0 -- enables depth/span
                 'hub': hub,
                 'level': st['level'],
                 'state': st['state'],
@@ -718,12 +872,32 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
         out['converged'] = out['lit_count'] >= converge_at
         out['spokes'].sort(key=lambda s: (-s['level'], s['country']))
 
+        out['breadth'] = _breadth(out['spokes'])
+
         lit_names = [s['display'] for s in out['spokes'] if s['state'] == 'lit']
         if out['converged']:
-            out['headline'] = (
-                '%d spokes lit simultaneously on the %s wheel (%s) -- consistent with '
-                'network activation rather than single-country noise.'
-                % (out['lit_count'], _display(hub), ', '.join(lit_names)))
+            _b = out['breadth']
+            # SPAN outranks DEPTH in the prose: several regions at once is the
+            # read no regional BLUF can reach on its own, so it is the finding
+            # that belongs at the top of the sentence.
+            if _b['span'] >= 2:
+                _reg = ', '.join(r.replace('_', ' ').title()
+                                 for r in sorted(_b['regions_lit']))
+                out['headline'] = (
+                    '%d spokes lit simultaneously on the %s wheel across %d regions '
+                    '(%s) -- spokes in %s. A rim lit in more than one region is a '
+                    'different read from several spokes inside one theatre: it is '
+                    'consistent with a hub working its whole network rather than '
+                    'pressing a single neighbourhood.'
+                    % (out['lit_count'], _display(hub), _b['span'],
+                       _reg, ', '.join(lit_names)))
+            else:
+                out['headline'] = (
+                    '%d spokes lit simultaneously on the %s wheel (%s), all within '
+                    '%s -- consistent with network activation rather than '
+                    'single-country noise, and concentrated in one theatre.'
+                    % (out['lit_count'], _display(hub), ', '.join(lit_names),
+                       (_b['depth_region'] or 'one region').replace('_', ' ').title()))
         elif out['lit_count'] == 1:
             out['headline'] = ('One %s spoke lit (%s). A lone spoke rides up independently; '
                                'convergence fires only when two or more light at once.'
@@ -846,6 +1020,37 @@ def build_convergence_panel(resident_hubs, local_countries=(), extra_spokes=None
             include_silent=True)
         panel['emanating'] = [e for e in _all_eman if e['state'] != 'not_reporting']
         panel['emanating_silent'] = [e for e in _all_eman if e['state'] == 'not_reporting']
+
+        # ── Cross-wheel breadth roll-up (v1.1.0) ──────────────────────
+        # Per-hub depth/span, hoisted so a caller does not have to walk the
+        # wheels. THE GATE THIS SERVES: kinetic activity rides up on its own
+        # merits. Sub-kinetic INFLUENCE activity earns higher altitude only
+        # through breadth -- several countries inside one region (depth), or
+        # several regions at once (span). This block supplies the evidence for
+        # that judgement; it deliberately does NOT make it. Naming a global
+        # campaign is a GPI-altitude call and belongs there, so no reader can
+        # declare one on its own.
+        _breadth_by_hub = {}
+        for w in panel['resident_wheels']:
+            b = w.get('breadth') or {}
+            if not b:
+                continue
+            _breadth_by_hub[w.get('hub')] = {
+                'depth': b.get('depth', 0),
+                'depth_region': b.get('depth_region', ''),
+                'span': b.get('span', 0),
+                'regions_lit': b.get('regions_lit', {}),
+                'lit_count': w.get('lit_count', 0),
+                'reporting_total': b.get('reporting_total', 0),
+                'instrumented_total': b.get('instrumented_total', 0),
+                'unreported_total': b.get('unreported_total', 0),
+                'coverage_note': b.get('coverage_note', ''),
+            }
+        panel['breadth_by_hub'] = _breadth_by_hub
+        panel['max_span'] = max([v['span'] for v in _breadth_by_hub.values()] or [0])
+        panel['max_depth'] = max([v['depth'] for v in _breadth_by_hub.values()] or [0])
+        panel['multi_region_hubs'] = sorted(
+            h for h, v in _breadth_by_hub.items() if v['span'] >= 2)
 
         if not resident_hubs:
             panel['subtitle'] = ('No resident hub in this region -- every wheel read here '
