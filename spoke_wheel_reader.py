@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 
 # ============================================================
 # CONFIG
@@ -350,7 +350,17 @@ def _breadth(spokes):
     same distinction gpi_delta.compute_wheel_trajectory draws.
     """
     lit_by, reporting_by, instrumented_by = {}, {}, {}
+    peers_excluded = []
     for sp in spokes or []:
+        # PEERS ARE NOT RIM. Iran/China/DPRK on the Russia wheel are
+        # wheel-to-wheel relationships; the Iran scoping note is explicit that
+        # they must never be double-counted as proxies. Without this filter a
+        # Russia wheel lit on Iran + China + DPRK alone reports span=2 --
+        # "multi-region reach" -- when nothing regional is happening at all.
+        if sp.get('node_class') == 'peer':
+            if sp.get('state') == 'lit':
+                peers_excluded.append(_display(sp.get('country')))
+            continue
         r = sp.get('region') or 'unmapped'
         instrumented_by[r] = instrumented_by.get(r, 0) + 1
         if sp.get('state') == 'not_reporting':
@@ -392,6 +402,12 @@ def _breadth(spokes):
         'instrumented_total': total,
         'unreported_total': unreported,
         'coverage_note': coverage_note,
+        'peers_lit_excluded': sorted(peers_excluded),
+        'peer_note': (
+            'Peer hubs lit but excluded from breadth (%s) -- these are '
+            'wheel-to-wheel relationships, not rim spokes, and counting them '
+            'would read hub-to-hub contact as a regional campaign.'
+            % ', '.join(sorted(peers_excluded))) if peers_excluded else '',
         'unmapped_spokes': sorted(
             (sp.get('country') for sp in (spokes or [])
              if (sp.get('region') or 'unmapped') == 'unmapped'), key=str),
@@ -976,6 +992,100 @@ def read_emanating(countries, exclude_hubs=(), freshness_hours=DEFAULT_FRESHNESS
     return out
 
 
+# ══════════════════════════════════════════════════════════════════════
+# CONTESTED SPOKES  (v1.2.0, Aug 2026)
+# ══════════════════════════════════════════════════════════════════════
+# BREADTH asks: is ONE hub reaching into MANY places?
+# CONTESTATION asks: are MANY hubs pressing on ONE place?
+#
+# Those are orthogonal, and the platform measured only the first. The
+# Abu al-Duhur case (Aug 18 2026) is the shape: Turkey carries Syria as
+# 'expeditionary_client', Israel carries Syria as 'ruptured', and both wheels
+# were lit on the same node in the same cycle. Neither regional BLUF could see
+# it -- Turkey is read on the Europe backend, Syria and Israel on ME -- so the
+# collision was invisible at every altitude below the GPI.
+#
+# This block does NOT adjudicate whether a contest is hostile or cooperative.
+# Two hubs on one node can be partners (Russia + Iran in Syria pre-2024) or
+# rivals (Turkey vs Israel now). Instead it reports how the two hubs classify
+# EACH OTHER in the registries as already written -- evidence, not inference.
+# The reader completes it.
+
+def _hub_pair_relation(hub_a, hub_b):
+    """How these two hubs classify each other, per HUB_REGISTRY as written.
+    Returns {} when neither has an entry for the other -- an unclassified pair
+    is surfaced as unclassified, never guessed at."""
+    a2b = ((HUB_REGISTRY.get(hub_a, {}) or {}).get('node_classes', {}) or {}).get(hub_b)
+    b2a = ((HUB_REGISTRY.get(hub_b, {}) or {}).get('node_classes', {}) or {}).get(hub_a)
+    out = {}
+    if a2b:
+        out['%s_reads_%s' % (hub_a, hub_b)] = a2b
+    if b2a:
+        out['%s_reads_%s' % (hub_b, hub_a)] = b2a
+    return out
+
+
+def _contested_spokes(wheels):
+    """Countries lit on TWO OR MORE hub wheels in the same cycle.
+
+    Hub-on-hub traffic is excluded: 'Iran is lit on both the Russia wheel and
+    the China wheel' is peer-to-peer contact between hubs, not a third country
+    being contested, and counting it would turn routine axis activity into a
+    contested-node finding.
+    """
+    by_country = {}
+    for w in wheels or []:
+        if not w.get('readable'):
+            continue
+        hub = w.get('hub')
+        for sp in w.get('spokes') or []:
+            if sp.get('state') != 'lit':
+                continue
+            c = sp.get('country')
+            if c in _KNOWN_HUBS:        # hub-on-hub, not a contested third country
+                continue
+            if sp.get('node_class') == 'peer':
+                continue
+            by_country.setdefault(c, []).append({
+                'hub': hub,
+                'level': sp.get('level', 0),
+                'node_class': sp.get('node_class', ''),
+                'relationship': sp.get('relationship', ''),
+                'top_signal': sp.get('top_signal', ''),
+            })
+
+    out = []
+    for country, entries in by_country.items():
+        if len(entries) < 2:
+            continue
+        entries.sort(key=lambda e: (-int(e.get('level') or 0), str(e.get('hub'))))
+        hubs = [e['hub'] for e in entries]
+        rel = {}
+        for i in range(len(hubs)):
+            for j in range(i + 1, len(hubs)):
+                rel.update(_hub_pair_relation(hubs[i], hubs[j]))
+        # Do the contesting hubs sit in DIFFERENT regions from each other, or
+        # from the contested country? That is what makes a contest invisible to
+        # every regional BLUF and readable only at GPI altitude.
+        hub_regions = sorted({region_of(h) for h in hubs})
+        c_region = region_of(country)
+        out.append({
+            'country': country,
+            'display': _display(country),
+            'region': c_region,
+            'hubs': entries,
+            'hub_names': hubs,
+            'hub_count': len(entries),
+            'max_level': max(int(e.get('level') or 0) for e in entries),
+            'mutual_classification': rel,
+            'hub_regions': hub_regions,
+            'cross_region': bool([r for r in hub_regions if r != c_region]),
+            'unclassified_pair': not rel,
+        })
+    out.sort(key=lambda x: (-x['hub_count'], -x['max_level'], x['country']))
+    return out
+
+
 def build_convergence_panel(resident_hubs, local_countries=(), extra_spokes=None,
                             freshness_hours=DEFAULT_FRESHNESS_HOURS,
                             lit_threshold=DEFAULT_LIT_THRESHOLD, region=''):
@@ -1051,6 +1161,16 @@ def build_convergence_panel(resident_hubs, local_countries=(), extra_spokes=None
         panel['max_depth'] = max([v['depth'] for v in _breadth_by_hub.values()] or [0])
         panel['multi_region_hubs'] = sorted(
             h for h, v in _breadth_by_hub.items() if v['span'] >= 2)
+
+        # ── Contested spokes (v1.2.0) ─────────────────────────────────
+        # Orthogonal to breadth: many hubs on ONE node, rather than one hub
+        # across many nodes. Only computable where more than one wheel is read
+        # in the same call -- i.e. at GPI altitude, or in a region hosting two
+        # resident hubs.
+        _contested = _contested_spokes(panel['resident_wheels'])
+        panel['contested_spokes'] = _contested
+        panel['contested_count'] = len(_contested)
+        panel['max_contest_hubs'] = max([c['hub_count'] for c in _contested] or [0])
 
         if not resident_hubs:
             panel['subtitle'] = ('No resident hub in this region -- every wheel read here '

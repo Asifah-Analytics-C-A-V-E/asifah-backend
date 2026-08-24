@@ -740,6 +740,108 @@ def _narrative_hub_network_breadth(blufs):
     return out or None
 
 
+def _narrative_contested_spoke(blufs):
+    """Two or more hubs lit on the SAME country in the same cycle.
+
+    Orthogonal to hub_network_breadth: that measures one hub reaching wide,
+    this measures several hubs pressing on one node. Abu al-Duhur (Aug 18
+    2026) is the reference case -- Turkey and Israel both lit on Syria, with
+    Turkey read on the Europe backend and Syria/Israel on ME, so no regional
+    BLUF could see the collision. The GPI is the only altitude that can.
+
+    OUTPUT IS A TASKING TRIGGER, NOT A FORECAST. A contested node says the
+    collection question has changed, not that anything will happen. The
+    narrative therefore ends by naming what an analyst should go and ask --
+    which is the honest limit of an OSINT layer that cannot see intelligence.
+
+    Ranked below the +11 kinetic boost: contestation is an influence read.
+    """
+    panel = _get_convergence_panel()
+    if not panel:
+        return None
+    contested = panel.get('contested_spokes') or []
+    if not contested:
+        return None
+
+    out = []
+    for c in contested[:3]:          # top 3 by hub count then level
+        hubs = c.get('hub_names') or []
+        if len(hubs) < 2:
+            continue
+        disp = c.get('display') or c.get('country')
+        hub_names = [str(h).replace('_', ' ').title() for h in hubs]
+        max_level = _decay_int(c.get('max_level'), 0)
+        c_region = _REGION_DISPLAY.get(c.get('region', ''), c.get('region', ''))
+
+        headline = ('%s is contested: %s wheels lit simultaneously'
+                    % (disp, ' and '.join(hub_names)))
+
+        detail = ('%d hubs register %s on their rim in the same cycle -- '
+                  % (len(hubs), disp))
+        detail += '; '.join(
+            '%s at L%d as %s' % (str(h.get('hub')).title(),
+                                 _decay_int(h.get('level'), 0),
+                                 str(h.get('node_class') or 'unclassified').replace('_', ' '))
+            for h in (c.get('hubs') or []))
+        detail += '. '
+
+        rel = c.get('mutual_classification') or {}
+        if rel:
+            detail += ('These hubs classify each other in the platform registry as: %s. '
+                       % '; '.join('%s reads %s as %s'
+                                   % (k.split('_reads_')[0].title(),
+                                      k.split('_reads_')[1].title(), v)
+                                   for k, v in sorted(rel.items())))
+        else:
+            detail += ('Neither hub carries a classification of the other in the registry, '
+                       'so whether this contest is rivalrous or cooperative is UNRESOLVED '
+                       'here rather than assumed. ')
+
+        if c.get('cross_region'):
+            detail += ('The contesting hubs are not all resident in %s, so no single '
+                       'regional BLUF reads both sides of this: each sees one hub pressing '
+                       'and correctly declines to generalise. The collision is visible only '
+                       'at global altitude. ' % c_region)
+
+        detail += ('Two hubs on one node is a different finding from one hub across many '
+                   'nodes. It does not by itself indicate escalation -- hubs can press the '
+                   'same node cooperatively -- but it does mean the node is carrying '
+                   'competing external interests at once. ')
+
+        # The tasking trigger -- the actual product of this narrative. Roles are
+        # NOT assigned: which hub is placing capability and which is objecting
+        # cannot be read from a rim level, and asserting it backwards would be
+        # worse than leaving it open. Which is which is part of the question.
+        detail += ('COLLECTION PROMPT -- this is a cue to task, not a forecast. Four things '
+                   'worth establishing directly about %s, none of which this layer can see: '
+                   '(1) whether either of %s is placing or preparing to place physical '
+                   'capability there -- facility rehabilitation, technical delegations, '
+                   'radar or air-defence emplacement; (2) whether the host government has '
+                   'granted or is weighing consent for it; (3) whether either hub has '
+                   'restated a red line naming a specific site rather than the country in '
+                   'general; and (4) whether one hub is denying activity the other is '
+                   'asserting. A restated, site-specific red line running concurrently with '
+                   'a flat denial is the configuration that has historically preceded '
+                   'unilateral action against the emplacement rather than against the '
+                   'personnel -- the infrastructure is struck before it can be used. '
+                   % (disp, ' or '.join(hub_names)))
+
+        detail += ('This composite is a CONVERGENCE indicator, NOT a probability of '
+                   'action; each wheel is independently sourced and the reader completes '
+                   'the inference.')
+
+        out.append({
+            'priority': 10 if (len(hubs) >= 3 or max_level >= 4) else 9,
+            'category': 'contested_spoke',
+            'regions':  sorted({c.get('region', 'global')} | set(c.get('hub_regions') or [])),
+            'icon':     '\u2694\uFE0F',
+            'color':    '#0891b2',
+            'headline': headline,
+            'detail':   detail,
+        })
+    return out or None
+
+
 def _decay_int(v, default=0):
     """Local int coercion -- this module has _safe_level but no generic int
     helper, and priority is not a 0-5 level so _safe_level would clamp it."""
@@ -1095,6 +1197,10 @@ NARRATIVE_AXIS_SETS = {
     # across regions is an alignment/pressure finding, and listing kinetic
     # first would let reach render as escalation on the kinetic axis.
     'hub_network_breadth':             ['diplomatic', 'kinetic'],
+    # Contestation is an alignment/pressure finding first. Kinetic is listed
+    # because a contested node is where force gets used -- but second, so a
+    # contest never renders as escalation on its own.
+    'contested_spoke':                 ['diplomatic', 'kinetic'],
 }
 
 def _axes_for_narrative(n):
@@ -2990,6 +3096,7 @@ NARRATIVE_DETECTORS = [
     _narrative_turkey_regional_convergence,              # Turkey cross-theater convergence (projection + periphery, Jun 28 2026)
     _narrative_iran_axis_convergence,                    # Iran Unity-of-Fronts / proxy-arena influence read (Jun 29 2026)
     _narrative_hub_network_breadth,                      # ANY hub: depth (countries/region) or span (regions) — Slice 2, Aug 2026
+    _narrative_contested_spoke,                          # MANY hubs on ONE node — Abu al-Duhur geometry, Aug 2026
     # Fallback always last
     _narrative_global_baseline,
 ]
