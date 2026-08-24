@@ -840,6 +840,139 @@ def _detect_silence_anomalies(actor_results, baselines):
 # ============================================
 # CROSS-THEATER COORDINATION (v2.0)
 # ============================================
+# ============================================================
+# MEDIATED DE-ESCALATION  (Slice C, Aug 2026)
+# ============================================================
+# Syria was a CONSUMER-ONLY node in the diplomatic track: the Israel tracker
+# already reads `diplomatic_active` / `ceasefire_level` / `diplomatic_modifier`
+# off each theatre's fingerprint and aggregates them into a downward modifier
+# capped at -25 -- but Syria never wrote them. So when Amman happened, the
+# de-escalation had nowhere to enter the platform. This is the producer half.
+#
+# THE LADDER, and why the rungs are not evenly spaced:
+#   Everyone calls for de-escalation. Calls are cheap and near-constant, so the
+#   bottom rung is worth almost nothing. What is scarce is a mediator actually
+#   convening both parties in a room. The modifier therefore stays small until
+#   talks are HELD, and only reaches its floor when a follow-up mechanism is
+#   agreed -- because a mechanism is the thing that survives the news cycle.
+#
+# THE ALLY-CRITICISM MARKER: after Abu al-Duhur the sharpest public rebuke of
+# the strike came from Washington -- the striking party's own principal ally --
+# not from an adversary. Adversary condemnation is free and tells you nothing;
+# an ally publicly constraining its partner is costly and materially raises the
+# odds of an off-ramp being taken. It is scored as a MULTIPLIER on the ladder
+# rather than as its own rung, because alone it de-escalates nothing.
+#
+# DOCTRINE: this is a downward modifier on pressure, never a peace prediction.
+# Talks failing is a normal outcome and the modifier decays with the fingerprint
+# TTL rather than persisting as though the de-escalation held.
+
+MEDIATED_DEESCALATION_TRIGGERS = {
+    5: [  # Mechanism agreed -- the rung that survives the news cycle
+        'deconfliction mechanism agreed', 'security mechanism agreed',
+        'agreed to establish a mechanism', 'joint committee agreed',
+        'security arrangement signed', 'follow-up talks scheduled',
+        'آلية تنسيق أمني', 'اتفاق على آلية',        # AR: security coordination mechanism, agreement on a mechanism
+    ],
+    4: [  # Talks actually HELD, both parties in the room
+        'talks in amman', 'amman talks', 'held talks', 'meeting in amman',
+        'us-mediated talks', 'us mediated talks', 'mediated talks',
+        'direct talks', 'syria israel talks', 'israel syria talks',
+        'delegations met', 'convened talks',
+        'محادثات في عمان', 'مباحثات مباشرة',         # AR: talks in Amman, direct talks
+        'שיחות בעמאן', 'מגעים ישירים',                # HE: talks in Amman, direct contacts
+    ],
+    3: [  # Mediator actively engaged / talks scheduled
+        'mediation effort', 'shuttle diplomacy', 'envoy travels',
+        'talks scheduled', 'agreed to meet', 'will host discussions',
+        'hosted discussions', 'deconfliction channel',
+        'وساطة أمريكية', 'جولة مكوكية',              # AR: American mediation, shuttle round
+        'תיווך אמריקאי',                              # HE: American mediation
+    ],
+    2: [  # Channel open, contacts acknowledged
+        'security channel', 'back channel', 'contacts under way',
+        'communication channel', 'quiet contacts',
+        'قناة اتصال', 'ערוץ תקשורת',
+    ],
+    1: [  # Calls for de-escalation -- cheap, near-constant, worth almost nothing
+        'calls for de-escalation', 'urged restraint', 'called for calm',
+        'unnecessary escalation', 'does not advance regional stability',
+        'دعوات للتهدئة', 'קריאות להרגעה',
+    ],
+}
+
+# Multiplier, not a rung. An ally publicly constraining its own partner.
+ALLY_CONSTRAINT_TRIGGERS = [
+    'us envoy criticized', 'washington criticized', 'ally criticized strike',
+    'unnecessary escalation that does not advance', 'barrack said',
+    'barrack criticized', 'us deeply concerned', 'called for stronger deconfliction',
+    'lack of warning', 'did not warn washington',
+]
+
+# Ladder -> downward modifier on theatre pressure. Deliberately back-loaded,
+# and sized so that ladder + ally multiplier lands ON the -15 per-theatre floor
+# rather than through it. The consumer aggregates across theatres and caps at
+# -25; a single theatre reaching -21 would consume most of that budget alone
+# and crowd out genuine multi-theatre de-escalation, which is the thing the
+# aggregate exists to measure.
+DEESCALATION_MODIFIER = {0: 0, 1: -1, 2: -2, 3: -5, 4: -8, 5: -11}
+DEESCALATION_FLOOR = -15   # per-theatre, after the ally multiplier
+
+
+def _compute_mediated_deescalation(articles):
+    """Producer half of the diplomatic track. Returns the three fields the
+    Israel tracker (and any other consumer) already knows how to read."""
+    def _hits(triggers):
+        n = 0
+        for a in (articles or []):
+            blob = ((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+            if any(t.lower() in blob for t in triggers):
+                n += 1
+        return n
+
+    level, evidence = 0, []
+    for lvl in sorted(MEDIATED_DEESCALATION_TRIGGERS, reverse=True):
+        n = _hits(MEDIATED_DEESCALATION_TRIGGERS[lvl])
+        if n:
+            evidence.append(f'L{lvl}: {n} article(s)')
+            if lvl > level:
+                level = lvl
+
+    ally = _hits(ALLY_CONSTRAINT_TRIGGERS)
+    modifier = DEESCALATION_MODIFIER.get(level, 0)
+
+    # Ally constraint deepens an existing off-ramp by 40%; it cannot create one.
+    # An ally objecting while no channel exists is friction, not de-escalation.
+    if ally and modifier < 0:
+        modifier = max(DEESCALATION_FLOOR, int(round(modifier * 1.4)))
+        evidence.append(f'ally-constraint signal x{ally} (modifier deepened 40%)')
+
+    note = ''
+    if level == 0:
+        note = ('No mediated de-escalation track detected this cycle. Absence here is not '
+                'evidence that tensions are unmanaged -- quiet channels are quiet by design.')
+    elif level <= 2:
+        note = ('A channel is acknowledged but no convening is reported. Calls for restraint '
+                'are near-constant and carry little weight on their own.')
+    elif level == 3:
+        note = 'A mediator is actively engaged; talks are reported as intended, not held.'
+    elif level == 4:
+        note = ('Both parties have been convened by a third party. Talks held is the scarce '
+                'signal in this ladder -- calls for talks are not.')
+    else:
+        note = ('A follow-up mechanism is reported agreed. That is the rung that outlives the '
+                'news cycle; it is also the rung most often announced and least often built.')
+
+    return {
+        'diplomatic_active': level >= 2,
+        'ceasefire_level': level,
+        'diplomatic_modifier': modifier,
+        'ally_constraint': bool(ally),
+        'diplomatic_evidence': evidence[:5],
+        'diplomatic_note': note,
+    }
+
+
 def _write_crosstheater_signal(result):
     """Write Syria fingerprint to shared cross-theater Redis key."""
     try:
@@ -878,6 +1011,15 @@ def _write_crosstheater_signal(result):
                 for aid in ['israel', 'hts', 'iran_proxies', 'isis']
             },
             'specificity_score': result.get('specificity_score', 0),
+            # ── Diplomatic track (Slice C) — the Israel tracker already reads
+            # these three off every theatre fingerprint and aggregates them
+            # into inbound_diplomatic_modifier (capped -25). Syria was silent
+            # on all three until now, so Amman had no way in.
+            'diplomatic_active':    (result.get('mediated_deescalation') or {}).get('diplomatic_active', False),
+            'ceasefire_level':      (result.get('mediated_deescalation') or {}).get('ceasefire_level', 0),
+            'diplomatic_modifier':  (result.get('mediated_deescalation') or {}).get('diplomatic_modifier', 0),
+            'ally_constraint':      (result.get('mediated_deescalation') or {}).get('ally_constraint', False),
+            'diplomatic_note':      (result.get('mediated_deescalation') or {}).get('diplomatic_note', ''),
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
@@ -1837,6 +1979,7 @@ def run_syria_rhetoric_scan(days=3):
     result['delta'] = _compute_delta()
 
     # Cross-theater
+    result['mediated_deescalation'] = _compute_mediated_deescalation(articles)
     _write_crosstheater_signal(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination()
 
