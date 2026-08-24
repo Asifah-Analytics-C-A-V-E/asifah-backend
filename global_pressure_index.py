@@ -586,6 +586,160 @@ def _build_global_convergence_panel():
         return None
 
 
+# ══════════════════════════════════════════════════════════════════════
+# HUB NETWORK BREADTH  (Slice 2, Aug 2026)
+# ══════════════════════════════════════════════════════════════════════
+# THE GATING DOCTRINE THIS IMPLEMENTS:
+#
+#   Kinetic activity rides up on INTENSITY. Russia-Ukraine shelling reaches
+#   GPI altitude because the event is the signal; it keeps the +11 kinetic
+#   boost and this module never touches it.
+#
+#   Sub-kinetic INFLUENCE activity rides up on BREADTH. Africa Corps in Mali
+#   is a Mali headline and an Africa BLUF headline on its own merits. Whether
+#   it deserves GLOBAL altitude depends on whether the same hub shows up in
+#   more places -- and there are two independent ways to qualify:
+#
+#     DEPTH  Mali + Somalia + CAR        several countries, one region
+#     SPAN   Mali + Cuba + Poland        several regions
+#
+#   Either can carry it. Both together is the strongest read on the platform,
+#   because it is simultaneously a regional campaign AND a global one.
+#
+# This is the generalisation of _narrative_iran_axis_convergence, which
+# implemented exactly this logic hardcoded to Iran's proxy theatres ("GATE:
+# breadth, not depth. Fires when >=3 proxies active"). Every hub now gets it.
+#
+# PRIORITY STAYS BELOW THE +11 KINETIC BOOST -- deliberately, and for the same
+# reason the Iran detector does: an influence convergence must surface as a
+# prominent narrative without inflating the kinetic-weighted global level.
+# Mixing those axes would let a diplomatic pattern masquerade as escalation.
+
+HUB_BREADTH_DEPTH_GATE = 3   # lit spokes inside ONE region
+HUB_BREADTH_SPAN_GATE  = 3   # distinct regions with >=1 lit spoke
+
+_REGION_DISPLAY = {'africa': 'Africa', 'europe': 'Europe',
+                   'middle_east': 'the Middle East',
+                   'asia_pacific': 'Asia-Pacific',
+                   'wha': 'the Western Hemisphere',
+                   'unmapped': 'unmapped theatres'}
+
+_PANEL_MEMO = {'ts': None, 'panel': None}
+
+
+def _get_convergence_panel():
+    """Memoised panel read. The payload and the breadth detector both need it,
+    and a wheel read scans the keyspace -- doing that twice per request would
+    double the Redis work for an identical answer."""
+    now = datetime.now(timezone.utc)
+    ts = _PANEL_MEMO.get('ts')
+    if _PANEL_MEMO.get('panel') is not None and ts is not None:
+        if (now - ts).total_seconds() < 60:
+            return _PANEL_MEMO['panel']
+    panel = _build_global_convergence_panel()
+    _PANEL_MEMO['ts'] = now
+    _PANEL_MEMO['panel'] = panel
+    return panel
+
+
+def _narrative_hub_network_breadth(blufs):
+    """Hub influence measured by REACH rather than intensity.
+
+    Returns a LIST (one narrative per qualifying hub) or None.
+
+    Absence-honest throughout: a hub whose spokes are largely not reporting
+    is reported with its coverage gap named, because breadth measured over a
+    partial rim UNDERSTATES reach -- and a gate that fires on understated
+    breadth would be silently conservative in a way no reader could see.
+
+    Peers are already excluded upstream by spoke_wheel_reader._breadth:
+    Iran/China/DPRK on the Russia wheel are wheel-to-wheel, and counting them
+    would read hub-to-hub contact as a regional campaign.
+    """
+    panel = _get_convergence_panel()
+    if not panel:
+        return None
+    by_hub = panel.get('breadth_by_hub') or {}
+    if not by_hub:
+        return None
+
+    out = []
+    for hub, b in sorted(by_hub.items()):
+        depth = _decay_int(b.get('depth'), 0)
+        span  = _decay_int(b.get('span'), 0)
+        deep  = depth >= HUB_BREADTH_DEPTH_GATE
+        wide  = span  >= HUB_BREADTH_SPAN_GATE
+        if not (deep or wide):
+            continue
+
+        hub_name    = str(hub).replace('_', ' ').title()
+        regions_lit = b.get('regions_lit') or {}
+        depth_region = _REGION_DISPLAY.get(b.get('depth_region', ''),
+                                           b.get('depth_region', ''))
+        region_names = [_REGION_DISPLAY.get(r, r) for r in sorted(regions_lit)]
+
+        # Denominators travel with the claim. Breadth is otherwise confounded
+        # with build history -- a hub with 21 instrumented spokes will always
+        # out-score one with 8, and a bare tally would report the roadmap as
+        # a finding about the world.
+        lit_total    = _decay_int(b.get('lit_count'), 0)
+        reporting    = _decay_int(b.get('reporting_total'), 0)
+        instrumented = _decay_int(b.get('instrumented_total'), 0)
+
+        if deep and wide:
+            headline = ('%s is lit on %d spokes across %d regions, with %d in %s alone'
+                        % (hub_name, lit_total, span, depth, depth_region))
+        elif wide:
+            headline = ('%s is lit across %d regions simultaneously (%s)'
+                        % (hub_name, span, ', '.join(region_names)))
+        else:
+            headline = ('%s is lit on %d spokes concentrated in %s'
+                        % (hub_name, depth, depth_region))
+
+        detail = ('Influence read, not a kinetic one. %s registers %d lit spokes of %d '
+                  'reporting (%d instrumented). '
+                  % (hub_name, lit_total, reporting, instrumented))
+        for r in sorted(regions_lit):
+            detail += ('%s: %s. ' % (_REGION_DISPLAY.get(r, r), ', '.join(regions_lit[r])))
+
+        if deep and wide:
+            detail += ('This clears both breadth tests at once: several countries inside '
+                       'a single region AND presence across separated regions. Those are '
+                       'different findings -- a regional campaign and a global one -- and '
+                       'their co-occurrence is the strongest reach signal the platform '
+                       'measures. ')
+        elif wide:
+            detail += ('Separated regions lighting in the same cycle is the read no '
+                       'regional BLUF can reach on its own; each would see one spoke and '
+                       'correctly decline to generalise from it. ')
+        else:
+            detail += ('Concentration inside one region is a REGIONAL campaign read, not '
+                       'a global one. It is surfaced here because the count exceeds what '
+                       'single-country noise produces, not because reach is global. ')
+
+        detail += ('Spoke levels reflect rhetoric and influence signals, so this narrative '
+                   'is ranked BELOW kinetic escalation by design -- reach is not the same '
+                   'thing as force, and the global level should not move as though it were. ')
+
+        cov = b.get('coverage_note') or ''
+        if cov:
+            detail += cov + ' '
+        detail += ('This composite is a CONVERGENCE indicator, NOT a probability of '
+                   'action; each spoke is independently sourced and the reader completes '
+                   'the inference.')
+
+        out.append({
+            'priority': 10 if (deep and wide) else 9,   # below the +11 kinetic boost
+            'category': 'hub_network_breadth',
+            'regions':  sorted(regions_lit) or ['global'],
+            'icon':     '\U0001f578',    # web -- a rim, not a flag
+            'color':    '#7c3aed',
+            'headline': headline,
+            'detail':   detail,
+        })
+    return out or None
+
+
 def _decay_int(v, default=0):
     """Local int coercion -- this module has _safe_level but no generic int
     helper, and priority is not a 0-5 level so _safe_level would clamp it."""
@@ -937,6 +1091,10 @@ NARRATIVE_AXIS_SETS = {
     'multiaxis_convergence':           ['kinetic', 'economic'],   # by definition cross-axis
     'turkey_regional_convergence':     ['kinetic', 'diplomatic'], # projection (hard-power) + alignment/mediation
     'iran_axis_convergence':           ['kinetic', 'economic', 'diplomatic'], # proxy arena + chokepoint/oil + mediation counterweight
+    # Influence reach, NOT force. Diplomatic leads deliberately: a hub lit
+    # across regions is an alignment/pressure finding, and listing kinetic
+    # first would let reach render as escalation on the kinetic axis.
+    'hub_network_breadth':             ['diplomatic', 'kinetic'],
 }
 
 def _axes_for_narrative(n):
@@ -2831,6 +2989,7 @@ NARRATIVE_DETECTORS = [
     _narrative_conflict_repricing_europe,                # Europe off-ramp market-belief read (Slice 4c, Jun 19 2026)
     _narrative_turkey_regional_convergence,              # Turkey cross-theater convergence (projection + periphery, Jun 28 2026)
     _narrative_iran_axis_convergence,                    # Iran Unity-of-Fronts / proxy-arena influence read (Jun 29 2026)
+    _narrative_hub_network_breadth,                      # ANY hub: depth (countries/region) or span (regions) — Slice 2, Aug 2026
     # Fallback always last
     _narrative_global_baseline,
 ]
@@ -3875,7 +4034,7 @@ def build_gpi(force=False):
             'global_color':    GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
             'bluf':            bluf_prose,
             'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
-            'convergence_panel': _build_global_convergence_panel(),
+            'convergence_panel': _get_convergence_panel(),
             # Narratives get country tags as well (Jul 27 2026). An earlier pass
             # tagged only top_signals, so the ECONOMIC card -- whose prose is
             # narrative-driven and routinely names "China, Brazil, India" or
