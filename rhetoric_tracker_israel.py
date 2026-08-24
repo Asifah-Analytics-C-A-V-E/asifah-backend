@@ -473,6 +473,99 @@ BRAKE_LANGUAGE = [
 # ============================================
 
 # Vector 4: Strike Posture (IDF mobilization, target language)
+# ============================================================
+# RED-LINE RESTATEMENT TRIGGERS  (v-tempo, Aug 2026)
+# ============================================================
+# The OBJECTING half of the emplacement-precursor pattern. Turkey's tracker
+# carries the emplacing half (facility rehabilitation, delegations, capability
+# naming, denial); this carries Israel's side.
+#
+# WHY THE SITE-SPECIFIC DISTINCTION MATTERS: Israel restates general red lines
+# about Syria constantly -- that is baseline, not signal. What preceded the
+# 18 Aug 2026 Abu al-Duhur strike was a red line restated about a NAMED SITE,
+# plus an invoked "status quo in security matters", plus "repeatedly warned".
+# General deterrent language and site-specific warning are different tempos and
+# are counted separately so the baseline engine can tell them apart.
+#
+# mode='actor' for Israel: it is a CLAIMING actor here. It stated the red line
+# publicly and confirmed the strike afterwards. Silence following a run of
+# site-specific restatement is therefore itself readable -- which is exactly
+# what actor mode measures and tape mode cannot.
+
+REDLINE_RESTATEMENT_TRIGGERS = {
+    'site_specific': [       # the high-value stream -- a NAMED place
+        'status quo in security', 'security status quo',
+        'breach the status quo', 'on the verge of breaching',
+        'repeatedly warned', 'warned damascus', 'warned syria against',
+        'ignored our warnings', 'ignored the warnings',
+        'warned against the deployment', 'warned against allowing',
+        'abu al-duhur', 'abu duhur', 'abu al duhur',
+        'airbase near aleppo', 'base near aleppo',
+        'קו אדום ספציפי', 'הזהרנו את דמשק',        # HE: specific red line, we warned Damascus
+        'סטטוס קוו ביטחוני',                        # HE: security status quo
+        'خط أحمر محدد', 'حذرنا دمشق',                # AR: specific red line, we warned Damascus
+    ],
+    'general': [             # baseline deterrent language -- context, not signal
+        'red line', 'redline', 'will not allow', 'will not permit',
+        'will not tolerate', 'israel reserves the right',
+        'unacceptable to israel', 'threat to our security',
+        'קו אדום', 'לא נאפשר', 'לא נסכים',          # HE: red line, will not allow, will not agree
+        'خط أحمر', 'لن نسمح',                        # AR: red line, we will not allow
+    ],
+    'strike_claim': [        # Israel claiming an action -- the actor half
+        'idf confirms strike', 'israel confirms', 'idf struck',
+        'israel struck', 'idf carried out', 'we struck',
+        'israel acknowledges strike', 'prime ministers office said',
+        'צה"ל תקף', 'ישראל תקפה', 'צה"ל אישר',      # HE: IDF struck, Israel struck, IDF confirmed
+        'الجيش الإسرائيلي قصف',                      # AR: the Israeli army bombed
+    ],
+    'deconfliction': [       # the de-escalation counterweight
+        'deconfliction', 'deconfliction mechanism', 'mediated talks',
+        'us mediated', 'talks in amman', 'amman talks',
+        'de-escalation talks', 'security channel',
+        'מנגנון תיאום', 'שיחות בעמאן',              # HE: coordination mechanism, talks in Amman
+        'آلية التنسيق', 'محادثات عمان',              # AR: coordination mechanism, Amman talks
+    ],
+}
+
+
+def _emit_tempo_counts_israel(articles):
+    """Write raw daily counts + corpus health. No logic, no thresholds.
+    Engine lives on this backend (ME); shared Upstash Redis is the bus."""
+    try:
+        from tempo_baseline import emit_counts
+    except ImportError:
+        return False
+
+    def _hits(triggers):
+        n = 0
+        for a in (articles or []):
+            blob = ((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+            if any(t.lower() in blob for t in triggers):
+                n += 1
+        return n
+
+    streams = {
+        'redline':       _hits(REDLINE_RESTATEMENT_TRIGGERS['site_specific']),
+        'redline_general': _hits(REDLINE_RESTATEMENT_TRIGGERS['general']),
+        'strike_claim':  _hits(REDLINE_RESTATEMENT_TRIGGERS['strike_claim']),
+        'deconfliction': _hits(REDLINE_RESTATEMENT_TRIGGERS['deconfliction']),
+    }
+    # Corpus-health denominator. Without it a dead feed reads as an actor
+    # going quiet and the platform hallucinates menace from its own outage.
+    corpus = {
+        'articles_seen': len(articles or []),
+        'sources_alive': len({a.get('source') for a in (articles or []) if a.get('source')}),
+    }
+    try:
+        emit_counts('israel', streams, corpus)
+        print(f'[Israel Rhetoric] tempo emitted: {streams} corpus={corpus}')
+        return True
+    except Exception as e:
+        print(f'[Israel Rhetoric] tempo emit failed (non-fatal): {str(e)[:120]}')
+        return False
+
+
 STRIKE_POSTURE_TRIGGERS = {
     5: [
         'idf ground operation launched', 'israel invades',
@@ -2196,6 +2289,9 @@ def run_israel_rhetoric_scan(days=3):
 
     # Write fingerprint
     _write_crosstheater_signal(result, articles)
+
+    # Tempo emitter (mode='actor') — feeds tempo_baseline.py on this backend
+    _emit_tempo_counts_israel(articles)
 
     # Signal interpretation — So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:

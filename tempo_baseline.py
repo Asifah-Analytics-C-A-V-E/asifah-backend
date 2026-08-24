@@ -125,6 +125,21 @@ TEMPO_REGISTRY = {
                  'drop in claim cadence after a period of high tempo, is signal.'),
     },
 
+    'israel': {
+        'theatre': 'israel', 'backend': 'me', 'mode': 'actor',
+        'streams': ['redline', 'redline_general', 'strike_claim', 'deconfliction'],
+        'flag': '\U0001f1ee\U0001f1f1',
+        'note': ('The OBJECTING half of the emplacement-precursor pattern; Turkey carries '
+                 'the emplacing half. mode=actor because Israel CLAIMS: it stated the red '
+                 'line publicly before Abu al-Duhur and confirmed the strike after, so a '
+                 'silence following a run of site-specific restatement is itself readable. '
+                 'The two redline streams are separate on purpose -- general deterrent '
+                 'language ("will not tolerate") is Israeli baseline and near-constant, '
+                 'while a red line restated about a NAMED SITE, with an invoked security '
+                 'status quo and "repeatedly warned", is the rare form that preceded '
+                 'action. Counting them together would bury the signal in the baseline.'),
+    },
+
     # ── mode='tape' — DENIABLE actors. Measure the tape, not the actor. ──
     'poland': {
         'theatre': 'poland', 'backend': 'europe', 'mode': 'tape',

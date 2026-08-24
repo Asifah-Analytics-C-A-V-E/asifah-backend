@@ -740,6 +740,138 @@ def _narrative_hub_network_breadth(blufs):
     return out or None
 
 
+def _narrative_emplacement_precursor(blufs):
+    """The emplacement-precursor convergence, read from two tempo baselines.
+
+    THE PATTERN, reconstructed from Abu al-Duhur (18 Aug 2026):
+      1. dormant-facility reactivation      (weeks ahead, OSINT-visible)
+      2. technical delegation               ("training and exchange of expertise")
+      3. capability naming                  (radar, air-defence, troops)
+      4. rival restates a SITE-SPECIFIC red line, invoking a security status quo
+      5. emplacing hub DENIES, concurrently with 4
+
+    Stages 4 and 5 running together is the configuration that preceded action --
+    and the action struck the runway, not personnel: the infrastructure was
+    destroyed before capability could arrive.
+
+    TWO TARGETS, TWO MODES, DELIBERATELY:
+      turkey  mode='tape'   emplacement / denial / redline
+      israel  mode='actor'  redline (site-specific) / strike_claim / deconfliction
+    Turkey denies, so there is no claiming actor to fall silent. Israel claims,
+    so its silence is readable. Reading either in the other's mode produces
+    confident nonsense.
+
+    OUTPUT IS A TASKING TRIGGER, NOT A FORECAST. This layer cannot see what an
+    intelligence service knows. It can say two independent curves are rising
+    together and name what to go and ask.
+    """
+    try:
+        from tempo_baseline import read_baseline
+    except ImportError:
+        return None
+
+    try:
+        tk = read_baseline('turkey') or {}
+        il = read_baseline('israel') or {}
+    except Exception as e:
+        print(f'[GPI] emplacement precursor read failed (non-fatal): {str(e)[:120]}')
+        return None
+
+    # ABSENCE-HONEST: a baseline still accumulating is reported as such and the
+    # detector stays silent. It never estimates a deviation it cannot support.
+    if not (tk.get('ready') and il.get('ready')):
+        return None
+
+    def _dev(bl, stream):
+        """Short-window tempo against long-window norm: mean_7d / mean_30d.
+
+        NOT a single-day spike. compute_baseline() writes mean_7d, mean_30d,
+        stdev, max and days per stream -- there is no per-day 'current' in the
+        payload, and using the 7d mean is the better read anyway: one loud news
+        cycle should not read as a tempo shift, whereas a week sustained above
+        the monthly norm is exactly what tempo means.
+
+        Returns None when the long-window mean is too small to divide by --
+        a stream that barely fires cannot produce a meaningful ratio, and
+        inventing one would manufacture signal from noise.
+        """
+        base = (bl.get('baselines') or {}).get(stream) or {}
+        m30 = base.get('mean_30d') or 0
+        m7 = base.get('mean_7d')
+        if m7 is None or float(m30) < 1.0:
+            return None
+        return round(float(m7) / float(m30), 2)
+
+    empl = _dev(tk, 'emplacement')
+    deny = _dev(tk, 'denial')
+    rline = _dev(il, 'redline')          # site-specific stream, NOT the general one
+
+    if rline is None or (empl is None and deny is None):
+        return None
+
+    # The gate. A site-specific red line restated above baseline while the
+    # emplacing hub's denial or emplacement tempo is also above baseline.
+    REDLINE_GATE, COUNTERPART_GATE = 1.5, 1.5
+    counterpart = max([v for v in (empl, deny) if v is not None] or [0])
+    if rline < REDLINE_GATE or counterpart < COUNTERPART_GATE:
+        return None
+
+    both = (empl or 0) >= COUNTERPART_GATE and (deny or 0) >= COUNTERPART_GATE
+
+    headline = ('Emplacement-precursor configuration: Israeli site-specific red-line tempo '
+                'and Turkish %s tempo are both above baseline'
+                % ('emplacement and denial' if both else
+                   ('emplacement' if (empl or 0) >= (deny or 0) else 'denial')))
+
+    detail = ('Israeli site-specific red-line tempo is running at %.1fx its 30-day norm over the past week. '
+              % rline)
+    if empl is not None:
+        detail += 'Turkish emplacement tempo (facility work, delegations, capability naming) is at %.1fx. ' % empl
+    if deny is not None:
+        detail += 'Turkish denial tempo is at %.1fx. ' % deny
+
+    detail += ('These are two independently sourced corpora on two different backends -- '
+               'Turkey is gathered by Europe, Israel by the Middle East -- so neither '
+               'regional BLUF sees both curves. ')
+
+    detail += ('The pattern this matches: a rival restating a red line about a NAMED SITE '
+               'while the emplacing hub flatly denies the activity. That configuration '
+               'preceded the 18 August 2026 strike on Abu al-Duhur, where the runway was '
+               'struck rather than personnel -- the infrastructure destroyed before the '
+               'capability it was being prepared to receive could arrive. General deterrent '
+               'language is excluded from this read; Israel restates broad red lines about '
+               'Syria constantly and that is baseline, not signal. ')
+
+    # Corpus honesty. Surge reads survive a degraded corpus -- a spike detected
+    # despite fewer sources is MORE notable, not less -- but the reader is told.
+    for lbl, bl in (('Turkish', tk), ('Israeli', il)):
+        if bl.get('corpus_warning'):
+            detail += ('%s corpus note: %s ' % (lbl, bl['corpus_warning']))
+
+    detail += ('COLLECTION PROMPT -- this is a cue to task, not a forecast, and the honest '
+               'limit of an open-source layer is that it cannot see what an intelligence '
+               'service knows. Worth establishing directly: which specific site is at issue; '
+               'whether physical preparation is under way there (runway or facility works, '
+               'technical delegations, radar or air-defence emplacement); whether the host '
+               'government has granted or is weighing consent; and how far apart the two '
+               'sides\' accounts now are. A widening gap between a restated warning and a '
+               'flat denial has historically closed through unilateral action against the '
+               'infrastructure rather than negotiation over it. ')
+
+    detail += ('This composite is a CONVERGENCE indicator, NOT a probability of action; '
+               'each stream is independently sourced and the reader completes the inference.')
+
+    return {
+        'priority': 10 if both else 9,   # below the +11 kinetic boost
+        'category': 'emplacement_precursor',
+        'regions':  ['me', 'europe'],
+        'icon':     '\U0001f6a7',
+        'color':    '#b45309',
+        'headline': headline,
+        'detail':   detail,
+    }
+
+
 def _narrative_contested_spoke(blufs):
     """Two or more hubs lit on the SAME country in the same cycle.
 
@@ -1201,6 +1333,9 @@ NARRATIVE_AXIS_SETS = {
     # because a contested node is where force gets used -- but second, so a
     # contest never renders as escalation on its own.
     'contested_spoke':                 ['diplomatic', 'kinetic'],
+    # A precursor read, not an escalation read. Diplomatic first so a rising
+    # warning/denial tempo never renders as force having been used.
+    'emplacement_precursor':           ['diplomatic', 'kinetic'],
 }
 
 def _axes_for_narrative(n):
@@ -3097,6 +3232,7 @@ NARRATIVE_DETECTORS = [
     _narrative_iran_axis_convergence,                    # Iran Unity-of-Fronts / proxy-arena influence read (Jun 29 2026)
     _narrative_hub_network_breadth,                      # ANY hub: depth (countries/region) or span (regions) — Slice 2, Aug 2026
     _narrative_contested_spoke,                          # MANY hubs on ONE node — Abu al-Duhur geometry, Aug 2026
+    _narrative_emplacement_precursor,                    # redline tempo × denial tempo — tasking trigger, Aug 2026
     # Fallback always last
     _narrative_global_baseline,
 ]
