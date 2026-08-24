@@ -137,6 +137,24 @@ TEMPO_REGISTRY = {
                  'shaping ahead of an operation.'),
     },
 
+    'turkey': {
+        'theatre': 'turkey', 'backend': 'europe', 'mode': 'tape',
+        'streams': ['emplacement', 'denial', 'redline'],
+        'flag': '\U0001f1f9\U0001f1f7',
+        'note': ('Turkey denies its emplacements -- it rejected the Abu al-Duhur delegation '
+                 'outright while Damascus confirmed one had visited. Deniability is the '
+                 'architecture, so there is no claiming actor to fall silent and mode=actor '
+                 'would measure nothing. We measure the tape: emplacement tempo (facility '
+                 'rehabilitation, technical delegations, capability naming), denial tempo, '
+                 'and the rival red-line tempo carried on the same corpus. THE CONVERGENCE '
+                 'THAT MATTERS: a restated site-specific red line running concurrently with '
+                 'a flat denial is the configuration that preceded the 18 Aug 2026 strike on '
+                 'Abu al-Duhur -- and the strike hit the runway, not personnel, because the '
+                 'infrastructure was destroyed before capability could arrive. This is a '
+                 'TASKING TRIGGER: rising tempo here means go and ask, never that action '
+                 'is coming.'),
+    },
+
     # ── Future targets: uncomment when the emitter ships in that tracker. ──
     # 'dprk': {
     #     'theatre': 'dprk', 'backend': 'asia', 'mode': 'actor',
