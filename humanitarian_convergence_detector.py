@@ -744,8 +744,17 @@ def detect_humanitarian_signals(articles):
             level = _severity_to_level(severity)
             country_label = country.replace('_', ' ').title()
 
+            # SPECIFICITY IN THE HEADLINE (Aug 2026). This previously read
+            # "Nepal: natural disaster signal" and discarded matched_kws -- which
+            # the very next line then used. A reader scanning Driving Signals got
+            # a category and no content: "natural disaster" is true of an
+            # earthquake, a wildfire and a flood, and the three imply completely
+            # different responses. Naming the hazard costs nothing and is the
+            # difference between a label and a signal.
+            _kw_txt = ', '.join(matched_kws[:2]) if matched_kws else ''
             short_text = (
                 f"{cat_cfg['icon']} {country_label}: {cat_cfg['label'].lower()} signal"
+                f"{f' — {_kw_txt}' if _kw_txt else ''}"
                 f"{' (high intensity)' if severity == SEVERITY_HIGH else ''}"
             )
             long_text = (
