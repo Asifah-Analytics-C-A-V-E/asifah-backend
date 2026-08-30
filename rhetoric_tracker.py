@@ -2309,26 +2309,43 @@ def _detect_framework_gates(articles):
                 hits.append(m[0])
         return n, hits[:3]
 
-    # ── Gate ladder: declared vs actual at each gate ──
-    gates = {}
-    for gate, pair in FRAMEWORK_GATE_TRIGGERS.items():
-        dec, dec_hits = _count(pair['declared'])
-        act, act_hits = _count(pair['actual'])
-        gates[gate] = {
-            'declared': dec, 'actual': act,
-            'spread': dec - act,
-            'declared_examples': dec_hits, 'actual_examples': act_hits,
-            # A gate is BLOCKED when it is being talked about and not delivered.
-            # Silence on both sides is NOT a block -- it is no information, and
-            # calling it a block would manufacture a finding out of a quiet week.
-            'state': ('blocked' if (dec >= 2 and act == 0) else
-                      'moving' if act > 0 else
-                      'quiet'),
-        }
+    # ── Gate ladder: DELEGATED to the shared primitive (Slice 2) ──
+    # The gate maths and the freeze coupling now live in framework_gates.py,
+    # shared with the Gaza Board of Peace roadmap, which has the identical
+    # architecture. The local FRAMEWORK_GATE_TRIGGERS above are retained as a
+    # fallback so this tracker still functions if the shared module is absent
+    # on a backend -- absence-honest rather than hard-failing.
+    _shared = None
+    try:
+        from framework_gates import evaluate_gates
+        _shared = evaluate_gates('lebanon_trilateral', articles)
+    except ImportError:
+        print('[Lebanon Rhetoric] framework_gates unavailable -- local gate fallback')
+    except Exception as _e:
+        print(f'[Lebanon Rhetoric] shared gate eval failed ({str(_e)[:90]}) -- local fallback')
 
-    ordered = ['clearance', 'verification', 'aid_flow', 'zone_expansion']
-    blocking = next((g for g in ordered if gates.get(g, {}).get('state') == 'blocked'), None)
-    moving = [g for g in ordered if gates.get(g, {}).get('state') == 'moving']
+    if _shared and _shared.get('gates'):
+        gates = _shared['gates']
+        ordered = _shared.get('gate_order') or list(gates.keys())
+        blocking = _shared.get('blocking_gate')
+        moving = _shared.get('moving_gates') or []
+    else:
+        gates = {}
+        for gate, pair in FRAMEWORK_GATE_TRIGGERS.items():
+            dec, dec_hits = _count(pair['declared'])
+            act, act_hits = _count(pair['actual'])
+            gates[gate] = {
+                'declared': dec, 'actual': act,
+                'spread': dec - act,
+                'declared_examples': dec_hits, 'actual_examples': act_hits,
+                # Silence on BOTH sides is 'quiet', never 'blocked'. A quiet week
+                # is no information; calling it a block would manufacture one.
+                'state': ('blocked' if (dec >= 2 and act == 0) else
+                          'moving' if act > 0 else 'quiet'),
+            }
+        ordered = ['clearance', 'verification', 'aid_flow', 'zone_expansion']
+        blocking = next((g for g in ordered if gates.get(g, {}).get('state') == 'blocked'), None)
+        moving = [g for g in ordered if gates.get(g, {}).get('state') == 'moving']
 
     # ── Named-site concentration ──
     taher_n, taher_hits = _count(ALI_AL_TAHER_TRIGGERS)
@@ -2403,10 +2420,25 @@ def _detect_framework_gates(articles):
     if peace_n:
         note += ('Durable-peace vocabulary in %d article(s). ' % peace_n)
 
+    # Freeze coupling (Slice 2): the same stall means opposite things depending on
+    # whether an Israeli government is positioned to conclude anything.
+    _freeze = (_shared or {}).get('freeze') or {}
+    _freeze_reading = (_shared or {}).get('freeze_reading', 'unknown')
+    if state == 'stalled' and _shared and _shared.get('note'):
+        for _marker in ('READ AS PARKED', 'No Israeli decision freeze',
+                        'Israeli coalition survival is contested',
+                        'Israeli electoral-cycle state is UNAVAILABLE'):
+            _i = _shared['note'].find(_marker)
+            if _i >= 0:
+                note += _shared['note'][_i:_shared['note'].find('This is a CONVERGENCE')].strip() + ' '
+                break
+
     note += ('This is a CONVERGENCE indicator, NOT a probability of action. Which gate is '
              'blocking is observable; whether the framework holds is not.')
 
     return {
+        'freeze': _freeze,
+        'freeze_reading': _freeze_reading,
         'state': state,
         'headline': headline,
         'blocking_gate': blocking,

@@ -529,6 +529,30 @@ REDLINE_RESTATEMENT_TRIGGERS = {
 }
 
 
+def _detect_gaza_framework_gates(articles):
+    """Gaza Board of Peace roadmap gate ladder, via the shared primitive.
+
+    Gaza has no dedicated tracker and this corpus already carries it heavily,
+    so the gate read lives with the actor whose decisions gate the sequence.
+
+    The freeze coupling matters more here than anywhere: the Board of Peace has
+    stated there is no Israeli withdrawal before Hamas disarmament is complete,
+    which makes the whole downstream sequence contingent on an Israeli decision.
+    If no Israeli government is positioned to take it, a stall says nothing
+    about Hamas -- and reading it as Hamas intransigence would be wrong.
+    """
+    try:
+        from framework_gates import evaluate_gates
+    except ImportError:
+        return {'state': 'unavailable',
+                'note': 'framework_gates shared module not deployed on this backend.'}
+    try:
+        return evaluate_gates('gaza_bop', articles)
+    except Exception as e:
+        print(f'[Israel Rhetoric] Gaza gate eval failed: {str(e)[:120]}')
+        return {'state': 'error', 'note': str(e)[:200]}
+
+
 def _emit_tempo_counts_israel(articles):
     """Write raw daily counts + corpus health. No logic, no thresholds.
     Engine lives on this backend (ME); shared Upstash Redis is the bus."""
@@ -2292,6 +2316,15 @@ def run_israel_rhetoric_scan(days=3):
 
     # Tempo emitter (mode='actor') — feeds tempo_baseline.py on this backend
     _emit_tempo_counts_israel(articles)
+
+    # Gaza Board of Peace gate ladder (Slice 2) — shared primitive, freeze-coupled
+    try:
+        result['gaza_framework_gates'] = _detect_gaza_framework_gates(articles)
+        _g = result['gaza_framework_gates']
+        print(f"[Israel Rhetoric] Gaza BoP: {_g.get('state')} "
+              f"(blocking={_g.get('blocking_gate')}, freeze={_g.get('freeze_reading')})")
+    except Exception as _e:
+        print(f"[Israel Rhetoric] Gaza gate read failed: {str(_e)[:120]}")
 
     # Signal interpretation — So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
