@@ -2599,7 +2599,7 @@ def run_israel_rhetoric_scan(days=3):
     try:
         from us_voice_signals import detect_voice_signals
         result['us_voice_signals'] = detect_voice_signals(
-            articles, voices=['huckabee', 'barrack', 'ortagus'])
+            articles, voices=['huckabee', 'barrack', 'ortagus', 'kushner', 'boulos'])
         _uv = result['us_voice_signals']
         print(f"[Israel Rhetoric] US voices: {_uv['deviation_count']} deviation(s) — {_uv['headline']}")
     except ImportError:

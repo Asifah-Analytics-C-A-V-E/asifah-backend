@@ -48,14 +48,29 @@ __version__ = '1.0.0'
 # ============================================================================
 # VOICE REGISTRY
 # ============================================================================
+# signal_mode            : 'valence' or 'presence'
 # expected_posture       : what this speaker routinely says, per the public record
 # posture_basis          : where that characterisation comes from
 # informative_deviation  : which direction of departure carries signal, and why
 # subjects               : entities whose treatment we score
+#
+# TWO SIGNAL MODES, because envoys and principals are not the same instrument:
+#
+#   'valence'  -- ambassadors speak constantly, so their baseline is dense and
+#                 a DEPARTURE from it is the finding. Huckabee criticising
+#                 settlers. Issa criticising Israel.
+#
+#   'presence' -- principals speak rarely and usually only at decision points,
+#                 so there is no dense baseline to depart from. THE FACT THAT
+#                 THEY SPOKE AT ALL is the finding, and its direction is
+#                 secondary. Applying valence logic to a rare speaker would
+#                 mean waiting for a deviation from a baseline that does not
+#                 exist -- and missing the signal entirely.
 
 US_VOICE_REGISTRY = {
 
     'barrack': {
+        'signal_mode': 'valence',
         'display': 'Amb. Tom Barrack',
         'role': 'US Special Envoy for Syria; US Ambassador to Turkey',
         'portfolio': ['syria', 'lebanon', 'turkey', 'israel'],
@@ -73,6 +88,7 @@ US_VOICE_REGISTRY = {
     },
 
     'issa': {
+        'signal_mode': 'valence',
         'display': 'Amb. Michel Issa',
         'role': 'US Ambassador to Lebanon (credentials presented 17 Nov 2025)',
         'portfolio': ['lebanon'],
@@ -95,6 +111,7 @@ US_VOICE_REGISTRY = {
     },
 
     'huckabee': {
+        'signal_mode': 'valence',
         'display': 'Amb. Mike Huckabee',
         'role': 'US Ambassador to Israel',
         'portfolio': ['israel', 'west_bank'],
@@ -118,6 +135,7 @@ US_VOICE_REGISTRY = {
     },
 
     'ortagus': {
+        'signal_mode': 'valence',
         'display': 'Morgan Ortagus',
         'role': 'US envoy, Lebanon file / ceasefire mechanism',
         'portfolio': ['lebanon', 'israel'],
@@ -131,6 +149,44 @@ US_VOICE_REGISTRY = {
                                   'mechanism is being characterised as broken by a participant '
                                   'rather than by an observer.'),
         'subjects': ['israel', 'lebanon', 'hezbollah'],
+    },
+
+    # ── PRINCIPALS: mode='presence' ──
+    'kushner': {
+        'signal_mode': 'presence',
+        'display': 'Jared Kushner',
+        'role': 'Principal-level actor on the Gaza file; unveiled the "New Gaza" master plan (early 2026)',
+        'portfolio': ['gaza', 'israel', 'gulf'],
+        'aliases': ['jared kushner', 'kushner'],
+        'expected_posture': ('Speaks rarely and at decision points rather than routinely. '
+                             'Associated with the reconstruction-and-investment framing of the '
+                             'Gaza file.'),
+        'posture_basis': 'Contemporaneous reporting on the Board of Peace and the Gaza plan.',
+        'informative_deviation': ('PRESENCE, not valence. A principal who speaks rarely is '
+                                  'signalling by speaking at all -- it usually indicates a '
+                                  'decision point has been reached or a track is being '
+                                  'personally reactivated. What he says matters less than that '
+                                  'he chose this moment to say it.'),
+        'subjects': ['gaza', 'israel', 'palestinians'],
+    },
+
+    'boulos': {
+        'signal_mode': 'presence',
+        'display': 'Massad Boulos',
+        'role': 'US Senior Advisor for Arab and African Affairs (since Jan 2025); also Senior Advisor for Africa, Dept. of State',
+        'portfolio': ['lebanon', 'gaza', 'gulf', 'africa'],
+        'aliases': ['massad boulos', 'boulos', 'مسعد بولس'],
+        'expected_posture': ('Lebanese-born; reported at appointment as the administration\'s '
+                             'point-man to Arab countries, with Witkoff handling the Israel '
+                             'side. Portfolio spans Arab affairs and Africa.'),
+        'posture_basis': 'Appointment reporting (Times of Israel, Al Jazeera, CBS, Dec 2024); official role listings.',
+        'informative_deviation': ('PRESENCE on the LEBANON file specifically. Boulos is '
+                                  'Lebanese-born and family-connected, which makes him a '
+                                  'plausible back-channel rather than a declaratory voice. His '
+                                  'surfacing publicly on Lebanon is therefore more likely to '
+                                  'indicate that a channel has become official than that a '
+                                  'position has changed. Treat as a channel-state signal.'),
+        'subjects': ['lebanon', 'gaza', 'hezbollah', 'palestinians'],
     },
 }
 
@@ -195,7 +251,8 @@ def detect_voice_signals(articles, voices=None):
     results, deviations = {}, []
 
     for vid, spec in registry.items():
-        counts = {'mentions': 0, 'critical': {}, 'supportive': {}}
+        mode = spec.get('signal_mode', 'valence')
+        counts = {'mentions': 0, 'critical': {}, 'supportive': {}, 'mode': mode}
         quotes = []
         for a in (articles or []):
             blob = ((a.get('title') or '') + '. ' + (a.get('description') or ''))
@@ -230,6 +287,24 @@ def detect_voice_signals(articles, voices=None):
                                 'url': a.get('url', ''),
                             })
                         quotes.append({'subject': subj, 'valence': bucket, 'text': sent[:180]})
+        # PRESENCE MODE: a rare speaker surfacing at all is the finding. There is
+        # no dense baseline to depart from, so waiting for a valence deviation
+        # would mean waiting forever and missing the signal.
+        if mode == 'presence' and counts['mentions'] > 0:
+            deviations.append({
+                'voice': vid,
+                'display': spec['display'],
+                'subject': 'presence',
+                'valence': 'spoke',
+                'tier': 'high',
+                'quote': (quotes[0]['text'] if quotes else ''),
+                'why': spec['informative_deviation'],
+                'expected_posture': spec['expected_posture'],
+                'posture_basis': spec['posture_basis'],
+                'mentions': counts['mentions'],
+                'url': '',
+            })
+
         counts['quotes'] = quotes[:4]
         results[vid] = counts
 
@@ -239,8 +314,12 @@ def detect_voice_signals(articles, voices=None):
 
     if deviations:
         top = deviations[0]
-        headline = ('%s spoke off baseline: %s toward %s'
-                    % (top['display'], top['valence'], top['subject'].replace('_', ' ')))
+        if top['valence'] == 'spoke':
+            headline = ('%s surfaced publicly (%d mention(s)) — presence signal'
+                        % (top['display'], top.get('mentions', 1)))
+        else:
+            headline = ('%s spoke off baseline: %s toward %s'
+                        % (top['display'], top['valence'], top['subject'].replace('_', ' ')))
         note = ('SIGNAL VALUE IS INVERSELY PROPORTIONAL TO EXPECTEDNESS. This is flagged '
                 'because of WHO said it, not what was said. %s Expected posture on the '
                 'public record: %s (%s) '
