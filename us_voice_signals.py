@@ -170,6 +170,26 @@ US_VOICE_REGISTRY = {
         'subjects': ['gaza', 'israel', 'palestinians'],
     },
 
+    'witkoff': {
+        'signal_mode': 'presence',
+        'display': 'Steve Witkoff',
+        'role': 'US Special Envoy to the Middle East',
+        'portfolio': ['israel', 'gaza', 'gulf', 'iran'],
+        'aliases': ['steve witkoff', 'witkoff', 'ويتكوف', 'וויטקוף'],
+        'expected_posture': ('Speaks less frequently than any other voice in this registry, '
+                             'and typically only when a track is being personally worked. '
+                             'Reported at appointment as handling the Israel side directly, '
+                             'with Boulos as point-man to Arab countries.'),
+        'posture_basis': 'Appointment reporting (Times of Israel, Dec 2024); subsequent coverage of his envoy role.',
+        'informative_deviation': ('PRESENCE, and the highest-scarcity presence signal here. '
+                                  'Witkoff speaks less than Kushner, so a public surfacing is '
+                                  'correspondingly more likely to mark a live decision point '
+                                  'rather than routine engagement. He typically works in tandem '
+                                  'with Kushner -- see PRINCIPAL_PAIRINGS, where co-presence is '
+                                  'scored higher than either alone.'),
+        'subjects': ['israel', 'gaza', 'iran', 'palestinians'],
+    },
+
     'boulos': {
         'signal_mode': 'presence',
         'display': 'Massad Boulos',
@@ -219,6 +239,24 @@ SUBJECT_MARKERS = {
     'turkey':       ['turkey', 'turkish', 'ankara', 'تركيا', 'טורקיה'],
     'syria':        ['syria', 'syrian', 'damascus', 'سوريا', 'סוריה'],
     'palestinians': ['palestinian', 'palestinians', 'فلسطين', 'פלסטינים'],
+}
+
+# PRINCIPAL PAIRINGS. Two rare speakers surfacing in the SAME cycle is not two
+# independent signals -- it is one stronger signal. Witkoff and Kushner work the
+# Gaza and Israel tracks in tandem, so their co-presence indicates a track being
+# worked at principal level rather than either man commenting in passing.
+# Scored as its own finding so it cannot be lost in a list of individual hits.
+PRINCIPAL_PAIRINGS = {
+    ('kushner', 'witkoff'): ('Kushner and Witkoff surfacing in the same cycle is the '
+                             'principal-level pairing on the Gaza and Israel tracks. Both '
+                             'speak rarely; both speaking at once is more consistent with an '
+                             'active negotiation than with commentary.'),
+    ('witkoff', 'boulos'):  ('Witkoff and Boulos together spans the reported division of '
+                             'labour -- Israel side and Arab side -- which is the '
+                             'configuration associated with a two-sided track rather than a '
+                             'one-sided push.'),
+    ('kushner', 'boulos'):  ('Kushner and Boulos together indicates the reconstruction and '
+                             'Arab-outreach tracks being worked concurrently.'),
 }
 
 # Deviations worth flagging, by voice and subject. Keyed (voice, subject, valence).
@@ -308,13 +346,36 @@ def detect_voice_signals(articles, voices=None):
         counts['quotes'] = quotes[:4]
         results[vid] = counts
 
+    # Co-presence of principals: one stronger signal, not two independent ones.
+    _present = {v for v, c in results.items()
+                if c.get('mode') == 'presence' and c.get('mentions', 0) > 0}
+    pairings = []
+    for pair, why in PRINCIPAL_PAIRINGS.items():
+        if set(pair).issubset(_present):
+            pairings.append({'pair': list(pair), 'why': why})
+            deviations.append({
+                'voice': '+'.join(pair),
+                'display': ' and '.join(US_VOICE_REGISTRY[v]['display'] for v in pair),
+                'subject': 'co-presence',
+                'valence': 'paired',
+                'tier': 'highest',
+                'quote': '',
+                'why': why,
+                'expected_posture': 'Both speak rarely; simultaneous surfacing is the finding.',
+                'posture_basis': 'Reported division of labour between these principals.',
+                'url': '',
+            })
+
     # Rank: 'highest' before 'high' before 'moderate'.
     order = {'highest': 0, 'high': 1, 'moderate': 2}
     deviations.sort(key=lambda d: order.get(d['tier'], 9))
 
     if deviations:
         top = deviations[0]
-        if top['valence'] == 'spoke':
+        if top['valence'] == 'paired':
+            headline = ('%s surfaced in the same cycle — principal-level pairing'
+                        % top['display'])
+        elif top['valence'] == 'spoke':
             headline = ('%s surfaced publicly (%d mention(s)) — presence signal'
                         % (top['display'], top.get('mentions', 1)))
         else:
@@ -338,6 +399,7 @@ def detect_voice_signals(articles, voices=None):
         'voices': results,
         'deviations': deviations[:5],
         'deviation_count': len(deviations),
+        'principal_pairings': pairings,
         'headline': headline,
         'note': note,
         'checked_at': datetime.now(timezone.utc).isoformat(),

@@ -2860,7 +2860,7 @@ def run_rhetoric_scan(days=3):
     try:
         from us_voice_signals import detect_voice_signals
         result['us_voice_signals'] = detect_voice_signals(
-            articles, voices=['issa', 'barrack', 'ortagus', 'boulos'])
+            articles, voices=['issa', 'barrack', 'ortagus', 'boulos', 'witkoff'])
         _uv = result['us_voice_signals']
         print(f"[Lebanon Rhetoric] US voices: {_uv['deviation_count']} deviation(s) — {_uv['headline']}")
     except ImportError:
