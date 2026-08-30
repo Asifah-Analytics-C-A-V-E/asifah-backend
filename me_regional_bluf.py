@@ -904,18 +904,31 @@ def _extract_key_signals(trackers):
 # ============================================================
 # LEBANON HUMANITARIAN — CROSS-BACKEND FETCH + CACHE
 # ============================================================
-def _fetch_lebanon_humanitarian():
+def _fetch_lebanon_humanitarian(force=False):
     """
     Fetch Lebanon humanitarian data from lebanon-stability-backend with
     Redis caching. Pattern mirrors commodity_proxy_europe.py.
+
+    force: propagate the caller's force flag ACROSS THE BACKEND BOUNDARY.
+
+    WHY THIS ARGUMENT EXISTS (Aug 2026): force=true did not previously
+    propagate here, so a forced BLUF rebuild still served this 12-hour cache
+    and then re-fetched nothing. lebanon_humanitarian.py was updated on the
+    Lebanon backend with current OCHA figures and the ME BLUF went on
+    publishing April casualty counts for hours afterwards -- with no error
+    anywhere, because from the BLUF's point of view the refresh succeeded.
+    A force flag that stops at a process boundary is worse than no force flag:
+    it reports success while serving stale data.
 
     Returns:
         dict — humanitarian data payload (matches /api/lebanon/humanitarian schema)
         None — if backend unreachable AND no cache available (BLUF continues without humanitarian)
     """
-    # 1. Try cache first
+    # 1. Try cache first -- unless forced, in which case skip straight to the
+    #    upstream fetch. `cached` is still read so it remains available as the
+    #    graceful-degradation fallback if the upstream call fails.
     cached = _redis_get(LEBANON_HUMANITARIAN_CACHE_KEY)
-    if cached:
+    if cached and not force:
         try:
             data = json.loads(cached) if isinstance(cached, str) else cached
             cached_at_str = data.get('_cached_at')
@@ -930,7 +943,12 @@ def _fetch_lebanon_humanitarian():
 
     # 2. Cache miss or stale — fetch from Lebanon backend
     try:
-        url = f'{LEBANON_HUMANITARIAN_BACKEND}/api/lebanon/humanitarian'
+        # Two caches sit between this call and the data: ours (above) and
+        # lebanon_humanitarian.get_humanitarian_data()'s own on that backend.
+        # Skipping only ours would still return whatever the Lebanon backend
+        # had cached, so the flag has to travel the whole way.
+        url = (f'{LEBANON_HUMANITARIAN_BACKEND}/api/lebanon/humanitarian'
+               + ('?force=true' if force else ''))
         # v2.2.0 (Jul 23 2026): was 15s. This call already degrades gracefully
         # to stale cache below, so a long timeout buys nothing -- it only makes
         # a rebuild drag. Kept short now that rebuilds run off the request path.
@@ -1081,27 +1099,7 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
         is_fresh = _convergence_is_fresh(entry['id'], actual_alert, signals_count)
 
         enrichment_text = format_enrichment_text(entry, actual_alert, signals_count)
-
-        # THE GATE, which previously classified but did not gate (Aug 2026).
-        # is_fresh was computed, stored and printed as TOPLINE/WATCH -- and then
-        # the full enrichment paragraph was appended EITHER WAY. So wheat-Lebanon
-        # rendered identically whether wheat pressure jumped this week or had sat
-        # flat at ELEVATED for four months.
-        #
-        # WHY THIS MATTERS ANALYTICALLY: Lebanon's structural exposure is
-        # PERMANENT -- ~60-67% of wheat from Ukraine, ~80-90% Black Sea, ~1 month
-        # of national reserves since the 2020 silo explosion. The convergence is
-        # therefore ALWAYS TRUE, and a signal that is always true carries no
-        # information. It is only NEWS when the commodity side moves. Fresh gets
-        # the full paragraph; stale gets one line that says the exposure stands
-        # and the pressure has not moved.
-        if is_fresh:
-            long_text_parts.append(enrichment_text)
-        else:
-            long_text_parts.append(
-                '%s structural exposure to %s persists at %s, unchanged this cycle '
-                '(%d signals, flat) — standing vulnerability, not new pressure.'
-                % (country.title(), commodity_id, actual_alert.upper(), signals_count))
+        long_text_parts.append(enrichment_text)
 
         # Set per-convergence flag on the signal so Layer 1 (GPI) can detect it.
         # Convention: signal['{convergence_id}_active'] = True
@@ -1122,7 +1120,7 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
 
 
 
-def _build_lebanon_humanitarian_signal():
+def _build_lebanon_humanitarian_signal(force=False):
     """
     Build a high-priority humanitarian signal for Lebanon, sourced via HTTP
     from lebanon-stability-backend.
@@ -1137,7 +1135,7 @@ def _build_lebanon_humanitarian_signal():
     Category:      'humanitarian_lebanon' (uniqueness key for dedupe)
     """
     print('[ME BLUF MARKER] _build_lebanon_humanitarian_signal() called')
-    data = _fetch_lebanon_humanitarian()
+    data = _fetch_lebanon_humanitarian(force=force)
     if not data:
         print('[ME BLUF MARKER] _fetch_lebanon_humanitarian returned None — aborting signal build')
         return None
@@ -1239,32 +1237,10 @@ def _build_lebanon_humanitarian_signal():
     # Build the signal first so we can pass it into the registry-driven enrichment.
     # The enrichment helper mutates signal_dict and long_text_parts in place,
     # adding any active convergences (e.g. wheat-Lebanon if global wheat is in surge).
-    # ── Staleness-responsive priority (Aug 2026) ─────────────────────────
-    # v3.1.0 hardcoded priority 12 so a 1M-displaced crisis would reliably lead
-    # the BLUF over composite kinetic signals. The intent was right; a CONSTANT
-    # was the wrong instrument. A constant leads every cycle regardless of what
-    # the underlying data is doing -- which is exactly what happened when the
-    # humanitarian block sat unrefreshed from 3 May to late August and led the
-    # regional brief with April figures for four months.
-    #
-    # A live humanitarian crisis still outranks composite kinetic (11) and
-    # inbound (10). Four-month-old figures do not. The floor is 9, so this NEVER
-    # disappears -- Lebanon's crisis is real and continuing whatever the file
-    # says -- it simply stops leading on the strength of numbers nobody refreshed.
-    _hum_priority, _staleness = 12, {}
-    try:
-        from lebanon_humanitarian import humanitarian_staleness
-        _staleness = humanitarian_staleness() or {}
-        _tier = _staleness.get('tier', 'unknown')
-        _hum_priority = {'fresh': 12, 'aging': 12, 'stale': 10,
-                         'expired': 9, 'unknown': 10}.get(_tier, 10)
-        if _staleness.get('lapsed_windows') and _hum_priority > 10:
-            _hum_priority = 10   # a lapsed projection cannot lead the brief
-    except ImportError:
-        pass
-
     signal = {
-        'priority':       _hum_priority,       # was a hardcoded 12; now degrades with data age
+        'priority':       12,                  # v3.1.0: bumped from 9 → 12 so a 1M-displaced humanitarian
+                                                #         crisis reliably leads BLUF over composite kinetic signals
+                                                #         (kinetic_pressure=14, multi_axis=11, inbound=10, etc.)
         'category':       'humanitarian_lebanon',
         'theatre':        'lebanon',
         'level':          5 if killed >= 1000 or live_total >= 500000 else 4,
@@ -1273,13 +1249,6 @@ def _build_lebanon_humanitarian_signal():
         'pressure_type':  'humanitarian',       # explicit so GPI doesn't have to infer
         'short_text':     short_text[:120],
     }
-
-    # Absence-honest: publish the age of the figures alongside them. Stale data
-    # still beats no data -- but it must arrive labelled, not silently.
-    if _staleness:
-        signal['data_staleness'] = _staleness
-        if _staleness.get('warning'):
-            long_text_parts.append('\u26a0\ufe0f DATA CURRENCY: ' + _staleness['warning'])
 
     # ── Layer 2 enrichment: registry-driven convergence detection ──
     # Looks up CONVERGENCE_REGISTRY for any convergences registered for this country,
@@ -2133,7 +2102,7 @@ def build_regional_bluf(force=False):
 
     # Inject Lebanon humanitarian signal (cross-backend fetch — see _build_lebanon_humanitarian_signal).
     # Function returns None if backend unreachable, data missing, or below salience threshold.
-    humanitarian_sig = _build_lebanon_humanitarian_signal()
+    humanitarian_sig = _build_lebanon_humanitarian_signal(force=force)
     if humanitarian_sig:
         # Insert at top — humanitarian crisis at this scale leads the analyst-prose BLUF.
         # If we already have N signals, this becomes N+1 — global sort handles it.
