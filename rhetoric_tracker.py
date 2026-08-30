@@ -1257,7 +1257,17 @@ def _fetch_rss(feed_url, source_name, max_items=20):
     return articles
 
 
+# Corpus denominator for the tempo emitter. The feed table lives INSIDE
+# fetch_lebanon_articles() as a local, so the emitter's len(RHETORIC_RSS_FEEDS)
+# referenced a name that never existed -- raising NameError on every scan,
+# swallowed by a non-fatal except, meaning tempo:hezbollah:counts was NEVER
+# written and the hezbollah baseline never accumulated a single day.
+# Set at first fetch so the denominator is real rather than guessed.
+RHETORIC_FEED_COUNT = 0
+
+
 def fetch_lebanon_articles(days=3):
+    global RHETORIC_FEED_COUNT
     all_articles = []
 
     # RSS Feeds — expanded for France, Cyprus, Syria border
@@ -1297,6 +1307,8 @@ def fetch_lebanon_articles(days=3):
         'Ravid — Trump Lebanon':      'https://news.google.com/rss/search?q=%22Barak+Ravid%22+Trump+Lebanon&hl=en&gl=US&ceid=US:en',
         'Ravid — Hebrew Lebanon':     'https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22+%D7%9C%D7%91%D7%A0%D7%95%D7%9F&hl=iw&gl=IL&ceid=IL:iw',
     }
+    if not RHETORIC_FEED_COUNT:
+        RHETORIC_FEED_COUNT = len(rss_feeds)
 
     for name, url in rss_feeds.items():
         articles = _fetch_rss(url, name)
@@ -2083,6 +2095,325 @@ FRAMEWORK_ARTICLE_KEYWORDS = [
 ]
 
 
+# ============================================================================
+# TRILATERAL FRAMEWORK IMPLEMENTATION STATE  (v1.3.0, Aug 2026)
+# ----------------------------------------------------------------------------
+# The Framework (signed 26 Jun 2026) plus its leaked security annex is not a
+# mood to be scored -- it is a CONDITIONAL SEQUENCE with named, observable
+# gates. Each gate must clear before the next can:
+#
+#   0  framework signed .................. DONE (26 Jun 2026)
+#   1  pilot zone designated ............. DONE (announced during Aoun's DC visit)
+#   2  IDF withdrawal from the zone ...... observable
+#   3  LAF deployment into the zone ...... DONE
+#   4  CLEARANCE of fighters and weapons . the blocking gate
+#   5  THIRD-PARTY VERIFICATION .......... required by the annex; absent
+#   6  aid and reconstruction flow ....... downstream of 4 and 5
+#   7  zone expansion .................... downstream of 6
+#
+# THE MEASUREMENT, and the reason this is trackable at all: the framework's
+# failure mode is a DECLARED-vs-ACTUAL SPREAD. Every gate has an announcement
+# and a verification, and they have come apart. "LAF deployed" is declared and
+# true. "Weapons handed over" is not happening. "Aid pledged" is declared;
+# "aid delivered" is not. A high declared count against a zero actual count at
+# the same gate IS the stall signature -- and it is machine-readable in a way
+# that "the process is going badly" is not.
+#
+# This is the same primitive as the emplacement-precursor assertion/denial gap,
+# pointed at implementation rather than capability.
+#
+# DOCTRINE: reports WHICH gate is blocking and whether the spread is widening
+# or closing. It does NOT forecast whether the framework succeeds. Direction of
+# a stalled gate is a convergence read; outcome is not ours to call.
+
+FRAMEWORK_GATES = ['signed', 'zone_designated', 'idf_withdrawal', 'laf_deployment',
+                   'clearance', 'verification', 'aid_flow', 'zone_expansion']
+
+# Paired vocabulary. DECLARED = it was announced, asserted, pledged, intended.
+# ACTUAL  = it was observed, verified, delivered, handed over.
+FRAMEWORK_GATE_TRIGGERS = {
+    'clearance': {
+        'declared': [
+            'laf deployed', 'army deployed south', 'laf takes control',
+            'laf assumes control', 'army control south litani',
+            'checkpoints established', 'laf checkpoints', 'army positions',
+            'الجيش انتشر', 'انتشار الجيش', 'حواجز الجيش',
+            'צה"ל נסוג', 'הצבא הלבנוני נפרס',
+        ],
+        'actual': [
+            'weapons handed over', 'handover of weapons', 'weapons cache seized',
+            'arms cache found', 'tunnels destroyed', 'tunnel network cleared',
+            'rockets confiscated', 'launchers seized', 'disarmament completed',
+            'hezbollah withdrew from', 'fighters withdrew',
+            'تسليم السلاح', 'مصادرة أسلحة', 'تدمير الأنفاق', 'ضبط مخزن أسلحة',
+            'פירוק נשק', 'תפיסת אמצעי לחימה', 'הריסת מנהרות',
+        ],
+    },
+    'verification': {
+        'declared': [
+            'verification mechanism', 'third-party verifier', 'third party verifier',
+            'monitoring mechanism', 'verification body', 'observers proposed',
+            'verifier discussed', 'monitoring committee',
+            'آلية التحقق', 'طرف ثالث', 'لجنة المراقبة',
+            'מנגנון אימות', 'גורם מאמת',
+        ],
+        'actual': [
+            'verifier appointed', 'verification team deployed', 'observers deployed',
+            'monitors arrived', 'verification mission began', 'inspectors deployed',
+            'certified cleared', 'verified clearance',
+            'تعيين المراقبين', 'وصول المراقبين', 'بدء مهمة التحقق',
+            'פריסת משקיפים',
+        ],
+    },
+    'aid_flow': {
+        'declared': [
+            'aid pledged', 'reconstruction funds pledged', 'donors pledged',
+            'reconstruction plan', 'funds allocated', 'aid package announced',
+            'world bank loan', 'reconstruction conference',
+            'تعهدات المانحين', 'خطة إعادة الإعمار', 'مساعدات موعودة',
+        ],
+        'actual': [
+            'aid delivered', 'reconstruction began', 'rebuilding started',
+            'funds disbursed', 'first convoy', 'construction under way',
+            'homes rebuilt', 'compensation paid',
+            'وصول المساعدات', 'بدء إعادة الإعمار', 'صرف الأموال',
+        ],
+    },
+    'zone_expansion': {
+        'declared': [
+            'expand pilot zone', 'additional zones', 'second pilot zone',
+            'next phase', 'extend the model', 'more villages',
+            'توسيع المنطقة', 'مرحلة ثانية', 'مناطق إضافية',
+        ],
+        'actual': [
+            'second zone established', 'new zone activated', 'zone expanded to',
+            'additional villages transferred', 'phase two began',
+            'تفعيل منطقة جديدة', 'تسليم قرى إضافية',
+        ],
+    },
+}
+
+# The named site where the contradiction concentrates. Abu al-Duhur played the
+# same role for the emplacement pattern: a specific place is more trackable than
+# a general condition, and reporting clusters around it.
+ALI_AL_TAHER_TRIGGERS = [
+    'ali al-taher', 'ali al taher', 'ali taher', 'jabal ali al-taher',
+    'علي الطاهر', 'جبل علي الطاهر', 'وادي علي الطاهر',
+    'עלי א-טאהר', 'אלי א-טאהר',
+]
+
+# RUMINT ONLY. Rachel flagged the AQAH gold reporting as rumour-tier and it is
+# carried as rumour-tier: counted, never asserted, and reported with its own
+# label so it can never be read as an established finding. Al-Qard al-Hassan is
+# a real, US-designated entity; the claim about stored gold under this specific
+# site is not established and must not be laundered into fact by aggregation.
+AQAH_RUMINT_TRIGGERS = [
+    'al-qard al-hassan', 'al qard al hassan', 'aqah', 'qard hassan',
+    'gold reserves hezbollah', 'hezbollah gold', 'bullion',
+    'القرض الحسن', 'ذهب حزب الله',
+]
+
+# ── TERMINAL-SCENARIO WATCH ─────────────────────────────────────────────────
+# Two tails, watched asymmetrically on purpose.
+#
+# The DURABLE-PEACE tail is the framework's own stated end-state, so its
+# vocabulary is ordinary diplomatic language and a modest bar is appropriate.
+#
+# The COLLAPSE tail -- Lebanese government failure plus permanent Israeli
+# presence in the south -- is high-consequence and low-frequency. A tracker
+# that shouts "annexation" off one settler op-ed is worse than no tracker,
+# because it burns the reader's trust in exactly the signal they would most
+# need to believe. It therefore requires MULTIPLE INDEPENDENT MARKERS, not
+# volume on one.
+#
+# THE FALSE-POSITIVE TRAP, and it is a live one: Israel's annexation
+# vocabulary is overwhelmingly WEST BANK -- rhetoric_tracker_israel.py carries
+# annexation_bloc, annexation vote, settlement expansion, 38 hits, effectively
+# all of it Judea/Samaria. Bare "annexation" terms would import that
+# high-volume chatter straight into a Lebanon tail-risk read. Every trigger
+# below is therefore scoped to Lebanese geography, and West Bank markers are
+# actively excluded.
+
+DURABLE_PEACE_TRIGGERS = [
+    'permanent ceasefire', 'comprehensive agreement', 'border demarcation',
+    'blue line demarcation', 'normalization talks lebanon', 'peace treaty lebanon',
+    'security arrangement signed', 'phased withdrawal agreed',
+    'prisoner exchange agreed', 'maritime border lebanon',
+    'اتفاق دائم', 'ترسيم الحدود', 'انسحاب مرحلي',
+    'הסכם קבע', 'תיחום גבול',
+]
+
+COLLAPSE_TAIL_TRIGGERS = {
+    'government_failure': [
+        'government collapse lebanon', 'cabinet resigns', 'government resigned',
+        'salam resigns', 'aoun resigns', 'political vacuum lebanon',
+        'state collapse lebanon', 'parliament paralysed', 'unable to govern',
+        'استقالة الحكومة', 'انهيار الدولة', 'الفراغ السياسي',
+    ],
+    'laf_failure': [
+        'laf withdraws', 'army withdraws from south', 'laf refuses',
+        'army cannot disarm', 'laf unable', 'soldiers desert',
+        'army split', 'laf defections',
+        'انسحاب الجيش', 'الجيش يرفض', 'عجز الجيش',
+    ],
+    'permanent_presence': [
+        'permanent israeli presence lebanon', 'permanent security zone lebanon',
+        'buffer zone southern lebanon', 'security belt lebanon',
+        'indefinite presence south lebanon', 'israel to remain in lebanon',
+        'annex southern lebanon', 'annexation of southern lebanon',
+        'lebanese territory annexation', 'south lebanon annexation',
+        'israeli settlement lebanon',
+        'منطقة عازلة جنوب لبنان', 'ضم جنوب لبنان', 'الحزام الأمني',
+        'סיפוח דרום לבנון', 'רצועת ביטחון בלבנון', 'נוכחות קבע בלבנון',
+    ],
+}
+
+# Hard exclusion. If an article is about the West Bank it cannot count toward
+# the Lebanon collapse tail, however much annexation language it contains.
+WEST_BANK_EXCLUSIONS = [
+    'west bank', 'judea and samaria', 'judea & samaria', 'settlement bloc',
+    'maale adumim', "ma'ale adumim", 'jordan valley', 'area c', 'e1 ',
+    'الضفة الغربية', 'يهودا والسامرة',
+    'יהודה ושומרון', 'הגדה המערבית',
+]
+
+# The collapse tail requires markers from at least this many INDEPENDENT
+# categories before it is reported as a convergence rather than as chatter.
+COLLAPSE_MIN_CATEGORIES = 2
+
+def _detect_framework_implementation(articles):
+    """Which Trilateral Framework gate is blocking, and is the spread widening?
+
+    Returns a state dict. Reports the blocking gate and the direction of the
+    declared/actual spread; does NOT forecast whether the framework succeeds.
+    """
+    def _txt(a):
+        return ((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+
+    def _count(triggers, pool=None):
+        n, hits = 0, []
+        for a in (pool if pool is not None else (articles or [])):
+            blob = _txt(a)
+            m = [t for t in triggers if t.lower() in blob]
+            if m:
+                n += 1
+                hits.append(m[0])
+        return n, hits[:3]
+
+    # ── Gate ladder: declared vs actual at each gate ──
+    gates = {}
+    for gate, pair in FRAMEWORK_GATE_TRIGGERS.items():
+        dec, dec_hits = _count(pair['declared'])
+        act, act_hits = _count(pair['actual'])
+        gates[gate] = {
+            'declared': dec, 'actual': act,
+            'spread': dec - act,
+            'declared_examples': dec_hits, 'actual_examples': act_hits,
+            # A gate is BLOCKED when it is being talked about and not delivered.
+            # Silence on both sides is NOT a block -- it is no information, and
+            # calling it a block would manufacture a finding out of a quiet week.
+            'state': ('blocked' if (dec >= 2 and act == 0) else
+                      'moving' if act > 0 else
+                      'quiet'),
+        }
+
+    ordered = ['clearance', 'verification', 'aid_flow', 'zone_expansion']
+    blocking = next((g for g in ordered if gates.get(g, {}).get('state') == 'blocked'), None)
+    moving = [g for g in ordered if gates.get(g, {}).get('state') == 'moving']
+
+    # ── Named-site concentration ──
+    taher_n, taher_hits = _count(ALI_AL_TAHER_TRIGGERS)
+    aqah_n, _ = _count(AQAH_RUMINT_TRIGGERS)
+
+    # ── Terminal tails ──
+    peace_n, peace_hits = _count(DURABLE_PEACE_TRIGGERS)
+
+    # Collapse tail: exclude West Bank articles BEFORE counting, then require
+    # markers from >=2 independent categories.
+    lebanon_pool = [a for a in (articles or [])
+                    if not any(x in _txt(a) for x in WEST_BANK_EXCLUSIONS)]
+    excluded_wb = len(articles or []) - len(lebanon_pool)
+
+    collapse_cats, collapse_hits = {}, []
+    for cat, trig in COLLAPSE_TAIL_TRIGGERS.items():
+        n, hits = _count(trig, pool=lebanon_pool)
+        if n:
+            collapse_cats[cat] = n
+            collapse_hits.extend(hits)
+    collapse_active = len(collapse_cats) >= COLLAPSE_MIN_CATEGORIES
+
+    # ── Read ──
+    if blocking:
+        g = gates[blocking]
+        headline = ('Framework implementation stalled at %s: %d declared signals, '
+                    '%d verified' % (blocking.replace('_', ' '), g['declared'], g['actual']))
+        state = 'stalled'
+    elif moving:
+        headline = ('Framework implementation advancing at %s'
+                    % ', '.join(m.replace('_', ' ') for m in moving))
+        state = 'advancing'
+    else:
+        headline = 'No Trilateral Framework implementation signals this cycle'
+        state = 'quiet'
+
+    note = ''
+    if state == 'stalled':
+        note = ('The blocking gate is being ANNOUNCED but not VERIFIED. That spread is the '
+                'measurement: deployment without clearance, pledges without disbursement, '
+                'or a verification mechanism discussed but never appointed. Because clearance '
+                'and third-party verification both sit UPSTREAM of aid and of zone expansion, '
+                'a block at either one holds the entire sequence regardless of activity '
+                'downstream. ')
+    elif state == 'quiet':
+        note = ('Absence of implementation reporting is NOT evidence of progress or of failure. '
+                'Quiet weeks are ordinary and the framework was never expected to generate '
+                'continuous coverage. ')
+
+    if taher_n:
+        note += ('Ali al-Taher appears in %d article(s) this cycle. The site is where the '
+                 'framework contradiction concentrates: it sits inside the clearance gate and '
+                 'is the location most reported as retaining fighters and materiel. '
+                 'Reporting volume there is a proxy for how contested the clearance gate is. '
+                 % taher_n)
+    if aqah_n:
+        note += ('RUMINT (%d mention(s)): claims regarding al-Qard al-Hassan holdings at this '
+                 'site are RUMOUR-TIER and are counted, not asserted. AQAH is a real designated '
+                 'entity; the specific storage claim is unestablished and must not be treated '
+                 'as a finding. ' % aqah_n)
+    if collapse_active:
+        note += ('COLLAPSE-TAIL WATCH ACTIVE: markers present across %d independent categories '
+                 '(%s). This is a low-frequency, high-consequence tail and requires multiple '
+                 'categories precisely so it cannot fire on chatter. %d West Bank article(s) '
+                 'were excluded before counting, since Israeli annexation vocabulary is '
+                 'overwhelmingly Judea/Samaria and would otherwise contaminate this read. '
+                 % (len(collapse_cats), ', '.join(sorted(collapse_cats)), excluded_wb))
+    elif collapse_cats:
+        note += ('Collapse-tail markers present in only %d category (%s) -- below the %d-category '
+                 'threshold, reported as chatter rather than convergence. '
+                 % (len(collapse_cats), ', '.join(sorted(collapse_cats)), COLLAPSE_MIN_CATEGORIES))
+    if peace_n:
+        note += ('Durable-peace vocabulary in %d article(s). ' % peace_n)
+
+    note += ('This is a CONVERGENCE indicator, NOT a probability of action. Which gate is '
+             'blocking is observable; whether the framework holds is not.')
+
+    return {
+        'state': state,
+        'headline': headline,
+        'blocking_gate': blocking,
+        'moving_gates': moving,
+        'gates': gates,
+        'ali_al_taher_mentions': taher_n,
+        'ali_al_taher_examples': taher_hits,
+        'aqah_rumint_mentions': aqah_n,
+        'durable_peace_signals': peace_n,
+        'collapse_categories': collapse_cats,
+        'collapse_tail_active': collapse_active,
+        'west_bank_articles_excluded': excluded_wb,
+        'note': note,
+    }
+
+
 def run_rhetoric_scan(days=3):
     """
     Execute full Lebanon rhetoric scan.
@@ -2456,11 +2787,29 @@ def run_rhetoric_scan(days=3):
                 corpus={
                     'articles':      _arts,
                     'sources_live':  _sources_seen,
-                    'sources_total': len(RHETORIC_RSS_FEEDS),
+                    # was len(RHETORIC_RSS_FEEDS) -- an undefined name. See
+                    # RHETORIC_FEED_COUNT above; falls back to observed sources
+                    # so a cold first scan still emits rather than raising.
+                    'sources_total': RHETORIC_FEED_COUNT or _sources_seen or 1,
                 },
             )
         except Exception as _e:
             print(f"[Lebanon Rhetoric] Tempo emit failed (non-fatal): {str(_e)[:100]}")
+
+    # ── Trilateral Framework implementation state (v1.3.0) ──
+    # Runs on the escalation-BLIND framework pool where available, since
+    # implementation signals are frequently de-escalatory and would otherwise
+    # be squeezed out of the escalation-ranked article list.
+    try:
+        _fw_pool = result.get('framework_articles') or result.get('articles') or []
+        result['framework_implementation'] = _detect_framework_implementation(_fw_pool)
+        _fi = result['framework_implementation']
+        print(f"[Lebanon Rhetoric] Framework: {_fi['state']} "
+              f"(blocking={_fi.get('blocking_gate')}, taher={_fi.get('ali_al_taher_mentions')}, "
+              f"collapse_tail={_fi.get('collapse_tail_active')})")
+    except Exception as _e:
+        print(f"[Lebanon Rhetoric] Framework implementation read failed: {str(_e)[:120]}")
+        result['framework_implementation'] = {'state': 'error', 'note': str(_e)[:200]}
 
     # ── Delta ──
     result['delta'] = _compute_delta()
