@@ -697,6 +697,242 @@ WEST_BANK_FRAMES = {
     },
 }
 
+# ============================================================================
+# GAZA CONTROL RATCHET  (Slice 4, Aug 2026)
+# ----------------------------------------------------------------------------
+# A THIRD INSTRUMENT TYPE. Gates measure a declared/actual spread. Tempo
+# measures a rate against a baseline. Neither can express what is happening in
+# Gaza, because the thing to be measured is what DOES NOT HAPPEN.
+#
+# A ratchet only turns one way. The IDF moved control westward from the
+# "Yellow Line" to the "Orange Line" and holds more than half the Strip; no
+# reconstruction occurred across 2026. Every individual notch is announced as
+# temporary and security-justified, and each one is individually defensible.
+# What is not defensible -- and what no event counter can see -- is that the
+# ratchet has never turned back.
+#
+# SO THE MEASUREMENT IS A CLOCK, NOT A COUNT:
+#
+#   days_since_reversal        how long since control moved back at all
+#   reconstruction_absent_days how long since reconstruction was reported starting
+#   net_notches                advances minus reversals
+#   conditions_added           new preconditions attached to withdrawal over time
+#
+# "Reconstruction absent for 240 days" is a finding. "Reconstruction absent"
+# is not. The duration IS the signal, and it is the one thing that cannot be
+# justified notch by notch.
+#
+# WITHDRAWAL-CONDITION INVERSION: the roadmap sequenced withdrawal after
+# disarmament. Each additional precondition attached to withdrawal pushes it
+# further out while leaving the framework nominally intact. Conditions
+# accumulating is therefore its own ratchet, running in parallel to the
+# territorial one.
+#
+# DOCTRINE: this counts publicly reported control movements and durations. It
+# does not assert intent, and no single notch is presented as annexation. The
+# absence of reversal over time is the observation; what it means is the
+# reader's inference. Analytical characterisations, where attached, are
+# ATTRIBUTED (see GAZA_RATCHET_FRAMES).
+
+GAZA_RATCHET_KEY = 'gaza:control_ratchet:state'
+
+GAZA_CONTROL_MARKERS = {
+    # Control EXPANDING -- the ratchet turning forward
+    'advance': [
+        'yellow line', 'orange line', 'expanded control', 'pushed westward',
+        'idf advanced', 'seized additional', 'new positions in gaza',
+        'expanded the buffer', 'widened the perimeter', 'took control of',
+        'operational control of', 'holds more than half',
+        'الخط الأصفر', 'الخط البرتقالي', 'توسيع السيطرة', 'تقدم الجيش',
+        'הקו הצהוב', 'הקו הכתום', 'הרחבת השליטה',
+    ],
+    # Control CONTRACTING -- the ratchet turning back. THE THING WE WATCH FOR.
+    'reversal': [
+        'idf withdrew from', 'pulled back from', 'handed over control',
+        'evacuated positions', 'vacated the area', 'returned control to',
+        'withdrew to the yellow line', 'pulled back to', 'reduced its presence',
+        'انسحبت القوات', 'تسليم السيطرة', 'إخلاء المواقع',
+        'צה"ל נסוג מ', 'נסיגה לקו',
+    ],
+    # Reconstruction ACTUALLY happening -- resets the absence clock
+    'reconstruction': [
+        'reconstruction began', 'rebuilding started', 'construction under way',
+        'materials entered gaza', 'rubble cleared', 'homes rebuilt',
+        'cement entered', 'reconstruction convoy',
+        'بدء الإعمار', 'دخول مواد البناء', 'إزالة الركام',
+    ],
+    # New preconditions attached to withdrawal -- the parallel ratchet
+    'condition_added': [
+        'additional condition', 'new precondition', 'will not withdraw until',
+        'only after', 'conditioned on', 'no withdrawal before',
+        'further requirement', 'israel insists', 'demands first',
+        'لن ننسحب حتى', 'شرط إضافي',
+        'לא ניסוג עד', 'תנאי נוסף',
+    ],
+}
+
+GAZA_SCOPE = ['gaza', 'strip', 'rafah', 'khan younis', 'deir al-balah', 'gaza city',
+              'غزة', 'رفح', 'خان يونس', 'עזה', 'רפיח']
+
+GAZA_RATCHET_FRAMES = {
+    'no_reversal': {
+        'claim': ('Territorial control that expands and does not contract, combined with '
+                  'absent reconstruction, is characterised as de facto permanent '
+                  'administration rather than temporary military presence.'),
+        'attribution': 'Board of Peace roadmap reporting; Foundation for Middle East Peace',
+        'context': ('The 20-point plan endorsed by UNSCR 2803 (17 Nov 2025) was reported as '
+                    'frozen through 2026 with Hamas armed, Israel holding more than half the '
+                    'Gaza Strip, and no reconstruction. The Board of Peace stated in August '
+                    '2026 that there would be no Israeli withdrawal before Hamas disarmament '
+                    'is complete.'),
+        'tier': 'reported',
+        'source': 'Board of Peace Roadmap coverage, Jul-Aug 2026; UNSCR 2803',
+        'source_url': 'https://israeled.org/roadmap-for-gaza-july-2026/',
+        'counter_frame': ('Israel characterises its positions as security measures pending '
+                          'Hamas disarmament, and the Board of Peace sequence itself places '
+                          'withdrawal after disarmament -- so on that reading the absence of '
+                          'withdrawal reflects the agreed order rather than a change of aim.'),
+    },
+}
+
+def _detect_gaza_control_ratchet(articles):
+    """Duration clocks over a one-way process. See the block comment above.
+
+    State PERSISTS across scans: a ratchet is a cumulative object, and a
+    per-scan reading would reset the very clocks that constitute the finding.
+    """
+    def _blob(a):
+        return ((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+
+    scoped = [a for a in (articles or []) if any(k in _blob(a) for k in GAZA_SCOPE)]
+
+    def _hits(key):
+        n, ex = 0, []
+        for a in scoped:
+            b = _blob(a)
+            m = [t for t in GAZA_CONTROL_MARKERS[key] if t.lower() in b]
+            if m:
+                n += 1
+                ex.append((a.get('title') or '')[:110])
+        return n, ex[:2]
+
+    adv_n, adv_ex = _hits('advance')
+    rev_n, rev_ex = _hits('reversal')
+    rec_n, rec_ex = _hits('reconstruction')
+    con_n, con_ex = _hits('condition_added')
+
+    now = datetime.now(timezone.utc)
+    prior = _redis_get(GAZA_RATCHET_KEY) or {}
+
+    def _days_since(iso):
+        if not iso:
+            return None
+        try:
+            return (now - datetime.fromisoformat(iso)).days
+        except Exception:
+            return None
+
+    state = {
+        'advances': int(prior.get('advances', 0)) + (1 if adv_n else 0),
+        'reversals': int(prior.get('reversals', 0)) + (1 if rev_n else 0),
+        'conditions_added': int(prior.get('conditions_added', 0)) + (1 if con_n else 0),
+        'last_advance': now.isoformat() if adv_n else prior.get('last_advance'),
+        'last_reversal': now.isoformat() if rev_n else prior.get('last_reversal'),
+        'last_reconstruction': now.isoformat() if rec_n else prior.get('last_reconstruction'),
+        'clock_started': prior.get('clock_started') or now.isoformat(),
+        'updated': now.isoformat(),
+    }
+    _redis_set(GAZA_RATCHET_KEY, state, ttl=400 * 24 * 3600)
+
+    clock_age = _days_since(state['clock_started']) or 0
+    days_since_reversal = _days_since(state['last_reversal'])
+    recon_absent = _days_since(state['last_reconstruction'])
+    net_notches = state['advances'] - state['reversals']
+
+    # ABSENCE-HONEST, and this is the load-bearing caveat: on a cold start there
+    # is no history, so an empty clock means WE HAVE NOT BEEN WATCHING -- not
+    # that nothing happened. Reporting "0 days since reversal" on day one would
+    # invert the finding completely.
+    cold_start = clock_age < 14
+
+    if cold_start:
+        ratchet_state = 'accumulating'
+        headline = ('Gaza control ratchet: baseline accumulating (%d/14 days observed)'
+                    % clock_age)
+    elif rev_n:
+        ratchet_state = 'reversed'
+        headline = 'Gaza control ratchet: REVERSAL reported this cycle'
+    elif net_notches > 0 and (days_since_reversal is None or days_since_reversal > 60):
+        ratchet_state = 'ratcheting'
+        headline = ('Gaza control ratchet: %d net advance(s), no reversal observed in %s'
+                    % (net_notches,
+                       ('%d days' % days_since_reversal) if days_since_reversal is not None
+                       else 'the observed window'))
+    else:
+        ratchet_state = 'static'
+        headline = 'Gaza control ratchet: no net movement observed'
+
+    note = ''
+    if cold_start:
+        note = ('The ratchet clocks began %d day(s) ago. An empty clock means THIS MODULE HAS '
+                'NOT BEEN WATCHING LONG ENOUGH, not that no movement occurred. Durations below '
+                'are floors, not measurements, and should not be read as findings yet. '
+                % clock_age)
+    else:
+        if recon_absent is None:
+            note += ('No reconstruction start has been reported in the %d days observed. '
+                     'Reconstruction absence is a DURATION, and duration is the whole point: '
+                     'absent-for-a-week and absent-for-eight-months are the same event count '
+                     'and completely different findings. ' % clock_age)
+        else:
+            note += ('Reconstruction last reported starting %d day(s) ago. ' % recon_absent)
+
+        if ratchet_state == 'ratcheting':
+            note += ('Control has expanded and has not contracted. NO SINGLE NOTCH IS A STATUS '
+                     'CHANGE and none is presented as one -- each is announced as temporary and '
+                     'security-justified, and each is individually defensible. What an event '
+                     'count cannot express, and this clock can, is that the movement has only '
+                     'ever run one way. ')
+        elif ratchet_state == 'reversed':
+            note += ('A reversal was reported this cycle, which is the observation that would '
+                     'distinguish a temporary military posture from a ratchet. It resets the '
+                     'clock and is worth weighting accordingly. ')
+
+    if state['conditions_added']:
+        note += ('%d cycle(s) have added preconditions to withdrawal. Conditions accumulate as '
+                 'their own ratchet running parallel to the territorial one: each addition '
+                 'pushes withdrawal further out while leaving the framework nominally intact. '
+                 % state['conditions_added'])
+
+    frames = []
+    if ratchet_state == 'ratcheting' and recon_absent is None:
+        frames.append({'category': 'no_reversal', **GAZA_RATCHET_FRAMES['no_reversal']})
+
+    note += ('Characterisations are attributed with counter-positions recorded. This is a '
+             'CONVERGENCE indicator, NOT a probability of action.')
+
+    return {
+        'ratchet_state': ratchet_state,
+        'headline': headline,
+        'net_notches': net_notches,
+        'advances': state['advances'],
+        'reversals': state['reversals'],
+        'days_since_reversal': days_since_reversal,
+        'reconstruction_absent_days': (clock_age if recon_absent is None else 0),
+        'reconstruction_last_seen_days': recon_absent,
+        'conditions_added': state['conditions_added'],
+        'clock_age_days': clock_age,
+        'cold_start': cold_start,
+        'this_cycle': {'advance': adv_n, 'reversal': rev_n,
+                       'reconstruction': rec_n, 'condition_added': con_n},
+        'examples': {'advance': adv_ex, 'reversal': rev_ex,
+                     'reconstruction': rec_ex, 'condition_added': con_ex},
+        'articles_in_scope': len(scoped),
+        'frames': frames,
+        'note': note,
+    }
+
+
 def _detect_west_bank_annexation_tempo(articles):
     """Administrative-act tempo. A RATE, not an event.
 
@@ -2606,6 +2842,16 @@ def run_israel_rhetoric_scan(days=3):
         pass
     except Exception as _e:
         print(f"[Israel Rhetoric] US voice read failed: {str(_e)[:120]}")
+
+    # Gaza control ratchet (Slice 4) — duration clocks over a one-way process
+    try:
+        result['gaza_control_ratchet'] = _detect_gaza_control_ratchet(articles)
+        _gr = result['gaza_control_ratchet']
+        print(f"[Israel Rhetoric] Gaza ratchet: {_gr['ratchet_state']} "
+              f"(net {_gr['net_notches']}, no reversal {_gr['days_since_reversal']}d, "
+              f"recon absent {_gr['reconstruction_absent_days']}d)")
+    except Exception as _e:
+        print(f"[Israel Rhetoric] Gaza ratchet read failed: {str(_e)[:120]}")
 
     # West Bank annexation tempo (Slice 3) — administrative acts as a RATE
     try:
