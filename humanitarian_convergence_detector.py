@@ -1344,6 +1344,26 @@ def detect_and_build_bluf(articles, extra_signals=None):
     extra_signals: pre-built signals (e.g. UNHCR structured surges) merged in.
     """
     signals = detect_humanitarian_signals(articles or [])
+
+    # ── WORLDWIDE STRUCTURED DISASTER CATCH (Aug 2026) ──────────────────
+    # News-derived detection is biased toward countries with press presence and
+    # toward events already being written about. GDACS and USGS fire on the
+    # EVENT rather than the coverage, which is how Nepal, Vanuatu or Mozambique
+    # reach this axis at all when no country tracker exists and no newsroom has
+    # filed. Merged here rather than run separately so it lands on
+    # global_humanitarian with everything else -- no GPI change, no parallel axis.
+    try:
+        from disaster_feeds import fetch_disaster_signals
+        _dis = fetch_disaster_signals(tracked_countries=TRACKED_COUNTRIES)
+        if _dis:
+            signals = signals + _dis
+    except ImportError:
+        pass
+    except Exception as _e:
+        # Non-fatal by design: the news-derived signals stand on their own and a
+        # feed outage must not take the humanitarian axis down with it.
+        print(f'[Humanitarian] disaster feed merge failed (non-fatal): {str(_e)[:110]}')
+
     if extra_signals:
         signals = signals + list(extra_signals)
     aggregation = aggregate_convergence(signals)
