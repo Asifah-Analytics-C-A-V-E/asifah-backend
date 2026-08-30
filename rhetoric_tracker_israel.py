@@ -795,6 +795,97 @@ GAZA_RATCHET_FRAMES = {
     },
 }
 
+POLICY_BRANCH_KEY = 'israel:policy_branch:state'
+
+
+def _write_policy_branch_summary(result):
+    """Compact three-theatre branch read for GPI altitude (Slice 5).
+
+    THE FRAMING, from Rachel: safety on the northern border is a GIVEN for any
+    Israeli government. How they get there -- negotiated agreement versus
+    occupation and annexation -- is the branch. The same fork exists in all
+    three theatres:
+
+        Lebanon    negotiated framework   vs   permanent security presence
+        Gaza       Palestinian governance vs   permanent administration
+        West Bank  negotiated status      vs   incremental annexation
+
+    NO SINGLE THEATRE'S BRANCH IS A POLICY FINDING. Three theatres leaning the
+    same way in the same cycle is, and it is a finding no regional BLUF can
+    reach: Lebanon is read on ME, the West Bank inside Israel, and Gaza across
+    both. Only global altitude sees all three at once.
+
+    Writes a small dict rather than the full payload -- the GPI needs the
+    branch lean, not the evidence, and shipping the evidence upward would just
+    duplicate it.
+    """
+    branches = {}
+
+    # ── Lebanon: from the framework gate ladder (written by rhetoric_tracker) ──
+    try:
+        leb = _redis_get('rhetoric:lebanon:framework_gates') or {}
+    except Exception:
+        leb = {}
+    if leb:
+        adv = leb.get('state') == 'advancing'
+        occ = bool(leb.get('collapse_tail_active'))
+        branches['lebanon'] = {
+            'lean': 'negotiated' if adv else ('occupation' if occ else 'unresolved'),
+            'basis': leb.get('headline', ''),
+        }
+
+    # ── Gaza: gates + ratchet together ──
+    gz_gates = result.get('gaza_framework_gates') or {}
+    gz_ratchet = result.get('gaza_control_ratchet') or {}
+    if gz_gates or gz_ratchet:
+        adv = gz_gates.get('state') == 'advancing'
+        ratcheting = gz_ratchet.get('ratchet_state') == 'ratcheting'
+        reversed_ = gz_ratchet.get('ratchet_state') == 'reversed'
+        if adv or reversed_:
+            lean = 'palestinian_governance'
+        elif ratcheting:
+            lean = 'permanent_administration'
+        else:
+            lean = 'unresolved'
+        branches['gaza'] = {
+            'lean': lean,
+            'basis': gz_ratchet.get('headline') or gz_gates.get('headline', ''),
+        }
+
+    # ── West Bank: administrative tempo. There is no branch_a signal here by
+    # construction -- a negotiated West Bank status would be a diplomatic event,
+    # not an administrative act, so silence is 'unresolved' and never 'negotiated'.
+    wb = result.get('west_bank_annexation_tempo') or {}
+    if wb:
+        multi = len(wb.get('active_categories') or []) >= 3
+        branches['west_bank'] = {
+            'lean': 'incremental_annexation' if multi else 'unresolved',
+            'basis': ('%d acts across %d categories'
+                      % (wb.get('total_acts', 0), len(wb.get('active_categories') or []))),
+        }
+
+    HARD = {'occupation', 'permanent_administration', 'incremental_annexation'}
+    SOFT = {'negotiated', 'palestinian_governance'}
+    hard = sorted(k for k, v in branches.items() if v['lean'] in HARD)
+    soft = sorted(k for k, v in branches.items() if v['lean'] in SOFT)
+
+    payload = {
+        'branches': branches,
+        'theatres_read': sorted(branches),
+        'hard_branch_theatres': hard,
+        'soft_branch_theatres': soft,
+        'hard_count': len(hard),
+        'soft_count': len(soft),
+        'updated': datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        _redis_set(POLICY_BRANCH_KEY, payload, ttl=3 * 24 * 3600)
+        print(f"[Israel Rhetoric] Policy branch: hard={hard} soft={soft}")
+    except Exception as _e:
+        print(f"[Israel Rhetoric] Policy branch write failed: {str(_e)[:110]}")
+    return payload
+
+
 def _detect_gaza_control_ratchet(articles):
     """Duration clocks over a one-way process. See the block comment above.
 
@@ -2853,6 +2944,10 @@ def run_israel_rhetoric_scan(days=3):
     except Exception as _e:
         print(f"[Israel Rhetoric] Gaza ratchet read failed: {str(_e)[:120]}")
 
+    # Policy-branch summary for GPI altitude (Slice 5) — written LAST so it can
+    # read the Gaza gates, Gaza ratchet and West Bank tempo computed above.
+    # (Registered here; the call is placed after those three run.)
+
     # West Bank annexation tempo (Slice 3) — administrative acts as a RATE
     try:
         result['west_bank_annexation_tempo'] = _detect_west_bank_annexation_tempo(articles)
@@ -2862,6 +2957,12 @@ def run_israel_rhetoric_scan(days=3):
               f"(scope {_wb['articles_in_scope']}, tempo_emitted={_wb['tempo_emitted']})")
     except Exception as _e:
         print(f"[Israel Rhetoric] West Bank tempo read failed: {str(_e)[:120]}")
+
+    # Slice 5 — must run AFTER gates, ratchet and tempo are all on `result`.
+    try:
+        result['policy_branch'] = _write_policy_branch_summary(result)
+    except Exception as _e:
+        print(f"[Israel Rhetoric] Policy branch summary failed: {str(_e)[:120]}")
 
     # Gaza Board of Peace gate ladder (Slice 2) — shared primitive, freeze-coupled
     try:

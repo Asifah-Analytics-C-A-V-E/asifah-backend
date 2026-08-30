@@ -821,6 +821,104 @@ def _narrative_hub_network_breadth(blufs):
     return out or None
 
 
+_POLICY_BRANCH_KEY = 'israel:policy_branch:state'
+
+_BRANCH_LABEL = {
+    'negotiated':               'negotiated framework',
+    'occupation':               'permanent security presence',
+    'palestinian_governance':   'Palestinian governance',
+    'permanent_administration': 'permanent administration',
+    'incremental_annexation':   'incremental annexation',
+    'unresolved':               'unresolved',
+}
+_THEATRE_LABEL = {'lebanon': 'Lebanon', 'gaza': 'Gaza', 'west_bank': 'the West Bank'}
+
+
+def _narrative_policy_branch_convergence(blufs):
+    """Do Lebanon, Gaza and the West Bank branch the same way at once?
+
+    THE FRAMING: safety on Israel's northern border is a given for any Israeli
+    government. HOW it is reached -- negotiated agreement versus occupation and
+    annexation -- is the branch, and the same fork exists in all three theatres.
+
+    NO SINGLE THEATRE'S BRANCH IS A POLICY FINDING. Each has a local
+    explanation and each regional BLUF sees only its own. Two or more leaning
+    the same way in the same cycle is a different object -- and it is a read
+    regional altitude structurally cannot reach, because Lebanon is read on ME,
+    the West Bank inside Israel, and Gaza across both.
+
+    Ranked BELOW the +11 kinetic boost: a policy lean is not force.
+    """
+    st = _redis_get(_POLICY_BRANCH_KEY) or {}
+    if not st:
+        return None
+
+    branches = st.get('branches') or {}
+    hard = st.get('hard_branch_theatres') or []
+    soft = st.get('soft_branch_theatres') or []
+    read = st.get('theatres_read') or []
+
+    # Two is the minimum that separates a pattern from a coincidence. One
+    # theatre branching is always locally explicable and is not reported here.
+    if len(hard) < 2 and len(soft) < 2:
+        return None
+
+    lean_side = 'hard' if len(hard) >= len(soft) else 'soft'
+    group = hard if lean_side == 'hard' else soft
+    names = _serial([_THEATRE_LABEL.get(t, t.replace('_', ' ').title()) for t in group])
+
+    headline = ('%s branching toward %s outcomes simultaneously'
+                % (names, 'unilateral' if lean_side == 'hard' else 'negotiated'))
+
+    detail = ('Israeli policy in each of these theatres faces the same fork: the security '
+              'objective is not in question, but the METHOD is -- negotiated agreement on one '
+              'side, unilateral consolidation on the other. ')
+    for t in read:
+        b = branches.get(t) or {}
+        detail += ('%s reads as %s (%s). '
+                   % (_THEATRE_LABEL.get(t, t),
+                      _BRANCH_LABEL.get(b.get('lean'), 'unresolved'),
+                      (b.get('basis') or 'no basis recorded')[:90]))
+
+    detail += ('%d of %d instrumented theatres lean the same way this cycle. The finding is '
+               'the SIMULTANEITY -- a single theatre branching is locally explicable and is '
+               'not reported here. It is also a read no regional BLUF can reach: Lebanon is '
+               'read on the Middle East backend, the West Bank inside Israel, and Gaza across '
+               'both, so only global altitude sees all three at once. '
+               % (len(group), len(read)))
+
+    # Freeze qualifier: during a decision freeze a lean is inertia, not choice.
+    fz = {}
+    try:
+        from framework_gates import read_freeze_state
+        fz = read_freeze_state() or {}
+    except Exception:
+        pass
+    if fz.get('freeze'):
+        detail += ('AN ISRAELI DECISION FREEZE IS IN EFFECT (electoral stage: %s). A lean '
+                   'observed during a freeze reflects existing policy continuing by default '
+                   'rather than a decision to pursue it: unilateral measures proceed '
+                   'administratively while negotiated ones require a government able to sign. '
+                   'That asymmetry is STRUCTURAL and must not be read as intent. '
+                   % fz.get('state'))
+    elif fz.get('known'):
+        detail += ('No Israeli decision freeze is in effect, so this lean is not explained by '
+                   'an absent counterparty. ')
+
+    detail += ('This composite is a CONVERGENCE indicator, NOT a probability of action; each '
+               'theatre is independently sourced and the reader completes the inference.')
+
+    return {
+        'priority': 10 if len(group) >= 3 else 9,
+        'category': 'policy_branch_convergence',
+        'regions': ['me'],
+        'icon': '\U0001f500',
+        'color': '#9333ea',
+        'headline': headline,
+        'detail': detail,
+    }
+
+
 def _narrative_emplacement_precursor(blufs):
     """The emplacement-precursor convergence, read from two tempo baselines.
 
@@ -1423,6 +1521,9 @@ NARRATIVE_AXIS_SETS = {
     # A precursor read, not an escalation read. Diplomatic first so a rising
     # warning/denial tempo never renders as force having been used.
     'emplacement_precursor':           ['diplomatic', 'kinetic'],
+    # A method finding, not a force finding. Diplomatic leads so a policy lean
+    # never renders as escalation on the kinetic axis.
+    'policy_branch_convergence':       ['diplomatic', 'kinetic'],
 }
 
 def _axes_for_narrative(n):
@@ -3320,6 +3421,7 @@ NARRATIVE_DETECTORS = [
     _narrative_hub_network_breadth,                      # ANY hub: depth (countries/region) or span (regions) — Slice 2, Aug 2026
     _narrative_contested_spoke,                          # MANY hubs on ONE node — Abu al-Duhur geometry, Aug 2026
     _narrative_emplacement_precursor,                    # redline tempo × denial tempo — tasking trigger, Aug 2026
+    _narrative_policy_branch_convergence,                # Lebanon/Gaza/West Bank branching together — Slice 5, Aug 2026
     # Fallback always last
     _narrative_global_baseline,
 ]

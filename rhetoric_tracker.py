@@ -2845,6 +2845,19 @@ def run_rhetoric_scan(days=3):
         _fw_pool = result.get('framework_articles') or result.get('articles') or []
         result['framework_gates'] = _detect_framework_gates(_fw_pool)
         _fi = result['framework_gates']
+        # Publish for the Israel tracker's three-theatre policy-branch summary
+        # (Slice 5). Small dict only -- the branch read needs the lean, not the
+        # evidence, and shipping the evidence would just duplicate it.
+        try:
+            _redis_set('rhetoric:lebanon:framework_gates', {
+                'state': _fi.get('state'),
+                'headline': _fi.get('headline'),
+                'blocking_gate': _fi.get('blocking_gate'),
+                'collapse_tail_active': _fi.get('collapse_tail_active'),
+                'freeze_reading': _fi.get('freeze_reading'),
+            }, ttl=3 * 24 * 3600)
+        except Exception:
+            pass
         print(f"[Lebanon Rhetoric] Framework: {_fi['state']} "
               f"(blocking={_fi.get('blocking_gate')}, taher={_fi.get('ali_al_taher_mentions')}, "
               f"collapse_tail={_fi.get('collapse_tail_active')})")
