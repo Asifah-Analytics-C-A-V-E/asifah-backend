@@ -1043,7 +1043,20 @@ def scan_israel_conflict(days=7):
     print(f"[Israel Conflict] War:{war_hits} | Coalition:{coalition_hits} | Hostage:{hostage_hits} | Opposition:{bennett_hits} | Elections:{elections_hits}")
     print(f"[Israel Conflict] Conflict: {conflict_score}/100 | Coalition fragility: {coalition_score}/100 | Elections proximity: {elections_proximity_score}/100")
 
+    # Slice 1: electoral cycle stage + decision freeze. Informational; the
+    # rhetoric layer does the coupling.
+    try:
+        election_cycle = _detect_election_state(all_articles)
+        print(f"[Israel Conflict] Election cycle: {election_cycle['state']} "
+              f"({election_cycle['days_in_state']}d) freeze={election_cycle['decision_freeze']} "
+              f"overrun={election_cycle['overrun']}")
+    except Exception as _e:
+        print(f"[Israel Conflict] Election state detect failed: {str(_e)[:120]}")
+        election_cycle = {'state': 'unknown', 'decision_freeze': False,
+                          'note': 'detection failed', 'days_in_state': 0}
+
     return {
+        'election_cycle': election_cycle,
         'conflict_score': conflict_score,
         'coalition_score': coalition_score,
         'elections_proximity_score': elections_proximity_score,
@@ -1064,6 +1077,201 @@ def scan_israel_conflict(days=7):
             'elections': elections_articles[:6],  # v2.1.0
         },
         'all_articles': all_articles[:40]
+    }
+
+# ============================================================================
+# ELECTION CYCLE STATE MACHINE + DECISION FREEZE  (Slice 1, Aug 2026)
+# ----------------------------------------------------------------------------
+# WHY THIS EXISTS, and it is not really about elections:
+#
+# While Israel is between a dissolution and a formed government, large
+# externally-facing decisions -- a Lebanon peace framework, a Gaza withdrawal
+# sequence, a West Bank status change -- do not get made. Not because anyone
+# refuses, but because there is no government positioned to make them.
+#
+# That matters because the Lebanon framework gate ladder will report
+# "stalled at clearance" in BOTH worlds, and they are opposite findings:
+#
+#   stalled because Hizballah will not disarm      -> the framework is FAILING
+#   stalled because Israel structurally cannot act -> the framework is PARKED
+#
+# Without a freeze state the platform reads those identically and would call a
+# dying process when it is a waiting one. Same trap for the Gaza roadmap.
+#
+# THE FREEZE ALSO HAS AN EXPECTED DURATION, which makes OVERRUN a signal in its
+# own right. Formation running past its envelope is not a pause any more; it is
+# a different condition, and it is observable without predicting an outcome.
+#
+# THIS MODULE IS INFORMATIONAL ONLY. It reports which stage the cycle is in and
+# how long it has been there. It does NOT forecast a winner, model coalition
+# arithmetic, or attribute policy positions to parties -- that is the rhetoric
+# layer's job, and polling-to-seats projection is modelling, not observation.
+
+ELECTION_STATES = ['stable', 'coalition_crisis', 'dissolution',
+                   'campaign', 'voted', 'formation', 'formed']
+
+# Approximate envelopes in days. These are TUNABLE and deliberately generous.
+# Israeli formation: the President tasks a candidate with 28 days, extendable by
+# 14 (42 max); on failure another candidate may receive 28; then the Knesset has
+# a further window to nominate. Realistic total therefore runs well past 42 days
+# and has historically failed outright into repeat elections. Campaign length is
+# set by the dissolution law and typically runs about three months.
+# Treat these as ORDERS OF MAGNITUDE for overrun detection, not legal advice.
+STATE_ENVELOPE_DAYS = {
+    'stable':           None,     # no envelope — this is the resting state
+    'coalition_crisis': 60,
+    'dissolution':      14,
+    'campaign':         95,
+    'voted':            10,       # election to presidential consultations
+    'formation':        45,       # first mandate incl. extension
+    'formed':           None,
+}
+FORMATION_HARD_OVERRUN_DAYS = 100   # past this, repeat elections become live
+
+# States in which large external decisions do not get made.
+FREEZE_STATES = {'dissolution', 'campaign', 'voted', 'formation'}
+PARTIAL_FREEZE_STATES = {'coalition_crisis'}
+
+ELECTION_STATE_TRIGGERS = {
+    'formed': [
+        'new government sworn in', 'government sworn in', 'coalition agreement signed',
+        'cabinet sworn in', 'new israeli government', 'coalition deal reached',
+        'government formed israel',
+        'ממשלה חדשה הושבעה', 'הסכם קואליציוני נחתם',
+    ],
+    'formation': [
+        'tasked with forming', 'mandate to form a government', 'coalition talks',
+        'coalition negotiations', 'president tasks', 'forming a government',
+        'mandate extended', 'coalition talks stall', 'unable to form',
+        'הרכבת הממשלה', 'מו"מ קואליציוני', 'הטיל את מלאכת ההרכבה',
+    ],
+    'voted': [
+        'israelis vote', 'polls close israel', 'election results israel',
+        'exit polls israel', 'votes counted israel', 'israel election result',
+        'תוצאות הבחירות', 'מדגמים',
+    ],
+    'campaign': [
+        'election campaign israel', 'campaigning ahead of', 'election date set',
+        'israel goes to elections', 'election slate', 'party list submitted',
+        'ahead of the election', 'candidate list',
+        'מערכת בחירות', 'רשימות המפלגות',
+    ],
+    'dissolution': [
+        'knesset dissolved', 'dissolve knesset', 'knesset dissolution bill',
+        'dissolution bill passes', 'knesset votes to dissolve',
+        'הכנסת התפזרה', 'פיזור הכנסת',
+    ],
+    'coalition_crisis': [
+        'coalition crisis', 'coalition collapse', 'no confidence',
+        'threatens to leave the coalition', 'quits the coalition',
+        'budget vote fails', 'haredi draft crisis', 'likud rebellion',
+        'משבר קואליציוני', 'הצבעת אי אמון', 'פרישה מהקואליציה',
+    ],
+}
+
+ELECTION_STATE_KEY = 'israel:election_cycle:state'
+
+
+def _detect_election_state(articles):
+    """Which stage of the electoral cycle, and how long has it been there?
+
+    State is detected from published reporting, then PERSISTED -- because an
+    election cycle is a state you remain in, not an event that recurs daily.
+    A quiet news week during coalition talks does not mean formation ended.
+    """
+    def _blob(a):
+        return ((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+
+    hits = {}
+    for state, trigs in ELECTION_STATE_TRIGGERS.items():
+        n = sum(1 for a in (articles or []) if any(t.lower() in _blob(a) for t in trigs))
+        if n:
+            hits[state] = n
+
+    # Latest stage wins. The cycle only runs forwards, so if both 'campaign' and
+    # 'formation' appear, formation is the live stage and campaign is retrospect.
+    detected = None
+    for state in reversed(ELECTION_STATES):
+        if state in hits and state != 'stable':
+            detected = state
+            break
+
+    prior = _redis_get(ELECTION_STATE_KEY) or {}
+    prior_state = prior.get('state')
+    prior_since = prior.get('since')
+
+    now = datetime.now(timezone.utc)
+
+    # PERSISTENCE, and the reason for it: absence of election reporting is not
+    # evidence the cycle ended. Only a NEW detected stage advances the machine.
+    if detected and detected != prior_state:
+        state, since, changed = detected, now.isoformat(), True
+    elif prior_state:
+        state, since, changed = prior_state, (prior_since or now.isoformat()), False
+    else:
+        state, since, changed = (detected or 'stable'), now.isoformat(), bool(detected)
+
+    try:
+        days_in_state = (now - datetime.fromisoformat(since)).days
+    except Exception:
+        days_in_state, since = 0, now.isoformat()
+
+    envelope = STATE_ENVELOPE_DAYS.get(state)
+    overrun = bool(envelope and days_in_state > envelope)
+    hard_overrun = bool(state == 'formation' and days_in_state > FORMATION_HARD_OVERRUN_DAYS)
+
+    freeze = state in FREEZE_STATES
+    partial = state in PARTIAL_FREEZE_STATES
+
+    _redis_set(ELECTION_STATE_KEY,
+               {'state': state, 'since': since, 'detected': detected,
+                'hits': hits, 'updated': now.isoformat()},
+               ex=90 * 24 * 3600)
+
+    if freeze:
+        note = ('Israel is between dissolution and a formed government. Large externally-'
+                'facing decisions -- a Lebanon framework, a Gaza withdrawal sequence, a West '
+                'Bank status change -- are not being made in this window, and a stall in any '
+                'of those theatres during it should be read as PARKED rather than FAILING. '
+                'This is a structural observation about who is positioned to decide, not a '
+                'claim about anyone\'s intentions.')
+    elif partial:
+        note = ('Coalition survival is contested. Decisions are not frozen but become hostage '
+                'to coalition arithmetic, which narrows the range of what is politically '
+                'available rather than stopping decisions outright.')
+    elif state == 'formed':
+        note = ('A government has formed. The freeze lifts, but policy continuity should NOT '
+                'be assumed: a new coalition is a policy discontinuity, and the terms on which '
+                'it was assembled are what determine theatre posture. Prior-government '
+                'positions are not a baseline for the new one.')
+    else:
+        note = ('No active electoral cycle detected. Decision-making capacity is nominal.')
+
+    if overrun:
+        note += (' OVERRUN: this stage has run %d days against an expected envelope of ~%d. '
+                 'A stage past its envelope is a different condition from a stage inside it.'
+                 % (days_in_state, envelope))
+    if hard_overrun:
+        note += (' Formation past ~%d days is the range in which repeat elections have '
+                 'historically become live. The freeze does not end; it extends.'
+                 % FORMATION_HARD_OVERRUN_DAYS)
+
+    return {
+        'state': state,
+        'state_changed_this_cycle': changed,
+        'detected_this_cycle': detected,
+        'since': since,
+        'days_in_state': days_in_state,
+        'expected_envelope_days': envelope,
+        'overrun': overrun,
+        'formation_hard_overrun': hard_overrun,
+        'decision_freeze': freeze,
+        'partial_freeze': partial,
+        'evidence_hits': hits,
+        'note': note,
+        'disclaimer': ('Observational only. This reports which stage of the electoral cycle '
+                       'is under way and how long it has run. It does not forecast a result, '
+                       'model coalition arithmetic, or attribute policy positions to parties.'),
     }
 
 # ========================================
@@ -1597,6 +1805,7 @@ def calculate_israel_stability(economic_data, tase_data, conflict_data, knesset_
             'rhetoric_alerts': rhetoric_alerts,
             # v2.1.0 — elections proximity surfaced for frontend's new Elections Vector card
             'elections_proximity_score': conflict_data.get('elections_proximity_score', 0),
+            'election_cycle': conflict_data.get('election_cycle', {}),
             'opposition_mentions': conflict_data.get('opposition_mentions', 0),
             'elections_mentions': conflict_data.get('elections_mentions', 0),
             # v2.2.0 — commodity penalty exposure for frontend stability breakdown
@@ -1712,6 +1921,11 @@ def scan_israel_stability():
                 'coalition_score': conflict.get('coalition_score', 0),
                 # v2.1.0 — new fields
                 'elections_proximity_score': conflict.get('elections_proximity_score', 0),
+                # Slice 1 — electoral cycle stage + decision freeze. Consumed by
+                # the rhetoric layer (analysis) and the Israel stability page
+                # (informational). Also read by the Lebanon/Gaza gate ladders so
+                # a stall during a freeze is labelled PARKED, not FAILING.
+                'election_cycle': conflict.get('election_cycle', {}),
                 'opposition_mentions': conflict.get('opposition_mentions', 0),
                 'elections_mentions': conflict.get('elections_mentions', 0),
                 'opposition_articles': conflict.get('articles', {}).get('opposition', [])[:6],
