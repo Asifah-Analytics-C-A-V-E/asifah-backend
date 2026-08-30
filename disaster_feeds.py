@@ -57,6 +57,59 @@ UA = {'User-Agent': 'Mozilla/5.0 (compatible; AsifahAnalytics/1.0)'}
 # expected impact, and emitting them would bury real signals under noise.
 GDACS_ALERT_SEVERITY = {'red': 3, 'orange': 2, 'green': 0}
 
+# OUTCOME ESCALATION (Aug 2026). GDACS assigns an alert level when an event
+# BEGINS, from modelled exposure, and does not re-score it as consequences are
+# confirmed. So a still-ORANGE alert can carry hundreds of confirmed deaths
+# while a same-level drought notification carries none -- and mapping both to
+# severity 2 treated them as equivalent.
+#
+# Observed casualties therefore override the modelled level. This is not a
+# judgement call layered on top of GDACS; it is reading the outcome field GDACS
+# itself publishes and which its alert level predates.
+DEATH_SEVERITY_FLOOR = [(100, 3), (25, 3), (10, 2)]      # deaths -> minimum severity
+DISPLACED_SEVERITY_FLOOR = [(100000, 3), (25000, 2)]      # displaced -> minimum severity
+
+
+def _outcome_severity(pop_text):
+    """Minimum severity implied by confirmed deaths/displaced in a GDACS alert.
+
+    Returns (severity_floor, reason) or (0, '') when no outcome figures are
+    present -- absence of a casualty figure is NOT evidence of no casualties,
+    it usually just means the event is too new, so it never lowers severity.
+    """
+    if not pop_text:
+        return 0, ''
+    t = pop_text.replace(',', '').lower()
+    floor, reason = 0, ''
+
+    m = re.search(r'([\d.]+)\s*(?:thousand|k\b)?\s*deaths?', t)
+    if m:
+        try:
+            n = float(m.group(1))
+            if 'thousand' in t.split('deaths')[0][-14:]:
+                n *= 1000
+            for threshold, sev in DEATH_SEVERITY_FLOOR:
+                if n >= threshold and sev > floor:
+                    floor, reason = sev, '%d confirmed deaths' % int(n)
+                    break
+        except Exception:
+            pass
+
+    m2 = re.search(r'([\d.]+)\s*(million|thousand)?\s*displaced', t)
+    if m2:
+        try:
+            n = float(m2.group(1))
+            unit = (m2.group(2) or '')
+            n *= 1000000 if unit == 'million' else (1000 if unit == 'thousand' else 1)
+            for threshold, sev in DISPLACED_SEVERITY_FLOOR:
+                if n >= threshold and sev > floor:
+                    floor = sev
+                    reason = (reason + '; ' if reason else '') + '%d displaced' % int(n)
+                    break
+        except Exception:
+            pass
+    return floor, reason
+
 # Raw magnitude bands. Conservative on purpose -- see the USGS note above.
 # M6.5 is the floor because below it, impact is almost entirely a function of
 # depth and population, which this feed cannot see.
@@ -107,6 +160,10 @@ def fetch_gdacs(min_severity=2):
 
         alert = _tag('gdacs:alertlevel').lower()
         sev = GDACS_ALERT_SEVERITY.get(alert, 0)
+        _pop_probe = _tag('gdacs:population')
+        _floor, _floor_reason = _outcome_severity(_pop_probe)
+        if _floor > sev:
+            sev = _floor
         if sev < min_severity:
             continue
 
@@ -145,15 +202,21 @@ def fetch_gdacs(min_severity=2):
                            % (HAZARD_ICON.get(etype, '\U0001f30b'), label,
                               alert.upper(), etype, pop_txt))[:150],
             'long_text': ('%s: GDACS %s alert for %s. %s '
-                          'GDACS alert levels are IMPACT estimates incorporating population '
+                          '%sGDACS alert levels are IMPACT estimates incorporating population '
                           'exposure and vulnerability, not raw physical magnitude. '
                           'Structured feed — fires on the event rather than on press coverage, '
                           'so it reaches countries with no tracker and no newsroom presence.'
-                          % (label, alert.upper(), etype, desc[:220])),
+                          % (label, alert.upper(), etype, desc[:220],
+                             ('SEVERITY RAISED ON CONFIRMED OUTCOME (%s): GDACS assigns an '
+                              'alert level when an event begins, from modelled exposure, and '
+                              'does not re-score it as consequences are confirmed. '
+                              % _floor_reason) if _floor_reason else '')),
             'source_url': link,
             'source_title': title[:200],
             'source': 'GDACS',
             'matched_keywords': [b for b in [etype, alert] if b],
+            'outcome_escalated': bool(_floor_reason),
+            'escalation_reason': _floor_reason,
             'detected_at': datetime.now(timezone.utc).isoformat(),
             'icon': HAZARD_ICON.get(etype, '\U0001f30b'),
             'theatre': 'global_humanitarian',
