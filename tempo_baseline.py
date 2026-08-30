@@ -141,6 +141,25 @@ TEMPO_REGISTRY = {
     },
 
     # ── mode='tape' — DENIABLE actors. Measure the tape, not the actor. ──
+    'west_bank': {
+        'theatre': 'west_bank', 'backend': 'me', 'mode': 'tape',
+        'streams': ['land_registration', 'outpost_legalization', 'governance_transfer',
+                    'planning_approvals', 'displacement', 'settler_violence_impunity',
+                    'sovereignty_legislation'],
+        'flag': '\U0001f3d7\ufe0f',
+        'note': ('Annexation "one acre at a time" has no declaration to detect, so there is '
+                 'no claiming actor and mode=actor would measure nothing. Each stream is an '
+                 'ADMINISTRATIVE ACT CLASS measured against its own 30-day norm: a spike in '
+                 'land registration is a different finding from a spike in settler violence, '
+                 'and a combined count would hide which one moved. THE METHODOLOGY IS NOT '
+                 'OURS: Peace Now and Kerem Navot ("Annus Mirabilis", 2026) argue the correct '
+                 'analytical unit is the consolidated set of government actions rather than '
+                 'isolated developments taken one at a time -- we count what they argue '
+                 'should be counted together. Streams are counted; intent is never asserted, '
+                 'and characterisations are attributed to named organisations with '
+                 'counter-positions recorded.'),
+    },
+
     'poland': {
         'theatre': 'poland', 'backend': 'europe', 'mode': 'tape',
         'streams': ['attack', 'attribution', 'amplification'],

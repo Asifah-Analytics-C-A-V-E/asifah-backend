@@ -529,6 +529,280 @@ REDLINE_RESTATEMENT_TRIGGERS = {
 }
 
 
+# ============================================================================
+# WEST BANK ANNEXATION TEMPO  (Slice 3, Aug 2026)
+# ----------------------------------------------------------------------------
+# WHY A TEMPO AND NOT A DETECTOR:
+#
+# This tracker already has an `annexation_bloc` ACTOR that scores annexation
+# RHETORIC -- who is saying it, how loudly. That is the DECLARATORY instrument
+# and it works. What it cannot see is the thing Rachel described as annexation
+# "one acre at a time": there is no declaration to detect, because the process
+# is administrative and each step is individually deniable and individually
+# minor. A tracker waiting for an announcement will wait forever.
+#
+# So the instrument is a RATE. Individual administrative acts are counted by
+# category and measured against their own 30-day baseline via tempo_baseline
+# (mode='tape' -- nobody claims these as annexation, so there is no claiming
+# actor whose silence could be read).
+#
+# THIS IS NOT AN ORIGINAL METHODOLOGY. Peace Now and Kerem Navot's report
+# "Annus Mirabilis: Actions by the Israeli Government to Annex the West Bank,
+# 2023-2025" makes precisely this argument -- that the analytically correct
+# unit is the consolidated set of government actions rather than isolated
+# developments such as settlement construction, outpost authorization or state
+# land declarations taken one at a time. We are counting what they argue
+# should be counted together.
+#
+# DOCTRINE: this counts PUBLICLY REPORTED ADMINISTRATIVE ACTS. It does not
+# assert intent. Where an analytical frame is attached to those acts, the frame
+# is ATTRIBUTED to a named source with a counter-frame where one exists (see
+# WEST_BANK_FRAMES). No named source, no frame -- the platform reports the
+# argument, it does not join it.
+
+WEST_BANK_ADMIN_ACTS = {
+    'land_registration': [
+        'land registration west bank', 'land registration area c',
+        'state land declaration', 'declared state land', 'state land',
+        'land registration process', 'registration of land in area c',
+        'land survey area c', 'ownership registration west bank',
+        'רישום קרקעות', 'הכרזה על אדמות מדינה',
+        'تسجيل الأراضي', 'أراضي الدولة',
+    ],
+    'outpost_legalization': [
+        'outpost legalization', 'legalize outposts', 'retroactive legalization',
+        'farming outpost', 'herding outpost', 'outposts authorized',
+        'outpost recognized', 'regularization of outposts', 'new outpost established',
+        'הסדרת מאחזים', 'מאחז חקלאי', 'לגליזציה של מאחזים',
+        'تقنين البؤر', 'بؤرة استيطانية',
+    ],
+    'governance_transfer': [
+        'civil administration powers', 'transfer of powers west bank',
+        'civilian authority west bank', 'ministry of justice west bank',
+        'israeli law applied', 'apply israeli law to', 'statutory body west bank',
+        'heritage sites authority', 'settlement administration',
+        # Broadened after a functional test: 'statutory body west bank' missed
+        # "statutory body over heritage sites in the West Bank" -- the words are
+        # not adjacent. Scope is already enforced by WB_SCOPE upstream, so short
+        # stems are safe here.
+        'statutory body', 'heritage sites', 'powers transferred',
+        'authority over the area', 'civilian powers',
+        'העברת סמכויות', 'החלת החוק הישראלי', 'המנהל האזרחי',
+        'نقل الصلاحيات', 'تطبيق القانون الإسرائيلي',
+    ],
+    'planning_approvals': [
+        'higher planning council', 'planning committee approved',
+        'settlement units advanced', 'housing units approved west bank',
+        'tenders issued settlement', 'plan deposited', 'e1 settlement',
+        'e-1 project', 'new settlements approved',
+        'המועצה הארצית לתכנון', 'אישור יחידות דיור', 'תוכנית הופקדה',
+        'مجلس التخطيط', 'وحدات استيطانية',
+    ],
+    'displacement': [
+        'palestinian community displaced', 'community uprooted', 'communities uprooted',
+        'community displaced', 'communities displaced', 'residents uprooted',
+        'forced displacement west bank',
+        'demolition order', 'structures demolished', 'evacuation order palestinian',
+        'shepherding community expelled', 'residents fled outpost violence',
+        'הריסת מבנים', 'צו הריסה', 'עקירת קהילה',
+        'هدم منازل', 'تهجير قسري', 'أوامر الهدم',
+    ],
+    'settler_violence_impunity': [
+        'settler violence', 'settler attack', 'price tag attack',
+        'no indictment settler', 'case closed settler', 'settlers not charged',
+        'impunity settler violence', 'settler assault palestinians',
+        'אלימות מתנחלים', 'תג מחיר', 'התיק נסגר',
+        'عنف المستوطنين', 'اعتداء المستوطنين',
+    ],
+    'sovereignty_legislation': [
+        'sovereignty bill', 'apply sovereignty', 'annexation bill',
+        'knesset sovereignty vote', 'sovereignty legislation west bank',
+        'ריבונות ביהודה ושומרון', 'חוק הריבונות',
+        'مشروع قانون السيادة', 'فرض السيادة',
+    ],
+}
+
+# ── SOURCED FRAME REGISTRY ──────────────────────────────────────────────────
+# A frame does NOT render without a citation attached. Each entry carries an
+# attribution, a source, a date and a TIER; where the reading is contested the
+# counter-frame rides along, because publishing both is better analysis than
+# either alone and it keeps the platform reporting the argument rather than
+# joining it.
+#
+# tier: documented (NGO report / legal filing / official record)
+#       reported   (mainstream press)
+#       contested  (disputed characterisation)
+WEST_BANK_FRAMES = {
+    'land_registration': {
+        'claim': ('Large-scale registration of Area C land under Israeli process is '
+                  'characterised as de facto annexation without formal declaration.'),
+        'attribution': 'Peace Now and Yesh Din',
+        'context': ('Israel\'s cabinet approved a land registration process for Area C on '
+                    '15 February 2026 -- the first since 1967 -- with an initial NIS 244m '
+                    'budget, transferring registration powers to the Ministry of Justice. '
+                    'Peace Now assesses that roughly 58% of Area C is currently unregistered.'),
+        'tier': 'documented',
+        'source': 'Times of Israel / CNN, 15-16 Feb 2026; Amnesty International, 27 Feb 2026',
+        'source_url': 'https://www.timesofisrael.com/cabinet-oks-new-west-bank-land-registration-process-critics-decry-de-facto-annexation/',
+        'counter_frame': ('The ministers who initiated the measure describe it as enabling '
+                          'orderly registration of land for development, and state land is '
+                          'formally designated as managed for the benefit of all civilians.'),
+    },
+    'outpost_legalization': {
+        'claim': ('Retroactive legalisation of farming and herding outposts converts small '
+                  'settler presences into control over disproportionately large land areas.'),
+        'attribution': 'Peace Now (Settlement Watch); Foundation for Middle East Peace',
+        'context': ('Peace Now recorded a record 86 outposts established in 2025, primarily '
+                    'herding or farming outposts. In February 2026 the Defence Minister '
+                    'announced work toward retroactive legalisation of 140 farming outposts. '
+                    'Haaretz reported in July 2026 that settler outposts control close to a '
+                    'fifth of the West Bank.'),
+        'tier': 'documented',
+        'source': 'FMEP Settlement & Annexation Report, 6 Feb 2026; Haaretz, 7 Jul 2026',
+        'source_url': 'https://fmep.org/resource/settlement-annexation-report-february-6-2026/',
+        'counter_frame': ('Supporters characterise legalisation as regularising existing '
+                          'communities and resolving planning status rather than acquiring '
+                          'new territory.'),
+    },
+    'consolidated_policy': {
+        'claim': ('Settlement construction, outpost authorisation, state land declarations '
+                  'and governance transfers are assessed as a SINGLE systematic policy '
+                  'advancing de facto annexation, rather than as isolated developments.'),
+        'attribution': 'Peace Now and Kerem Navot, "Annus Mirabilis" (2026)',
+        'context': ('The report consolidates government actions across 2023-2025 and argues '
+                    'they function together as one policy; it counts 102 new settlements '
+                    'established through outpost legalisation or by granting existing '
+                    'neighbourhoods independent settlement status. This is also the '
+                    'methodological basis for measuring TEMPO here rather than events.'),
+        'tier': 'documented',
+        'source': 'Peace Now / Kerem Navot, 2026',
+        'source_url': 'https://peacenow.org.il/en/annus-mirabilis',
+        'counter_frame': ('The Israeli government has not declared annexation of the West '
+                          'Bank and characterises these as separate administrative, planning '
+                          'and security decisions rather than a unified sovereignty policy.'),
+    },
+    'displacement': {
+        'claim': ('State-backed settler violence is associated with the uprooting of '
+                  'Palestinian communities, particularly herding communities in Area C.'),
+        'attribution': "B'Tselem",
+        'context': ("B'Tselem reported that 21 Palestinian communities were fully or "
+                    'partially uprooted during 2025 as a result of state-backed settler '
+                    'violence.'),
+        'tier': 'documented',
+        'source': "B'Tselem, cited in Amnesty International, 27 Feb 2026",
+        'source_url': 'https://www.amnesty.org/en/latest/news/2026/02/israel-opt-global-impunity-fueling-israels-unlawful-annexation-measures-in-the-west-bank/',
+        'counter_frame': ('Israeli authorities characterise settler violence as criminal acts '
+                          'by individuals rather than state policy, and point to arrests and '
+                          'prosecutions in some cases.'),
+    },
+}
+
+def _detect_west_bank_annexation_tempo(articles):
+    """Administrative-act tempo. A RATE, not an event.
+
+    Counts publicly reported administrative acts by category and emits them to
+    tempo_baseline (mode='tape') so each category is measured against its own
+    30-day norm. Attaches an ATTRIBUTED analytical frame with counter-frame
+    where the category has one; frames never render without a citation.
+    """
+    def _blob(a):
+        return ((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
+
+    # Only West Bank / Area C articles count. Gaza and Lebanon carry overlapping
+    # vocabulary ('demolition', 'displacement', 'sovereignty') and would inflate
+    # this badly -- the mirror image of the West Bank exclusion the Lebanon
+    # tracker applies in the other direction.
+    WB_SCOPE = ['west bank', 'area c', 'judea and samaria', 'judea & samaria',
+                'settlement', 'settler', 'outpost', 'ramallah', 'hebron', 'nablus',
+                'jenin', 'bethlehem', 'jordan valley', 'e1 ', 'e-1',
+                'הגדה המערבית', 'יהודה ושומרון', 'התנחלות', 'מאחז',
+                'الضفة الغربية', 'مستوطنة', 'بؤرة']
+    scoped = [a for a in (articles or []) if any(k in _blob(a) for k in WB_SCOPE)]
+    out_of_scope = len(articles or []) - len(scoped)
+
+    counts, examples = {}, {}
+    for cat, trigs in WEST_BANK_ADMIN_ACTS.items():
+        n, hits = 0, []
+        for a in scoped:
+            b = _blob(a)
+            m = [t for t in trigs if t.lower() in b]
+            if m:
+                n += 1
+                hits.append((a.get('title') or '')[:110])
+        counts[cat] = n
+        if hits:
+            examples[cat] = hits[:2]
+
+    total_acts = sum(counts.values())
+    active = {k: v for k, v in counts.items() if v}
+
+    # Emit to the tempo engine. Each category is its own stream so a spike in
+    # land registration is distinguishable from a spike in settler violence --
+    # they are different acts with different implications and a combined count
+    # would hide which one moved.
+    emitted = False
+    try:
+        from tempo_baseline import emit_counts
+        emit_counts('west_bank',
+                    streams=dict(counts),
+                    corpus={'articles_seen': len(scoped),
+                            'sources_alive': len({a.get('source') for a in scoped
+                                                  if a.get('source')})})
+        emitted = True
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f'[Israel Rhetoric] West Bank tempo emit failed (non-fatal): {str(e)[:110]}')
+
+    # Attach frames -- ONLY for categories that actually fired, and only with
+    # their citation and counter-frame attached.
+    frames = []
+    for cat in active:
+        fr = WEST_BANK_FRAMES.get(cat)
+        if fr:
+            frames.append({'category': cat, **fr})
+    if len(active) >= 3 and 'consolidated_policy' in WEST_BANK_FRAMES:
+        # The consolidated-policy frame is the one that applies when acts appear
+        # across MULTIPLE categories at once -- which is precisely the condition
+        # its authors argue should be read together rather than separately.
+        frames.append({'category': 'consolidated_policy',
+                       **WEST_BANK_FRAMES['consolidated_policy']})
+
+    if total_acts == 0:
+        note = ('No West Bank administrative acts reported in this scan window. Absence here '
+                'is a reporting gap as much as a quiet period: these acts are routinely '
+                'documented by monitoring organisations on longer cycles than a news scan, '
+                'so a zero count is NOT evidence that nothing happened. ')
+    else:
+        note = ('%d administrative act(s) reported across %d categor%s this cycle (%s). '
+                % (total_acts, len(active), 'y' if len(active) == 1 else 'ies',
+                   ', '.join('%s: %d' % (k.replace('_', ' '), v) for k, v in sorted(active.items()))))
+        note += ('These are counted as a RATE against their own baseline, not as events. '
+                 'No single act here constitutes a status change, and none is presented as '
+                 'one. ')
+        if len(active) >= 3:
+            note += ('Acts appearing across three or more categories in the same cycle is the '
+                     'condition under which monitoring organisations argue they should be read '
+                     'as a single policy rather than separately -- see the attributed frames. ')
+
+    note += ('ATTRIBUTION RULE: analytical characterisations below are attributed to named '
+             'organisations with counter-positions recorded where they exist. This platform '
+             'reports the argument; it does not join it. This is a CONVERGENCE indicator, '
+             'NOT a probability of action.')
+
+    return {
+        'total_acts': total_acts,
+        'counts': counts,
+        'active_categories': sorted(active),
+        'examples': examples,
+        'articles_in_scope': len(scoped),
+        'articles_out_of_scope': out_of_scope,
+        'tempo_emitted': emitted,
+        'frames': frames,
+        'note': note,
+    }
+
+
 def _detect_gaza_framework_gates(articles):
     """Gaza Board of Peace roadmap gate ladder, via the shared primitive.
 
@@ -2316,6 +2590,16 @@ def run_israel_rhetoric_scan(days=3):
 
     # Tempo emitter (mode='actor') — feeds tempo_baseline.py on this backend
     _emit_tempo_counts_israel(articles)
+
+    # West Bank annexation tempo (Slice 3) — administrative acts as a RATE
+    try:
+        result['west_bank_annexation_tempo'] = _detect_west_bank_annexation_tempo(articles)
+        _wb = result['west_bank_annexation_tempo']
+        print(f"[Israel Rhetoric] West Bank acts: {_wb['total_acts']} across "
+              f"{len(_wb['active_categories'])} categories "
+              f"(scope {_wb['articles_in_scope']}, tempo_emitted={_wb['tempo_emitted']})")
+    except Exception as _e:
+        print(f"[Israel Rhetoric] West Bank tempo read failed: {str(_e)[:120]}")
 
     # Gaza Board of Peace gate ladder (Slice 2) — shared primitive, freeze-coupled
     try:
