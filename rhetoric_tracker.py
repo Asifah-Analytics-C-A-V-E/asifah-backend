@@ -2281,8 +2281,17 @@ WEST_BANK_EXCLUSIONS = [
 # categories before it is reported as a convergence rather than as chatter.
 COLLAPSE_MIN_CATEGORIES = 2
 
-def _detect_framework_implementation(articles):
+def _detect_framework_gates(articles):
     """Which Trilateral Framework gate is blocking, and is the spread widening?
+
+    NAMING: deliberately NOT 'framework_implementation'. That key is already
+    owned by the signal interpreter's Slice 4 sovereignty-band card, which
+    rhetoric-lebanon.html reads as interp.framework_implementation and gates on
+    a `band` field this dict does not have. Colliding on the name would either
+    blank that card or silently render nothing. The two are complementary:
+    Slice 4 answers "is the framework ACCEPTED"; this answers "where is
+    implementation physically STUCK".
+
 
     Returns a state dict. Reports the blocking gate and the direction of the
     declared/actual spread; does NOT forecast whether the framework succeeds.
@@ -2802,14 +2811,14 @@ def run_rhetoric_scan(days=3):
     # be squeezed out of the escalation-ranked article list.
     try:
         _fw_pool = result.get('framework_articles') or result.get('articles') or []
-        result['framework_implementation'] = _detect_framework_implementation(_fw_pool)
-        _fi = result['framework_implementation']
+        result['framework_gates'] = _detect_framework_gates(_fw_pool)
+        _fi = result['framework_gates']
         print(f"[Lebanon Rhetoric] Framework: {_fi['state']} "
               f"(blocking={_fi.get('blocking_gate')}, taher={_fi.get('ali_al_taher_mentions')}, "
               f"collapse_tail={_fi.get('collapse_tail_active')})")
     except Exception as _e:
         print(f"[Lebanon Rhetoric] Framework implementation read failed: {str(_e)[:120]}")
-        result['framework_implementation'] = {'state': 'error', 'note': str(_e)[:200]}
+        result['framework_gates'] = {'state': 'error', 'note': str(_e)[:200]}
 
     # ── Delta ──
     result['delta'] = _compute_delta()
