@@ -1353,10 +1353,18 @@ def detect_and_build_bluf(articles, extra_signals=None):
     # filed. Merged here rather than run separately so it lands on
     # global_humanitarian with everything else -- no GPI change, no parallel axis.
     try:
-        from disaster_feeds import fetch_disaster_signals
+        from disaster_feeds import fetch_disaster_signals, merge_with_news_signals
         _dis = fetch_disaster_signals(tracked_countries=TRACKED_COUNTRIES)
         if _dis:
-            signals = signals + _dis
+            # CROSS-POOL DEDUPE. humanitarian_article_gatherer already ingests the
+            # GDACS RSS feed and keyword-matches it as prose, which yields a
+            # second, weaker reading of the same event -- "Nepal: flooding,
+            # severity 1" beside "Nepal: ORANGE alert, 527 deaths". Structured
+            # wins: the news path discards alert level, hazard type and exposure.
+            signals, _replaced = merge_with_news_signals(signals, _dis)
+            if _replaced:
+                print(f'[Humanitarian] {_replaced} news-derived disaster signal(s) '
+                      f'superseded by structured GDACS/USGS records')
     except ImportError:
         pass
     except Exception as _e:

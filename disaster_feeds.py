@@ -123,7 +123,17 @@ def fetch_gdacs(min_severity=2):
         # Population exposure, where GDACS supplies it, is the most useful single
         # number in the alert -- it is the difference between a hazard and a
         # humanitarian event -- so it goes in the headline, not the footnotes.
-        pop_txt = (' — %s exposed' % pop) if pop else ''
+        #
+        # GDACS phrases this field DIFFERENTLY BY HAZARD: quakes give exposure
+        # ("300 thousand in MMI VI"), floods give outcomes ("527 deaths and 0
+        # displaced"). Appending "exposed" unconditionally produced "527 deaths
+        # exposed", which is simply wrong. Only add the word where the string is
+        # not already self-describing.
+        _self_describing = any(w in (pop or '').lower()
+                               for w in ('death', 'displaced', 'affected', 'killed'))
+        pop_txt = ('' if not pop else
+                   (' — %s' % pop.strip()) if _self_describing else
+                   (' — %s exposed' % pop.strip()))
         out.append({
             'category': 'natural_disaster',
             'country': _slug(country) or 'unspecified',
@@ -286,3 +296,68 @@ def feed_status():
                  'coverage, which is how countries with no tracker and no newsroom presence '
                  'reach the humanitarian axis at all.'),
     }
+
+
+# ============================================================================
+# CROSS-POOL DEDUPE
+# ============================================================================
+# humanitarian_article_gatherer.py ALREADY ingests the GDACS RSS feed (line 246,
+# weight 1.2) and keyword-matches it like any other news source. That produces a
+# second, much weaker reading of the same event: "Nepal: natural disaster --
+# flooding, severity 1" alongside this module's "Nepal: ORANGE alert -- flood,
+# 527 deaths". Same source, same event, and the vague one was surviving next to
+# the specific one.
+#
+# Structured always wins. The news path reads a GDACS headline as prose and
+# throws away the alert level, the hazard type and the exposure figure -- the
+# three fields that make the alert worth having.
+
+_HAZARD_FAMILY_TOKENS = {
+    'earthquake': ('earthquake', 'quake', 'seismic', 'aftershock', 'tremor'),
+    'flood':      ('flood', 'flooding', 'floodwater', 'inundation', 'deluge'),
+    'tropical cyclone': ('cyclone', 'typhoon', 'hurricane', 'tropical storm', 'storm surge'),
+    'wildfire':   ('wildfire', 'forest fire', 'bushfire', 'blaze'),
+    'volcano':    ('volcan', 'eruption', 'lava', 'ashfall'),
+    'drought':    ('drought', 'dry spell', 'water scarcity'),
+    'landslide':  ('landslide', 'mudslide', 'rockslide'),
+}
+
+
+def hazard_family(*texts):
+    """Normalise any hazard wording to a family. Returns '' when unrecognised --
+    an unknown hazard is left alone rather than force-matched into a bucket."""
+    joined = ' '.join(str(t or '') for t in texts).lower()
+    for fam, toks in _HAZARD_FAMILY_TOKENS.items():
+        if any(tok in joined for tok in toks):
+            return fam
+    return ''
+
+
+def merge_with_news_signals(news_signals, structured_signals):
+    """Fold structured disaster signals into the news-derived pool.
+
+    On a (country, hazard-family) collision the STRUCTURED record replaces the
+    news-derived one rather than sitting beside it. Returns
+    (merged_list, replaced_count) so the caller can log what was collapsed --
+    a silent dedupe would hide whether this is working at all.
+    """
+    structured = list(structured_signals or [])
+    keys = set()
+    for s in structured:
+        fam = s.get('hazard_type') or hazard_family(s.get('short_text'))
+        if fam:
+            keys.add((str(s.get('country', '')).lower(), fam))
+
+    kept, replaced = [], 0
+    for n in (news_signals or []):
+        if n.get('category') != 'natural_disaster':
+            kept.append(n)
+            continue
+        fam = hazard_family(' '.join(n.get('matched_keywords') or []),
+                            n.get('short_text'), n.get('long_text'))
+        if fam and (str(n.get('country', '')).lower(), fam) in keys:
+            replaced += 1
+            continue
+        kept.append(n)
+
+    return kept + structured, replaced
