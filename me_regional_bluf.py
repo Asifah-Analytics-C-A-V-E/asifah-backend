@@ -1081,7 +1081,27 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
         is_fresh = _convergence_is_fresh(entry['id'], actual_alert, signals_count)
 
         enrichment_text = format_enrichment_text(entry, actual_alert, signals_count)
-        long_text_parts.append(enrichment_text)
+
+        # THE GATE, which previously classified but did not gate (Aug 2026).
+        # is_fresh was computed, stored and printed as TOPLINE/WATCH -- and then
+        # the full enrichment paragraph was appended EITHER WAY. So wheat-Lebanon
+        # rendered identically whether wheat pressure jumped this week or had sat
+        # flat at ELEVATED for four months.
+        #
+        # WHY THIS MATTERS ANALYTICALLY: Lebanon's structural exposure is
+        # PERMANENT -- ~60-67% of wheat from Ukraine, ~80-90% Black Sea, ~1 month
+        # of national reserves since the 2020 silo explosion. The convergence is
+        # therefore ALWAYS TRUE, and a signal that is always true carries no
+        # information. It is only NEWS when the commodity side moves. Fresh gets
+        # the full paragraph; stale gets one line that says the exposure stands
+        # and the pressure has not moved.
+        if is_fresh:
+            long_text_parts.append(enrichment_text)
+        else:
+            long_text_parts.append(
+                '%s structural exposure to %s persists at %s, unchanged this cycle '
+                '(%d signals, flat) — standing vulnerability, not new pressure.'
+                % (country.title(), commodity_id, actual_alert.upper(), signals_count))
 
         # Set per-convergence flag on the signal so Layer 1 (GPI) can detect it.
         # Convention: signal['{convergence_id}_active'] = True
@@ -1219,10 +1239,32 @@ def _build_lebanon_humanitarian_signal():
     # Build the signal first so we can pass it into the registry-driven enrichment.
     # The enrichment helper mutates signal_dict and long_text_parts in place,
     # adding any active convergences (e.g. wheat-Lebanon if global wheat is in surge).
+    # ── Staleness-responsive priority (Aug 2026) ─────────────────────────
+    # v3.1.0 hardcoded priority 12 so a 1M-displaced crisis would reliably lead
+    # the BLUF over composite kinetic signals. The intent was right; a CONSTANT
+    # was the wrong instrument. A constant leads every cycle regardless of what
+    # the underlying data is doing -- which is exactly what happened when the
+    # humanitarian block sat unrefreshed from 3 May to late August and led the
+    # regional brief with April figures for four months.
+    #
+    # A live humanitarian crisis still outranks composite kinetic (11) and
+    # inbound (10). Four-month-old figures do not. The floor is 9, so this NEVER
+    # disappears -- Lebanon's crisis is real and continuing whatever the file
+    # says -- it simply stops leading on the strength of numbers nobody refreshed.
+    _hum_priority, _staleness = 12, {}
+    try:
+        from lebanon_humanitarian import humanitarian_staleness
+        _staleness = humanitarian_staleness() or {}
+        _tier = _staleness.get('tier', 'unknown')
+        _hum_priority = {'fresh': 12, 'aging': 12, 'stale': 10,
+                         'expired': 9, 'unknown': 10}.get(_tier, 10)
+        if _staleness.get('lapsed_windows') and _hum_priority > 10:
+            _hum_priority = 10   # a lapsed projection cannot lead the brief
+    except ImportError:
+        pass
+
     signal = {
-        'priority':       12,                  # v3.1.0: bumped from 9 → 12 so a 1M-displaced humanitarian
-                                                #         crisis reliably leads BLUF over composite kinetic signals
-                                                #         (kinetic_pressure=14, multi_axis=11, inbound=10, etc.)
+        'priority':       _hum_priority,       # was a hardcoded 12; now degrades with data age
         'category':       'humanitarian_lebanon',
         'theatre':        'lebanon',
         'level':          5 if killed >= 1000 or live_total >= 500000 else 4,
@@ -1231,6 +1273,13 @@ def _build_lebanon_humanitarian_signal():
         'pressure_type':  'humanitarian',       # explicit so GPI doesn't have to infer
         'short_text':     short_text[:120],
     }
+
+    # Absence-honest: publish the age of the figures alongside them. Stale data
+    # still beats no data -- but it must arrive labelled, not silently.
+    if _staleness:
+        signal['data_staleness'] = _staleness
+        if _staleness.get('warning'):
+            long_text_parts.append('\u26a0\ufe0f DATA CURRENCY: ' + _staleness['warning'])
 
     # ── Layer 2 enrichment: registry-driven convergence detection ──
     # Looks up CONVERGENCE_REGISTRY for any convergences registered for this country,
