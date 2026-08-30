@@ -2591,6 +2591,22 @@ def run_israel_rhetoric_scan(days=3):
     # Tempo emitter (mode='actor') — feeds tempo_baseline.py on this backend
     _emit_tempo_counts_israel(articles)
 
+    # ── US envoy voice signals (Slice 4.5) ──
+    # Huckabee is the point of this on the Israel file. He is the US voice most
+    # publicly identified with the settlement movement, so criticism FROM HIM is
+    # costly and therefore informative in a way that the same criticism from any
+    # other source is not. The signal is the speaker, not the sentiment.
+    try:
+        from us_voice_signals import detect_voice_signals
+        result['us_voice_signals'] = detect_voice_signals(
+            articles, voices=['huckabee', 'barrack', 'ortagus'])
+        _uv = result['us_voice_signals']
+        print(f"[Israel Rhetoric] US voices: {_uv['deviation_count']} deviation(s) — {_uv['headline']}")
+    except ImportError:
+        pass
+    except Exception as _e:
+        print(f"[Israel Rhetoric] US voice read failed: {str(_e)[:120]}")
+
     # West Bank annexation tempo (Slice 3) — administrative acts as a RATE
     try:
         result['west_bank_annexation_tempo'] = _detect_west_bank_annexation_tempo(articles)

@@ -2852,6 +2852,22 @@ def run_rhetoric_scan(days=3):
         print(f"[Lebanon Rhetoric] Framework implementation read failed: {str(_e)[:120]}")
         result['framework_gates'] = {'state': 'error', 'note': str(_e)[:200]}
 
+    # ── US envoy voice signals (Slice 4.5) ──
+    # Issa, Barrack and Ortagus all carry the Lebanon file. The finding is
+    # DEVIATION from each speaker's own posture, not what they said: Issa
+    # pressing on disarmament is baseline and near-zero signal, Issa
+    # criticising Israel is not.
+    try:
+        from us_voice_signals import detect_voice_signals
+        result['us_voice_signals'] = detect_voice_signals(
+            articles, voices=['issa', 'barrack', 'ortagus'])
+        _uv = result['us_voice_signals']
+        print(f"[Lebanon Rhetoric] US voices: {_uv['deviation_count']} deviation(s) — {_uv['headline']}")
+    except ImportError:
+        pass
+    except Exception as _e:
+        print(f"[Lebanon Rhetoric] US voice read failed: {str(_e)[:120]}")
+
     # ── Delta ──
     result['delta'] = _compute_delta()
 
