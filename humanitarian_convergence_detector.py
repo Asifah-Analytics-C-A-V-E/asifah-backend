@@ -814,6 +814,41 @@ def detect_humanitarian_signals(articles):
                 'is_tracked_country': country in TRACKED_COUNTRIES,
             })
 
+    # ── WORLDWIDE STRUCTURED DISASTER CATCH ─────────────────────────────
+    # RELOCATED HERE Aug 2026. This merge previously sat in
+    # detect_and_build_bluf(), which is only ONE of the callers -- the /details
+    # endpoint calls detect_humanitarian_signals() directly and therefore
+    # silently received no structured feeds at all. The merge belongs where the
+    # signals are PRODUCED, not inside one of the functions that consumes them,
+    # so every caller gets the same signal set.
+    #
+    # News-derived detection is biased toward countries with press presence.
+    # GDACS and USGS fire on the EVENT rather than the coverage, which is how
+    # Nepal, Vanuatu or Mozambique reach this axis when no country tracker
+    # exists and no newsroom has filed.
+    try:
+        from disaster_feeds import fetch_disaster_signals, merge_with_news_signals
+        _dis = fetch_disaster_signals(tracked_countries=TRACKED_COUNTRIES)
+        if _dis:
+            # Cross-pool dedupe: humanitarian_article_gatherer already ingests
+            # the GDACS RSS feed and keyword-matches it as prose, producing a
+            # weaker second reading of the same event. Structured wins -- the
+            # news path discards alert level, hazard type and exposure.
+            detected, _replaced = merge_with_news_signals(detected, _dis)
+            if _replaced:
+                print(f'[Humanitarian] {_replaced} news-derived disaster signal(s) '
+                      f'superseded by structured GDACS/USGS records')
+    except ImportError:
+        # Never silent. An absent optional dependency looked identical to one
+        # that ran and found nothing, which cost a debugging session.
+        print('[Humanitarian] disaster_feeds module NOT FOUND on this backend — '
+              'GDACS/USGS structured worldwide catch is INACTIVE. News-derived '
+              'disaster detection continues. Deploy disaster_feeds.py to enable.')
+    except Exception as _e:
+        # Non-fatal: news-derived signals stand on their own and a feed outage
+        # must not take the humanitarian axis down with it.
+        print(f'[Humanitarian] disaster feed merge failed (non-fatal): {str(_e)[:110]}')
+
     return detected
 
 
@@ -1376,38 +1411,9 @@ def detect_and_build_bluf(articles, extra_signals=None):
     """
     signals = detect_humanitarian_signals(articles or [])
 
-    # ── WORLDWIDE STRUCTURED DISASTER CATCH (Aug 2026) ──────────────────
-    # News-derived detection is biased toward countries with press presence and
-    # toward events already being written about. GDACS and USGS fire on the
-    # EVENT rather than the coverage, which is how Nepal, Vanuatu or Mozambique
-    # reach this axis at all when no country tracker exists and no newsroom has
-    # filed. Merged here rather than run separately so it lands on
-    # global_humanitarian with everything else -- no GPI change, no parallel axis.
-    try:
-        from disaster_feeds import fetch_disaster_signals, merge_with_news_signals
-        _dis = fetch_disaster_signals(tracked_countries=TRACKED_COUNTRIES)
-        if _dis:
-            # CROSS-POOL DEDUPE. humanitarian_article_gatherer already ingests the
-            # GDACS RSS feed and keyword-matches it as prose, which yields a
-            # second, weaker reading of the same event -- "Nepal: flooding,
-            # severity 1" beside "Nepal: ORANGE alert, 527 deaths". Structured
-            # wins: the news path discards alert level, hazard type and exposure.
-            signals, _replaced = merge_with_news_signals(signals, _dis)
-            if _replaced:
-                print(f'[Humanitarian] {_replaced} news-derived disaster signal(s) '
-                      f'superseded by structured GDACS/USGS records')
-    except ImportError:
-        # WAS `pass` -- silent. That is how disaster_feeds.py being absent from a
-        # backend looked identical to it running and finding nothing, which cost
-        # a debugging session. An optional dependency may be absent; it must
-        # never be absent QUIETLY.
-        print('[Humanitarian] disaster_feeds module NOT FOUND on this backend — '
-              'GDACS/USGS structured worldwide catch is INACTIVE. News-derived '
-              'disaster detection continues. Deploy disaster_feeds.py to enable.')
-    except Exception as _e:
-        # Non-fatal by design: the news-derived signals stand on their own and a
-        # feed outage must not take the humanitarian axis down with it.
-        print(f'[Humanitarian] disaster feed merge failed (non-fatal): {str(_e)[:110]}')
+    # NOTE: the structured disaster merge now lives inside
+    # detect_humanitarian_signals() so that EVERY caller receives it --
+    # /details calls that function directly and was bypassing this path.
 
     if extra_signals:
         signals = signals + list(extra_signals)
