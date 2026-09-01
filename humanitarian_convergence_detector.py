@@ -1023,6 +1023,92 @@ def aggregate_convergence(signals):
 # ============================================================
 # BLUF-SHAPED PAYLOAD BUILDER (consumed by GPI)
 # ============================================================
+# ============================================================
+# SIGNAL-CLASS RANKING  (Sep 2026)
+# ============================================================
+# THE PROBLEM THIS SOLVES: ~40 signals tie at severity=3 in a normal cycle.
+# The old sort key had three terms and then fell through to Python's stable
+# sort -- i.e. to INSERTION ORDER, which is the order articles happened to
+# arrive from the gatherer. Nepal's flood (527 confirmed deaths, three days
+# old) sat in position ~20 purely by accident of arrival, while Chad's food
+# insecurity -- a World Bank indicator that updates ANNUALLY and has been true
+# for years -- competed for the same top-five slot.
+#
+# Severity answers "how bad". It does not answer "why is this in front of me
+# today". Three things the old sort could not see:
+#
+#   ACUITY      A flood that killed 527 people this week and a chronic poverty
+#               headcount are both severity 3. One is news; the other is a
+#               standing condition that carries no information on any given
+#               day. Same distinction as the wheat-convergence freshness gate:
+#               always-true is not a headline.
+#   PROVENANCE  A GDACS ORANGE alert with a casualty count is a stronger claim
+#               than an article that used the word "earthquake" three times.
+#   MAGNITUDE   527 confirmed deaths did not enter the ranking at all.
+#
+# STRUCTURAL SIGNALS ARE NOT DEMOTED OUT OF THE PAYLOAD. They still drive the
+# posture line ("94 countries x 4 categories") and remain in `signals`. They
+# simply stop competing for the top five, because a condition true every day
+# for a decade is context, not today's finding.
+
+SIGNAL_CLASS_WEIGHT = {
+    'structured_acute_casualties': 0,   # GDACS/USGS with confirmed deaths
+    'structured_acute':            1,   # GDACS alert, USGS significant, UNHCR YoY surge
+    'news_acute':                  2,   # keyword-matched outbreak or disaster
+    'structural_chronic':          3,   # World Bank indicators — true for years
+}
+
+# Categories whose signals describe an EVENT rather than a CONDITION.
+ACUTE_SIGNAL_CATEGORIES = {'natural_disaster', 'health_emergency', 'displacement_surge'}
+
+
+def _signal_class(sig):
+    """Rank class for a signal. Lower sorts first."""
+    origin = (sig.get('signal_origin') or '').lower()
+    feed = (sig.get('feed') or '').lower()
+    source = (sig.get('source') or '').lower()
+    category = sig.get('category') or ''
+
+    # Chronic conditions: World Bank structural sweep. True every day; the
+    # reader needs them as context, not as this cycle's headline.
+    if origin == 'worldbank_structural' or 'world bank' in source:
+        return SIGNAL_CLASS_WEIGHT['structural_chronic']
+
+    # Structured feeds carry an alert level, a hazard type and an exposure or
+    # casualty figure -- all discarded by the keyword path.
+    #
+    # IDENTIFIED BY EXPLICIT MARKERS ONLY, never by source name. The article
+    # gatherer ingests the GDACS and USGS feeds AS ARTICLES and keyword-matches
+    # them, producing signals with source='gdacs' or 'USGS/significant' that are
+    # still keyword-derived -- they have no alert level, no hazard type and no
+    # exposure figure. Matching on the source string would promote those to
+    # structured and defeat the whole distinction. Only disaster_feeds.py sets
+    # `feed`; only the UNHCR detector sets signal_origin='unhcr_structured'.
+    structured = bool(feed) or origin == 'unhcr_structured'
+    if structured:
+        if sig.get('outcome_escalated') or _casualty_count(sig) > 0:
+            return SIGNAL_CLASS_WEIGHT['structured_acute_casualties']
+        return SIGNAL_CLASS_WEIGHT['structured_acute']
+
+    if category in ACUTE_SIGNAL_CATEGORIES:
+        return SIGNAL_CLASS_WEIGHT['news_acute']
+    return SIGNAL_CLASS_WEIGHT['structural_chronic']
+
+
+def _casualty_count(sig):
+    """Confirmed deaths reported in a signal, or 0. Used as a tiebreak only --
+    absence of a figure is NOT evidence of no casualties, usually just that the
+    event is too new, so it never demotes below its class."""
+    import re as _re
+    blob = ((sig.get('short_text') or '') + ' ' + (sig.get('long_text') or '')).replace(',', '')
+    m = _re.search(r'(\d+)\s*(?:confirmed\s+)?deaths?', blob, _re.I)
+    if m:
+        try:
+            return int(m.group(1))
+        except Exception:
+            return 0
+    return 0
+
 def build_humanitarian_bluf(signals, aggregation=None):
     """
     Build a BLUF-shaped payload that GPI consumes via REGIONAL_BLUF_ENDPOINTS.
@@ -1060,12 +1146,25 @@ def build_humanitarian_bluf(signals, aggregation=None):
         'acute':    '#dc2626',   # single catastrophic disaster / outbreak
     }.get(tier, '#6b7280')
 
-    # Build canonical signal payload — sorted by severity desc, novel-first
+    # Build canonical signal payload.
+    #
+    # SORT ORDER (Sep 2026 rebuild -- see SIGNAL_CLASS_WEIGHT above):
+    #   1. severity            how bad
+    #   2. signal class        acute-and-structured before chronic-and-inferred
+    #   3. confirmed deaths    magnitude, as a tiebreak within class
+    #   4. novel country       a country with no tracker is the harder catch
+    #   5. level
+    #
+    # Class sits ABOVE novelty deliberately: novelty was previously the only
+    # tiebreak that fired, and it cannot distinguish a 527-death flood from a
+    # decade-old poverty statistic when both are in untracked countries.
     sorted_signals = sorted(
         signals or [],
         key=lambda s: (
             -s.get('severity', 0),
-            0 if not s.get('is_tracked_country') else 1,  # novel countries first
+            _signal_class(s),
+            -_casualty_count(s),
+            0 if not s.get('is_tracked_country') else 1,
             -s.get('level', 0),
         ),
     )
@@ -1083,7 +1182,12 @@ def build_humanitarian_bluf(signals, aggregation=None):
             'color':         posture_color,
             'short_text':    s['short_text'],
             'long_text':     s['long_text'],
-            'priority':      s['severity'] * 3,  # rough priority for GPI sort tiebreaker
+            # Export priority for the GPI's own sort. Previously severity*3, so
+            # every severity-3 signal arrived at priority 9 -- ~40 signals, one
+            # value, nothing to discriminate on. Class now separates them while
+            # keeping the same 3-9 band so no GPI threshold shifts.
+            'priority':      max(3, s['severity'] * 3 - _signal_class(s)),
+            'signal_class':  _signal_class(s),
             'source_url':    s.get('source_url', ''),
             'source':        s.get('source', ''),
         })
