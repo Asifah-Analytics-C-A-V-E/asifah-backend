@@ -730,13 +730,44 @@ def detect_humanitarian_signals(articles):
 
             dedup_key = (country, cat_key)
             if dedup_key in seen_country_category:
-                # Already captured this country+category — bump severity if higher
+                # Already captured this country+category — bump severity if higher.
+                #
+                # BUG FIXED Aug 2026: this branch updated severity, level and
+                # matched_keywords but NEVER rebuilt short_text/long_text, which
+                # were frozen from the FIRST article seen. Result on the live
+                # card: Indonesia carried severity=3 / level=5 while its own
+                # prose read "severity 1/3" -- taken from a GDACS *green* M5.5
+                # headline -- and outranked a Nepal flood that killed 527 people.
+                #
+                # Two separate faults, both fixed here:
+                #   1. prose not rebuilt on escalation (the visible contradiction)
+                #   2. matched_keywords POOLED across every article about that
+                #      country, so unrelated coverage donated "major earthquake"
+                #      and "red alert issued" to a minor event. Keywords now
+                #      track the article that SET the severity, so the evidence
+                #      shown is the evidence that produced the score.
                 for d in detected:
                     if d['country'] == country and d['category'] == cat_key:
                         if severity > d['severity']:
                             d['severity'] = severity
                             d['level'] = _severity_to_level(severity)
-                            d['matched_keywords'].extend(matched_kws)
+                            d['matched_keywords'] = list(dict.fromkeys(matched_kws))[:5]
+                            d['source_url'] = url
+                            d['source_title'] = title
+                            d['source'] = source
+                            _kw2 = ', '.join(matched_kws[:2]) if matched_kws else ''
+                            d['short_text'] = (
+                                f"{cat_cfg['icon']} {d['country_label']}: "
+                                f"{cat_cfg['label'].lower()} signal"
+                                f"{f' — {_kw2}' if _kw2 else ''}"
+                                f"{' (high intensity)' if severity == SEVERITY_HIGH else ''}"
+                            )[:150]
+                            d['long_text'] = (
+                                f"{d['country_label']} showing {cat_cfg['label'].lower()} "
+                                f"signals (severity {severity}/3): "
+                                f"{', '.join(matched_kws[:3])}. "
+                                f"Source: {source}. {cat_cfg['description']}."
+                            )
                         break
                 continue
 
@@ -1366,7 +1397,13 @@ def detect_and_build_bluf(articles, extra_signals=None):
                 print(f'[Humanitarian] {_replaced} news-derived disaster signal(s) '
                       f'superseded by structured GDACS/USGS records')
     except ImportError:
-        pass
+        # WAS `pass` -- silent. That is how disaster_feeds.py being absent from a
+        # backend looked identical to it running and finding nothing, which cost
+        # a debugging session. An optional dependency may be absent; it must
+        # never be absent QUIETLY.
+        print('[Humanitarian] disaster_feeds module NOT FOUND on this backend — '
+              'GDACS/USGS structured worldwide catch is INACTIVE. News-derived '
+              'disaster detection continues. Deploy disaster_feeds.py to enable.')
     except Exception as _e:
         # Non-fatal by design: the news-derived signals stand on their own and a
         # feed outage must not take the humanitarian axis down with it.
