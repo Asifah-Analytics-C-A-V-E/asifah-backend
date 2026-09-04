@@ -493,24 +493,85 @@ def _theatre_state(level, category=None, pressure_type=None):
 # because the phrasing is editorial and a bad auto-generated tag on the front
 # door is worse than no tag. Unregistered categories fall through to a generic
 # builder rather than rendering nothing.
+# TITLE CASE, hand-set rather than machine-applied. A naive .title() would
+# produce "Pla Tempo" and "Bab El-Mandeb" -- acronyms and name particles are
+# exactly what automatic casing gets wrong, and this text sits on the front door.
 CONVERGENCE_TAGS = {
-    'market_fragility_semis_compound': 'Markets \u00d7 Taiwan semis',
+    'market_fragility_semis_compound': 'Markets \u00d7 Taiwan Semis',
     'dual_chokepoint':                 'Hormuz \u00d7 Bab el-Mandeb',
-    'china_taiwan_takeover':           'PLA tempo \u00d7 Taiwan',
-    'nuclear_signaling_global':        'Nuclear signaling \u00d7 2 theatres',
-    'iran_axis_convergence':           'Iran axis \u00d7 proxy fronts',
-    'iran_deescalation':               'Ceasefire \u00d7 breach risk',
-    'wheat_lebanon':                   'Black Sea wheat \u00d7 Lebanon',
-    'wha_cascade':                     'Regime stress \u00d7 migration',
-    'multiaxis_convergence':           'Independent streams \u00d7 one country',
-    'hub_network_breadth':             'One hub \u00d7 many regions',
-    'contested_spoke':                 'One node \u00d7 many hubs',
-    'food_stress_convergence':         'Food prices \u00d7 conflict',
-    'emplacement_precursor':           'Red line \u00d7 denial',
-    'policy_branch_convergence':       'Three theatres \u00d7 one method',
-    'houthi_fragility':                'Houthi quiet \u00d7 fragile',
-    'market_fragility':                'Market concentration \u00d7 fragility',
+    'china_taiwan_takeover':           'PLA Tempo \u00d7 Taiwan',
+    'nuclear_signaling_global':        'Nuclear Signaling \u00d7 Two Theatres',
+    'iran_axis_convergence':           'Iran Axis \u00d7 Proxy Fronts',
+    'iran_deescalation':               'Ceasefire \u00d7 Breach Risk',
+    'wheat_lebanon':                   'Black Sea Wheat \u00d7 Lebanon',
+    'wha_cascade':                     'Regime Stress \u00d7 Migration',
+    'multiaxis_convergence':           'Independent Streams \u00d7 One Country',
+    'hub_network_breadth':             'One Hub \u00d7 Many Regions',
+    'contested_spoke':                 'One Node \u00d7 Many Hubs',
+    'food_stress_convergence':         'Food Prices \u00d7 Conflict',
+    'emplacement_precursor':           'Red Line \u00d7 Denial',
+    'policy_branch_convergence':       'Three Theatres \u00d7 One Method',
+    'houthi_fragility':                'Houthi Quiet \u00d7 Fragile',
+    'market_fragility':                'Market Concentration \u00d7 Fragility',
 }
+
+# Words that stay lowercase inside a tag unless they lead it. Name particles
+# ("Bab el-Mandeb") and joiners; everything else takes an initial capital.
+_TAG_LOWER = {'el', 'al', 'de', 'da', 'von', 'van', 'the', 'of', 'and', 'in', 'on'}
+
+# Acronyms that arrive LOWERCASE from category slugs and region codes. Without
+# these, 'us_inbound_influence' renders as "Us Inbound Influence" -- the exact
+# fault already fixed once in the GPI narrative prose. Reused here rather than
+# re-derived so the two cannot drift apart.
+_TAG_ACRONYMS = {'us', 'uk', 'eu', 'uae', 'drc', 'car', 'dprk', 'bri', 'ipc',
+                 'laf', 'idf', 'isf', 'ivc', 'pla', 'adiz', 'nato', 'un', 'who',
+                 'gdp', 'wha'}
+
+# Region codes as they appear in narrative `regions` lists.
+_TAG_REGION_NAMES = {'me': 'Middle East', 'wha': 'Western Hemisphere',
+                     'asia': 'Asia-Pacific', 'asia_pacific': 'Asia-Pacific',
+                     'europe': 'Europe', 'africa': 'Africa',
+                     'middle_east': 'Middle East', 'global': 'Global',
+                     'global_commodity': 'Commodities',
+                     'global_market': 'Markets',
+                     'global_humanitarian': 'Humanitarian'}
+
+
+def _titlecase_tag(text):
+    """Title-case a tag without destroying acronyms or name particles.
+
+    Applied to the GENERIC fallback path only -- registry entries above are
+    hand-cased. A token already containing an uppercase letter is left alone,
+    which preserves PLA, US, BRI, IPC and anything else that arrives shouting.
+    """
+    def _case_word(w, lead):
+        if not w:
+            return w
+        if any(c.isupper() for c in w):
+            return w                              # already cased: PLA, BRI
+        if w.lower() in _TAG_ACRONYMS:
+            return w.upper()                      # us -> US, uae -> UAE
+        if (not lead) and w.lower() in _TAG_LOWER:
+            return w.lower()                      # particle mid-tag
+        return w[0].upper() + w[1:]
+
+    out, first = [], True
+    for tok in str(text or '').split(' '):
+        if not tok:
+            continue
+        if tok == '\u00d7':
+            out.append(tok)
+            continue
+        # Hyphenated names are cased part-by-part so "bab el-mandeb" does not
+        # become "Bab El-mandeb"; the particle rule applies inside the hyphen too.
+        if '-' in tok:
+            parts = tok.split('-')
+            out.append('-'.join(_case_word(p, first and i == 0)
+                                for i, p in enumerate(parts)))
+        else:
+            out.append(_case_word(tok, first))
+        first = False
+    return ' '.join(out)
 
 # Never used as the headline: these describe the ABSENCE of a finding.
 _NON_CONVERGENCE = {'global_baseline', 'global_warning', 'global_commodity_oil',
@@ -527,9 +588,12 @@ def _compound_tag(narr):
     # relationship rather than a label.
     regions = [r for r in ((narr or {}).get('regions') or []) if r]
     if len(regions) >= 2:
-        return '%s \u00d7 %s' % (_REGION_DISPLAY.get(regions[0], regions[0]).title(),
-                                 _REGION_DISPLAY.get(regions[1], regions[1]).title())
-    return cat.replace('_', ' ').title() if cat else ''
+        # _TAG_REGION_NAMES first: _REGION_DISPLAY carries prose forms like
+        # "the Middle East" that read badly inside a two-noun tag.
+        def _rn(r):
+            return _TAG_REGION_NAMES.get(r) or _REGION_DISPLAY.get(r, r)
+        return _titlecase_tag('%s \u00d7 %s' % (_rn(regions[0]), _rn(regions[1])))
+    return _titlecase_tag(cat.replace('_', ' ')) if cat else ''
 
 
 def _breach_line(full):
