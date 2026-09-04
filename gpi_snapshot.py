@@ -165,12 +165,29 @@ def signal_identity(sig):
     GPI signals carry either `region` (str) or `regions` (list) -- handle both.
     """
     sig = _d(sig)
+    theatre = _s(sig.get('theatre'), 'unknown')
+    category = _s(sig.get('category'), 'unknown')
+
+    # GLOBAL-THEATRE SIGNALS ARE KEYED WITHOUT REGION (Sep 2026).
+    # A global narrative spans several regions, and the different places it
+    # surfaces describe that differently: top_signals carries
+    # regions=['me','europe'], _all_signals_raw carries no region at all, and
+    # narratives carry their own list. Deriving the prefix from whichever
+    # happened to be first produced TWO identities for one signal --
+    # 'global|global|nuclear_signaling_global' and
+    # 'me|global|nuclear_signaling_global' -- which double-counts it in the
+    # archive and makes it appear and resolve as the source mix shifts.
+    #
+    # A signal filed at theatre='global' IS the global one; region adds nothing
+    # to its identity and only destabilises it. Regional signals keep their
+    # region, which is single-valued and stable there.
+    if theatre == 'global':
+        return 'global|global|%s' % category
+
     region = _s(sig.get('region'))
     if not region:
         regions = _l(sig.get('regions'))
         region = _s(regions[0]) if regions else 'global'
-    theatre = _s(sig.get('theatre'), 'unknown')
-    category = _s(sig.get('category'), 'unknown')
     return '%s|%s|%s' % (region, theatre, category)
 
 
@@ -251,26 +268,86 @@ def build_snapshot(gpi_data, captured_at=None):
         }
 
     # ── regions ──
+    #
+    # BUG FIXED Sep 2026: an UNREACHABLE region was written to history as
+    # `available: False, level: 0` -- indistinguishable from a region that was
+    # reachable and genuinely calm. Render free-tier services sleep, so a
+    # snapshot taken while Europe was cold recorded "Europe: CRITICAL -> 0,
+    # trackers -12" and the delta reported it as a regional COLLAPSE.
+    #
+    # Absence-honesty applies at the snapshot layer too: a level of 0 must mean
+    # MEASURED CALM. When the region could not be read, `reachable` is False and
+    # `level` is None, so a consumer can tell "we did not see it" from "we saw
+    # nothing happening". The delta skips level comparison on unreachable
+    # regions rather than scoring the gap as a change.
     regions = {}
     for card in _l(g.get('regional_cards')):
         c = _d(card)
         key = _s(c.get('region'), 'unknown')
+        _available = bool(c.get('available', False))
+        _live = _i(c.get('trackers_live'))
+        # Reachable means the backend answered. A region that answers with zero
+        # live trackers is a coverage problem, not an outage -- both are worth
+        # recording, but they are NOT the same fact.
+        _reachable = _available and _live > 0
         regions[key] = {
-            'level':          _i(c.get('level')),
-            'posture':        _s(c.get('posture_label')),
-            'available':      bool(c.get('available', False)),
-            'trackers_live':  _i(c.get('trackers_live')),
+            'level':          _i(c.get('level')) if _reachable else None,
+            'posture':        _s(c.get('posture_label')) if _reachable else None,
+            'available':      _available,
+            'reachable':      _reachable,
+            'trackers_live':  _live,
             'trackers_total': _i(c.get('trackers_total')),
-            'avg_score':      c.get('avg_score', 0),
+            'avg_score':      c.get('avg_score', 0) if _reachable else None,
         }
+        if not _reachable:
+            print('[GPI Snapshot] region %s UNREACHABLE at capture '
+                  '(available=%s, trackers_live=%d) -- level recorded as None, '
+                  'NOT as 0. An outage must never enter history as calm.'
+                  % (key, _available, _live))
 
     # ── signals (identity + level only) ──
+    #
+    # BUG FIXED Sep 2026: this iterated `top_signals` ONLY -- a priority-ranked
+    # list capped at 20. The delta therefore measured changes in a LEADERBOARD,
+    # not changes in the world: a signal that was completely unchanged but got
+    # displaced by two higher-priority arrivals was reported as RESOLVED.
+    #
+    # Observed on 4 Sep: hub_network_breadth, contested_spoke and
+    # humanitarian_lebanon all appeared in delta.resolved while being present
+    # and active in the very same payload. Lebanon's humanitarian crisis --
+    # unchanged, still L5 -- read as having ended because two new signals
+    # outranked it. `appeared` and `resolved` are the delta's headline output,
+    # so this made the whole feature untrustworthy without ever erroring.
+    #
+    # Now unions three sources so a signal's presence in the archive does not
+    # depend on where it placed in a ranking that day:
+    #   _all_signals_raw  every signal the GPI computed (uncapped)
+    #   top_signals       the ranked view (kept for `priority`/`label` detail)
+    #   narratives        global composites that never enter top_signals at all
+    # Deduped on identity; richer records win so labels stay populated.
+    _signal_sources = (
+        _l(g.get('_all_signals_raw'))
+        + _l(g.get('top_signals'))
+        + _l(g.get('narratives'))
+    )
+
     signals = []
     seen = set()
-    for sig in _l(g.get('top_signals')):
+    for sig in _signal_sources:
         s = _d(sig)
         ident = signal_identity(s)
         if ident in seen:
+            # Already captured. Upgrade the stored record if this copy carries
+            # detail the first one lacked -- _all_signals_raw is uncapped but
+            # sparse, top_signals is capped but rich.
+            for _existing in signals:
+                if _existing['id'] == ident:
+                    if not _existing.get('label'):
+                        _existing['label'] = (_s(s.get('short_text'))
+                                              or _s(s.get('headline')))[:160]
+                    if not _existing.get('priority'):
+                        _existing['priority'] = _i(s.get('priority'))
+                    break
             continue
         seen.add(ident)
         signals.append({
@@ -282,7 +359,8 @@ def build_snapshot(gpi_data, captured_at=None):
             'priority': _i(s.get('priority')),
             # one short label so the digest can name the signal without
             # re-fetching; trimmed because the archive stays lean
-            'label':    _s(s.get('short_text'))[:160],
+            # narratives use `headline` where signals use `short_text`
+            'label':    (_s(s.get('short_text')) or _s(s.get('headline')))[:160],
         })
 
     # ── narratives (identity only) ──

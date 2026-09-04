@@ -168,16 +168,50 @@ def compare(current, previous):
                           'direction': 'up' if c > p else 'down'}
 
     # ── regions ──
+    #
+    # UNREACHABLE REGIONS ARE NOT COMPARED (Sep 2026). gpi_snapshot now records
+    # level=None when a backend could not be read, instead of 0. Comparing a
+    # None against a real level would score a Render cold start as a regional
+    # de-escalation -- which is exactly what happened on 4 Sep, when Europe was
+    # reported "CRITICAL -> Unavailable, trackers -12" while the live payload
+    # showed all 12 trackers up. The gap is SURFACED as a coverage note rather
+    # than scored as a change.
+    #
+    # Legacy snapshots (written before this fix) carry level=0 with
+    # available=False and cannot be distinguished retrospectively; the
+    # `legacy_unreachable` flag marks that ambiguity instead of hiding it.
     regions = {}
     for name in set(list(_d(cur.get('regions')).keys()) + list(_d(prev.get('regions')).keys())):
         c = _d(_d(cur.get('regions')).get(name))
         p = _d(_d(prev.get('regions')).get(name))
+
+        c_reach = c.get('reachable', c.get('available', True))
+        p_reach = p.get('reachable', p.get('available', True))
+        c_legacy = 'reachable' not in c and not bool(c.get('available', True))
+        p_legacy = 'reachable' not in p and not bool(p.get('available', True))
+
+        if not (c_reach and p_reach):
+            regions[name] = {
+                'comparable': False,
+                'reason': ('region unreachable at capture in %s snapshot -- level '
+                           'comparison skipped so an outage is not scored as a change'
+                           % ('current' if not c_reach else 'previous')),
+                'available_now': bool(c.get('available')),
+                'reachable_now': bool(c_reach),
+                'reachable_then': bool(p_reach),
+                'legacy_unreachable': bool(c_legacy or p_legacy),
+                'trackers_live_now': _i(c.get('trackers_live')),
+                'trackers_live_then': _i(p.get('trackers_live')),
+            }
+            continue
+
         cl, pl = _i(c.get('level')), _i(p.get('level'))
         posture_changed = _s(c.get('posture')) != _s(p.get('posture'))
         avail_changed = bool(c.get('available')) != bool(p.get('available'))
         tracker_delta = _i(c.get('trackers_live')) - _i(p.get('trackers_live'))
         if cl != pl or posture_changed or avail_changed or tracker_delta:
             regions[name] = {
+                'comparable': True,
                 'from': pl, 'to': cl, 'change': cl - pl,
                 'direction': 'up' if cl > pl else 'down' if cl < pl else 'flat',
                 'posture_from': _s(p.get('posture')),
