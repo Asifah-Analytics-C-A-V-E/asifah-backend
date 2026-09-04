@@ -465,6 +465,123 @@ def _theatre_state(level, category=None, pressure_type=None):
     return THEATRE_STATE[axis][lv]
 
 
+# ============================================================
+# LANDING-PAGE BANNER  (Sep 2026)
+# ============================================================
+# The landing page is a DOOR, not a room. Its only job is to earn a click.
+#
+# WHY NOT COUNTRIES: "Russia, Taiwan, Iraq" tells a geopolitically curious
+# visitor what they already read this morning. It confirms rather than informs,
+# and confirmation gives nobody a reason to click through. Signal-type labels
+# (Kinetic / Economic) are worse -- they describe our taxonomy, not the world.
+#
+# WHAT GOES THERE INSTEAD: the leading CONVERGENCE, as a short compound tag.
+# A connection is the one thing on this platform a well-informed reader cannot
+# get elsewhere, and it opens a curiosity gap rather than closing one:
+#     "Markets x Taiwan"        not  "Taiwan"
+#     "Hormuz x Bab el-Mandeb"  not  "Iran, Yemen"
+# Two nouns and a multiplication sign. The room is behind the door.
+#
+# L6 IS DIFFERENT. A red-line breach is rare enough to be its own hook, so it
+# DISPLACES the level line and names the country. Note the gate is level == 6
+# specifically, NOT the red_line_breached category: on 4 Sep four signals
+# carried that category (Iraq, Russia, Somalia x2) and only Iraq was L6. Gating
+# on category would fire constantly, which is exactly the failure mode the
+# pinned-at-L5 gauge already demonstrates.
+
+# Compound tags per narrative category. Kept as a registry rather than derived,
+# because the phrasing is editorial and a bad auto-generated tag on the front
+# door is worse than no tag. Unregistered categories fall through to a generic
+# builder rather than rendering nothing.
+CONVERGENCE_TAGS = {
+    'market_fragility_semis_compound': 'Markets \u00d7 Taiwan semis',
+    'dual_chokepoint':                 'Hormuz \u00d7 Bab el-Mandeb',
+    'china_taiwan_takeover':           'PLA tempo \u00d7 Taiwan',
+    'nuclear_signaling_global':        'Nuclear signaling \u00d7 2 theatres',
+    'iran_axis_convergence':           'Iran axis \u00d7 proxy fronts',
+    'iran_deescalation':               'Ceasefire \u00d7 breach risk',
+    'wheat_lebanon':                   'Black Sea wheat \u00d7 Lebanon',
+    'wha_cascade':                     'Regime stress \u00d7 migration',
+    'multiaxis_convergence':           'Independent streams \u00d7 one country',
+    'hub_network_breadth':             'One hub \u00d7 many regions',
+    'contested_spoke':                 'One node \u00d7 many hubs',
+    'food_stress_convergence':         'Food prices \u00d7 conflict',
+    'emplacement_precursor':           'Red line \u00d7 denial',
+    'policy_branch_convergence':       'Three theatres \u00d7 one method',
+    'houthi_fragility':                'Houthi quiet \u00d7 fragile',
+    'market_fragility':                'Market concentration \u00d7 fragility',
+}
+
+# Never used as the headline: these describe the ABSENCE of a finding.
+_NON_CONVERGENCE = {'global_baseline', 'global_warning', 'global_commodity_oil',
+                    'global_commodity_gold', 'global_commodity_wheat'}
+
+
+def _compound_tag(narr):
+    """Short compound tag for one narrative. Two nouns and a multiplication sign."""
+    cat = (narr or {}).get('category') or ''
+    tag = CONVERGENCE_TAGS.get(cat)
+    if tag:
+        return tag
+    # Generic fallback: pair the two regions it spans, which is at least a
+    # relationship rather than a label.
+    regions = [r for r in ((narr or {}).get('regions') or []) if r]
+    if len(regions) >= 2:
+        return '%s \u00d7 %s' % (_REGION_DISPLAY.get(regions[0], regions[0]).title(),
+                                 _REGION_DISPLAY.get(regions[1], regions[1]).title())
+    return cat.replace('_', ' ').title() if cat else ''
+
+
+def _breach_line(full):
+    """Level-6 red-line breach, or None. Displaces the level when present."""
+    best = None
+    for sig in (full.get('_all_signals_raw') or []) + (full.get('top_signals') or []):
+        try:
+            if int(sig.get('level') or 0) < 6:
+                continue
+        except Exception:
+            continue
+        if best is None or int(sig.get('priority') or 0) > int(best.get('priority') or 0):
+            best = sig
+    if not best:
+        return None
+    theatre = (best.get('theatre') or '').replace('_', ' ').title()
+    txt = (best.get('short_text') or '')
+    # Strip the leading flag+country prefix so the detail line does not repeat
+    # the theatre name already shown beside the level.
+    if ':' in txt:
+        txt = txt.split(':', 1)[1].strip()
+    return {
+        'level': 6,
+        'label': 'RED-LINE BREACH',
+        'theatre': theatre or 'Global',
+        'detail': txt[:90],
+        'category': best.get('category'),
+    }
+
+
+def _banner(full):
+    """What the landing page shows. L6 breach displaces the level; otherwise
+    the level plus the leading convergence tag."""
+    breach = _breach_line(full)
+    if breach:
+        return {'mode': 'breach', **breach}
+
+    narrs = [n for n in (full.get('narratives') or [])
+             if (n.get('category') or '') not in _NON_CONVERGENCE]
+    narrs.sort(key=lambda n: -int(n.get('priority') or 0))
+    lead = narrs[0] if narrs else None
+    return {
+        'mode':     'level',
+        'level':    full.get('global_level', 0),
+        'label':    full.get('global_label', ''),
+        'tag':      _compound_tag(lead) if lead else '',
+        'category': (lead or {}).get('category', ''),
+        'axis':     (lead or {}).get('pressure_type')
+                    or CATEGORY_AXIS_HINTS.get((lead or {}).get('category') or '')
+                    or PRESSURE_KINETIC,
+    }
+
 def _headline_signal(full):
     """The single most useful line for a first-time visitor.
 
@@ -4562,6 +4679,9 @@ def build_gpi_level(force=False):
         # moves: which theatre leads, and what changed.
         'headline':      _headline_signal(full),
         'motion':        _motion_line(full),
+        # Sep 2026: the banner the landing page actually renders. L6 breach
+        # displaces the level; otherwise level + leading convergence tag.
+        'banner':        _banner(full),
         'generated_at':  full.get('generated_at', datetime.now(timezone.utc).isoformat()),
         'success':       full.get('success', False),
     }
