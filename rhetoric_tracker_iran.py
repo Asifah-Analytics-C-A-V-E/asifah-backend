@@ -774,6 +774,54 @@ NUCLEAR_TRIGGERS = {
     ],
 }
 
+# ── RUMINT GATING FOR THE NUCLEAR AXIS ──────────────────────────────────
+# Telegram and Reddit are already merged into the SAME article pool as wire
+# copy, with only a `source` field to tell them apart -- so they score on the
+# same rungs. On most vectors that is acceptable and useful. On the nuclear
+# axis it is not: a single anonymous Telegram post reading "Iran expels
+# inspectors" would reach L4, which is the GPI's nuclear threshold and the
+# platform's highest-stakes signal class.
+#
+# Rachel's RUMINT rule applies: corroboration before assertion. Persian-language
+# channels and r/CredibleDefense are exactly where a fatwa-revision or
+# doctrine-change rumour surfaces FIRST, so excluding them would lose the early
+# warning -- but a rumour must not be able to move the axis on its own.
+#
+# THE RULE:
+#   social-only match         -> capped at L3 (below the GPI threshold),
+#                                reported as RUMINT with its sources named
+#   >= RUMINT_CORROBORATION   -> may reach its natural level; independent
+#     distinct social sources    channels saying the same thing is evidence
+#   any non-social source     -> ungated; wire copy stands on its own
+#
+# Counted, labelled, never asserted. The signal is preserved and its
+# provenance travels with it.
+
+RUMINT_CORROBORATION = 3          # distinct social sources to lift the cap
+RUMINT_SOCIAL_CAP    = 3          # max level a social-only match may reach
+
+# Anchor sources: higher-confidence OSINT. One of these among the corroborating
+# set is worth more than three anonymous channels agreeing with each other,
+# which is how rumour cascades look from the outside.
+RUMINT_ANCHORS = (
+    'credibledefense', 'r/credibledefense', 'osintdefender',
+    'clashreport', 'al-monitor', 'almonitor', 'iranintl', 'iran international',
+    'bbcpersian', 'radiofarda', 'iranwire',
+)
+
+
+def _is_social_source(src):
+    """True for Telegram channels and Reddit subs -- unverified by default."""
+    s = str(src or '').lower()
+    return (s.startswith('r/') or 'telegram' in s or s.startswith('@')
+            or 'reddit' in s)
+
+
+def _is_rumint_anchor(src):
+    s = str(src or '').lower()
+    return any(a in s for a in RUMINT_ANCHORS)
+
+
 # ── INBOUND: attacks ON Iranian nuclear infrastructure ──────────────────
 # Moved out of NUCLEAR_TRIGGERS Sep 2026. This is a real signal and a serious
 # one -- striking a nuclear facility is an escalation event in its own right --
@@ -2924,6 +2972,11 @@ def classify_articles(articles, proxy_activation_level):
         # otherwise pin the second at threshold indefinitely.
         'nuclear_inbound_max': 0,
         'nuclear_inbound_trigger': '',
+        # RUMINT provenance for the nuclear axis. Populated during the scan and
+        # resolved AFTER it -- a cap can only be applied once all sources for a
+        # given level are known, since corroboration is a property of the set.
+        '_nuc_by_level': {},        # level -> {'social': set(), 'hard': set()}
+        'nuclear_rumint': {},
         'domestic_max': 0,
         'regional_max': 0,
         'soft_power_max': 0,
@@ -3022,6 +3075,16 @@ def classify_articles(articles, proxy_activation_level):
                 # Nuclear -- OUTBOUND posture
                 for kw in NUCLEAR_TRIGGERS.get(level, []):
                     if kw in text:
+                        # Record WHO said it before recording the level. The cap
+                        # is resolved after the scan because corroboration is a
+                        # property of the whole source set, not of one article.
+                        _src = article.get('source', '') or ''
+                        _bucket = theatre_summary['_nuc_by_level'].setdefault(
+                            level, {'social': set(), 'hard': set()})
+                        if _is_social_source(_src):
+                            _bucket['social'].add(_src)
+                        else:
+                            _bucket['hard'].add(_src)
                         effective_level = level
                         if actor_id in REPORTING_ACTORS and level >= 4 and is_reporting_context:
                             effective_level = 3
@@ -3475,7 +3538,53 @@ def run_iran_rhetoric_scan(days=3):
 
     # ── Step 3: Compute theatre levels ──
     max_irgc     = theatre_summary['irgc_direct_max']
+    # ── RESOLVE THE RUMINT CAP (Sep 2026) ───────────────────────────────
+    # Applied here, after the scan, because corroboration is a property of the
+    # SOURCE SET for a level -- not of any single article. A level carried only
+    # by social sources is capped below the GPI's nuclear threshold and
+    # reported as RUMINT with its channels named; the same level with any wire
+    # source, or with enough independent social sources, stands ungated.
+    _nuc_prov = theatre_summary.get('_nuc_by_level', {}) or {}
+    _rumint_notes, _capped_from = [], 0
+    _max_allowed = 0
+    for _lvl in sorted(_nuc_prov.keys()):
+        _b = _nuc_prov[_lvl]
+        _social, _hard = _b.get('social', set()), _b.get('hard', set())
+        if _hard:
+            _max_allowed = max(_max_allowed, _lvl)          # wire copy: ungated
+            continue
+        _anchored = any(_is_rumint_anchor(x) for x in _social)
+        # An anchor source counts double toward corroboration: three anonymous
+        # channels repeating each other is what a rumour cascade looks like
+        # from outside, whereas one anchor plus two others is independent.
+        _weight = len(_social) + (1 if _anchored else 0)
+        if _weight >= RUMINT_CORROBORATION:
+            _max_allowed = max(_max_allowed, _lvl)
+            _rumint_notes.append(
+                'L%d corroborated across %d social source(s)%s: %s'
+                % (_lvl, len(_social), ' incl. anchor' if _anchored else '',
+                   ', '.join(sorted(_social)[:4])))
+        else:
+            _allowed = min(_lvl, RUMINT_SOCIAL_CAP)
+            _max_allowed = max(_max_allowed, _allowed)
+            if _lvl > _allowed:
+                _capped_from = max(_capped_from, _lvl)
+                _rumint_notes.append(
+                    'L%d claim held at L%d -- social sources only (%s), below the '
+                    '%d-source corroboration bar. Counted, not asserted.'
+                    % (_lvl, _allowed, ', '.join(sorted(_social)[:3]),
+                       RUMINT_CORROBORATION))
+
     max_nuclear  = theatre_summary['nuclear_max']
+    if _nuc_prov and max_nuclear > _max_allowed:
+        print('[Iran Rhetoric] nuclear axis capped L%d -> L%d (RUMINT gate)'
+              % (max_nuclear, _max_allowed))
+        max_nuclear = _max_allowed
+    theatre_summary['nuclear_rumint'] = {
+        'notes': _rumint_notes[:4],
+        'capped_from': _capped_from,
+        'gate': '%d distinct social sources (anchor counts double)' % RUMINT_CORROBORATION,
+    }
     max_nuclear_inbound = theatre_summary.get('nuclear_inbound_max', 0)
     max_domestic = theatre_summary['domestic_max']
     max_regional = theatre_summary['regional_max']
@@ -3634,6 +3743,7 @@ def run_iran_rhetoric_scan(days=3):
             # Kept alongside so a consumer can see both directions. The GPI's
             # nuclear-signaling narrative must read `nuclear` only.
             'nuclear_inbound':         max_nuclear_inbound,
+            'nuclear_rumint':          theatre_summary.get('nuclear_rumint', {}),
             'nuclear_inbound_trigger': theatre_summary.get('nuclear_inbound_trigger', ''),
             'regional':   max_regional,
             'domestic':   max_domestic,
