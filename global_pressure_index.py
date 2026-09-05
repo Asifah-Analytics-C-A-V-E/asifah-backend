@@ -615,6 +615,24 @@ def _breach_line(full):
     # the theatre name already shown beside the level.
     if ':' in txt:
         txt = txt.split(':', 1)[1].strip()
+    # Landing-page text must stay TIGHT -- this line sits under a button, not in
+    # a report. Red-line labels are written as "A / B" alternatives ("Attack on
+    # US Embassy / Diplomatic Facility"), and the first alternative is always the
+    # sharper, more concrete one. Take it and drop the rest.
+    if ' / ' in txt:
+        txt = txt.split(' / ', 1)[0].strip()
+    # Same for dash appendages ("Mogadishu Penetration -- the state-survival
+    # threshold"): the clause after the dash is usually explanation, not headline.
+    #
+    # BUT NOT ALWAYS. "IRAN: BREACH -- Operation True Promise" puts the generic
+    # word first and the substance second, and blindly taking the left half
+    # rendered the whole line as "BREACH". So keep the left side only when it
+    # actually says something; otherwise take the right.
+    _MIN_USEFUL = 14
+    for _sep in (' -- ', ' \u2014 ', ' \u2013 '):
+        if _sep in txt:
+            _left, _right = [x.strip() for x in txt.split(_sep, 1)]
+            txt = _left if len(_left) >= _MIN_USEFUL else (_right or _left)
     return {
         'level': 6,
         'label': 'RED-LINE BREACH',
