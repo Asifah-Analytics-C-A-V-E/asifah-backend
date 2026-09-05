@@ -685,38 +685,122 @@ IRGC_DIRECT_TRIGGERS = {
 
 # Vector 3: Nuclear Escalation
 NUCLEAR_TRIGGERS = {
+    # ══ REBUILT Sep 2026 -- DIRECTIONAL ═══════════════════════════════════
+    # THE BUG: this ladder conflated "Iran's nuclear POSTURE" with "events
+    # involving Iran's nuclear FACILITIES". L4 contained 'natanz attacked',
+    # 'fordow attacked', 'iran nuclear facility struck' -- Iran being ATTACKED.
+    # Under Operation Epic Fury that is the dominant news story, so the vector
+    # sat at L4 permanently, which is exactly the GPI's nuclear threshold. The
+    # platform was reading inbound kinetic action as Iranian intent. Being
+    # bombed is not signalling; the causality runs the other way.
+    #
+    # WHY IRAN IS NOT RUSSIA: Russia's fault was too much signal from too
+    # little -- constant nuclear rhetoric that means nothing, so the job was
+    # filtering. Iran's is the inverse. A state that formally denies pursuing
+    # weapons does not DO nuclear rhetoric; officials say "we have no
+    # intention". So there is little to filter and the real indicators are not
+    # statements at all. They are DOCTRINE-BOUNDARY MOVES, SAFEGUARDS ACCESS,
+    # ENRICHMENT THRESHOLDS and WEAPONISATION-ADJACENT WORK -- administrative
+    # and technical acts, individually deniable, that no one announces.
+    #
+    # This ladder now scores ONLY outbound Iranian posture. Attacks on Iranian
+    # nuclear infrastructure moved to NUCLEAR_INBOUND_TRIGGERS below: still a
+    # real and important signal, but a KINETIC one, and it must not masquerade
+    # as Iranian nuclear signalling.
+
+    # ── L5: weaponisation, or a declared change of nuclear status. ──
     5: [
         'iran nuclear bomb', 'iran nuclear weapon ready',
         'iran weaponizes uranium', 'iran nuclear breakout',
         'iran has nuclear weapon', 'iran detonates',
-        'ایران بمب هسته‌ای', 'إيران تمتلك قنبلة نووية',
+        'iran nuclear test', 'iran withdraws from npt',
+        'iran leaves npt', 'iran npt withdrawal',
+        '\u0627\u06cc\u0631\u0627\u0646 \u0628\u0645\u0628 \u0647\u0633\u062a\u0647\u200c\u0627\u06cc',
+        '\u0625\u064a\u0631\u0627\u0646 \u062a\u0645\u062a\u0644\u0643 \u0642\u0646\u0628\u0644\u0629 \u0646\u0648\u0648\u064a\u0629',
     ],
+
+    # ── L4: DOCTRINE BOUNDARY + WEAPONS-GRADE THRESHOLD.
+    #        The fatwa is the single highest-value signal available here: it is
+    #        a religious-legal story, not a military one, and revisiting it
+    #        would precede any technical move. Safeguards withdrawal is where a
+    #        decision shows up administratively before it shows up physically.
     4: [
-        'natanz attacked', 'fordow attacked', 'iran nuclear facility struck',
-        'iran nuclear program destroyed', 'iran enrichment halted',
         'iran 90 percent enrichment', 'iran weapons grade',
-        'نطنز تعرض لهجوم', 'فردو تعرض لهجوم',
-        'تأسیسات هسته‌ای ایران مورد حمله',
+        'iran weapons-grade uranium', 'enriched to 90',
+        'fatwa revisited', 'fatwa reconsidered', 'nuclear fatwa review',
+        'khamenei fatwa nuclear', 'revise nuclear fatwa',
+        'iran expels inspectors', 'expels iaea inspectors',
+        'iran ends additional protocol', 'iran suspends cooperation iaea',
+        'iaea cameras removed', 'iran bars inspectors',
+        'iran undeclared material', 'undeclared nuclear material iran',
+        'iran moves enriched stockpile', 'stockpile relocated iran',
+        'parchin activity', 'neutron initiator', 'implosion testing iran',
+        'hydrodynamic testing iran', 'warhead integration iran',
+        'iran majlis nuclear bill', 'iran parliament nuclear law',
+        '\u0627\u062e\u0631\u0627\u062c \u0628\u0627\u0632\u0631\u0633\u0627\u0646',
+        '\u0637\u0631\u062f \u0627\u0644\u0645\u0641\u062a\u0634\u064a\u0646',
     ],
+
+    # ── L3: threshold movement and declared intent short of weaponisation. ──
     3: [
-        'iran enriches uranium', 'iran nuclear threshold',
-        'iran breakout timeline', 'iran nuclear red line',
-        'iran expels inspectors', 'iran iaea',
-        'iran nuclear deal collapsed', 'iran nuclear ambiguity',
-        'غنی‌سازی اورانیوم', 'آستانه هسته‌ای ایران',
-        'إيران تخصب اليورانيوم', 'الخط الأحمر النووي',
+        'iran nuclear threshold', 'iran breakout timeline',
+        'iran breakout time', 'iran enrichment increased',
+        'iran raises enrichment', 'iran 60 percent enrichment',
+        'iran new centrifuges', 'iran advanced centrifuges installed',
+        'iran nuclear ambiguity policy', 'iran reconsiders nuclear doctrine',
+        'iran nuclear deterrent', 'iran may seek nuclear',
+        'iran nuclear capability statement',
+        '\u0622\u0633\u062a\u0627\u0646\u0647 \u0647\u0633\u062a\u0647\u200c\u0627\u06cc \u0627\u06cc\u0631\u0627\u0646',
+        '\u0627\u0644\u062e\u0637 \u0627\u0644\u0623\u062d\u0645\u0631 \u0627\u0644\u0646\u0648\u0648\u064a',
     ],
+
+    # ── L2: routine programme activity and diplomacy. Context, not signal. ──
     2: [
         'iran nuclear talks', 'iran nuclear negotiations',
         'iran nuclear deal', 'jcpoa', 'iran centrifuges',
-        'iran nuclear program', 'iran uranium',
-        'مذاکرات هسته‌ای', 'برنامه هسته‌ای ایران',
-        'مفاوضات نووية إيران', 'البرنامج النووي الإيراني',
+        'iran enriches uranium', 'iran iaea', 'iaea iran report',
+        'iran nuclear deal collapsed', 'snapback sanctions iran',
+        '\u0645\u0630\u0627\u06a9\u0631\u0627\u062a \u0647\u0633\u062a\u0647\u200c\u0627\u06cc',
+        '\u0645\u0641\u0627\u0648\u0636\u0627\u062a \u0646\u0648\u0648\u064a\u0629 \u0625\u064a\u0631\u0627\u0646',
     ],
+
+    # ── L1: the programme exists. Standing descriptors, true every day. ──
     1: [
         'nuclear iran', 'iran nuclear', 'natanz', 'fordow',
-        'arak reactor', 'iran enrichment',
-        'هسته‌ای ایران', 'نووي إيران',
+        'arak reactor', 'iran enrichment', 'iran nuclear program',
+        'iran uranium', 'iran nuclear facility', 'iran nuclear site',
+        '\u0647\u0633\u062a\u0647\u200c\u0627\u06cc \u0627\u06cc\u0631\u0627\u0646',
+        '\u0646\u0648\u0648\u064a \u0625\u064a\u0631\u0627\u0646',
+    ],
+}
+
+# ── INBOUND: attacks ON Iranian nuclear infrastructure ──────────────────
+# Moved out of NUCLEAR_TRIGGERS Sep 2026. This is a real signal and a serious
+# one -- striking a nuclear facility is an escalation event in its own right --
+# but it is KINETIC and INBOUND. Scoring it as Iranian nuclear signalling
+# inverts the causality and, during an active air campaign, pins the nuclear
+# vector at threshold permanently on someone else's actions.
+#
+# Consumed by the kinetic vector. Kept separate so both readings stay
+# available: "Iran's facilities were struck" and "Iran is moving toward a
+# weapon" are different findings that happen to share vocabulary.
+NUCLEAR_INBOUND_TRIGGERS = {
+    5: [
+        'natanz destroyed', 'fordow destroyed',
+        'iran nuclear program destroyed', 'enrichment site destroyed',
+    ],
+    4: [
+        'natanz attacked', 'fordow attacked', 'natanz struck', 'fordow struck',
+        'iran nuclear facility struck', 'iran nuclear site struck',
+        'strike on iranian nuclear', 'strikes iranian nuclear facilities',
+        'iran enrichment halted', 'isfahan nuclear struck',
+        '\u0646\u0637\u0646\u0632 \u062a\u0639\u0631\u0636 \u0644\u0647\u062c\u0648\u0645',
+        '\u0641\u0631\u062f\u0648 \u062a\u0639\u0631\u0636 \u0644\u0647\u062c\u0648\u0645',
+        '\u062a\u0623\u0633\u06cc\u0633\u0627\u062a \u0647\u0633\u062a\u0647\u200c\u0627\u06cc \u0627\u06cc\u0631\u0627\u0646 \u0645\u0648\u0631\u062f \u062d\u0645\u0644\u0647',
+    ],
+    3: [
+        'threat to strike iranian nuclear', 'plans to strike nuclear sites',
+        'targeting iranian nuclear', 'iran nuclear sites targeted',
     ],
 }
 
@@ -2833,6 +2917,13 @@ def classify_articles(articles, proxy_activation_level):
     theatre_summary = {
         'irgc_direct_max': 0,
         'nuclear_max': 0,
+        # Attacks ON Iranian nuclear infrastructure. Tracked separately from
+        # nuclear_max so "Iran's facilities were struck" and "Iran is moving
+        # toward a weapon" stay distinguishable -- they share vocabulary but
+        # are opposite findings, and during an air campaign the first would
+        # otherwise pin the second at threshold indefinitely.
+        'nuclear_inbound_max': 0,
+        'nuclear_inbound_trigger': '',
         'domestic_max': 0,
         'regional_max': 0,
         'soft_power_max': 0,
@@ -2917,7 +3008,18 @@ def classify_articles(articles, proxy_activation_level):
                             theatre_summary['irgc_direct_max'] = _dl
                         break
 
-                # Nuclear
+                # Nuclear -- INBOUND (attacks on Iranian nuclear infrastructure).
+                # Scored on its own ladder; feeds the kinetic reading, never the
+                # nuclear-posture one.
+                for kw in NUCLEAR_INBOUND_TRIGGERS.get(level, []):
+                    if kw in text:
+                        _dl_in = _decay_level(level, _rec_w)
+                        if _dl_in > theatre_summary['nuclear_inbound_max']:
+                            theatre_summary['nuclear_inbound_max'] = _dl_in
+                            theatre_summary['nuclear_inbound_trigger'] = kw
+                        break
+
+                # Nuclear -- OUTBOUND posture
                 for kw in NUCLEAR_TRIGGERS.get(level, []):
                     if kw in text:
                         effective_level = level
@@ -3374,6 +3476,7 @@ def run_iran_rhetoric_scan(days=3):
     # ── Step 3: Compute theatre levels ──
     max_irgc     = theatre_summary['irgc_direct_max']
     max_nuclear  = theatre_summary['nuclear_max']
+    max_nuclear_inbound = theatre_summary.get('nuclear_inbound_max', 0)
     max_domestic = theatre_summary['domestic_max']
     max_regional = theatre_summary['regional_max']
 
@@ -3528,6 +3631,10 @@ def run_iran_rhetoric_scan(days=3):
             'irgc':       max_irgc,
             'proxy':      proxy_activation_level,
             'nuclear':    max_nuclear,
+            # Kept alongside so a consumer can see both directions. The GPI's
+            # nuclear-signaling narrative must read `nuclear` only.
+            'nuclear_inbound':         max_nuclear_inbound,
+            'nuclear_inbound_trigger': theatre_summary.get('nuclear_inbound_trigger', ''),
             'regional':   max_regional,
             'domestic':   max_domestic,
             'otp_count':  otp_count,
