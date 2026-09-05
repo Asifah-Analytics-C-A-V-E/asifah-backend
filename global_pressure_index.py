@@ -2763,14 +2763,54 @@ def _narrative_wha_cascade(blufs):
 
 def _narrative_nuclear_signaling_global(blufs):
     """Russia OR any other region at nuclear-signaling threshold."""
-    nuclear_active = []
+    nuclear_active, evidence = [], []
     for region, bluf in blufs.items():
         if not bluf:
             continue
         if bluf.get('nuclear_elevated') or _max_signal_level(bluf, 'nuclear_signaling') >= 4:
             nuclear_active.append(region)
+            # CARRY THE EVIDENCE (Sep 2026). This detector is a pure pass-through
+            # on a boolean, and it used to discard everything behind it -- so the
+            # platform's PRIORITY-15 narrative, its highest-stakes signal class,
+            # told an analyst only that "at least one regional theater shows
+            # nuclear-doctrine-language" with nothing whatsoever to check.
+            #
+            # The trigger phrase existed two functions upstream the entire time,
+            # unpacked into a throwaway variable. An alarm this loud has to be
+            # auditable from its own output or it trains the reader to ignore it.
+            trig = (bluf.get('nuclear_trigger')
+                    or (bluf.get('so_what') or {}).get('nuclear_trigger') or '')
+            lvl = (bluf.get('nuclear_level')
+                   or (bluf.get('so_what') or {}).get('nuclear_level') or 0)
+            evidence.append({'region': region, 'trigger': trig, 'level': lvl})
+
     if nuclear_active:
         regions_str = ', '.join(REGION_DISPLAY[r]['name'] for r in nuclear_active)
+        detail = ('At least one regional theater shows nuclear-doctrine-language at coercion '
+                  'threshold. This is the highest-stakes signal class on the platform. ')
+
+        named = [e for e in evidence if e.get('trigger')]
+        if named:
+            detail += ('WHAT FIRED IT: '
+                       + '; '.join('%s at L%s on "%s"'
+                                   % (REGION_DISPLAY.get(e['region'], {}).get('name', e['region']),
+                                      e['level'] or '?', e['trigger'])
+                                   for e in named)
+                       + '. The matched phrase is shown so the reading can be checked against '
+                         'the source rather than taken on trust. ')
+        unnamed = [e for e in evidence if not e.get('trigger')]
+        if unnamed:
+            # Absence-honest: a region can set the flag without exposing what set
+            # it. Say so rather than implying evidence the payload does not carry.
+            detail += ('COVERAGE GAP: %s flagged nuclear elevation without an attached '
+                       'trigger phrase, so the specific language is not visible at this '
+                       'altitude and must be read from the regional tracker directly. '
+                       % ', '.join(REGION_DISPLAY.get(e['region'], {}).get('name', e['region'])
+                                   for e in unnamed))
+
+        detail += ('Watch for further escalation rhetoric or de-escalation off-ramp signaling. '
+                   'A nuclear-axis reading is a CONVERGENCE indicator, NOT a probability of use.')
+
         return {
             'priority': 15,
             'category': 'nuclear_signaling_global',
@@ -2778,9 +2818,8 @@ def _narrative_nuclear_signaling_global(blufs):
             'icon':     '\u2622\ufe0f',  # ☢️
             'color':    '#dc2626',
             'headline': f'Nuclear signaling active -- {regions_str}',
-            'detail':   ('At least one regional theater shows nuclear-doctrine-language at coercion '
-                         'threshold. This is the highest-stakes signal class on the platform; '
-                         'watch for further escalation rhetoric or de-escalation off-ramp signaling.'),
+            'detail':   detail,
+            'evidence': evidence,
         }
     return None
 
