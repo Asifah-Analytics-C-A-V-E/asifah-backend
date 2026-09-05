@@ -4700,12 +4700,30 @@ def build_gpi(force=False):
         _normalize_payload_terms(result)
 
         _redis_set(GPI_CACHE_KEY, result)
-        # Also cache the lightweight level-only payload
+
+        # Also cache the lightweight level-only payload.
+        #
+        # BUG FIXED Sep 2026 -- TWO WRITERS, ONE KEY, DIFFERENT SHAPES.
+        # This block used to write ONLY global_level/label/color/generated_at.
+        # build_gpi_level() separately builds a RICHER payload (headline, motion,
+        # banner) but returns it without writing it back. So:
+        #     force=true  -> full build -> rich payload returned  (looked fine)
+        #     page load   -> reads THIS stripped cache           -> banner missing
+        # The landing page therefore never saw `banner`, and with a 12h TTL it
+        # stayed that way for half a day at a time. The same fault silently
+        # swallowed `headline` and `motion` from 27 Jul onward -- six weeks of a
+        # feature that was built, deployed, and never once rendered.
+        #
+        # Both writers must now emit the SAME SHAPE. Built here from `result`
+        # rather than duplicating the logic, so the two cannot drift again.
         level_payload = {
             'global_level':  global_level,
             'global_label':  GLOBAL_LEVEL_LABELS.get(global_level, ''),
             'global_color':  GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
             'generated_at':  result['generated_at'],
+            'headline':      _headline_signal(result),
+            'motion':        _motion_line(result),
+            'banner':        _banner(result),
         }
         _redis_set(LEVEL_CACHE_KEY, level_payload, ttl=LEVEL_CACHE_TTL)
 
@@ -4743,9 +4761,17 @@ def build_gpi_level(force=False):
             try:
                 age = (datetime.now(timezone.utc)
                        - datetime.fromisoformat(cached['generated_at'])).total_seconds()
-                if age < LEVEL_CACHE_TTL:
+                # A cache entry written by a PRE-FIX build carries no banner.
+                # Serving it would silently blank the landing page's lead line,
+                # which is exactly the failure this fix exists to end -- so treat
+                # a bannerless entry as a miss and rebuild rather than trusting
+                # the timestamp alone.
+                if age < LEVEL_CACHE_TTL and cached.get('banner'):
                     cached['from_cache'] = True
                     return cached
+                if age < LEVEL_CACHE_TTL:
+                    print('[GPI Level] cached entry predates the banner field '
+                          '-- rebuilding rather than serving a stripped payload')
             except Exception:
                 pass
 
