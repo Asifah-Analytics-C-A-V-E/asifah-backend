@@ -1181,17 +1181,63 @@ def _extract_commodity_signals(scan_data):
             icon = '⚓'
 
         elif category == 'nuclear_signaling':
-            # Reinforces nuclear program story
-            priority   = 12 if is_surge else 11
-            level      = 5 if is_surge else 4
-            color      = '#dc2626' if is_surge else '#f97316'
-            short_text = (f'{iran_flag} IRAN: Uranium market '
-                          f'{global_alert.upper()} (nuclear signal)')
-            long_text  = (f'{iran_flag} IRAN uranium commodity pressure '
-                          f'{global_alert.upper()}: {signal_count} global signals. '
-                          f'Reinforces nuclear program signaling — '
-                          f'Natanz/Fordow/enrichment narrative.')
-            icon = '☢️'
+            # ══ CONVERGENCE-GATED (Sep 2026) ═══════════════════════════════
+            # This branch emitted category='nuclear_signaling' at a FLOOR of L4
+            # -- which is precisely the GPI's nuclear threshold -- purely on
+            # global uranium market volume. On 5 Sep the Iran rhetoric nuclear
+            # vector read L0 BASELINE while this fired L4 on "45 global
+            # signals", and the platform's priority-15 nuclear narrative stayed
+            # lit on the strength of it.
+            #
+            # THE CATEGORY ERROR: commodity pressure is NEWS-SIGNAL VOLUME --
+            # weighted count of matched reporting -- not price and not intent.
+            # 45 global uranium signals means the world is writing about
+            # uranium: Kazakh supply, reactor build-outs, spot prices, mining
+            # deals. None of that is Iran signalling anything. It is the same
+            # mistake as reading "nuclear-capable" or "Natanz attacked" as
+            # Iranian posture.
+            #
+            # CONVERGENCE, NOT SUBSTITUTION. Uranium pressure is genuinely
+            # informative WHEN THE RHETORIC VECTOR IS ALSO ELEVATED -- market
+            # attention plus posture movement is a real compound read, and that
+            # is what this signal was reaching for. Alone it is a commodity
+            # story and belongs on the economic axis where gold and wheat sit.
+            _nuc_vec = 0
+            try:
+                _nuc_vec = int(scan_data.get('nuclear_level', 0) or 0)
+            except Exception:
+                _nuc_vec = 0
+
+            if _nuc_vec >= 3:
+                priority   = 12 if is_surge else 11
+                level      = 5 if is_surge else 4
+                color      = '#dc2626' if is_surge else '#f97316'
+                short_text = (f'{iran_flag} IRAN: Uranium market '
+                              f'{global_alert.upper()} \u00d7 nuclear posture L{_nuc_vec}')
+                long_text  = (f'{iran_flag} IRAN uranium commodity pressure '
+                              f'{global_alert.upper()} ({signal_count} global signals) '
+                              f'CONVERGING with an elevated nuclear posture vector '
+                              f'(L{_nuc_vec}). Market attention and posture movement in the '
+                              f'same window is the compound read; either alone is not. '
+                              f'Commodity pressure measures weighted volume of matched '
+                              f'reporting, NOT price and NOT intent.')
+                icon = '\u2622\ufe0f'
+            else:
+                # Rhetoric vector at or below L2: this is a market story.
+                category   = 'commodity_pressure'
+                priority   = 9 if is_surge else 8
+                level      = 4 if is_surge else 3
+                color      = '#facc15'
+                short_text = (f'{iran_flag} IRAN: Uranium market '
+                              f'{global_alert.upper()} (market signal)')
+                long_text  = (f'{iran_flag} IRAN uranium commodity pressure '
+                              f'{global_alert.upper()}: {signal_count} global signals. '
+                              f'This is NEWS-SIGNAL VOLUME on the uranium market -- supply, '
+                              f'mining, reactor demand, spot pricing -- not Iranian nuclear '
+                              f'signalling. The Iran nuclear posture vector reads L{_nuc_vec}; '
+                              f'without posture movement alongside it, market attention is an '
+                              f'economic reading and is filed as one.')
+                icon = '\u26a1'
 
         elif category == 'commodity_pressure':
             # Gold (sanctions evasion) or wheat (regime stability)
