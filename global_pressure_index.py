@@ -500,7 +500,11 @@ CONVERGENCE_TAGS = {
     'market_fragility_semis_compound': 'Markets \u00d7 Taiwan Semis',
     'dual_chokepoint':                 'Hormuz \u00d7 Bab el-Mandeb',
     'china_taiwan_takeover':           'PLA Tempo \u00d7 Taiwan',
-    'nuclear_signaling_global':        'Nuclear Signaling \u00d7 Two Theatres',
+    # NOTE: no count here. An earlier version read "x Two Theatres" and went
+    # stale the moment Europe dropped off -- the banner asserted two while the
+    # narrative said one. A tag that states a number must DERIVE it; see
+    # _compound_tag's dynamic branch below.
+    'nuclear_signaling_global':        '',
     'iran_axis_convergence':           'Iran Axis \u00d7 Proxy Fronts',
     'iran_deescalation':               'Ceasefire \u00d7 Breach Risk',
     'wheat_lebanon':                   'Black Sea Wheat \u00d7 Lebanon',
@@ -581,6 +585,20 @@ _NON_CONVERGENCE = {'global_baseline', 'global_warning', 'global_commodity_oil',
 def _compound_tag(narr):
     """Short compound tag for one narrative. Two nouns and a multiplication sign."""
     cat = (narr or {}).get('category') or ''
+    regions = [r for r in ((narr or {}).get('regions') or []) if r]
+
+    # DYNAMIC TAGS. Categories whose second term depends on live data cannot be
+    # a fixed string -- naming the REGION is both correct and more useful than
+    # naming a count, and it cannot go stale.
+    if cat == 'nuclear_signaling_global':
+        if len(regions) == 1:
+            return _titlecase_tag('Nuclear Signaling \u00d7 %s'
+                                  % (_TAG_REGION_NAMES.get(regions[0])
+                                     or _REGION_DISPLAY.get(regions[0], regions[0])))
+        if len(regions) > 1:
+            return 'Nuclear Signaling \u00d7 %d Theatres' % len(regions)
+        return 'Nuclear Signaling'
+
     tag = CONVERGENCE_TAGS.get(cat)
     if tag:
         return tag
