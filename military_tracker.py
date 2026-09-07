@@ -7771,6 +7771,474 @@ def deduplicate_event_signals(signals):
     }
 
 
+# ════════════════════════════════════════════════════════════════════════
+# SIGNAL DIRECTION (v3.5) - the tracker learns to subtract
+# ════════════════════════════════════════════════════════════════════════
+# Every signal in this tracker has been additive. "The US Navy has 11
+# carriers and can usually deploy 4, and only 1 shipyard can fix them"
+# scored 15.0 as power projection. "Navy not returning to damaged Bahrain
+# base anytime soon" scored 0.6 as Military Activity. Both articles are
+# about American capability being LOST, and both made America look
+# stronger.
+#
+# That is the failure this module fixes. It answers, for each signal:
+# is this capability being APPLIED, PULLED BACK, WORN DOWN, or SHOT AT?
+#
+#   projection   capability applied forward - deploys, surges, arrives,
+#                strikes, scrambles, reinforces, goes to alert
+#   withdrawal   capability pulled back - departs, returns home, draws
+#                down, ends deployment, evacuates
+#   degradation  capability structurally impaired - maintenance backlog,
+#                shipyard capacity, readiness shortfall, munitions
+#                depletion, manning gaps, budget shortfall, materiel
+#                condition. Self-inflicted or systemic, not combat.
+#   attrition    capability damaged or destroyed BY AN ADVERSARY - struck,
+#                hit, shot down, sunk, casualties. Combat loss.
+#   neutral      analysis, commentary, history. No directional content.
+#
+# THIS RELEASE IS ADDITIVE ONLY. Scores are untouched. Every signal gains
+# a direction plus the exact cues that produced it, and the scan result
+# gains a per-actor ledger. Look at the ledger, judge whether the calls
+# are right, and only then decide whether direction should move numbers.
+#
+# Direction is resolved RELATIVE TO THE SIGNAL'S ACTOR. "Iran Strikes
+# Kuwait" is projection for Iran and attrition for Kuwait, from the same
+# sentence. That is done by locating the actor's own matched keyword in
+# the text and reading what sits on either side of it.
+# ════════════════════════════════════════════════════════════════════════
+
+DIRECTION_CLASSES = ('projection', 'withdrawal', 'degradation', 'attrition', 'neutral')
+
+# Directions that mean an actor's usable combat power went DOWN.
+DIRECTION_NEGATIVE = ('withdrawal', 'degradation', 'attrition')
+
+# How far either side of the actor keyword to read for subject/object.
+DIRECTION_WINDOW_CHARS = 80
+
+# ---- Structural capability loss. Not combat. -------------------------
+DEGRADATION_CUES = (
+    # maintenance and industrial base
+    'maintenance backlog', 'maintenance delay', 'shipyard backlog',
+    'only 1 shipyard', 'only one shipyard', 'depot backlog', 'dry dock',
+    'drydock', 'in overhaul', 'undergoing repair', 'awaiting repair',
+    'yard period', 'out of service', 'sidelined', 'inoperable',
+    'industrial base', 'production shortfall', 'behind schedule',
+    'delayed delivery', 'cost overrun',
+    # readiness
+    'readiness shortfall', 'readiness gap', 'readiness crisis',
+    'not ready for', 'ready for action', 'unable to deploy',
+    'cannot deploy', 'can usually deploy', 'can only deploy',
+    'no longer able', 'not returning', 'anytime soon',
+    'availability gap', 'carrier gap', 'presence gap',
+    # materiel condition
+    'rust', 'rusty', 'rusted', 'poor condition', 'disrepair',
+    'deteriorat', 'worn out', 'wear and tear',
+    "warship's condition", "ship's condition", 'materiel condition',
+    'material condition', 'reveal warship', 'state of the ship',
+    # people
+    'recruiting shortfall', 'retention crisis', 'manning shortfall',
+    'undermanned', 'short-handed', 'personnel shortage', 'crew fatigue',
+    'sailor fatigue', 'morale', 'worst deployment', 'marathon deployment',
+    'extended deployment', 'deployment extended', 'record deployment',
+    'back-to-back deployment',
+    # munitions and money
+    'munitions shortage', 'magazine depletion', 'interceptor shortage',
+    'running low on', 'stockpile depletion', 'depleted', 'exhausted its',
+    'burn rate', 'expenditure rate',
+    'budget cut', 'unfunded priorit', 'funding shortfall',
+    'aging fleet', 'block obsolescence', 'end of service life',
+    'overstretched', 'overextended', 'stretched thin', 'spread thin',
+)
+
+# ---- Force pulled back ----------------------------------------------
+WITHDRAWAL_CUES = (
+    'departs', 'departed', 'departure from', 'leaves port', 'left port',
+    'returns home', 'returning home', 'return home', 'heads home',
+    'sails home', 'homecoming', 'end of deployment', 'ends deployment',
+    'concludes deployment', 'completed deployment', 'wraps up deployment',
+    'drawdown', 'draw down', 'drawing down', 'withdraw', 'withdrawal of',
+    'withdrew', 'pulls out', 'pulled out', 'pulling out', 'pull back',
+    'pulled back', 'pulls back', 'exits the', 'exited the',
+    'relieved on station', 'ordered home', 'recalled to',
+    'reduce its presence', 'reducing its presence', 'scaling back',
+    'evacuat', 'ordered departure', 'authorized departure', 'drew down',
+    'disengag', 'ceases operations', 'shuts down base', 'closes base',
+    'vacated', 'relocated away',
+)
+
+# ---- Force applied ---------------------------------------------------
+PROJECTION_CUES = (
+    'deploys', 'deployed', 'deploying', 'deployment order', 'orders the',
+    'surge', 'surged', 'surging', 'arrives', 'arrived', 'arriving',
+    'reinforce', 'reinforcement', 'reinforcing', 'additional forces',
+    'more troops', 'additional troops', 'additional aircraft',
+    'buildup', 'build-up', 'massing', 'amassing', 'staging',
+    'forward deploy', 'forward-deploy', 'repositioned to', 'moves toward',
+    'moving toward', 'en route to', 'heading to', 'headed to',
+    'bound for', 'sails for', 'sailing for', 'steaming toward',
+    'ordered to the', 'dispatched to', 'sent to the',
+    'scrambled', 'scramble', 'sortie', 'sorties', 'launched strikes',
+    'conducts strikes', 'conducted strikes', 'carried out strikes',
+    'intercept', 'intercepts', 'intercepted', 'interception',
+    'repelled', 'repel', 'thwarted', 'engaged and destroyed',
+    'air defense activated', 'air defences engaged',
+    'high alert', 'heightened alert', 'on alert', 'alert status',
+    'raised readiness', 'mobiliz', 'activated', 'call-up', 'called up',
+    'extended stay', 'remains on station', 'stays on station',
+    'exercise', 'drill', 'war game', 'wargame',
+)
+
+# Bare departure words. Ambiguous on their own - "strike leaves 3 dead"
+# is not a withdrawal - so these count ONLY when the text carries no
+# combat-loss vocabulary at all.
+WITHDRAWAL_CUES_WEAK = (
+    'leaves', 'leaving', 'left the', 'exits', 'exited', 'departing',
+    'pulls away', 'moves away', 'heads out',
+)
+
+# Prepositions of direction. A loss verb separated from the actor by one
+# of these is acting on something ELSE that is merely moving toward the
+# actor: "destroyed two bombers racing TOWARD Al Udeid" does not mean
+# Al Udeid was destroyed.
+DIRECTIONAL_PREPOSITIONS = (
+    'toward', 'towards', 'near', 'against', 'into', 'over ', 'at the',
+    'heading to', 'racing to', 'bound for', 'en route',
+)
+
+# Casualty vocabulary. Its presence means a bare departure word like
+# "leaves" is almost certainly "leaves 3 dead", not a ship sailing home.
+CASUALTY_WORDS = (
+    'dead', 'death toll', 'fatalities', 'bodies', 'martyr', 'victims',
+    'killed', 'wounded', 'injured', 'casualt',
+)
+
+# Kinetic vocabulary appearing in the SIGNAL'S OWN matched keyword. If the
+# thing that made this a signal was "drone strike" or "missile attack",
+# force was applied - and if the actor is not the victim, the actor
+# applied it. Checked after withdrawal so "carrier strike group departs"
+# still reads as a departure.
+KINETIC_KEYWORD_TERMS = (
+    'strike', 'airstrike', 'air strike', 'attack', 'launch', 'fired',
+    'bombard', 'shelling', 'offensive', 'raid', 'incursion', 'shot down',
+    'intercept', 'sortie', 'bombing',
+)
+
+# Formation names that merely CONTAIN a kinetic word. "Carrier Strike
+# Group" is a unit, not an act of violence, and treating it as one turned
+# every routine carrier mention into an attack.
+KINETIC_KEYWORD_EXCLUSIONS = (
+    'carrier strike group', 'strike group', 'strike package', 'strike wing',
+    'strike fighter', 'strikemaster', 'strike eagle',
+)
+
+# Attribution tails. In "Iran fired missiles at Israel, IRGC says" the
+# actor keyword sits AFTER the violence while being neither striker nor
+# struck - it is the party doing the talking. One keyword occurrence
+# cannot tell us which, so an attribution tail makes the signal neutral
+# and says so, rather than guessing. In full article text the actor is
+# normally named earlier too, and find() lands on that instead.
+ATTRIBUTION_TAIL_CUES = (
+    'says', 'said', 'confirmed', 'announced', 'reported', 'stated',
+    'claims', 'claimed', 'told', 'tells', 'adds', 'noted',
+)
+ATTRIBUTION_TAIL_WINDOW = 24
+
+# ---- Combat loss verbs, used with actor position ---------------------
+LOSS_VERBS = (
+    'hit', 'hits', 'struck', 'strikes', 'strike on', 'strike against',
+    'targeted', 'targets', 'targeting', 'damaged', 'destroyed', 'destroys',
+    'sank', 'sunk', 'sinks', 'shot down', 'shoot down', 'downed',
+    'attacked', 'attacks', 'bombed', 'shelled', 'disabled', 'crippled',
+    'casualties', 'killed', 'wounded', 'injured', 'wrecked',
+    # 'fired' alone is too ambiguous (officers get fired); only the forms
+    # that unambiguously name a weapon and a target.
+    'fired at', 'fired on', 'fired ballistic', 'fired missiles',
+    'missiles at', 'missile at', 'launched at', 'launched against',
+    'rockets at', 'drones at',
+)
+
+# Phrases meaning the thing just named RECEIVED the blow. These override
+# the plain-verb reading, because "US bases come under attack" puts the
+# verb after the actor while still making the actor the victim.
+RECEIVING_CUES = (
+    'come under', 'came under', 'comes under', 'under attack', 'under fire',
+    'hit by', 'struck by', 'targeted by', 'attacked by', 'damaged by',
+    'destroyed by', 'was hit', 'were hit', 'was struck', 'were struck',
+    'was targeted', 'were targeted', 'was damaged', 'were damaged',
+    'suffered', 'sustained damage', 'sustained casualties', 'took damage',
+    'shot down by', 'downed by', 'lost a', 'lost two', 'lost three',
+    'casualties confirmed', 'casualties reported',
+)
+
+
+def _normalize_direction_text(text):
+    """Lowercase and flatten typographic punctuation so cue phrases match.
+    Curly quotes are why 'worst deployment' failed to match a headline
+    that literally read Worst Deployment."""
+    if not text:
+        return ''
+    out = str(text).lower()
+    for bad, good in (
+        ('\u2018', "'"), ('\u2019', "'"), ('\u201c', '"'), ('\u201d', '"'),
+        ('\u2013', '-'), ('\u2014', '-'), ('\u00a0', ' '), ('\n', ' '),
+        ('\t', ' '),
+    ):
+        out = out.replace(bad, good)
+    return ' '.join(out.split())
+
+
+def _strip_quotes(text):
+    """Drop quote marks so 'worst deployment' still matches a headline
+    written as \"worst\" deployment."""
+    return (text or '').replace('"', '').replace("'", '')
+
+
+def _find_cues(text, cues):
+    """Every cue present in text, in the order the cue table lists them.
+    Matched against the text both as-is and with quote marks removed, so
+    an embedded quotation cannot hide a cue phrase."""
+    bare = _strip_quotes(text)
+    return [c for c in cues if c in text or _strip_quotes(c) in bare]
+
+
+def _actor_windows(text, actor_keyword):
+    """Text immediately before and after the actor's matched keyword.
+    Returns (before, after). Empty strings if the keyword is not locatable."""
+    if not actor_keyword:
+        return '', ''
+    idx = text.find(actor_keyword)
+    if idx < 0:
+        return '', ''
+    start = max(0, idx - DIRECTION_WINDOW_CHARS)
+    end = idx + len(actor_keyword) + DIRECTION_WINDOW_CHARS
+    return text[start:idx], text[idx + len(actor_keyword):end]
+
+
+def classify_signal_direction(text, actor_keyword, asset_id=None,
+                              signal_keyword=''):
+    """Direction of one signal, relative to that signal's own actor.
+
+    text           full article text (title + description + content)
+    actor_keyword  the actor keyword that matched, used to locate the
+                   actor in the sentence and read subject vs object
+    asset_id       asset category id, so evacuation short-circuits
+    signal_keyword the asset keyword that matched, e.g. 'drone strike'
+
+    Returns (direction, evidence_dict). Never raises; unknown reads
+    'neutral', which is the honest answer when nothing matched.
+    """
+    text = _normalize_direction_text(text)
+    actor_keyword = _normalize_direction_text(actor_keyword)
+    signal_keyword = _normalize_direction_text(signal_keyword)
+
+    before, after = _actor_windows(text, actor_keyword)
+    positionless = not (before or after)
+    if positionless:
+        # Actor keyword not locatable (it matched in a field we were not
+        # handed). Read the whole text rather than reading nothing.
+        near = text
+    else:
+        near = f"{before} {after}"
+
+    deg_cues = _find_cues(text, DEGRADATION_CUES)
+    loss_anywhere = _find_cues(text, LOSS_VERBS)
+
+    evidence = {
+        'degradation_cues': deg_cues[:6],
+        'withdrawal_cues': _find_cues(text, WITHDRAWAL_CUES)[:6],
+        'projection_cues': _find_cues(text, PROJECTION_CUES)[:6],
+        'loss_verbs_near_actor': _find_cues(near, LOSS_VERBS)[:6],
+        'receiving_cues_near_actor': _find_cues(near, RECEIVING_CUES)[:6],
+        'actor_keyword_located': not positionless,
+    }
+    if positionless:
+        evidence['positionless'] = ('actor keyword not found in text; '
+                                    'subject/object not resolved')
+
+    def _done(direction, secondary=None, **extra):
+        evidence['direction_secondary'] = secondary
+        evidence.update(extra)
+        return direction, evidence
+
+    # 1. Evacuation is unambiguous withdrawal whatever else is in the text.
+    if asset_id == 'base_evacuation':
+        return _done('withdrawal')
+
+    # 2. Did this actor TAKE a blow? Receiving language after the actor wins
+    #    outright. A loss verb in FRONT of the actor also makes the actor the
+    #    object, unless a preposition of direction sits between them - then
+    #    the verb acted on something merely moving toward the actor.
+    receiving_after = _find_cues(after, RECEIVING_CUES) if not positionless else []
+    loss_before = _find_cues(before, LOSS_VERBS) if not positionless else []
+    actor_is_object = bool(receiving_after)
+    if not actor_is_object and loss_before:
+        tail = before
+        for verb in loss_before:
+            idx = before.rfind(verb)
+            if idx >= 0:
+                tail = before[idx + len(verb):]
+        if not any(p in tail for p in DIRECTIONAL_PREPOSITIONS):
+            actor_is_object = True
+        else:
+            evidence['object_elsewhere'] = (
+                'loss verb separated from actor by a preposition of direction')
+
+    # An attribution tail means the actor is the SPEAKER, not a participant.
+    if actor_is_object and not receiving_after:
+        tail_probe = after[:ATTRIBUTION_TAIL_WINDOW]
+        if any(f' {c}' in f' {tail_probe}' for c in ATTRIBUTION_TAIL_CUES):
+            actor_is_object = False
+            evidence['attribution_tail'] = (
+                'actor keyword sits in an attribution clause, so striker vs '
+                'struck cannot be resolved from this occurrence')
+            return _done('neutral')
+
+    if actor_is_object:
+        reason = ('receiving language after actor' if receiving_after
+                  else 'loss verb immediately before actor')
+        # A base can be struck AND be out of action. Where the text is
+        # dominated by sustained-unavailability language the standing state
+        # is the more useful primary read; the strike survives as secondary.
+        if len(deg_cues) >= 2:
+            return _done('degradation', 'attrition',
+                         attrition_reason=reason,
+                         degradation_reason=f'{len(deg_cues)} sustained-capability '
+                                            f'cues outweigh a single strike reference')
+        return _done('attrition', 'degradation' if deg_cues else None,
+                     attrition_reason=reason)
+
+    # 3. Structural capability loss. Ahead of projection because a readiness
+    #    story is usually stuffed with deployment vocabulary.
+    if deg_cues:
+        return _done('degradation')
+
+    # 4. Actor is in a kinetic event and is NOT the victim, so it is the one
+    #    applying force. This requires knowing WHERE the actor sits in the
+    #    sentence. If the actor could not be located, we cannot tell the
+    #    striker from the struck, and guessing would be worse than silence -
+    #    so the signal reads neutral and says why.
+    if _find_cues(near, LOSS_VERBS):
+        if positionless:
+            return _done('neutral',
+                         unresolved_kinetic='combat vocabulary present but the '
+                                            'actor could not be located, so '
+                                            'striker vs struck is unresolved')
+        return _done('projection',
+                     projection_reason='loss verb near actor, actor not the object')
+
+    # 5. Withdrawal before projection: "departs" and "arrives" often share a
+    #    headline, and leaving is the more consequential of the two.
+    if evidence['withdrawal_cues']:
+        return _done('withdrawal')
+
+    # 6. The keyword that CREATED this signal was itself kinetic. Formation
+    #    names are stripped first so "carrier strike group" is not read as
+    #    an act of violence.
+    if not positionless:
+        kw_probe = signal_keyword
+        for excl in KINETIC_KEYWORD_EXCLUSIONS:
+            kw_probe = kw_probe.replace(excl, ' ')
+        kinetic = [t for t in KINETIC_KEYWORD_TERMS if t in kw_probe]
+        if kinetic:
+            return _done('projection', kinetic_keyword=kinetic[:3],
+                         projection_reason='signal keyword is itself kinetic')
+
+    if evidence['projection_cues']:
+        return _done('projection')
+
+    # 7. Bare departure words, trusted only when nothing in the text reads as
+    #    combat or casualties ("strike leaves 3 dead" is not a withdrawal).
+    if not loss_anywhere and not _find_cues(text, CASUALTY_WORDS):
+        weak = _find_cues(text, WITHDRAWAL_CUES_WEAK)
+        if weak:
+            return _done('withdrawal', withdrawal_cues_weak=weak[:4])
+
+    return _done('neutral')
+
+
+def build_direction_ledger(signals):
+    """Per-actor projection-vs-loss accounting over a list of signals.
+
+    net_score = projection - (withdrawal + degradation + attrition).
+    A negative net means this actor's week reads as capability going DOWN,
+    however loud the headlines were.
+    """
+    per_actor = {}
+    totals = {d: {'count': 0, 'score': 0.0} for d in DIRECTION_CLASSES}
+
+    for sig in signals:
+        actor = sig.get('actor') or 'unknown'
+        direction = sig.get('direction') or 'neutral'
+        if direction not in totals:
+            direction = 'neutral'
+        try:
+            weight = float(sig.get('weight') or 0)
+        except (TypeError, ValueError):
+            weight = 0.0
+
+        row = per_actor.setdefault(actor, {
+            'actor': actor,
+            'actor_name': sig.get('actor_name', actor),
+            **{d: {'count': 0, 'score': 0.0} for d in DIRECTION_CLASSES},
+            'total_score': 0.0,
+            'total_count': 0,
+            'examples': {},
+        })
+        row[direction]['count'] += 1
+        row[direction]['score'] = round(row[direction]['score'] + weight, 2)
+        row['total_score'] = round(row['total_score'] + weight, 2)
+        row['total_count'] += 1
+
+        totals[direction]['count'] += 1
+        totals[direction]['score'] = round(totals[direction]['score'] + weight, 2)
+
+        # Keep the heaviest example of each direction so the call is auditable.
+        ex = row['examples'].get(direction)
+        if ex is None or weight > ex.get('weight', 0):
+            row['examples'][direction] = {
+                'weight': round(weight, 2),
+                'title': (sig.get('article_title') or '')[:110],
+                'source': sig.get('source', ''),
+                'cues': sig.get('direction_evidence', {}),
+            }
+
+    for actor, row in per_actor.items():
+        projection = row['projection']['score']
+        loss = sum(row[d]['score'] for d in DIRECTION_NEGATIVE)
+        row['projection_score'] = round(projection, 2)
+        row['loss_score'] = round(loss, 2)
+        row['net_score'] = round(projection - loss, 2)
+        denom = projection + loss
+        row['projection_share'] = round(projection / denom, 3) if denom else None
+        if denom == 0:
+            row['reading'] = 'no directional signal this scan'
+        elif row['net_score'] > 0:
+            row['reading'] = 'capability reads as being applied'
+        elif row['net_score'] < 0:
+            row['reading'] = 'capability reads as being lost'
+        else:
+            row['reading'] = 'projection and loss in balance'
+
+    ranked = sorted(per_actor.values(), key=lambda r: r['net_score'])
+
+    return {
+        'note': ('Additive only in v3.5 - direction is recorded but does not '
+                 'change any score. net_score = projection minus '
+                 '(withdrawal + degradation + attrition).'),
+        'totals': totals,
+        'per_actor': per_actor,
+        'most_degraded': [
+            {'actor': r['actor'], 'net_score': r['net_score'],
+             'projection': r['projection_score'], 'loss': r['loss_score'],
+             'reading': r['reading']}
+            for r in ranked if r['loss_score'] > 0
+        ][:10],
+        'classified_share': round(
+            1 - (totals['neutral']['count'] / max(1, sum(t['count'] for t in totals.values()))), 3
+        ),
+    }
+
+
 def analyze_article_military(article):
     """Analyze a single article for military deployment signals."""
     title = (article.get('title') or '').lower()
@@ -7835,6 +8303,12 @@ def analyze_article_military(article):
                             if evac_subtype:
                                 signal_entry['evacuation_subtype'] = evac_subtype
 
+                            # v3.5 - direction, additive only (score untouched)
+                            _dir, _dir_ev = classify_signal_direction(
+                                text, keyword, asset_id, asset_kw)
+                            signal_entry['direction'] = _dir
+                            signal_entry['direction_evidence'] = _dir_ev
+
                             result['signals'].append(signal_entry)
                             result['score'] += signal_score
                             asset_matched = True
@@ -7861,7 +8335,10 @@ def analyze_article_military(article):
                         'article_title': article.get('title', '')[:120],
                         'article_url': article.get('url', ''),
                         'source': article.get('source', {}).get('name', 'Unknown'),
-                        'published': article.get('publishedAt', '')
+                        'published': article.get('publishedAt', ''),
+                        **dict(zip(('direction', 'direction_evidence'),
+                                   classify_signal_direction(text, keyword,
+                                                             'unspecified', keyword)))
                     })
                     result['score'] += signal_score
 
@@ -8111,6 +8588,20 @@ def _run_full_scan(days=7):
               f"{_lc['report_count']} reports from {_lc['corroboration_count']} sources, "
               f"{_lc['raw_score_before']} -> {_lc['score_after']}")
 
+    # v3.5 - direction ledger. Additive: no score is changed by this.
+    direction_ledger = build_direction_ledger(all_signals)
+    _dt = direction_ledger['totals']
+    print(f"[Military Tracker] Direction: "
+          f"projection {_dt['projection']['count']} ({_dt['projection']['score']}) | "
+          f"withdrawal {_dt['withdrawal']['count']} ({_dt['withdrawal']['score']}) | "
+          f"degradation {_dt['degradation']['count']} ({_dt['degradation']['score']}) | "
+          f"attrition {_dt['attrition']['count']} ({_dt['attrition']['score']}) | "
+          f"neutral {_dt['neutral']['count']} ({_dt['neutral']['score']})")
+    for _row in direction_ledger['most_degraded'][:5]:
+        print(f"[Military Tracker]    Net capability {_row['actor']}: "
+              f"projection {_row['projection']} - loss {_row['loss']} = "
+              f"{_row['net_score']} ({_row['reading']})")
+
     for signal in all_signals:
         active_actors.add(signal['actor'])
 
@@ -8245,6 +8736,7 @@ def _run_full_scan(days=7):
             'articles': article_dedupe_stats,
             'events': event_dedupe_stats,
         },
+        'direction_ledger': direction_ledger,
         'active_actors': list(active_actors),
         'active_actor_count': len(active_actors),
         'tension_multiplier': tension_multiplier,
