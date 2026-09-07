@@ -7441,6 +7441,336 @@ def filter_articles_by_recency(articles, days):
     return kept, stats
 
 
+# ════════════════════════════════════════════════════════════════════════
+# EVENT DEDUPLICATION (v3.4)
+# ════════════════════════════════════════════════════════════════════════
+# The tracker used to count coverage, not events. One Abraham Lincoln port
+# call reported by five outlets scored five times. That inflates whichever
+# actor gets the most press, which is not the same thing as the actor doing
+# the most - the exact failure mode this platform exists to avoid.
+#
+# Two layers, applied in order:
+#
+#   LAYER 0 - Article dedupe. The same article arriving through more than
+#             one feed (RSS + GDELT + Brave all catch the same Reuters wire)
+#             is one article. Same URL, or same normalized title, = one.
+#             No judgment involved; this is a straight double-count bug.
+#
+#   LAYER 1 - Event dedupe. Distinct articles describing the SAME event are
+#             collapsed to one signal. Match rule: same actor + same asset
+#             class + same named entity, within a rolling 72h window.
+#             Requires a named entity - with nothing to anchor on we do NOT
+#             merge, because a wrongly merged event is invisible signal loss
+#             and that is the more dangerous error.
+#
+# Corroboration is preserved as a CONFIDENCE multiplier, not a count of
+# events. Five independent outlets genuinely is more confirmed than one, so
+# the surviving signal gets a logarithmic bonus that is capped and counts
+# DISTINCT SOURCES, not articles - five reposts by one outlet is one source.
+#   1 source  = x1.00      3 sources = x1.29      10 sources = x1.60 (cap)
+#   2 sources = x1.18      5 sources = x1.42
+# ════════════════════════════════════════════════════════════════════════
+
+EVENT_DEDUPE_WINDOW_HOURS = 72
+CORROBORATION_WEIGHT = 0.18
+CORROBORATION_MAX_MULTIPLIER = 1.6
+
+# Named assets recognizable WITHOUT a "USS" prefix. Used only to group
+# duplicate reports of one event, never to score.
+#
+# Deliberately conservative. A false positive here MERGES two unrelated
+# events and silently destroys signal, so bare surnames that are also
+# people, places or companies ('ford', 'roosevelt', 'truman', 'lincoln',
+# 'washington', 'bush', 'reagan') are listed only in their unambiguous
+# multi-word or USS-prefixed forms.
+NAMED_MILITARY_ASSETS = {
+    'cvn_68_nimitz':          ['uss nimitz', 'nimitz carrier', 'nimitz strike group'],
+    'cvn_69_eisenhower':      ['uss eisenhower', 'dwight d. eisenhower', 'dwight d eisenhower', 'ike carrier'],
+    'cvn_70_vinson':          ['uss carl vinson', 'carl vinson'],
+    'cvn_71_roosevelt':       ['uss theodore roosevelt', 'theodore roosevelt carrier', 'uss roosevelt'],
+    'cvn_72_lincoln':         ['uss abraham lincoln', 'abraham lincoln carrier', 'abraham lincoln strike group', 'uss lincoln'],
+    'cvn_73_washington':      ['uss george washington', 'george washington carrier'],
+    'cvn_74_stennis':         ['uss john c. stennis', 'uss john c stennis', 'john c. stennis', 'uss stennis'],
+    'cvn_75_truman':          ['uss harry s. truman', 'uss harry truman', 'harry s. truman', 'uss truman'],
+    'cvn_76_reagan':          ['uss ronald reagan', 'ronald reagan carrier'],
+    'cvn_77_bush':            ['uss george h.w. bush', 'uss george hw bush', 'uss george h. w. bush'],
+    'cvn_78_ford':            ['uss gerald r. ford', 'uss gerald ford', 'gerald r. ford', 'gerald ford carrier'],
+    'lhd_1_wasp':             ['uss wasp'],
+    'lha_6_america':          ['uss america'],
+    'lhd_3_kearsarge':        ['uss kearsarge'],
+    'lhd_7_iwo_jima':         ['uss iwo jima'],
+    'lha_7_tripoli':          ['uss tripoli'],
+    'lhd_8_makin_island':     ['uss makin island', 'makin island'],
+    'lhd_2_essex':            ['uss essex'],
+    'lhd_4_boxer':            ['uss boxer'],
+    'lhd_5_bataan':           ['uss bataan'],
+    'ssgn_ohio':              ['uss ohio'],
+    'ssgn_florida':           ['uss florida'],
+    'ssgn_georgia':           ['uss georgia'],
+    'ssgn_michigan':          ['uss michigan'],
+    'cg_gettysburg':          ['uss gettysburg'],
+    'ddg_carney':             ['uss carney'],
+    'ddg_cole':               ['uss cole'],
+    'ddg_laboon':             ['uss laboon'],
+    'ddg_mason':              ['uss mason'],
+    'ddg_thomas_hudner':      ['uss thomas hudner'],
+    'ddg_gravely':            ['uss gravely'],
+    'ddg_stockdale':          ['uss stockdale'],
+    'ddg_spruance':           ['uss spruance'],
+    'ddg_arleigh_burke':      ['uss arleigh burke'],
+    'ddg_bulkeley':           ['uss bulkeley'],
+}
+
+# CONTEXTUAL aliases: bare ship names that are also people or places.
+# The observed failure was literally "Abraham Lincoln departs Thailand"
+# with no USS prefix, so these have to be matched - but only when the text
+# also carries naval context, which keeps a Lincoln history piece or a
+# story datelined Lincoln, Nebraska out of the carrier's cluster.
+NAMED_ASSET_CONTEXTUAL_ALIASES = {
+    'cvn_68_nimitz':     ['nimitz'],
+    'cvn_69_eisenhower': ['eisenhower'],
+    'cvn_71_roosevelt':  ['theodore roosevelt'],
+    'cvn_72_lincoln':    ['abraham lincoln'],
+    'cvn_73_washington': ['george washington'],
+    'cvn_74_stennis':    ['stennis'],
+    'cvn_75_truman':     ['harry s. truman', 'harry truman'],
+    'cvn_76_reagan':     ['ronald reagan'],
+    'cvn_78_ford':       ['gerald r. ford', 'gerald ford'],
+    'lhd_8_makin_island':['makin island'],
+}
+
+NAVAL_CONTEXT_TERMS = (
+    'carrier', 'strike group', 'csg', 'navy', 'naval', 'warship', 'flattop',
+    'fleet', 'destroyer', 'amphibious', 'port call', 'underway', 'flight deck',
+    'deploy', 'deployment', 'transit', 'transits', 'steaming', 'sortie',
+    'sails', 'sailed', 'sailing', 'homeport', 'home port', 'shipyard',
+    'escort', 'air wing', 'sixth fleet', 'fifth fleet', 'seventh fleet',
+)
+
+# Flat alias -> canonical id, longest alias first so 'uss abraham lincoln'
+# wins over 'uss lincoln'.
+_NAMED_ASSET_ALIASES = sorted(
+    ((alias, asset_id)
+     for asset_id, aliases in NAMED_MILITARY_ASSETS.items()
+     for alias in aliases),
+    key=lambda pair: -len(pair[0])
+)
+
+_NAMED_ASSET_CONTEXTUAL = sorted(
+    ((alias, asset_id)
+     for asset_id, aliases in NAMED_ASSET_CONTEXTUAL_ALIASES.items()
+     for alias in aliases),
+    key=lambda pair: -len(pair[0])
+)
+
+
+def _has_naval_context(low_text):
+    return any(term in low_text for term in NAVAL_CONTEXT_TERMS)
+
+
+def _extract_named_asset(text):
+    """Return the canonical id of the first named asset in text, or None.
+
+    Three tiers, most confident first:
+      1. Unambiguous aliases ('uss abraham lincoln', 'carl vinson')
+      2. Bare names ('abraham lincoln') ONLY with naval context in the text
+      3. Generic USS-pattern fallback for ships not on the roster
+    """
+    if not text:
+        return None
+    low = text.lower()
+
+    for alias, asset_id in _NAMED_ASSET_ALIASES:
+        if alias in low:
+            return asset_id
+
+    if _has_naval_context(low):
+        for alias, asset_id in _NAMED_ASSET_CONTEXTUAL:
+            if alias in low:
+                return asset_id
+
+    try:
+        generic = _extract_named_ships(low)
+    except Exception:
+        generic = []
+    if generic:
+        return 'uss_' + sorted(generic)[0].replace(' ', '_').replace('.', '')
+    return None
+
+
+def _normalize_title_key(title):
+    """Collapse a headline to a comparison key: lowercase, alphanumerics
+    only, stopwords dropped. Used ONLY for Layer 0 exact-article dedupe."""
+    if not title:
+        return ''
+    low = ''.join(ch if ch.isalnum() else ' ' for ch in str(title).lower())
+    drop = {'the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for',
+            'and', 'as', 'is', 'it', 'its', 'by', 'with', 'from'}
+    words = [w for w in low.split() if w and w not in drop]
+    return ' '.join(words)[:150]
+
+
+def deduplicate_articles(articles):
+    """LAYER 0. Collapse the same article arriving through multiple feeds.
+    Returns (unique_articles, stats). Keeps the FIRST occurrence, and records
+    every feed that carried it on the survivor as 'also_seen_in'."""
+    seen_url = {}
+    seen_title = {}
+    unique = []
+    dropped_url = 0
+    dropped_title = 0
+
+    for art in articles:
+        url = (art.get('url') or '').strip().lower().split('#')[0].rstrip('/')
+        tkey = _normalize_title_key(art.get('title'))
+        feed = (art.get('source') or {}).get('name', 'Unknown') \
+            if isinstance(art.get('source'), dict) else str(art.get('source') or 'Unknown')
+
+        keeper = None
+        if url and url in seen_url:
+            keeper = seen_url[url]
+            dropped_url += 1
+        elif tkey and len(tkey) >= 25 and tkey in seen_title:
+            keeper = seen_title[tkey]
+            dropped_title += 1
+
+        if keeper is not None:
+            feeds = keeper.setdefault('also_seen_in', [])
+            if feed not in feeds:
+                feeds.append(feed)
+            continue
+
+        if url:
+            seen_url[url] = art
+        if tkey and len(tkey) >= 25:
+            seen_title[tkey] = art
+        unique.append(art)
+
+    return unique, {
+        'input': len(articles),
+        'kept': len(unique),
+        'dropped_same_url': dropped_url,
+        'dropped_same_title': dropped_title,
+        'dropped_total': dropped_url + dropped_title,
+    }
+
+
+def _corroboration_multiplier(distinct_sources):
+    """Logarithmic, capped confidence bonus for independent corroboration."""
+    n = max(1, int(distinct_sources))
+    if n <= 1:
+        return 1.0
+    mult = 1.0 + CORROBORATION_WEIGHT * math.log2(n)
+    return min(mult, CORROBORATION_MAX_MULTIPLIER)
+
+
+def _signal_event_key(signal):
+    """(actor, asset, named_entity) or None if the signal cannot be anchored
+    to a named entity. None means DO NOT dedupe this signal."""
+    text = f"{signal.get('article_title') or ''} {signal.get('keyword') or ''}"
+    entity = _extract_named_asset(text)
+    if not entity:
+        return None
+    return (signal.get('actor'), signal.get('asset'), entity)
+
+
+def deduplicate_event_signals(signals):
+    """LAYER 1. Collapse signals describing the same event into one.
+
+    Same actor + asset + named entity inside a rolling 72h window = one
+    event. The highest-weight signal survives and carries the corroboration
+    bonus. Signals with no named entity pass through untouched.
+
+    Returns (deduped_signals, stats).
+    """
+    window = timedelta(hours=EVENT_DEDUPE_WINDOW_HOURS)
+    clusters = {}
+    passthrough = []
+
+    for sig in signals:
+        key = _signal_event_key(sig)
+        if key is None:
+            passthrough.append(sig)
+            continue
+        when = _parse_article_date(sig.get('published'))
+        clusters.setdefault(key, []).append((when, sig))
+
+    deduped = list(passthrough)
+    collapsed = 0
+    events = 0
+    biggest = None
+
+    for key, entries in clusters.items():
+        # Undated signals sort last so a dated signal anchors each cluster.
+        dated = sorted((e for e in entries if e[0]), key=lambda e: e[0])
+        undated = [e for e in entries if not e[0]]
+
+        buckets = []
+        for when, sig in dated:
+            placed = False
+            for b in buckets:
+                if when - b['start'] <= window:
+                    b['signals'].append(sig)
+                    placed = True
+                    break
+            if not placed:
+                buckets.append({'start': when, 'signals': [sig]})
+        if undated:
+            if buckets:
+                buckets[0]['signals'].extend(s for _, s in undated)
+            else:
+                buckets.append({'start': None, 'signals': [s for _, s in undated]})
+
+        for b in buckets:
+            group = b['signals']
+            events += 1
+            winner = max(group, key=lambda s: s.get('weight', 0))
+            sources = []
+            for s in group:
+                src = s.get('source') or 'Unknown'
+                if src not in sources:
+                    sources.append(src)
+
+            merged = dict(winner)
+            base = float(winner.get('weight') or 0)
+            mult = _corroboration_multiplier(len(sources))
+            merged['weight'] = round(base * mult, 2)
+            merged['dedupe_event_key'] = f"{key[0]}|{key[1]}|{key[2]}"
+            merged['report_count'] = len(group)
+            merged['corroboration_count'] = len(sources)
+            merged['corroborating_sources'] = sources[:12]
+            merged['corroboration_multiplier'] = round(mult, 3)
+            merged['pre_corroboration_weight'] = round(base, 2)
+            merged['collapsed_titles'] = [
+                s.get('article_title', '') for s in group
+                if s.get('article_title') and s is not winner
+            ][:8]
+            deduped.append(merged)
+
+            if len(group) > 1:
+                collapsed += len(group) - 1
+                if biggest is None or len(group) > biggest['report_count']:
+                    biggest = {
+                        'event_key': merged['dedupe_event_key'],
+                        'report_count': len(group),
+                        'corroboration_count': len(sources),
+                        'title': merged.get('article_title', ''),
+                        'raw_score_before': round(sum(float(s.get('weight') or 0) for s in group), 2),
+                        'score_after': merged['weight'],
+                    }
+
+    return deduped, {
+        'input_signals': len(signals),
+        'output_signals': len(deduped),
+        'unanchored_passthrough': len(passthrough),
+        'anchored_signals': len(signals) - len(passthrough),
+        'distinct_events': events,
+        'duplicate_signals_collapsed': collapsed,
+        'window_hours': EVENT_DEDUPE_WINDOW_HOURS,
+        'largest_cluster': biggest,
+    }
+
+
 def analyze_article_military(article):
     """Analyze a single article for military deployment signals."""
     title = (article.get('title') or '').lower()
@@ -7723,6 +8053,14 @@ def _run_full_scan(days=7):
     if recency_stats['oldest_dropped']:
         print(f"[Military Tracker]    Oldest dropped: {recency_stats['oldest_dropped']}")
 
+    # v3.4 - LAYER 0: collapse the same article arriving through several feeds
+    _pre_dedupe_count = len(all_articles)
+    all_articles, article_dedupe_stats = deduplicate_articles(all_articles)
+    print(f"[Military Tracker] Article dedupe: {_pre_dedupe_count} -> "
+          f"{article_dedupe_stats['kept']} unique "
+          f"({article_dedupe_stats['dropped_same_url']} same URL, "
+          f"{article_dedupe_stats['dropped_same_title']} same title)")
+
     print(f"[Military Tracker] Total articles to analyze: {len(all_articles)}")
 
     print("[Military Tracker] Phase 2: Analyzing articles...")
@@ -7734,25 +8072,59 @@ def _run_full_scan(days=7):
     asset_type_counts = {}
     evacuation_signals = []
 
+    # v3.4 - Two passes. Collect every signal first, dedupe events, THEN score.
+    # Scoring inside the collection loop is what let one port call reported by
+    # five outlets count five times.
+    #
+    # Targets ride ON the signal dict (not a side table keyed by id()), because
+    # dedupe returns NEW dict objects for merged signals and any id()-based
+    # lookup would silently lose their target attribution.
+    raw_signals = []
+
     for article in all_articles:
         analysis = analyze_article_military(article)
-
         if analysis['signals']:
             for signal in analysis['signals']:
-                all_signals.append(signal)
-                active_actors.add(signal['actor'])
+                signal['targets'] = list(analysis['targets'])
+                raw_signals.append(signal)
 
-                for target in analysis['targets']:
-                    per_target_scores[target] = per_target_scores.get(target, 0) + signal['weight']
+    _raw_signal_score = round(sum(float(s.get('weight') or 0) for s in raw_signals), 2)
 
-                actor = signal['actor']
-                per_actor_scores[actor] = per_actor_scores.get(actor, 0) + signal['weight']
+    # LAYER 1: collapse distinct reports of the same event into one signal.
+    all_signals, event_dedupe_stats = deduplicate_event_signals(raw_signals)
 
-                asset = signal['asset']
-                asset_type_counts[asset] = asset_type_counts.get(asset, 0) + 1
+    _deduped_signal_score = round(sum(float(s.get('weight') or 0) for s in all_signals), 2)
+    event_dedupe_stats['raw_signal_score'] = _raw_signal_score
+    event_dedupe_stats['deduped_signal_score'] = _deduped_signal_score
+    event_dedupe_stats['score_removed'] = round(_raw_signal_score - _deduped_signal_score, 2)
 
-                if asset == 'base_evacuation':
-                    evacuation_signals.append(signal)
+    print(f"[Military Tracker] Event dedupe: {event_dedupe_stats['input_signals']} signals -> "
+          f"{event_dedupe_stats['output_signals']} "
+          f"({event_dedupe_stats['duplicate_signals_collapsed']} duplicates collapsed across "
+          f"{event_dedupe_stats['distinct_events']} distinct events; "
+          f"{event_dedupe_stats['unanchored_passthrough']} unanchored passed through)")
+    print(f"[Military Tracker]    Score: {_raw_signal_score} -> {_deduped_signal_score} "
+          f"(removed {event_dedupe_stats['score_removed']} of double-counted signal)")
+    if event_dedupe_stats['largest_cluster']:
+        _lc = event_dedupe_stats['largest_cluster']
+        print(f"[Military Tracker]    Largest cluster: {_lc['event_key']} - "
+              f"{_lc['report_count']} reports from {_lc['corroboration_count']} sources, "
+              f"{_lc['raw_score_before']} -> {_lc['score_after']}")
+
+    for signal in all_signals:
+        active_actors.add(signal['actor'])
+
+        for target in signal.get('targets') or []:
+            per_target_scores[target] = per_target_scores.get(target, 0) + signal['weight']
+
+        actor = signal['actor']
+        per_actor_scores[actor] = per_actor_scores.get(actor, 0) + signal['weight']
+
+        asset = signal['asset']
+        asset_type_counts[asset] = asset_type_counts.get(asset, 0) + 1
+
+        if asset == 'base_evacuation':
+            evacuation_signals.append(signal)
 
     # v3.3 - Apply DECAYED war footing floors (Redis-backed, half-life decay)
     print("[Military Tracker] Applying war footing floors (decayed)...")
@@ -7869,6 +8241,10 @@ def _run_full_scan(days=7):
         'days_analyzed': days,
         'total_articles_scanned': len(all_articles),
         'total_signals_detected': len(all_signals),
+        'deduplication': {
+            'articles': article_dedupe_stats,
+            'events': event_dedupe_stats,
+        },
         'active_actors': list(active_actors),
         'active_actor_count': len(active_actors),
         'tension_multiplier': tension_multiplier,
