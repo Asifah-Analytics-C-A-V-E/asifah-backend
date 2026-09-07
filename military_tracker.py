@@ -7772,6 +7772,111 @@ def deduplicate_event_signals(signals):
 
 
 # ════════════════════════════════════════════════════════════════════════
+# MATCH-TEXT HYGIENE (v3.6)
+# ════════════════════════════════════════════════════════════════════════
+# Keyword matching used to run against the raw title + description +
+# content. For Google News RSS the description is HTML containing the
+# encoded article link, so the text handed to the matcher looked like:
+#
+#   ...<a href="https://news.google.com/rss/articles/CBMiV0FVX3lxTE9q
+#   TFNuTkwxWnVvZTFiT1l1ZzY5WXBtN3hyeWJrUWVNUXpKRmpGejlySU9ZcDMx
+#   LTV6bDFONWhrODJZdnNhZlRILWFVcDV2SEY5WHdwQXVUSQ">...
+#
+# Lowercased, that blob contains the literal string "bdf" - which is
+# Bahrain's keyword for the Bahrain Defence Force. That is why an article
+# titled "New scheme introduced to attract Danish doctors and nurses to
+# Greenland" scored as Bahraini military activity. The RSS fetcher also
+# copies description into content, so every blob was matched twice.
+#
+# Two defences, because either alone is insufficient:
+#   1. Strip markup, URLs and opaque tokens before matching.
+#   2. Require word boundaries for short ASCII keywords, so a three-letter
+#      acronym cannot hide inside a longer word.
+# ════════════════════════════════════════════════════════════════════════
+
+# Opaque token = a long unbroken run of letters/digits with no vowel
+# rhythm a human word would have. Base64 ids, tracking hashes, encoded
+# links. Anything this long and unbroken is not prose.
+_OPAQUE_TOKEN_MIN_LEN = 22
+
+_HTML_TAG_RE = _re.compile(r'<[^>]{1,400}>')
+_HTML_ENTITY_RE = _re.compile(r'&(?:[a-z]{2,10}|#\d{1,5});')
+_URL_RE = _re.compile(r'(?:https?://|www\.)\S+', _re.IGNORECASE)
+_OPAQUE_TOKEN_RE = _re.compile(
+    r'\b(?=[A-Za-z0-9_-]*[A-Za-z])(?=[A-Za-z0-9_-]*\d)'
+    r'[A-Za-z0-9_-]{%d,}\b' % _OPAQUE_TOKEN_MIN_LEN
+)
+# Long alpha-only runs are also not words (base64 without digits).
+_LONG_ALPHA_RUN_RE = _re.compile(r'\b[A-Za-z]{28,}\b')
+
+
+def clean_match_text(raw):
+    """Strip markup, links and machine tokens so keyword matching only ever
+    sees human-readable prose. Returns lowercased, whitespace-collapsed text.
+
+    Deliberately aggressive about URLs: no actor or asset keyword should
+    ever legitimately be matched inside one, and the cost of leaving them
+    in is a Danish healthcare story scoring as a Gulf military signal.
+    """
+    if not raw:
+        return ''
+    txt = str(raw)
+    txt = _HTML_TAG_RE.sub(' ', txt)
+    txt = _URL_RE.sub(' ', txt)
+    txt = _HTML_ENTITY_RE.sub(' ', txt)
+    txt = _OPAQUE_TOKEN_RE.sub(' ', txt)
+    txt = _LONG_ALPHA_RUN_RE.sub(' ', txt)
+    return ' '.join(txt.lower().split())
+
+
+# ---- Word-boundary matching for short keywords -----------------------
+# A short ASCII acronym as a bare substring is a liability: 'bdf', 'far',
+# 'uss', 'gtmo'. Long keywords and non-Latin scripts keep plain substring
+# matching, which is both cheaper and correct for them.
+SHORT_KEYWORD_MAX_LEN = 5
+
+_kw_pattern_cache = {}
+
+
+def _keyword_needs_boundary(keyword):
+    k = (keyword or '').strip()
+    if not k or not k.isascii():
+        return False
+    if len(k) > SHORT_KEYWORD_MAX_LEN:
+        return False
+    # Multi-word short keywords are already self-limiting.
+    return ' ' not in k
+
+
+def _keyword_pattern(keyword):
+    """Compiled word-boundary pattern for a short keyword, cached."""
+    pat = _kw_pattern_cache.get(keyword)
+    if pat is None:
+        k = (keyword or '').strip()
+        pat = _re.compile(r'(?<![a-z0-9])' + _re.escape(k) + r'(?![a-z0-9])')
+        _kw_pattern_cache[keyword] = pat
+    return pat
+
+
+def kw_match(keyword, text):
+    """True if keyword occurs in text.
+
+    Short ASCII keywords must sit on word boundaries. Everything else is a
+    plain substring test, unchanged from previous behaviour.
+
+    Note the boundary class is [a-z0-9] rather than \\b: it lets 'uss'
+    match "USS Nimitz", "the USS." and "(USS)" while still refusing
+    "discuss" and a base64 run. It also means the old trailing-space hack
+    in 'uss ' is no longer load-bearing.
+    """
+    if not keyword or not text:
+        return False
+    if _keyword_needs_boundary(keyword):
+        return bool(_keyword_pattern(keyword).search(text))
+    return keyword in text
+
+
+# ════════════════════════════════════════════════════════════════════════
 # SIGNAL DIRECTION (v3.5) - the tracker learns to subtract
 # ════════════════════════════════════════════════════════════════════════
 # Every signal in this tracker has been additive. "The US Navy has 11
@@ -7886,6 +7991,9 @@ PROJECTION_CUES = (
     'raised readiness', 'mobiliz', 'activated', 'call-up', 'called up',
     'extended stay', 'remains on station', 'stays on station',
     'exercise', 'drill', 'war game', 'wargame',
+    'commissions', 'commissioned', 'joint exercise', 'joint drill',
+    'military drill', 'live-fire', 'live fire', 'show of force',
+    'freedom of navigation', 'fonop', 'overflight', 'patrols the',
 )
 
 # Bare departure words. Ambiguous on their own - "strike leaves 3 dead"
@@ -7903,6 +8011,21 @@ WITHDRAWAL_CUES_WEAK = (
 DIRECTIONAL_PREPOSITIONS = (
     'toward', 'towards', 'near', 'against', 'into', 'over ', 'at the',
     'heading to', 'racing to', 'bound for', 'en route',
+)
+
+# Weapons MOVING TOWARD something. This is the mirror image of the
+# preposition guard below and must beat it: "destroyed two bombers racing
+# toward Al Udeid" means Al Udeid was not hit, but "cruise missiles
+# towards U.S. Navy vessels" means the vessels ARE the target. The
+# difference is whether the noun travelling toward the actor is a weapon.
+WEAPON_APPROACH_CUES = (
+    'missiles toward', 'missiles towards', 'missile toward',
+    'missile towards', 'rockets toward', 'rockets towards',
+    'drones toward', 'drones towards', 'drone toward',
+    'launched toward', 'launched towards', 'fired toward',
+    'fired towards', 'inbound toward', 'inbound towards',
+    'incoming missile', 'incoming drone', 'incoming rocket',
+    'aimed at', 'directed at', 'bearing down on',
 )
 
 # Casualty vocabulary. Its presence means a bare departure word like
@@ -7955,6 +8078,13 @@ LOSS_VERBS = (
     'fired at', 'fired on', 'fired ballistic', 'fired missiles',
     'missiles at', 'missile at', 'launched at', 'launched against',
     'rockets at', 'drones at',
+    # Suppression and denial. Capability does not have to be destroyed to
+    # be taken away - a strike group that cannot operate is a strike group
+    # that is not projecting.
+    'suppress', 'suppressed', 'suppression of', 'pinned down',
+    'jammed', 'jamming', 'blockade', 'blockaded', 'besieged', 'siege of',
+    'cut off', 'forced to divert', 'forced to withdraw', 'driven off',
+    'repulsed', 'denied access', 'grounded',
 )
 
 # Phrases meaning the thing just named RECEIVED the blow. These override
@@ -8049,6 +8179,7 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
         'projection_cues': _find_cues(text, PROJECTION_CUES)[:6],
         'loss_verbs_near_actor': _find_cues(near, LOSS_VERBS)[:6],
         'receiving_cues_near_actor': _find_cues(near, RECEIVING_CUES)[:6],
+        'weapon_approach_near_actor': _find_cues(near, WEAPON_APPROACH_CUES)[:4],
         'actor_keyword_located': not positionless,
     }
     if positionless:
@@ -8070,13 +8201,25 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
     #    the verb acted on something merely moving toward the actor.
     receiving_after = _find_cues(after, RECEIVING_CUES) if not positionless else []
     loss_before = _find_cues(before, LOSS_VERBS) if not positionless else []
+    weapon_approach = _find_cues(before, WEAPON_APPROACH_CUES) if not positionless else []
     actor_is_object = bool(receiving_after)
-    if not actor_is_object and loss_before:
-        tail = before
+
+    if not actor_is_object and weapon_approach:
+        # A weapon travelling toward the actor makes the actor the target,
+        # and beats the preposition guard below.
+        actor_is_object = True
+        evidence['weapon_approach'] = weapon_approach[:3]
+    elif not actor_is_object and loss_before:
+        # Take the tail after the loss verb that appears LATEST IN THE TEXT,
+        # not last in the cue table. Getting this wrong reads the wrong
+        # clause and flips the call.
+        last_idx = -1
+        last_verb = ''
         for verb in loss_before:
             idx = before.rfind(verb)
-            if idx >= 0:
-                tail = before[idx + len(verb):]
+            if idx > last_idx:
+                last_idx, last_verb = idx, verb
+        tail = before[last_idx + len(last_verb):] if last_idx >= 0 else before
         if not any(p in tail for p in DIRECTIONAL_PREPOSITIONS):
             actor_is_object = True
         else:
@@ -8241,9 +8384,13 @@ def build_direction_ledger(signals):
 
 def analyze_article_military(article):
     """Analyze a single article for military deployment signals."""
-    title = (article.get('title') or '').lower()
-    description = (article.get('description') or '').lower()
-    content = (article.get('content') or '').lower()
+    # v3.6 - clean BEFORE matching. Raw RSS description is HTML carrying the
+    # encoded article link, and keywords were matching inside those base64
+    # blobs. The fetcher also copies description into content, so every blob
+    # was matched twice.
+    title = clean_match_text(article.get('title'))
+    description = clean_match_text(article.get('description'))
+    content = clean_match_text(article.get('content'))
     text = f"{title} {description} {content}"
 
     result = {
@@ -8263,14 +8410,14 @@ def analyze_article_military(article):
 
     for actor_id, actor_data in MILITARY_ACTORS.items():
         for keyword in actor_data['keywords']:
-            if keyword in text:
+            if kw_match(keyword, text):
                 result['actors'].add(actor_id)
                 actor_weight = actor_data['weight']
 
                 asset_matched = False
                 for asset_id, asset_data in ASSET_CATEGORIES.items():
                     for asset_kw in asset_data['keywords']:
-                        if asset_kw in text:
+                        if kw_match(asset_kw, text):
                             result['asset_types'].add(asset_id)
 
                             if asset_id == 'base_evacuation':
@@ -8346,7 +8493,7 @@ def analyze_article_military(article):
 
     for aor, bases in ASSET_TARGET_MAPPING.items():
         for base_name, base_data in bases.items():
-            if base_name.lower() in text:
+            if kw_match(base_name.lower(), text):
                 result['regions'].add(base_name)
                 for target in base_data['targets']:
                     result['targets'].add(target)
