@@ -8178,6 +8178,36 @@ def rate_limit_endpoint():
     """Rate limit status"""
     return jsonify(get_rate_limit_info())
 
+@app.route('/api/config/map', methods=['GET', 'OPTIONS'])
+def api_config_map():
+    """Front-end map configuration.
+
+    CARTO now requires a key for basemap tiles. Serving it from here means
+    the key lives in ONE place (the CARTO_API_KEY env var) and rotates
+    without editing or redeploying any HTML page.
+
+    This is NOT a secret endpoint and the key is NOT a secret. A browser
+    puts the key in every tile request, so anyone with devtools can read it
+    either way. What actually protects the key is the domain restriction
+    set on it in the CARTO dashboard. The value here is that the key never
+    enters the git repo and rotates in one place.
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    carto_key = os.environ.get('CARTO_API_KEY', '')
+    return jsonify({
+        'carto_key': carto_key,
+        'carto_configured': bool(carto_key),
+        'basemap_styles': {
+            'dark': 'dark_all',
+            'light': 'light_all',
+        },
+        'note': ('Publishable basemap key. Restrict it by domain in the CARTO '
+                 'dashboard; it is visible to every visitor by design.'),
+    })
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check"""
