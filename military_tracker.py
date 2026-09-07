@@ -3433,7 +3433,6 @@ MILITARY_ACTORS = {
             'car sudan rsf spillover', 'car refugees sudan',
             # French / Western exit
             'france car withdrawal', 'car france rupture', 'car us sanctions wagner',
-            'faca central african', 'far',
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=central+african+republic+military+OR+car+wagner+OR+bangui&hl=en&gl=US&ceid=US:en',
