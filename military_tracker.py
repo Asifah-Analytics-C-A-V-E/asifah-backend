@@ -7157,6 +7157,130 @@ def get_evacuation_subtype_weight(text):
     return ASSET_CATEGORIES['base_evacuation']['weight'], 'unspecified'
 
 
+# ════════════════════════════════════════════════════════════════════════
+# RECENCY GATE (Sep 7 2026)
+# ════════════════════════════════════════════════════════════════════════
+# The scan declares days_analyzed=7 and then scored an eleven-year span.
+# The Sep 7 payload carried a Rudaw article from 2015-04-28, another from
+# 2021, the USS Nimitz homecoming from 2025-12-16 (twice, from two USNI
+# feeds), and the Al Udeid evacuation stories from July. Every article
+# already carries publishedAt. Nothing read it.
+#
+# ABSENCE-HONEST: an article whose date cannot be parsed is KEPT, not
+# dropped. We do not infer a date we do not have. Those are counted
+# separately so the payload says how much of the corpus is undated.
+# ════════════════════════════════════════════════════════════════════════
+
+_REL_AGE_PATTERN = _re.compile(
+    r'(\d+)\s*(minute|min|hour|hr|day|week|month|year)s?\s*ago', _re.IGNORECASE)
+_REL_UNIT_SECONDS = {
+    'minute': 60, 'min': 60, 'hour': 3600, 'hr': 3600, 'day': 86400,
+    'week': 604800, 'month': 2592000, 'year': 31536000,
+}
+
+
+def _parse_article_date(raw):
+    """Parse the many publishedAt shapes this corpus carries.
+
+    Handles ISO 8601 with or without offset, Brave relative strings
+    ('27 minutes ago', '1 week ago'), GDELT compact stamps
+    (20260904T163321Z), and RFC 822 RSS dates. Returns an aware datetime
+    in UTC, or None when the value cannot be understood.
+    """
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    now = datetime.now(timezone.utc)
+
+    m = _REL_AGE_PATTERN.search(s)
+    if m:
+        try:
+            n = int(m.group(1))
+            secs = _REL_UNIT_SECONDS.get(m.group(2).lower())
+            if secs:
+                return now - timedelta(seconds=n * secs)
+        except (TypeError, ValueError):
+            return None
+
+    if _re.fullmatch(r'\d{8}T\d{6}Z', s):
+        try:
+            return datetime.strptime(s, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    if _re.fullmatch(r'\d{14}', s):
+        try:
+            return datetime.strptime(s, '%Y%m%d%H%M%S').replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    try:
+        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (TypeError, ValueError):
+        pass
+
+    for fmt in ('%a, %d %b %Y %H:%M:%S %z', '%a, %d %b %Y %H:%M:%S %Z',
+                '%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+        try:
+            dt = datetime.strptime(s, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            continue
+
+    return None
+
+
+def filter_articles_by_recency(articles, days):
+    """Drop articles published outside the declared scan window.
+
+    Returns (kept_articles, stats_dict). Undated articles are kept and
+    counted; the stats dict is published in the payload so an operator can
+    see how much of the corpus is undated rather than guessing.
+    """
+    if not articles:
+        return [], {'kept': 0, 'dropped_stale': 0, 'undated_kept': 0,
+                    'window_days': days, 'oldest_kept': None,
+                    'oldest_dropped': None}
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
+    kept, dropped, undated = [], 0, 0
+    oldest_kept = None
+    oldest_dropped = None
+
+    for art in articles:
+        dt = _parse_article_date(art.get('publishedAt'))
+        if dt is None:
+            undated += 1
+            kept.append(art)
+            continue
+        if dt < cutoff:
+            dropped += 1
+            if oldest_dropped is None or dt < oldest_dropped:
+                oldest_dropped = dt
+            continue
+        kept.append(art)
+        if oldest_kept is None or dt < oldest_kept:
+            oldest_kept = dt
+
+    stats = {
+        'kept':           len(kept),
+        'dropped_stale':  dropped,
+        'undated_kept':   undated,
+        'window_days':    days,
+        'oldest_kept':    oldest_kept.isoformat() if oldest_kept else None,
+        'oldest_dropped': oldest_dropped.isoformat() if oldest_dropped else None,
+    }
+    return kept, stats
+
+
 def analyze_article_military(article):
     """Analyze a single article for military deployment signals."""
     title = (article.get('title') or '').lower()
@@ -7431,6 +7555,14 @@ def _run_full_scan(days=7):
 
     all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles + nitter_articles + bluesky_articles + brave_articles
 
+    _pre_filter_count = len(all_articles)
+    all_articles, recency_stats = filter_articles_by_recency(all_articles, days)
+    print(f"[Military Tracker] Recency gate ({days}d): {_pre_filter_count} -> "
+          f"{recency_stats['kept']} kept, {recency_stats['dropped_stale']} stale dropped, "
+          f"{recency_stats['undated_kept']} undated kept")
+    if recency_stats['oldest_dropped']:
+        print(f"[Military Tracker]    Oldest dropped: {recency_stats['oldest_dropped']}")
+
     print(f"[Military Tracker] Total articles to analyze: {len(all_articles)}")
 
     print("[Military Tracker] Phase 2: Analyzing articles...")
@@ -7586,8 +7718,28 @@ def _run_full_scan(days=7):
             'newsapi': len(newsapi_articles),
             'reddit': len(reddit_posts),
             'telegram': len(telegram_articles),
-            'nitter': len(nitter_articles)
+            'nitter': len(nitter_articles),
+            'brave': len(brave_articles),
+            'bluesky': len(bluesky_articles)
         },
+        # Sep 7 2026: brave and bluesky were concatenated into all_articles
+        # but never reported. The Sep 7 payload showed 3,313 articles scanned
+        # against a source_breakdown summing to 3,090 -- 223 articles from
+        # two working sources, uncredited and invisible.
+        'source_health': {
+            name: ('ok' if count > 0 else 'ZERO')
+            for name, count in (
+                ('defense_rss', len(rss_articles)),
+                ('gdelt',       len(gdelt_articles)),
+                ('newsapi',     len(newsapi_articles)),
+                ('reddit',      len(reddit_posts)),
+                ('telegram',    len(telegram_articles)),
+                ('nitter',      len(nitter_articles)),
+                ('brave',       len(brave_articles)),
+                ('bluesky',     len(bluesky_articles)),
+            )
+        },
+        'recency_filter': recency_stats,
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
         'version': '3.2.1'
