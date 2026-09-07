@@ -397,8 +397,8 @@ def _articles_mention(actor_result, phrases):
         title or trigger fields. Returns on first match.
     """
     for art in (actor_result.get('top_articles')
-                or actor_result.get('sample_articles')
                 or actor_result.get('articles')
+                or actor_result.get('sample_articles')
                 or []):
         t = (art.get('title') or '').lower() + ' ' + (art.get('trigger') or '').lower()
         for p in phrases:
