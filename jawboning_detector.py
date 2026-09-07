@@ -371,7 +371,10 @@ def _has_phrase(actor_result, phrases):
     Returns:
         bool — True if ANY phrase appears as substring in joined triggers.
     """
-    triggers = actor_result.get('matched_triggers', []) or []
+    triggers = (actor_result.get('matched_triggers')
+                or actor_result.get('keywords_matched')
+                or actor_result.get('matched_keywords')
+                or [])
     joined   = ' '.join(triggers).lower()
     return any(p.lower() in joined for p in phrases)
 
@@ -393,7 +396,10 @@ def _articles_mention(actor_result, phrases):
         bool — True if ANY phrase appears as substring in ANY article's
         title or trigger fields. Returns on first match.
     """
-    for art in actor_result.get('top_articles', []) or []:
+    for art in (actor_result.get('top_articles')
+                or actor_result.get('sample_articles')
+                or actor_result.get('articles')
+                or []):
         t = (art.get('title') or '').lower() + ' ' + (art.get('trigger') or '').lower()
         for p in phrases:
             if p.lower() in t:
@@ -414,6 +420,30 @@ def _articles_mention(actor_result, phrases):
 # (returns False). Treating "missing cluster" as "level 0" is the canonical
 # behavior — never speculate about what a tracker didn't measure.
 # ============================================================================
+
+def _coerce_level(raw):
+    """Normalize a tracker's 0-4 band to an int.
+
+    Trackers disagree on the field NAME and also on the TYPE:
+      - ME family emits 'level' as an int (2)
+      - WHA US tracker emits 'tier' as a string ('L2')
+      - Asia trackers may use either depending on age
+    Returns 0 for anything unparseable, which fails the gate closed.
+    """
+    if isinstance(raw, bool):
+        return 0
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    if isinstance(raw, str):
+        s = raw.strip().upper()
+        if s.startswith('L'):
+            s = s[1:]
+        try:
+            return int(float(s))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
 
 def _evaluate_actor_gate(actor_gate, actor_results):
     """
@@ -444,8 +474,8 @@ def _evaluate_actor_gate(actor_gate, actor_results):
         #   - Asia trackers may use either depending on age
         # The detector accepts whichever is present, with 'level' winning
         # if both are set (canonical). Falls back to 0 if neither exists.
-        actual_level = cluster.get('level',
-                       cluster.get('tier', 0))
+        actual_level = _coerce_level(cluster.get('level',
+                       cluster.get('tier', 0)))
         if actual_level < min_level:
             print(f"[Jawboning Detector] gate FAIL for cluster '{cluster_id}': "
                   f"actual_level={actual_level} < required={min_level}")
