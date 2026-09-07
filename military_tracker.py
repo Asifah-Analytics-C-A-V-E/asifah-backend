@@ -4817,25 +4817,65 @@ ALERT_THRESHOLDS = {
 }
 
 # ========================================
-# WAR FOOTING FLOOR SCORES (v2.7.3)
-# Countries confirmed struck by Iran — minimum score floor regardless of scan hits
-# Update manually as situation evolves
+# WAR FOOTING FLOOR SCORES (v3.3) - Redis-backed with decay
+# ========================================
+# A floor is an ANALYST ASSERTION: "regardless of what this scan found,
+# this actor is at war and cannot read as quiet." It is not measured.
+#
+# Because it is an assertion and not a measurement, it must expire.
+# Every floor carries set_at + half_life_days and decays exponentially.
+# When the decayed value falls below FLOOR_EXPIRY_THRESHOLD the floor
+# stops applying entirely and the actor reads at its measured score.
+#
+# Floors live in Redis so they can be updated without a redeploy.
+# The seed dict below is used ONLY to hydrate an empty Redis key.
+#
+# Deliberate design decision: floors are NEVER auto-refreshed from
+# measured signal. Refreshing an assertion from the same data it exists
+# to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-WAR_FOOTING_FLOORS = {
-    'israel':       75,   # Active war, mass barrages
-    'iraq':         40,   # IRI militia ops, US bases hit
-    'kuwait':       35,   # Iranian strikes confirmed; US Embassy ordered departure; USAF scrambled
-    'saudi_arabia': 35,   # Iranian strikes confirmed; drone shoot-downs; Ukraine technicians deployed
-    'uae':          25,   # Struck; UAE air defense active; flights disrupted
-    'jordan':       25,   # Missiles/drones transiting airspace; intercept operations
-    'qatar':        20,   # Al Udeid on heightened alert; airspace affected
-    'bahrain':      20,   # 5th Fleet HQ; heightened posture
-    'turkey':       15,   # Incirlik on alert; border tensions
-    'egypt':        10,   # Suez disruption risk; Sinai watch
-    'oman':         15,   # Strait of Hormuz operations
-    'cyprus':       15,   # Akrotiri on alert; evacuation staging
+WAR_FOOTING_FLOOR_REDIS_KEY = 'military:war_footing_floors'
+WAR_FOOTING_FLOOR_TTL_SECONDS = 365 * 24 * 3600
+DEFAULT_FLOOR_HALF_LIFE_DAYS = 30.0
+FLOOR_EXPIRY_THRESHOLD = 3.0
+
+WAR_FOOTING_FLOORS_SEED = {
+    'israel':       {'score': 75, 'half_life_days': 30, 'note': 'Active war, mass barrages'},
+    'iraq':         {'score': 40, 'half_life_days': 30, 'note': 'IRI militia ops, US bases hit'},
+    'kuwait':       {'score': 35, 'half_life_days': 30, 'note': 'Iranian strikes confirmed; US Embassy ordered departure; USAF scrambled'},
+    'saudi_arabia': {'score': 35, 'half_life_days': 30, 'note': 'Iranian strikes confirmed; drone shoot-downs; Ukraine technicians deployed'},
+    'uae':          {'score': 25, 'half_life_days': 30, 'note': 'Struck; UAE air defense active; flights disrupted'},
+    'jordan':       {'score': 25, 'half_life_days': 30, 'note': 'Missiles/drones transiting airspace; intercept operations'},
+    'qatar':        {'score': 20, 'half_life_days': 30, 'note': 'Al Udeid on heightened alert; airspace affected'},
+    'bahrain':      {'score': 20, 'half_life_days': 30, 'note': '5th Fleet HQ; heightened posture'},
+    'turkey':       {'score': 15, 'half_life_days': 30, 'note': 'Incirlik on alert; border tensions'},
+    'egypt':        {'score': 10, 'half_life_days': 30, 'note': 'Suez disruption risk; Sinai watch'},
+    'oman':         {'score': 15, 'half_life_days': 30, 'note': 'Strait of Hormuz operations'},
+    'cyprus':       {'score': 15, 'half_life_days': 30, 'note': 'Akrotiri on alert; evacuation staging'},
 }
+
+# Back-compat: some older call sites read WAR_FOOTING_FLOORS as a flat
+# {country: score} dict. Keep that name alive as the UNDECAYED asserted
+# values. Nothing in the scan path should use it - use get_effective_floors().
+WAR_FOOTING_FLOORS = {k: v['score'] for k, v in WAR_FOOTING_FLOORS_SEED.items()}
+
+
+def _floor_age_days(entry, now=None):
+    """Days since this floor was asserted. Returns None if undatable."""
+    now = now or datetime.now(timezone.utc)
+    raw = entry.get('set_at')
+    if not raw:
+        return None
+    try:
+        txt = str(raw).replace('Z', '+00:00')
+        dt = datetime.fromisoformat(txt)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+    delta = (now - dt).total_seconds() / 86400.0
+    return max(0.0, delta)
 
 # ========================================
 # DEFENSE MEDIA RSS FEEDS
@@ -5205,6 +5245,127 @@ def _redis_fp_get(key):
     except Exception:
         pass
     return None
+
+
+def _floor_half_life(entry):
+    """Half-life in days for one floor entry. 0 means do not decay.
+    Missing/blank falls back to the default; junk falls back to the default."""
+    raw = entry.get('half_life_days')
+    if raw is None or raw == '':
+        return DEFAULT_FLOOR_HALF_LIFE_DAYS
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_FLOOR_HALF_LIFE_DAYS
+
+
+def _decayed_floor_value(entry, now=None):
+    """Exponential half-life decay of an asserted floor.
+    Returns (effective_score, age_days_or_None).
+    An entry with no usable set_at does not decay - it is treated as
+    freshly asserted rather than silently zeroed."""
+    try:
+        asserted = float(entry.get('score') or 0)
+    except (TypeError, ValueError):
+        asserted = 0.0
+    if asserted <= 0:
+        return 0.0, _floor_age_days(entry, now)
+
+    age = _floor_age_days(entry, now)
+    if age is None:
+        return asserted, None
+
+    half_life = _floor_half_life(entry)
+    if half_life <= 0:
+        # half_life_days = 0 means "permanent assertion, do not decay"
+        return asserted, age
+
+    return asserted * (0.5 ** (age / half_life)), age
+
+
+def _seed_floor_entries():
+    """Build a fresh Redis payload from the static seed.
+    The original assertion dates are unknown, so the clock honestly starts
+    at hydration time and the provenance note says so."""
+    stamp = datetime.now(timezone.utc).isoformat()
+    out = {}
+    for country, cfg in WAR_FOOTING_FLOORS_SEED.items():
+        out[country] = {
+            'score': float(cfg['score']),
+            'half_life_days': float(cfg.get('half_life_days', DEFAULT_FLOOR_HALF_LIFE_DAYS)),
+            'note': cfg.get('note', ''),
+            'set_at': stamp,
+            'source': 'seed_hydration',
+            'provenance': 'Seeded from static code defaults. Original assertion date is unknown, so the decay clock starts at hydration.',
+        }
+    return out
+
+
+def load_war_footing_floors():
+    """Read floors from Redis. Hydrate from the seed if the key is empty
+    or Redis is unreachable. Always returns a dict of entries."""
+    stored = _redis_fp_get(WAR_FOOTING_FLOOR_REDIS_KEY)
+    if isinstance(stored, dict) and stored:
+        clean = {k: v for k, v in stored.items() if isinstance(v, dict)}
+        if clean:
+            return clean
+    seeded = _seed_floor_entries()
+    ok = _redis_fp_set(WAR_FOOTING_FLOOR_REDIS_KEY, seeded, WAR_FOOTING_FLOOR_TTL_SECONDS)
+    print(f"[Military Tracker] War footing floors hydrated from seed "
+          f"({len(seeded)} entries, redis_write={ok})")
+    return seeded
+
+
+def get_effective_floors(now=None):
+    """Returns (effective, ledger).
+      effective : {country: decayed_score} for floors still above threshold
+      ledger    : full audit trail for every floor, expired ones included
+    """
+    now = now or datetime.now(timezone.utc)
+    entries = load_war_footing_floors()
+    effective = {}
+    ledger = {}
+    for country, entry in entries.items():
+        value, age = _decayed_floor_value(entry, now)
+        expired = value < FLOOR_EXPIRY_THRESHOLD
+        ledger[country] = {
+            'asserted_score': round(float(entry.get('score') or 0), 2),
+            'effective_score': round(value, 2),
+            'age_days': None if age is None else round(age, 1),
+            'half_life_days': _floor_half_life(entry),
+            'set_at': entry.get('set_at'),
+            'expired': expired,
+            'note': entry.get('note', ''),
+            'source': entry.get('source', ''),
+        }
+        if not expired:
+            effective[country] = value
+    return effective, ledger
+
+
+def set_war_footing_floor(country, score, half_life_days=None, note='', source='manual'):
+    """Assert or renew a single floor. Restamps set_at, restarting decay."""
+    entries = load_war_footing_floors()
+    key = (country or '').strip().lower().replace(' ', '_')
+    if not key:
+        return None
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        return None
+
+    if score <= 0:
+        entries.pop(key, None)
+    else:
+        entries[key] = {
+            'score': score,
+            'half_life_days': _floor_half_life({'half_life_days': half_life_days}),
+            'note': note or '',
+            'set_at': datetime.now(timezone.utc).isoformat(),
+            'source': source,
+        }
+    _redis_fp_set(WAR_FOOTING_FLOOR_REDIS_KEY, entries, WAR_FOOTING_FLOOR_TTL_SECONDS)
+    return entries.get(key)
 
 
 def _classify_signal_asset_class(signal):
@@ -7593,16 +7754,32 @@ def _run_full_scan(days=7):
                 if asset == 'base_evacuation':
                     evacuation_signals.append(signal)
 
-    # v2.7.3 — Apply war footing floor scores for confirmed-struck actors
-    print("[Military Tracker] Applying war footing floors...")
-    for actor_id, floor_score in WAR_FOOTING_FLOORS.items():
+    # v3.3 - Apply DECAYED war footing floors (Redis-backed, half-life decay)
+    print("[Military Tracker] Applying war footing floors (decayed)...")
+    war_footing_effective, war_footing_ledger = get_effective_floors()
+
+    for actor_id, entry in sorted(war_footing_ledger.items()):
+        age_txt = 'undated' if entry['age_days'] is None else f"{entry['age_days']:.0f}d old"
+        if entry['expired']:
+            print(f"[Military Tracker]   Floor EXPIRED: {actor_id} "
+                  f"asserted {entry['asserted_score']:.0f} -> "
+                  f"{entry['effective_score']:.1f} ({age_txt}, "
+                  f"half-life {entry['half_life_days']:.0f}d) - no longer applied")
+        else:
+            print(f"[Military Tracker]   Floor active:  {actor_id} "
+                  f"asserted {entry['asserted_score']:.0f} -> "
+                  f"effective {entry['effective_score']:.1f} ({age_txt})")
+
+    for actor_id, floor_score in war_footing_effective.items():
         current = per_actor_scores.get(actor_id, 0)
         if current < floor_score:
-            print(f"[Military Tracker]   Floor applied: {actor_id} {current:.1f} → {floor_score}")
+            print(f"[Military Tracker]   Floor raised {actor_id}: "
+                  f"measured {current:.1f} -> floor {floor_score:.1f}")
             per_actor_scores[actor_id] = float(floor_score)
+        # Only an actor whose floor still stands is force-activated.
         active_actors.add(actor_id)
 
-    for actor_id, floor_score in WAR_FOOTING_FLOORS.items():
+    for actor_id, floor_score in war_footing_effective.items():
         current = per_target_scores.get(actor_id, 0)
         if current < floor_score:
             per_target_scores[actor_id] = float(floor_score)
@@ -7695,6 +7872,15 @@ def _run_full_scan(days=7):
         'active_actors': list(active_actors),
         'active_actor_count': len(active_actors),
         'tension_multiplier': tension_multiplier,
+        'war_footing_floors': {
+            'effective': {k: round(v, 2) for k, v in war_footing_effective.items()},
+            'ledger': war_footing_ledger,
+            'active_count': len(war_footing_effective),
+            'expired_count': sum(1 for e in war_footing_ledger.values() if e['expired']),
+            'default_half_life_days': DEFAULT_FLOOR_HALF_LIFE_DAYS,
+            'expiry_threshold': FLOOR_EXPIRY_THRESHOLD,
+            'redis_key': WAR_FOOTING_FLOOR_REDIS_KEY,
+        },
         'target_postures': target_postures,
         'actor_summaries': actor_summaries,
         'theatre_groupings': theatre_data,
@@ -8261,7 +8447,136 @@ def register_military_endpoints(app, start_background=True):
 
         return jsonify(debug)
 
+    # ============================================================
+    # WAR FOOTING FLOOR ENDPOINTS (v3.3)
+    # Read and renew analyst floor assertions without a redeploy.
+    # GET is open. POST mutates shared Redis state, so it is gated on
+    # the ASIFAH_ADMIN_TOKEN env var and FAILS CLOSED if that is unset.
+    # ============================================================
+
+    @app.route('/api/military/floors', methods=['GET', 'OPTIONS'])
+    def api_military_floors():
+        """Current war footing floors with decay ledger.
+
+        Every floor is an analyst assertion, not a measurement. This shows
+        what was asserted, how old the assertion is, what it has decayed to,
+        and whether it still applies.
+        """
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        try:
+            effective, ledger = get_effective_floors()
+            for country_id, entry in ledger.items():
+                entry['country'] = country_id
+            rows = sorted(
+                ledger.values(),
+                key=lambda e: (e['expired'], -e['effective_score'])
+            )
+            return jsonify({
+                'success':                 True,
+                'effective':               {k: round(v, 2) for k, v in effective.items()},
+                'ledger':                  ledger,
+                'rows':                    rows,
+                'active_count':            len(effective),
+                'expired_count':           sum(1 for e in ledger.values() if e['expired']),
+                'default_half_life_days':  DEFAULT_FLOOR_HALF_LIFE_DAYS,
+                'expiry_threshold':        FLOOR_EXPIRY_THRESHOLD,
+                'redis_key':               WAR_FOOTING_FLOOR_REDIS_KEY,
+                'write_enabled':           bool(os.environ.get('ASIFAH_ADMIN_TOKEN')),
+                'note':                    ('A floor is an analyst assertion that decays. '
+                                            'It is never auto-refreshed from measured signal, '
+                                            'because refreshing an assertion from the data it '
+                                            'backstops is circular. Renew it deliberately.'),
+                'read_at':                 datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)[:200]}), 500
+
+    @app.route('/api/military/floors/<country>', methods=['POST', 'OPTIONS'])
+    def api_military_set_floor(country):
+        """Assert or renew a war footing floor. Restarts that floor's decay clock.
+
+        Header:  X-Asifah-Admin: <ASIFAH_ADMIN_TOKEN>
+        Body:    {"score": 40, "half_life_days": 30, "note": "why"}
+
+        score = 0 deletes the floor.
+        half_life_days = 0 means do not decay (use sparingly).
+        """
+        from flask import request as flask_request, jsonify
+
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+
+        admin_token = os.environ.get('ASIFAH_ADMIN_TOKEN')
+        if not admin_token:
+            return jsonify({
+                'success': False,
+                'error':   ('Floor writes are disabled: ASIFAH_ADMIN_TOKEN is not set '
+                            'on this instance. Set it in Render env vars to enable.'),
+            }), 503
+
+        supplied = (flask_request.headers.get('X-Asifah-Admin')
+                    or flask_request.args.get('token') or '')
+        if supplied != admin_token:
+            return jsonify({'success': False, 'error': 'Unauthorized.'}), 401
+
+        try:
+            body = flask_request.get_json(silent=True) or {}
+            if 'score' not in body:
+                return jsonify({'success': False,
+                                'error': 'Body must include "score".'}), 400
+
+            key = (country or '').strip().lower().replace(' ', '_')
+            if not key:
+                return jsonify({'success': False,
+                                'error': 'Country is required.'}), 400
+
+            try:
+                score = float(body.get('score'))
+            except (TypeError, ValueError):
+                return jsonify({'success': False,
+                                'error': f'score must be a number, got '
+                                         f'{body.get("score")!r}.'}), 400
+
+            half_life = body.get('half_life_days')
+            if half_life is not None and half_life != '':
+                try:
+                    half_life = float(half_life)
+                except (TypeError, ValueError):
+                    return jsonify({'success': False,
+                                    'error': f'half_life_days must be a number, got '
+                                             f'{body.get("half_life_days")!r}.'}), 400
+                if half_life < 0:
+                    return jsonify({'success': False,
+                                    'error': 'half_life_days cannot be negative. '
+                                             'Use 0 for a non-decaying floor.'}), 400
+            else:
+                half_life = None
+
+            note = str(body.get('note') or '')[:300]
+            entry = set_war_footing_floor(key, score, half_life, note, source='api')
+
+            effective, ledger = get_effective_floors()
+            return jsonify({
+                'success':       True,
+                'country':       key,
+                'action':        'deleted' if score <= 0 else 'set',
+                'entry':         entry,
+                'ledger_entry':  ledger.get(key),
+                'active_count':  len(effective),
+                'reminder':      ('This floor now reads as freshly asserted. It will decay '
+                                  'from here and stop applying below '
+                                  f'{FLOOR_EXPIRY_THRESHOLD}.'),
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)[:200]}), 500
+
     print("[Military Tracker] ✅ Endpoints registered: /api/military-posture, /api/military-posture/<target>")
+    print("[Military Tracker] ✅ Floor endpoints registered: "
+          "GET /api/military/floors, POST /api/military/floors/<country>")
     print("[Military Tracker] ✅ Fingerprint endpoints registered: "
           "/api/military-fingerprint/<country>, "
           "/api/military-fingerprint/theatre/<id>, "
