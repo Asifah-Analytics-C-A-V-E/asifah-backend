@@ -178,8 +178,30 @@ from jawboning_signatures import (
 # REDIS CONFIG  (mirrors jawboning_signatures.py pattern)
 # ============================================================================
 
-UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_REST_URL', '')
-UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN', '')
+# ── ENV VAR NAME TOLERANCE (Sep 8, 2026) ───────────────────────────────
+# This module read ONLY the *_REST_* names while military_tracker.py on the
+# SAME backend reads UPSTASH_REDIS_URL / UPSTASH_REDIS_TOKEN. If only the
+# non-REST names are set in Render, every _redis_set here returned False at
+# the guard on line one -- silently. Detection would fire, the fingerprint
+# would never be written, and no cross-theater consumer would ever see it.
+# The endpoint made that invisible by reporting the caller's REQUESTED flag
+# instead of the actual write result (also fixed below).
+#
+# Accept either naming convention, non-REST first, matching the pattern
+# rhetoric_tracker_us.py already uses.
+UPSTASH_REDIS_URL   = (os.environ.get('UPSTASH_REDIS_URL', '')
+                       or os.environ.get('UPSTASH_REDIS_REST_URL', ''))
+UPSTASH_REDIS_TOKEN = (os.environ.get('UPSTASH_REDIS_TOKEN', '')
+                       or os.environ.get('UPSTASH_REDIS_REST_TOKEN', ''))
+
+REDIS_CONFIGURED = bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN)
+print(f"[Jawboning Detector] Redis configured: {REDIS_CONFIGURED} "
+      f"(URL len={len(UPSTASH_REDIS_URL)}, TOKEN len={len(UPSTASH_REDIS_TOKEN)})")
+if not REDIS_CONFIGURED:
+    print("[Jawboning Detector] \u26a0\ufe0f Redis NOT configured -- signatures will "
+          "still evaluate, but NO fingerprints will be written and no "
+          "cross-theater consumer will see them. Set UPSTASH_REDIS_URL + "
+          "UPSTASH_REDIS_TOKEN (or the *_REST_* variants) on this backend.")
 
 
 # ============================================================================
@@ -510,7 +532,8 @@ def detect_jawboning(leader_id,
                      actor_results,
                      articles=None,
                      write_fingerprints=True,
-                     scan_id=None):
+                     scan_id=None,
+                     return_details=False):
     """
     Detect all jawboning signatures for a given leader against current
     actor_results. Returns a flat dict mapping signature_id → bool.
@@ -551,19 +574,24 @@ def detect_jawboning(leader_id,
     """
     results = {}
     fingerprints_written = []
+    fingerprints_failed = []
 
     # Defensive: empty/None actor_results → nothing can fire, return empty
     if not isinstance(actor_results, dict):
         print(f"[Jawboning Detector] {leader_id} scan called with invalid actor_results "
               f"(type={type(actor_results).__name__}) — returning empty dict")
-        return results
+        return {'results': results, 'fingerprints_written': [],
+                'fingerprints_failed': [], 'redis_configured': REDIS_CONFIGURED} \
+            if return_details else results
 
     # Pull the catalog via the Redis-first reader (caching contract honored)
     try:
         catalog = list_jawboning_signatures()
     except Exception as e:
         print(f"[Jawboning Detector] Failed to load catalog: {e} — returning empty dict")
-        return results
+        return {'results': results, 'fingerprints_written': [],
+                'fingerprints_failed': [], 'redis_configured': REDIS_CONFIGURED} \
+            if return_details else results
 
     # Walk EVERY directional bucket the catalog defines (command, absorber,
     # mediator, and any future class). A leader could in principle have
@@ -644,10 +672,18 @@ def detect_jawboning(leader_id,
                     signature_id = sig_id,
                     metadata     = metadata,
                 )
+                _fp_key = _fingerprint_redis_key(direction, country_id,
+                                                 sig.get('target_key'))
                 if success:
-                    fingerprints_written.append(
-                        _fingerprint_redis_key(direction, country_id, sig.get('target_key'))
-                    )
+                    fingerprints_written.append(_fp_key)
+                else:
+                    # A signature that fires but whose fingerprint does not land
+                    # is worse than one that never fired: the tracker believes
+                    # it published and no consumer ever sees it.
+                    fingerprints_failed.append(_fp_key)
+                    print(f"[Jawboning Detector] \u274c {sig_id} FIRED but fingerprint "
+                          f"write FAILED for {_fp_key} -- cross-theater consumers "
+                          f"will not see this signal")
 
     # Diagnostic summary log
     fired_ids = [k for k, v in results.items() if v]
@@ -660,6 +696,13 @@ def detect_jawboning(leader_id,
         print(f"[Jawboning Detector] {leader_id}/{country_id} scan: "
               f"0/{len(results)} signatures fired")
 
+    if return_details:
+        return {
+            'results':              results,
+            'fingerprints_written': fingerprints_written,
+            'fingerprints_failed':  fingerprints_failed,
+            'redis_configured':     REDIS_CONFIGURED,
+        }
     return results
 
 
@@ -767,15 +810,16 @@ def register_jawboning_detector_endpoints(app):
                 }), 400
 
             # ---- Run detection ----
-            results = detect_jawboning(
+            detail = detect_jawboning(
                 leader_id          = leader_id,
                 country_id         = country_id,
                 actor_results      = actor_results,
                 articles           = articles,
                 write_fingerprints = write_fingerprints,
                 scan_id            = scan_id,
+                return_details     = True,
             )
-
+            results = detail['results']
             fired_count = sum(1 for v in results.values() if v)
 
             return jsonify({
@@ -785,7 +829,14 @@ def register_jawboning_detector_endpoints(app):
                 'results':            results,
                 'fired_count':        fired_count,
                 'evaluated_count':    len(results),
-                'wrote_fingerprints': write_fingerprints,
+                # 'wrote_fingerprints' used to echo the caller's REQUEST flag,
+                # so it read true even when every write silently failed. It now
+                # reports what actually landed.
+                'write_requested':    write_fingerprints,
+                'wrote_fingerprints': len(detail['fingerprints_written']) > 0,
+                'fingerprints_written': detail['fingerprints_written'],
+                'fingerprints_failed':  detail['fingerprints_failed'],
+                'redis_configured':   detail['redis_configured'],
                 'served_at':          datetime.now(timezone.utc).isoformat(),
                 'method':             flask_request.method,
             })
@@ -882,3 +933,5 @@ def register_jawboning_detector_endpoints(app):
     print("[Jawboning Detector]   GET  /api/jawboning/active")
     print("[Jawboning Detector]   GET  /api/jawboning/active/<country_id>")
     print("[Jawboning Detector]   ⚠️  Auth retrofit pending — see SECURITY TODO at top of file")
+    if not REDIS_CONFIGURED:
+        print("[Jawboning Detector]   ❌ Redis NOT configured — fingerprints will not persist")
