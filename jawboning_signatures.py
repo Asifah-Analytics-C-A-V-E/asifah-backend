@@ -122,8 +122,25 @@ from datetime import datetime, timezone
 # REDIS CONFIG  (mirrors absorption_signatures.py pattern)
 # ============================================================================
 
-UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_REST_URL', '')
-UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN', '')
+# ── ENV VAR NAME TOLERANCE (Sep 8, 2026) ───────────────────────────────
+# This module read ONLY the *_REST_* names while military_tracker.py on the
+# SAME backend reads UPSTASH_REDIS_URL / UPSTASH_REDIS_TOKEN. If only the
+# non-REST names are set in Render, every read and write here failed at the
+# guard on line one. The catalog still served from the static in-module copy
+# (graceful, by design), so detection kept working -- but nothing was ever
+# cached, and jawboning_detector.py's fingerprint writes, which use the same
+# convention, silently went nowhere.
+#
+# Accept either naming convention, non-REST first, matching the pattern
+# rhetoric_tracker_us.py already uses.
+UPSTASH_REDIS_URL   = (os.environ.get('UPSTASH_REDIS_URL', '')
+                       or os.environ.get('UPSTASH_REDIS_REST_URL', ''))
+UPSTASH_REDIS_TOKEN = (os.environ.get('UPSTASH_REDIS_TOKEN', '')
+                       or os.environ.get('UPSTASH_REDIS_REST_TOKEN', ''))
+
+REDIS_CONFIGURED = bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN)
+print(f"[Jawboning Signatures] Redis configured: {REDIS_CONFIGURED} "
+      f"(URL len={len(UPSTASH_REDIS_URL)}, TOKEN len={len(UPSTASH_REDIS_TOKEN)})")
 
 # Catalog itself is static and rarely changes; cached at long TTL.
 JAWBONING_CATALOG_TTL_HOURS = 168   # 7 days — catalog rarely changes
@@ -1521,6 +1538,10 @@ try:
               f"unconfigured. The static catalog still serves reads, but nothing "
               f"was cached and cross-process consumers reading Redis directly "
               f"will find nothing.")
+        if not REDIS_CONFIGURED:
+            print("[Jawboning Signatures]    CAUSE: neither UPSTASH_REDIS_URL nor "
+                  "UPSTASH_REDIS_REST_URL (and matching TOKEN) is set on this "
+                  "backend. This is an env-var problem, not a network problem.")
 except Exception as _e:
     print(f"[Jawboning Signatures] ⚠️ Auto-hydration failed: {_e}")
     print(f"[Jawboning Signatures]    Endpoints will fall back to static catalog.")
