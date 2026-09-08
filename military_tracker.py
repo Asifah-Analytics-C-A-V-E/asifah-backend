@@ -8009,6 +8009,15 @@ PROJECTION_CUES = (
     'raised readiness', 'mobiliz', 'activated', 'call-up', 'called up',
     'extended stay', 'remains on station', 'stays on station',
     'exercise', 'drill', 'war game', 'wargame',
+    # v3.8 - capability ENTERING SERVICE or under way. The corpus showed
+    # "INS Drakon en route from Germany to Israel", "4 Tu-160M bombers
+    # conducted launch maneuvers" and a new destroyer joining the fleet all
+    # reading neutral. Force arriving is force projected.
+    'en route', 'enroute', 'under way', 'underway to', 'maneuvers',
+    'manoeuvres', 'launch maneuvers', 'sea trials', 'enters service',
+    'entered service', 'joins the fleet', 'joined the fleet', 'inducted',
+    'delivered to', 'handed over to', 'took delivery', 'christened',
+    'nuclear response system', 'new destroyer', 'operational reality',
     'commissions', 'commissioned', 'joint exercise', 'joint drill',
     'military drill', 'live-fire', 'live fire', 'show of force',
     'freedom of navigation', 'fonop', 'overflight', 'patrols the',
@@ -8096,6 +8105,18 @@ LOSS_VERBS = (
     'fired at', 'fired on', 'fired ballistic', 'fired missiles',
     'missiles at', 'missile at', 'launched at', 'launched against',
     'rockets at', 'drones at',
+    # v3.8 - NOUN + PREPOSITION constructions. The live corpus showed these
+    # were the single largest miss: "Missile Launches AT Jordan", "Drone
+    # Attack ON Kuwait", "cruise missiles STRIKING Ukrainian forces" all read
+    # as neutral, so three countries being actively struck registered as
+    # nothing. The verb forms were covered; the noun forms were not.
+    'attack on', 'attacks on', 'attack against', 'attacks against',
+    'attack upon', 'strike on', 'strikes on', 'strike against',
+    'strikes against', 'raid on', 'raids on', 'assault on',
+    'launches at', 'launches against', 'launch at', 'launched against',
+    'shelling of', 'bombardment of', 'bombing of', 'siege on',
+    'striking', 'hitting', 'targeting of', 'incursion into',
+    'violation of', 'breach of',
     # Suppression and denial. Capability does not have to be destroyed to
     # be taken away - a strike group that cannot operate is a strike group
     # that is not projecting.
