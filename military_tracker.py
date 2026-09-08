@@ -4835,6 +4835,24 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
+MILITARY_TRACKER_VERSION = '3.7.0'
+
+# Feature flags published in the scan result. These exist so "did my deploy
+# land" is one field to read instead of an archaeology exercise on downstream
+# numbers. Every one of these was shipped on Sep 7, 2026.
+MILITARY_TRACKER_FEATURES = {
+    'recency_gate':            True,
+    'source_health':           True,
+    'floors_redis_decay':      True,   # v3.3
+    'floor_endpoints':         True,   # v3.3
+    'article_dedupe':          True,   # v3.4
+    'event_dedupe':            True,   # v3.4
+    'signal_direction':        True,   # v3.5
+    'match_text_hygiene':      True,   # v3.6
+    'short_keyword_boundary':  True,   # v3.6
+    'capability_fingerprint':  True,   # v3.7 - the join
+}
+
 WAR_FOOTING_FLOOR_REDIS_KEY = 'military:war_footing_floors'
 WAR_FOOTING_FLOOR_TTL_SECONDS = 365 * 24 * 3600
 DEFAULT_FLOOR_HALF_LIFE_DAYS = 30.0
@@ -8299,6 +8317,64 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
     return _done('neutral')
 
 
+MIL_CAPABILITY_FP_KEY = 'military:{actor}:capability_direction'
+MIL_CAPABILITY_SUMMARY_KEY = 'military:capability_direction:summary'
+
+
+def write_capability_fingerprints(ledger, total_signals=0):
+    """Publish the signed capability read to Redis for cross-backend consumers.
+
+    This is the MIL half of the capability-rhetoric join. The US rhetoric
+    tracker reads military:us:capability_direction and sets it against
+    measured rhetoric intensity. Neither sensor can see that on its own.
+
+    Writes one fingerprint per actor carrying directional signal, plus a
+    summary. Silent on failure: a Redis outage must never break a scan.
+    """
+    if not isinstance(ledger, dict):
+        return 0
+
+    per_actor = ledger.get('per_actor') or {}
+    written = 0
+    for actor_id, row in per_actor.items():
+        if not isinstance(row, dict):
+            continue
+        projection = row.get('projection_score', 0)
+        loss = row.get('loss_score', 0)
+        if (projection + loss) <= 0:
+            continue  # nothing directional to publish
+        payload = {
+            'actor':             actor_id,
+            'actor_name':        row.get('actor_name', actor_id),
+            'net_score':         row.get('net_score', 0),
+            'projection_score':  projection,
+            'loss_score':        loss,
+            'projection_share':  row.get('projection_share'),
+            'reading':           row.get('reading', ''),
+            'by_direction': {
+                d: {'count': row.get(d, {}).get('count', 0),
+                    'score': row.get(d, {}).get('score', 0.0)}
+                for d in DIRECTION_CLASSES if isinstance(row.get(d), dict)
+            },
+            'examples':          row.get('examples', {}),
+            'classified_share':  ledger.get('classified_share'),
+            'total_signals':     total_signals,
+            'tracker_version':   MILITARY_TRACKER_VERSION,
+        }
+        if _redis_fp_set(MIL_CAPABILITY_FP_KEY.format(actor=actor_id), payload):
+            written += 1
+
+    _redis_fp_set(MIL_CAPABILITY_SUMMARY_KEY, {
+        'totals':            ledger.get('totals'),
+        'classified_share':  ledger.get('classified_share'),
+        'most_degraded':     ledger.get('most_degraded'),
+        'actors_published':  written,
+        'total_signals':     total_signals,
+        'tracker_version':   MILITARY_TRACKER_VERSION,
+    })
+    return written
+
+
 def build_direction_ledger(signals):
     """Per-actor projection-vs-loss accounting over a list of signals.
 
@@ -8749,6 +8825,11 @@ def _run_full_scan(days=7):
               f"projection {_row['projection']} - loss {_row['loss']} = "
               f"{_row['net_score']} ({_row['reading']})")
 
+    # v3.7 - publish the signed capability read for the rhetoric tracker.
+    _fp_written = write_capability_fingerprints(direction_ledger, len(all_signals))
+    print(f"[Military Tracker] Capability fingerprints published: {_fp_written} actors "
+          f"(key {MIL_CAPABILITY_FP_KEY.format(actor='<actor>')})")
+
     for signal in all_signals:
         active_actors.add(signal['actor'])
 
@@ -8942,7 +9023,8 @@ def _run_full_scan(days=7):
         'recency_filter': recency_stats,
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'cached': False,
-        'version': '3.2.1'
+        'version': MILITARY_TRACKER_VERSION,
+        'features': MILITARY_TRACKER_FEATURES
     }
 
     # ── Compute chokepoint postures + convergences for scan_result + interpreter ──
