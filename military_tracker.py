@@ -4835,7 +4835,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.9.0'
+MILITARY_TRACKER_VERSION = '3.10.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4854,7 +4854,15 @@ MILITARY_TRACKER_FEATURES = {
     'loss_noun_cues':          True,   # v3.8 - "attack ON x", "launches AT x"
     'wartime_sustainment':     True,   # v3.9 - battle damage, munitions burn
     'roundup_guard':           True,   # v3.9 - digests are not events
+    'financial_burn':          True,   # v3.10 - money is capability
+    'neutral_sample':          True,   # v3.10 - read the 85%, stop guessing
+    'dynamic_fp_source':       True,   # v3.10 - fingerprint source no longer hardcoded
 }
+
+# Printed at module import so a deploy is verifiable from the boot log
+# without waiting out a full scan cycle.
+print(f"[Military Tracker] module loaded - version {MILITARY_TRACKER_VERSION} "
+      f"({sum(1 for v in MILITARY_TRACKER_FEATURES.values() if v)} features active)")
 
 WAR_FOOTING_FLOOR_REDIS_KEY = 'military:war_footing_floors'
 WAR_FOOTING_FLOOR_TTL_SECONDS = 365 * 24 * 3600
@@ -4996,7 +5004,8 @@ REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 #   military:evacuation:{country}         13h TTL  (only when active)
 #   military:cross:{label}                13h TTL  (only when active)
 #
-# All fingerprints carry a 'scanned_at' timestamp + 'source': 'military_tracker_v3.1'
+# All fingerprints carry a 'scanned_at' timestamp + a 'source' string built
+# from MILITARY_TRACKER_VERSION (v3.10; it was hardcoded to v3.1 until then)
 # so consumers can age-out stale data.
 #
 # This is an ADDITIVE upgrade — does not change existing /api/military-posture
@@ -5237,7 +5246,8 @@ def _redis_fp_set(key, payload, ttl_seconds=FINGERPRINT_TTL_SECONDS):
         if isinstance(payload, dict):
             payload = dict(payload)
             payload.setdefault('scanned_at', datetime.now(timezone.utc).isoformat())
-            payload.setdefault('source', 'military_tracker_v3.1')
+            payload.setdefault(
+                'source', f'military_tracker_v{MILITARY_TRACKER_VERSION}')
         resp = requests.post(
             f"{UPSTASH_REDIS_URL}/setex/{key}/{int(ttl_seconds)}",
             headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
@@ -7996,7 +8006,7 @@ DEGRADATION_CUES = (
     'written off', 'combat loss', 'combat losses', 'damage assessment',
     'out of action', 'non-mission capable', 'not mission capable',
     # munitions and interceptor burn
-    'expended', 'expenditure rate', 'rounds fired', 'missiles expended',
+    'expended', 'rounds fired', 'missiles expended',
     'interceptors expended', 'interceptor inventory', 'magazine depth',
     'vls reload', 'at-sea reload', 'rearm', 'resupply run',
     'inventory drawdown', 'outpacing production', 'faster than we can',
@@ -8007,13 +8017,58 @@ DEGRADATION_CUES = (
     'cannot sustain', 'sustainment strain', 'strain on the force',
     'straining', 'wear on the fleet',
     # deployment clock
-    'deployment extended', 'extension of deployment', 'tour extended',
+    'extension of deployment', 'tour extended',
     'no relief', 'no replacement', 'gapped', 'back-to-back',
     'held over', 'stop-loss',
     # enablers
     'tanker availability', 'tanker shortage', 'refueling capacity',
     'isr gap', 'lift shortfall', 'spare parts', 'parts shortage',
     'deferred maintenance', 'maintenance deferred',
+)
+
+# ---- Money as capability ---------------------------------------------
+# v3.10. The Sep 19 corpus carried "US War on Iran Hits $43.6B Price Tag /
+# CENTCOM estimates the war with Iran has cost..." and the tracker read it
+# as attrition. Nobody shot down $43.6 billion. That is capability the
+# United States consumed itself - munitions bought and fired, ops tempo
+# funded, readiness deferred to pay for today. Structurally that is
+# degradation, and it is the largest single capability-consumption datum
+# in the corpus.
+#
+# The degradation table above reads METAL. This one reads MONEY.
+FINANCIAL_BURN_CUES = (
+    # cost of the war being fought
+    'price tag', 'has cost', 'have cost', 'cost of the war',
+    'war has cost', 'cost so far', 'total cost of', 'running cost',
+    'costs taxpayers', 'cost to date', 'tab for', 'bill for the war',
+    'spent so far', 'has spent', 'burned through', 'burn through',
+    # emergency money, which is money that was not planned for
+    'supplemental request', 'supplemental appropriation',
+    'emergency appropriation', 'emergency funding', 'emergency supplemental',
+    'reprogramming request', 'reprogrammed funds', 'drawdown authority',
+    'above the budget request', 'over budget', 'cost growth',
+    # replacing what was consumed
+    'replenishment cost', 'replacement cost', 'cost to replace',
+    'restock', 'restocking', 'rebuild the stockpile',
+    'replenish stocks', 'replenish inventories',
+)
+
+# Money going the OTHER way. This is the hinge of the whole question -
+# 'is the United States buying capability, or spending it?' - and the
+# machine must not answer it backwards. An appropriation for new hulls is
+# capability being BOUGHT; it is not degradation, whatever dollar figure
+# sits next to it. When investment language is present the burn read is
+# vetoed rather than reversed: buying is not yet its own direction class,
+# and inventing one on a hunch would be worse than staying quiet.
+FINANCIAL_INVESTMENT_CUES = (
+    'contract award', 'awarded a contract', 'contract to build',
+    'procurement of', 'procures', 'procurement budget',
+    'orders new', 'buys new', 'purchase of new', 'acquisition of new',
+    'shipbuilding budget', 'shipbuilding plan', 'multiyear procurement',
+    'production increase', 'expand production', 'expanding production',
+    'new production line', 'capacity expansion', 'invests in',
+    'investment in', 'authorizes the purchase', 'budget request for new',
+    'modernization program', 'recapitalization',
 )
 
 # ---- Force pulled back ----------------------------------------------
@@ -8030,6 +8085,16 @@ WITHDRAWAL_CUES = (
     'evacuat', 'ordered departure', 'authorized departure', 'drew down',
     'disengag', 'ceases operations', 'shuts down base', 'closes base',
     'vacated', 'relocated away',
+    # v3.10 - bare and plural-subject forms, same rule as PROJECTION_CUES.
+    # withdrawal has read 0 signals on every scan of a war in which ships
+    # demonstrably rotate home; singular-only vocabulary is a candidate
+    # explanation and this tests it.
+    'depart the', 'depart from', 'depart port', 'leave port',
+    'head home', 'sail home', 'pull out of',
+    # 'exit the' rejected in testing: it matched exiting an arms
+    # control agreement, which is a policy move, not a force move.
+    'end deployment', 'end its deployment', 'relieve on station',
+    'rotate home', 'rotates home', 'rotated home',
 )
 
 # ---- Force applied ---------------------------------------------------
@@ -8072,6 +8137,23 @@ PROJECTION_CUES = (
     'commissions', 'commissioned', 'joint exercise', 'joint drill',
     'military drill', 'live-fire', 'live fire', 'show of force',
     'freedom of navigation', 'fonop', 'overflight', 'patrols the',
+    # v3.10 - BARE AND PLURAL-SUBJECT VERB FORMS.
+    # 'USS Abraham Lincoln (CVN 72), USS Frank E. Petersen Jr. (DDG 121)
+    # ARRIVE in Guam' does not match 'arrives', 'arrived' or 'arriving'.
+    # A plural subject takes the bare verb, and every inflected cue in
+    # this table was written for a singular one - so two ships arriving
+    # scored nothing where one ship arriving scored. Added by rule rather
+    # than by guess: a bare form goes in only where the inflected form is
+    # already above it.
+    'arrive in', 'arrive at', 'arrive off', 'deploy to', 'deploy for',
+    'sail for', 'sail to', 'steam toward', 'steam towards',
+    'conduct strikes', 'carry out strikes', 'operate with',
+    'steam with', 'sail with', 'enter service', 'join the fleet',
+    # Rejected in testing, kept here as a record of what NOT to add:
+    # 'head to' matched an admiral heading to a hearing, 'patrol the'
+    # matched Border Patrol, and 'move toward' matched moving toward
+    # a ceasefire. Generic motion verbs need a military object and
+    # these have none, so the inflected forms above stand alone.
 )
 
 # Bare departure words. Ambiguous on their own - "strike leaves 3 dead"
@@ -8227,6 +8309,27 @@ def _strip_quotes(text):
     return (text or '').replace('"', '').replace("'", '')
 
 
+def _distinct_cues(found):
+    """Collapse matched cues that are substrings of other matched cues.
+
+    The cue tables carry several forms of one concept on purpose - 'rust'
+    and 'rusted', 'combat loss' and 'combat losses' - so that matching is
+    robust. But a threshold that COUNTS cues then sees one rusty hull as
+    two independent pieces of evidence, and the >= 2 test in the classifier
+    is exactly such a threshold: it decides whether a struck actor is filed
+    as degraded rather than attrited. Counting one concept twice flips that
+    call on a single phrase.
+    """
+    out = []
+    for c in found:
+        if c in out:
+            continue
+        if any(c != o and c in o for o in found):
+            continue
+        out.append(c)
+    return out
+
+
 def _find_cues(text, cues):
     """Every cue present in text, in the order the cue table lists them.
     Matched against the text both as-is and with quote marks removed, so
@@ -8277,6 +8380,14 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
     deg_cues = _find_cues(text, DEGRADATION_CUES)
     loss_anywhere = _find_cues(text, LOSS_VERBS)
 
+    # v3.10 - financial burn counts as structural capability loss, but
+    # only where the money is being CONSUMED. Procurement language vetoes
+    # it: an appropriation for new hulls is capability bought, not spent.
+    fin_burn = _find_cues(text, FINANCIAL_BURN_CUES)
+    fin_invest = _find_cues(text, FINANCIAL_INVESTMENT_CUES)
+    if fin_invest:
+        fin_burn = []
+
     evidence = {
         'degradation_cues': deg_cues[:6],
         'withdrawal_cues': _find_cues(text, WITHDRAWAL_CUES)[:6],
@@ -8285,7 +8396,13 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
         'receiving_cues_near_actor': _find_cues(near, RECEIVING_CUES)[:6],
         'weapon_approach_near_actor': _find_cues(near, WEAPON_APPROACH_CUES)[:4],
         'actor_keyword_located': not positionless,
+        'financial_burn_cues': fin_burn[:6],
     }
+    if fin_invest:
+        evidence['financial_investment_cues'] = fin_invest[:4]
+        evidence['financial_burn_vetoed'] = (
+            'cost language present but the text reads as procurement, so '
+            'the spend is capability being bought rather than consumed')
     if positionless:
         evidence['positionless'] = ('actor keyword not found in text; '
                                     'subject/object not resolved')
@@ -8354,11 +8471,21 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
         # A base can be struck AND be out of action. Where the text is
         # dominated by sustained-unavailability language the standing state
         # is the more useful primary read; the strike survives as secondary.
-        if len(deg_cues) >= 2:
+        if len(_distinct_cues(deg_cues)) >= 2:
             return _done('degradation', 'attrition',
                          attrition_reason=reason,
-                         degradation_reason=f'{len(deg_cues)} sustained-capability '
-                                            f'cues outweigh a single strike reference')
+                         degradation_reason=f'{len(_distinct_cues(deg_cues))} distinct '
+                                            f'sustained-capability cues outweigh a '
+                                            f'single strike reference')
+        if fin_burn:
+            # A war-cost story often trips a loss verb ('war HITS $43.6B')
+            # and would otherwise be filed as a blow struck by an enemy.
+            # Self-consumed capability is degradation; the strike
+            # reference survives as the secondary read.
+            return _done('degradation', 'attrition',
+                         attrition_reason=reason,
+                         degradation_reason='financial burn: capability '
+                                            'consumed rather than destroyed')
         return _done('attrition', 'degradation' if deg_cues else None,
                      attrition_reason=reason)
 
@@ -8366,6 +8493,10 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
     #    story is usually stuffed with deployment vocabulary.
     if deg_cues:
         return _done('degradation')
+    if fin_burn:
+        return _done('degradation',
+                     degradation_reason='financial burn: capability funded '
+                                        'and consumed, not destroyed')
 
     # 4. Actor is in a kinetic event and is NOT the victim, so it is the one
     #    applying force. This requires knowing WHERE the actor sits in the
@@ -8410,6 +8541,11 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
 
     return _done('neutral')
 
+
+# How many neutral signals to publish for inspection. The neutral bucket
+# is ~85% of the corpus and is the reason classified_share sits under the
+# abstention gate; it cannot be fixed while it is unreadable.
+NEUTRAL_SAMPLE_SIZE = 40
 
 MIL_CAPABILITY_FP_KEY = 'military:{actor}:capability_direction'
 MIL_CAPABILITY_SUMMARY_KEY = 'military:capability_direction:summary'
@@ -8469,6 +8605,29 @@ def write_capability_fingerprints(ledger, total_signals=0):
     return written
 
 
+def _neutral_reason(evidence):
+    """Why one signal failed to classify, in a form that groups.
+
+    Returns a short stable label rather than free text, so the counts are
+    countable. 'no directional cue matched' means the vocabulary missed it
+    and is fixable; 'actor not locatable' and 'attribution clause' mean the
+    text genuinely does not say who did what, and no cue table will help.
+    Telling those apart is the whole point of publishing this.
+    """
+    ev = evidence if isinstance(evidence, dict) else {}
+    if ev.get('roundup_cues'):
+        return 'periodic roundup, not a discrete event'
+    if ev.get('attribution_tail'):
+        return 'actor is the speaker, not a participant'
+    if ev.get('unresolved_kinetic'):
+        return 'combat language but actor not locatable'
+    if ev.get('actor_keyword_located') is False:
+        return 'actor keyword not found in text'
+    if ev.get('financial_burn_vetoed'):
+        return 'cost language read as procurement'
+    return 'no directional cue matched'
+
+
 def build_direction_ledger(signals):
     """Per-actor projection-vs-loss accounting over a list of signals.
 
@@ -8478,6 +8637,8 @@ def build_direction_ledger(signals):
     """
     per_actor = {}
     totals = {d: {'count': 0, 'score': 0.0} for d in DIRECTION_CLASSES}
+    neutral_pool = []
+    neutral_reasons = {}
 
     for sig in signals:
         actor = sig.get('actor') or 'unknown'
@@ -8504,6 +8665,23 @@ def build_direction_ledger(signals):
 
         totals[direction]['count'] += 1
         totals[direction]['score'] = round(totals[direction]['score'] + weight, 2)
+
+        # v3.10 - keep the neutral bucket inspectable. Every signal that
+        # failed to classify records WHY, so the next vocabulary pass is
+        # driven by what the corpus actually contains instead of by a
+        # guess about what it might contain.
+        if direction == 'neutral':
+            why = _neutral_reason(sig.get('direction_evidence'))
+            neutral_reasons[why] = neutral_reasons.get(why, 0) + 1
+            neutral_pool.append({
+                'weight': round(weight, 2),
+                'actor': actor,
+                'asset': sig.get('asset', ''),
+                'keyword': sig.get('keyword', ''),
+                'title': (sig.get('article_title') or '')[:120],
+                'source': sig.get('source', ''),
+                'reason': why,
+            })
 
         # Keep the heaviest example of each direction so the call is auditable.
         ex = row['examples'].get(direction)
@@ -8532,6 +8710,7 @@ def build_direction_ledger(signals):
         else:
             row['reading'] = 'projection and loss in balance'
 
+    neutral_pool.sort(key=lambda r: r['weight'], reverse=True)
     ranked = sorted(per_actor.values(), key=lambda r: r['net_score'])
 
     return {
@@ -8549,6 +8728,11 @@ def build_direction_ledger(signals):
         'classified_share': round(
             1 - (totals['neutral']['count'] / max(1, sum(t['count'] for t in totals.values()))), 3
         ),
+        # v3.10 - the unread 85%, heaviest first, with a reason each.
+        'neutral_sample': neutral_pool[:NEUTRAL_SAMPLE_SIZE],
+        'neutral_reason_counts': dict(sorted(
+            neutral_reasons.items(), key=lambda kv: kv[1], reverse=True)),
+        'neutral_total': len(neutral_pool),
     }
 
 
@@ -8918,6 +9102,17 @@ def _run_full_scan(days=7):
         print(f"[Military Tracker]    Net capability {_row['actor']}: "
               f"projection {_row['projection']} - loss {_row['loss']} = "
               f"{_row['net_score']} ({_row['reading']})")
+
+    # v3.10 - why the neutral bucket is the size it is. classified_share
+    # sits under the 0.30 abstention gate because ~85% of signals read
+    # neutral; this line says how much of that is fixable vocabulary and
+    # how much is text that genuinely does not resolve who did what.
+    print(f"[Military Tracker] Classified share: "
+          f"{direction_ledger.get('classified_share')} "
+          f"(gate 0.30) | neutral {direction_ledger.get('neutral_total', 0)}")
+    for _why, _n in list(
+            (direction_ledger.get('neutral_reason_counts') or {}).items())[:6]:
+        print(f"[Military Tracker]    neutral x{_n}: {_why}")
 
     # v3.7 - publish the signed capability read for the rhetoric tracker.
     _fp_written = write_capability_fingerprints(direction_ledger, len(all_signals))
