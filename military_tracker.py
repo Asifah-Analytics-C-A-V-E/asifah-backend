@@ -4848,7 +4848,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.11.0'
+MILITARY_TRACKER_VERSION = '3.12.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4874,6 +4874,7 @@ MILITARY_TRACKER_FEATURES = {
     'script_detection':        True,   # v3.11 - neutral reasons name the script
     'multilingual_direction':  True,   # v3.11 - HE/AR/FA/RU direction cues
     'alliance_cues':           True,   # v3.11 - capability supplemented by pact
+    'source_health_v2':        True,   # v3.12 - why a feed is dead, not just that it is
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -6208,6 +6209,109 @@ def _build_empty_skeleton():
 # DATA FETCHING — RSS FEEDS
 # ========================================
 
+# =====================================================================
+# SOURCE HEALTH INSTRUMENTATION (v3.12, Sep 19 2026)
+# =====================================================================
+# The previous source_health was {name: 'ok' if count > 0 else 'ZERO'}. It
+# told us a feed was dead and never why. Underneath it every fetcher threw
+# its status code away:
+#     fetch_brave_military    -> except Exception: return []
+#     fetch_newsapi_military  -> except: return []
+#     fetch_reddit_military   -> except Exception: continue
+# so a 403, a spent quota, a soft block and a query matching nothing were
+# indistinguishable from outside the function. The three feeds reporting ZERO
+# on Sep 19 are exactly the three with silent catch-all handlers.
+#
+# This records the outcome of every attempt. It changes nothing about what is
+# fetched or how anything is scored, and ships deliberately AHEAD of any
+# attempt to revive a feed, so the corpus stays comparable across the change.
+
+# Sources this tracker is supposed to have. A name listed here that never
+# appears in _SOURCE_HEALTH is reported as 'not_attempted' rather than
+# vanishing from the payload.
+EXPECTED_SOURCES = ('defense_rss', 'gdelt', 'newsapi', 'reddit',
+                    'telegram', 'brave', 'bluesky')
+
+_SOURCE_HEALTH = {}
+
+
+def _health_reset():
+    """Clear per-scan health records. Called once at the top of a scan."""
+    global _SOURCE_HEALTH
+    _SOURCE_HEALTH = {}
+
+
+def _health_note(source, configured=True, http_status=None, error=None,
+                 articles=0, duration_ms=None, note=None):
+    """Record one fetch attempt. Many attempts aggregate into one source."""
+    rec = _SOURCE_HEALTH.setdefault(source, {
+        'configured':    configured,
+        'attempts':      0,
+        'articles':      0,
+        'http_statuses': {},
+        'errors':        [],
+        'notes':         [],
+        'duration_ms':   0,
+    })
+    rec['configured'] = configured
+    rec['attempts'] += 1
+    rec['articles'] += int(articles or 0)
+    if http_status is not None:
+        key = str(http_status)
+        rec['http_statuses'][key] = rec['http_statuses'].get(key, 0) + 1
+    if error and len(rec['errors']) < 3:
+        rec['errors'].append(str(error)[:160])
+    if note and note not in rec['notes']:
+        rec['notes'].append(str(note)[:120])
+    if duration_ms:
+        rec['duration_ms'] += int(duration_ms)
+
+
+def _health_status(rec):
+    """One word for what happened. The point is that 'we could not reach it'
+    and 'we reached it and asked the wrong question' stop looking the same."""
+    if not rec.get('configured'):
+        return 'not_configured'
+    if rec.get('attempts', 0) == 0:
+        # Never called. Brave sits behind a (gdelt + newsapi) < 10 gate, so a
+        # healthy GDELT silently disables it and the old field said 'ZERO'.
+        return 'not_attempted'
+    statuses = rec.get('http_statuses') or {}
+    if any(s in statuses for s in ('401', '403')):
+        return 'auth_failed'
+    if '429' in statuses:
+        return 'rate_limited'
+    non_ok = [s for s in statuses if s not in ('200', 'None')]
+    if non_ok:
+        return 'http_error'
+    if rec.get('errors'):
+        return 'error'
+    if rec.get('articles', 0) > 0:
+        return 'ok'
+    return 'reachable_but_empty'
+
+
+def _health_report(expected=EXPECTED_SOURCES):
+    """Per-source health for the scan payload."""
+    out = {}
+    for name in set(list(_SOURCE_HEALTH.keys()) + list(expected)):
+        rec = _SOURCE_HEALTH.get(name) or {
+            'configured': True, 'attempts': 0, 'articles': 0,
+            'http_statuses': {}, 'errors': [], 'notes': [], 'duration_ms': 0,
+        }
+        out[name] = {
+            'status':        _health_status(rec),
+            'configured':    rec['configured'],
+            'attempts':      rec['attempts'],
+            'articles':      rec['articles'],
+            'http_statuses': rec['http_statuses'],
+            'duration_ms':   rec['duration_ms'],
+            'error':         (rec['errors'][0] if rec['errors'] else None),
+            'notes':         rec['notes'],
+        }
+    return out
+
+
 def fetch_defense_rss(feed_name, feed_url, max_articles=15):
     """Fetch articles from a defense media RSS feed"""
     articles = []
@@ -6468,8 +6572,16 @@ def fetch_gdelt_military(query, days=7, language='eng'):
     if _GDELT_GATEWAY:
         # Adapt the gateway's canonical shape into this file's own dialect
         # (source is a DICT, publishedAt, content, feed_type='gdelt').
+        _t0 = time.time()
         raw = _gw_gdelt_fetch(query, language=language, timespan=f'{days}d',
                               maxrecords=50, label=f'military/{language}')
+        # The gateway hides its own transport detail, so all that is
+        # observable here is whether anything came back. Recorded so a
+        # dead gateway is not mistaken for a dead GDELT.
+        _health_note('gdelt', articles=len(raw or []),
+                     http_status=200 if raw else None,
+                     duration_ms=(time.time() - _t0) * 1000,
+                     note='routed through shared GDELT gateway')
         return [{
             'title':       a.get('title', ''),
             'description': a.get('title', ''),
@@ -6500,11 +6612,18 @@ def fetch_gdelt_military(query, days=7, language='eng'):
                     continue
                 raise
         if not response or response.status_code != 200:
+            _health_note('gdelt',
+                         http_status=(response.status_code if response else None),
+                         note='no response' if not response else None)
             return []
 
         try:
             data = response.json()
         except (json.JSONDecodeError, ValueError):
+            # 200 OK carrying HTML is GDELT's soft block. Neither an outage
+            # nor a query problem, and it needs its own label.
+            _health_note('gdelt', http_status=200,
+                         note='HTTP 200 with non-JSON body (soft block)')
             return []
         articles = data.get('articles', [])
 
@@ -6519,10 +6638,12 @@ def fetch_gdelt_military(query, days=7, language='eng'):
                 'content': article.get('title', ''),
                 'feed_type': 'gdelt'
             })
+        _health_note('gdelt', http_status=200, articles=len(standardized))
         return standardized
 
     except Exception as e:
         print(f"[Military GDELT] Error: {str(e)[:100]}")
+        _health_note('gdelt', error=e)
         return []
 
 
@@ -7127,7 +7248,9 @@ def fetch_all_gdelt_military(days=7):
 def fetch_newsapi_military(query, days=7):
     """Fetch military articles from NewsAPI"""
     if not NEWSAPI_KEY:
+        _health_note('newsapi', configured=False)
         return []
+    _t0 = time.time()
 
     from_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
 
@@ -7148,9 +7271,18 @@ def fetch_newsapi_military(query, days=7):
             articles = data.get('articles', [])
             for a in articles:
                 a['feed_type'] = 'newsapi'
+            _health_note('newsapi', http_status=200, articles=len(articles),
+                         duration_ms=(time.time() - _t0) * 1000)
             return articles
+        # NewsAPI answers a plan restriction with 426 and a bad key with
+        # 401; both looked exactly like 'no results' from outside.
+        _health_note('newsapi', http_status=response.status_code,
+                     error=(response.text or '')[:160],
+                     duration_ms=(time.time() - _t0) * 1000)
         return []
-    except:
+    except Exception as e:
+        _health_note('newsapi', error=e,
+                     duration_ms=(time.time() - _t0) * 1000)
         return []
 
 
@@ -7228,7 +7360,9 @@ def fetch_brave_military(query, days=7):
     """Fetch military articles from Brave Search News API (tertiary fallback).
     Returns empty list if no API key configured or request fails."""
     if not BRAVE_API_KEY:
+        _health_note('brave', configured=False)
         return []
+    _t0 = time.time()
     headers = {
         'Accept':              'application/json',
         'Accept-Encoding':     'gzip',
@@ -7256,9 +7390,19 @@ def fetch_brave_military(query, days=7):
                     'content':     r.get('description', '')[:500],
                     'feed_type':   'brave',
                 })
+            _health_note('brave', http_status=200, articles=len(articles),
+                         duration_ms=(time.time() - _t0) * 1000)
             return articles
+        # Brave sends 401 for a bad token, 403 for a plan problem and 429
+        # when the 2000/month free tier is spent. All three used to leave
+        # here as an empty list with the status code discarded.
+        _health_note('brave', http_status=response.status_code,
+                     error=(response.text or '')[:160],
+                     duration_ms=(time.time() - _t0) * 1000)
         return []
-    except Exception:
+    except Exception as e:
+        _health_note('brave', error=e,
+                     duration_ms=(time.time() - _t0) * 1000)
         return []
 
 
@@ -7293,6 +7437,7 @@ def fetch_all_brave_military(days=7):
 
 def fetch_reddit_military(days=7):
     """Fetch military-related Reddit posts"""
+    _t0 = time.time()
     all_posts = []
     keywords = ['deployment', 'military', 'carrier', 'strike group', 'NATO', 'CENTCOM',
                 'evacuation', 'Ukraine']
@@ -7314,7 +7459,16 @@ def fetch_reddit_military(days=7):
             time.sleep(2)
             response = requests.get(url, params=params, headers=headers, timeout=10)
 
+            if response.status_code != 200:
+                # Reddit blocks datacenter IPs and generic user agents with
+                # 403, and rate limits with 429. Both previously fell
+                # through this `if` in silence and then out of the bare
+                # `except ... continue` below, leaving zero trace.
+                _health_note('reddit', http_status=response.status_code,
+                             error=(response.text or '')[:160],
+                             note=f'r/{subreddit}')
             if response.status_code == 200:
+                _health_note('reddit', http_status=200)
                 data = response.json()
                 if "data" in data and "children" in data["data"]:
                     for post in data["data"]["children"]:
@@ -7331,9 +7485,12 @@ def fetch_reddit_military(days=7):
                             'content': post_data.get('selftext', ''),
                             'feed_type': 'reddit'
                         })
-        except Exception:
+        except Exception as e:
+            _health_note('reddit', error=e, note=f'r/{subreddit}')
             continue
 
+    _health_note('reddit', articles=len(all_posts),
+                 duration_ms=(time.time() - _t0) * 1000)
     print(f"[Military Reddit] Total posts: {len(all_posts)}")
     return all_posts
 
@@ -9341,8 +9498,11 @@ def _run_full_scan(days=7):
     scan_start = time.time()
 
     print("[Military Tracker] Phase 1: Fetching data...")
+    _health_reset()
 
     rss_articles = fetch_all_defense_rss()
+    _health_note('defense_rss', articles=len(rss_articles),
+                 http_status=200 if rss_articles else None)
     gdelt_articles = fetch_all_gdelt_military(days)
     newsapi_articles = fetch_all_newsapi_military(days)
     reddit_posts = fetch_reddit_military(days)
@@ -9355,9 +9515,20 @@ def _run_full_scan(days=7):
         brave_articles = fetch_all_brave_military(days)
     else:
         print(f"[Military Tracker] Upstream healthy (GDELT={len(gdelt_articles)}, NewsAPI={len(newsapi_articles)}); skipping Brave")
+        # Brave never ran. The old source_health reported that as 'ZERO',
+        # which reads as broken when the truth is that nobody asked.
+        _health_note('brave', configured=bool(BRAVE_API_KEY),
+                     note=f'not attempted: gdelt={len(gdelt_articles)} + '
+                          f'newsapi={len(newsapi_articles)} '
+                          f'(fallback fires below 10)')
+        _SOURCE_HEALTH['brave']['attempts'] = 0
 
     telegram_articles = []
+    if not TELEGRAM_AVAILABLE:
+        _health_note('telegram', configured=False,
+                     note='module import failed at startup')
     if TELEGRAM_AVAILABLE:
+        _tg_t0 = time.time()
         try:
             telegram_msgs = fetch_telegram_signals(hours_back=days*24, include_extended=True)
             if telegram_msgs:
@@ -9372,8 +9543,12 @@ def _run_full_scan(days=7):
                         'feed_type': 'telegram'
                     })
                 print(f"[Military Tracker] Telegram: {len(telegram_articles)} messages")
+            _health_note('telegram', articles=len(telegram_articles),
+                         duration_ms=(time.time() - _tg_t0) * 1000)
         except Exception as e:
             print(f"[Military Tracker] Telegram error: {str(e)[:100]}")
+            _health_note('telegram', error=e,
+                         duration_ms=(time.time() - _tg_t0) * 1000)
 
     # ─────────────────────────────────────────────────────────────
     # Nitter OSINT accounts — DEPRECATED May 6 2026
@@ -9408,13 +9583,26 @@ def _run_full_scan(days=7):
     # the rhetoric trackers, not here.
     # ─────────────────────────────────────────────────────────────
     bluesky_articles = []
+    _bs_t0 = time.time()
     try:
         bluesky_articles = fetch_bluesky_military_aggregated(days=days)
+        _health_note('bluesky', articles=len(bluesky_articles),
+                     duration_ms=(time.time() - _bs_t0) * 1000)
         print(f"[Military Tracker] BlueSky: {len(bluesky_articles)} posts from global-scoped accounts")
     except Exception as e:
         print(f"[Military Tracker] BlueSky error (non-fatal): {str(e)[:100]}")
+        _health_note('bluesky', error=e,
+                     duration_ms=(time.time() - _bs_t0) * 1000)
 
     all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles + nitter_articles + bluesky_articles + brave_articles
+
+    # One line per unhealthy source, so a dead feed is visible in the boot
+    # log without anyone having to inspect a payload.
+    for _hname, _hrec in sorted(_health_report().items()):
+        if _hrec['status'] != 'ok':
+            print(f"[Military Tracker HEALTH] {_hname}: {_hrec['status']} "
+                  f"(articles={_hrec['articles']}, attempts={_hrec['attempts']}, "
+                  f"http={_hrec['http_statuses'] or '-'})")
 
     _pre_filter_count = len(all_articles)
     all_articles, recency_stats = filter_articles_by_recency(all_articles, days)
@@ -9689,7 +9877,14 @@ def _run_full_scan(days=7):
         # but never reported. The Sep 7 payload showed 3,313 articles scanned
         # against a source_breakdown summing to 3,090 -- 223 articles from
         # two working sources, uncredited and invisible.
-        'source_health': {
+        # v3.12 - was {name: 'ok' if count > 0 else 'ZERO'}, which reported
+        # that a feed was dead and never why. Now carries status, http
+        # codes, attempt count and the first error per source, so a 403, a
+        # spent quota, a soft block, a query matching nothing and a
+        # fallback that never fired are five different answers.
+        'source_health': _health_report(),
+        # Kept under its old shape for any UI still reading it.
+        'source_health_legacy': {
             name: ('ok' if count > 0 else 'ZERO')
             for name, count in (
                 ('defense_rss', len(rss_articles)),
