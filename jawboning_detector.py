@@ -488,7 +488,19 @@ def _evaluate_actor_gate(actor_gate, actor_results):
         return False  # Defensive: no actor data → no signature fires
 
     for cluster_id, min_level in actor_gate.items():
+        cluster_present = cluster_id in actor_results
         cluster = actor_results.get(cluster_id) or {}
+        if not cluster_present:
+            # A MISSING cluster and a present-but-silent cluster both coerce to
+            # level 0, so the log could not tell "China is quiet" from "this
+            # cluster key does not exist in that tracker's ACTORS dict". The
+            # second is a wiring bug that fails every gate forever, and it has
+            # already happened once here (xi_jinping_signaling, May 2026).
+            print(f"[Jawboning Detector] gate FAIL for cluster '{cluster_id}': "
+                  f"CLUSTER ABSENT from actor_results -- this is a key mismatch, "
+                  f"not a quiet period. Available keys: "
+                  f"{sorted(actor_results.keys())[:15]}")
+            return False
         # ── FIELD NAME COMPATIBILITY (May 16, 2026) ───────────────────────
         # Different trackers use different field names for the 0-4 band:
         #   - ME family (Iran, Lebanon, Israel, etc.) uses 'level'
