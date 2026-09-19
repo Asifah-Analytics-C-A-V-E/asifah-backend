@@ -4835,7 +4835,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.7.0'
+MILITARY_TRACKER_VERSION = '3.9.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4851,6 +4851,9 @@ MILITARY_TRACKER_FEATURES = {
     'match_text_hygiene':      True,   # v3.6
     'short_keyword_boundary':  True,   # v3.6
     'capability_fingerprint':  True,   # v3.7 - the join
+    'loss_noun_cues':          True,   # v3.8 - "attack ON x", "launches AT x"
+    'wartime_sustainment':     True,   # v3.9 - battle damage, munitions burn
+    'roundup_guard':           True,   # v3.9 - digests are not events
 }
 
 WAR_FOOTING_FLOOR_REDIS_KEY = 'military:war_footing_floors'
@@ -7971,6 +7974,46 @@ DEGRADATION_CUES = (
     'budget cut', 'unfunded priorit', 'funding shortfall',
     'aging fleet', 'block obsolescence', 'end of service life',
     'overstretched', 'overextended', 'stretched thin', 'spread thin',
+
+    # v3.9 - WARTIME SUSTAINMENT BURN.
+    # Every degradation cue above this line is PEACETIME READINESS
+    # JOURNALISM: shipyard backlogs, rusty hulls, "worst deployment ever".
+    # That vocabulary produced 4 degradation signals on Sep 8 and ZERO on
+    # Sep 19 -- on day 203 of a war running 6,000 combat sorties, which is
+    # the single largest consumer of military capability there is.
+    #
+    # The tracker was not wrong about the corpus. It was blind to the
+    # register. In wartime, capability loss is not reported as "the Navy
+    # has a maintenance backlog." It is reported as a shrapnel-damaged
+    # tanker getting patched up, interceptors expended faster than they
+    # are built, a sortie rate nobody can hold, a deployment extended
+    # because there is no relief.
+    # battle damage and repair
+    'battle damage', 'battle-damaged', 'battle damaged', 'combat damage',
+    'shrapnel-damaged', 'shrapnel damage', 'damaged aircraft',
+    'damaged jet', 'patched up', 'patched-up', 'field repair',
+    'depot repair', 'depot-level', 'cannibaliz', 'salvaged',
+    'written off', 'combat loss', 'combat losses', 'damage assessment',
+    'out of action', 'non-mission capable', 'not mission capable',
+    # munitions and interceptor burn
+    'expended', 'expenditure rate', 'rounds fired', 'missiles expended',
+    'interceptors expended', 'interceptor inventory', 'magazine depth',
+    'vls reload', 'at-sea reload', 'rearm', 'resupply run',
+    'inventory drawdown', 'outpacing production', 'faster than we can',
+    'cannot keep up with demand', 'production backlog',
+    # tempo and sortie strain
+    'sortie rate', 'sortie generation', 'flying hours', 'flight hours',
+    'operational tempo', 'optempo', 'high tempo', 'unsustainable',
+    'cannot sustain', 'sustainment strain', 'strain on the force',
+    'straining', 'wear on the fleet',
+    # deployment clock
+    'deployment extended', 'extension of deployment', 'tour extended',
+    'no relief', 'no replacement', 'gapped', 'back-to-back',
+    'held over', 'stop-loss',
+    # enablers
+    'tanker availability', 'tanker shortage', 'refueling capacity',
+    'isr gap', 'lift shortfall', 'spare parts', 'parts shortage',
+    'deferred maintenance', 'maintenance deferred',
 )
 
 # ---- Force pulled back ----------------------------------------------
@@ -8018,6 +8061,14 @@ PROJECTION_CUES = (
     'entered service', 'joins the fleet', 'joined the fleet', 'inducted',
     'delivered to', 'handed over to', 'took delivery', 'christened',
     'nuclear response system', 'new destroyer', 'operational reality',
+    # v3.9 - combined and allied operations. "Carrier USS Abraham Lincoln
+    # Operates with Australians in the South China Sea" read neutral at
+    # 10.0: a carrier conducting combined ops with an ally is force being
+    # applied, and it is the most legible kind.
+    'operates with', 'operating with', 'operations with',
+    'combined operations', 'joint operations', 'combined exercise',
+    'bilateral exercise', 'trilateral', 'interoperability',
+    'steams with', 'sails with', 'escorted by', 'integrated with',
     'commissions', 'commissioned', 'joint exercise', 'joint drill',
     'military drill', 'live-fire', 'live fire', 'show of force',
     'freedom of navigation', 'fonop', 'overflight', 'patrols the',
@@ -8053,6 +8104,20 @@ WEAPON_APPROACH_CUES = (
     'fired towards', 'inbound toward', 'inbound towards',
     'incoming missile', 'incoming drone', 'incoming rocket',
     'aimed at', 'directed at', 'bearing down on',
+)
+
+# Periodic roundups and position digests. These are inventories, not
+# events. "USNI News Western Pacific Pulse: Sept. 18, 2026" classified as
+# PROJECTION at 10.0 -- a weekly list of where ships are is not force
+# being applied, and counting it as such inflates projection with the same
+# article every week. Same family as "Where Are America's Aircraft
+# Carriers Now?". Checked before everything except evacuation.
+ROUNDUP_TITLE_CUES = (
+    'pulse:', 'fleet tracker', 'fleet and marine tracker',
+    'where are america', 'where are the aircraft carriers',
+    'roundup', 'round-up', 'rundown', 'weekly digest', 'daily digest',
+    'this week in', 'week in review', 'news wrap', 'in pictures',
+    'by the numbers', 'explainer:', 'everything we know',
 )
 
 # Casualty vocabulary. Its presence means a bare departure word like
@@ -8233,6 +8298,14 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
     # 1. Evacuation is unambiguous withdrawal whatever else is in the text.
     if asset_id == 'base_evacuation':
         return _done('withdrawal')
+
+    # 1b. Periodic roundups are inventories, not events. Checked early so a
+    #     digest that happens to mention a strike is not read as one.
+    roundup = _find_cues(text, ROUNDUP_TITLE_CUES)
+    if roundup:
+        return _done('neutral', roundup_cues=roundup[:3],
+                     neutral_reason='periodic roundup or position digest, '
+                                    'not a discrete event')
 
     # 2. Did this actor TAKE a blow? Receiving language after the actor wins
     #    outright. A loss verb in FRONT of the actor also makes the actor the
