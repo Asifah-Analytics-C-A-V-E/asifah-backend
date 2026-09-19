@@ -1,6 +1,14 @@
 """
-Asifah Analytics — Military Asset & Deployment Tracker v3.0.0
-April 4, 2026
+Asifah Analytics — Military Asset & Deployment Tracker
+
+SINGLE SOURCE OF TRUTH FOR THE VERSION IS MILITARY_TRACKER_VERSION, defined
+below with MILITARY_TRACKER_FEATURES. This header is prose and cannot be
+trusted to match the code; it read 'v3.0.0 / April 4, 2026' through nine
+releases before anyone looked at it. If you want to know what is deployed,
+read MILITARY_TRACKER_VERSION, the boot log line it prints at import, or the
+'version' field on /api/military-posture. Do not read this paragraph.
+
+Current at time of writing: v3.10.0, September 19, 2026.
 
 Tracks military asset movements across multiple actors and regions.
 Feeds deployment scores into existing threat probability calculations.
@@ -59,6 +67,11 @@ OUTPUTS:
   - Standalone page data for military.html
 
 CHANGELOG:
+  The v3.1 - v3.10 changes are NOT listed here. They are recorded as flags in
+  MILITARY_TRACKER_FEATURES, which is machine-readable, published in the scan
+  payload, and therefore cannot silently drift out of date the way the entries
+  below did. Read that dict, not this list.
+
   v3.0.0 - Western Hemisphere expansion:
            * Added 'global_northcom' theatre — US as standalone global actor
            * Moved 'us' theatre from 'middle_east' to 'global_northcom'
@@ -6178,7 +6191,12 @@ def _build_empty_skeleton():
         'cached': False,
         'scan_in_progress': True,
         'message': 'Initial scan in progress. Data will appear shortly.',
-        'version': '3.0.0'
+        # This payload is what /api/military-posture serves in the window
+        # between a cold start and the first completed scan - which is exactly
+        # when someone is checking whether a deploy landed. Reporting a frozen
+        # '3.0.0' here would answer that question wrong at the only moment it
+        # is being asked.
+        'version': MILITARY_TRACKER_VERSION
     }
 
 
@@ -9764,7 +9782,7 @@ def register_military_endpoints(app, start_background=True):
         convergence_to_check = list(CHOKEPOINT_CONVERGENCE_PAIRS.keys())
 
         debug = {
-            'version':              '3.2.1',
+            'version':              MILITARY_TRACKER_VERSION,
             'fingerprint_ttl_hours': FINGERPRINT_TTL_SECONDS / 3600,
             'redis_configured':     bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
             'chokepoint_thresholds': CHOKEPOINT_THRESHOLDS,
