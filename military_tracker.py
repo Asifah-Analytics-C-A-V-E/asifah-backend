@@ -4848,7 +4848,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.10.0'
+MILITARY_TRACKER_VERSION = '3.11.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4870,6 +4870,10 @@ MILITARY_TRACKER_FEATURES = {
     'financial_burn':          True,   # v3.10 - money is capability
     'neutral_sample':          True,   # v3.10 - read the 85%, stop guessing
     'dynamic_fp_source':       True,   # v3.10 - fingerprint source no longer hardcoded
+    'rtl_normalization':       True,   # v3.11 - gershayim, alef forms, diacritics
+    'script_detection':        True,   # v3.11 - neutral reasons name the script
+    'multilingual_direction':  True,   # v3.11 - HE/AR/FA/RU direction cues
+    'alliance_cues':           True,   # v3.11 - capability supplemented by pact
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -8042,6 +8046,26 @@ DEGRADATION_CUES = (
     'tanker availability', 'tanker shortage', 'refueling capacity',
     'isr gap', 'lift shortfall', 'spare parts', 'parts shortage',
     'deferred maintenance', 'maintenance deferred',
+    # v3.11 - NON-COMBAT LOSS. 'Japan Air Self-Defense Force Recon Drone
+    # Crashes into Sea of Japan' is an airframe gone with no adversary
+    # involved, which is the exact distinction degradation was split from
+    # attrition to carry. It read neutral.
+    'crashes into', 'crashed into', 'crash landed', 'crashed near',
+    'went down over', 'went down in', 'aircraft crash', 'drone crash',
+    'jet crash', 'helicopter crash', 'non-combat loss', 'class a mishap',
+    # SERVICE LIFE EXTENSION. 'US Air Force to extend service of B-1, B-2
+    # bombers' is the thesis of this whole build in one headline: you
+    # extend forty-year-old airframes because the replacements are not
+    # arriving. It scored 4.0 and classified as nothing.
+    'extend service', 'extend the service', 'service life extension',
+    'life extension program', 'sustainment program', 'keep flying until',
+    'beyond its planned', 'past its retirement',
+    # FORCED HARDENING. 'Al Udeid Goes Underground After Iranian
+    # Barrages' - a base that must bury itself has lost operating freedom
+    # whether or not anything was destroyed. Placed in degradation so it
+    # resolves at step 3, ahead of the barrage reading as force applied.
+    'goes underground', 'went underground', 'hardened shelter',
+    'forced dispersal', 'dispersal of aircraft',
 )
 
 # ---- Money as capability ---------------------------------------------
@@ -8167,6 +8191,25 @@ PROJECTION_CUES = (
     'sail for', 'sail to', 'steam toward', 'steam towards',
     'conduct strikes', 'carry out strikes', 'operate with',
     'steam with', 'sail with', 'enter service', 'join the fleet',
+    # v3.11 - GROUND WAR AND SAHEL. Read straight off the neutral sample:
+    # 'Mi-24 Hind...conducting close air support for the forces of the
+    # Malian army', 'Sudan's Army...claim to have taken 11 areas west of
+    # El Obeid', 'US moves MQ-9 Reapers to South America'. The cue tables
+    # were built for a naval and air war in the Gulf; the corpus has since
+    # grown a Sahel ground war whose vocabulary is territory and air
+    # support, not sortie rates.
+    'close air support', 'air support for', 'air support to',
+    # Bare 'captured' and 'seized' rejected in testing: 'captured on video'
+    # and 'seized documents' are not territorial gains. Territory takes an
+    # article or an object.
+    'have taken', 'has taken', 'seized the', 'seized control',
+    'seized territory', 'seized positions', 'captured the',
+    'captured from', 'have captured', 'has captured',
+    'recaptured', 'retook', 'overran', 'advance on',
+    'advanced on', 'ground offensive', 'counteroffensive',
+    # NB 'moves to' / 'moved to' deliberately absent: as contiguous
+    # strings they match 'moves to condemn' and miss 'moves MQ-9 Reapers
+    # to South America'. That shape is handled by PROJECTION_PATTERNS.
     # Rejected in testing, kept here as a record of what NOT to add:
     # 'head to' matched an admiral heading to a hearing, 'patrol the'
     # matched Border Patrol, and 'move toward' matched moving toward
@@ -8276,15 +8319,21 @@ LOSS_VERBS = (
     # as neutral, so three countries being actively struck registered as
     # nothing. The verb forms were covered; the noun forms were not.
     'attack on', 'attacks on', 'attack against', 'attacks against',
-    'attack upon', 'strike on', 'strikes on', 'strike against',
-    'strikes against', 'raid on', 'raids on', 'assault on',
-    'launches at', 'launches against', 'launch at', 'launched against',
+    'attack upon', 'strikes on', 'strikes against', 'raid on',
+    'raids on', 'assault on',
+    'launches at', 'launches against', 'launch at',
     'shelling of', 'bombardment of', 'bombing of', 'siege on',
     'striking', 'hitting', 'targeting of', 'incursion into',
     'violation of', 'breach of',
     # Suppression and denial. Capability does not have to be destroyed to
     # be taken away - a strike group that cannot operate is a strike group
     # that is not projecting.
+    # v3.11 - from the sample: 'During an ambush on Africa Corps and
+    # Malian forces...lead to catastrophic losses', 'dozens of burning
+    # vehicles and camps of Malian army'. Irregular-warfare loss language.
+    'ambush on', 'ambush of', 'ambushed', 'ambushes',
+    'heavy losses', 'catastrophic losses', 'sustained losses',
+    'burning vehicles', 'burnt-out', 'wreckage of', 'overrun by',
     'suppress', 'suppressed', 'suppression of', 'pinned down',
     'jammed', 'jamming', 'blockade', 'blockaded', 'besieged', 'siege of',
     'cut off', 'forced to divert', 'forced to withdraw', 'driven off',
@@ -8305,13 +8354,111 @@ RECEIVING_CUES = (
 )
 
 
+# ---- RTL and non-Latin script normalisation (v3.11) -------------------
+# Written because 13 of 40 signals in the Sep 19 neutral sample were Hebrew or
+# Arabic, matched an actor, carried a weight, and were structurally unable to
+# classify: the detection layer has spoken Hebrew, Arabic, Farsi and Russian
+# since v2.3, and the direction layer added in v3.5 speaks only English.
+#
+# Normalisation has to happen before any of that vocabulary can fire:
+#   Hebrew   - gershayim/geresh vs ASCII quotes in acronyms (צה״ל vs צה"ל),
+#              and niqqud vowel points that split otherwise identical words.
+#   Arabic   - four alef forms, two yeh forms, teh marbuta, tatweel padding
+#              and harakat, any of which break a plain substring match.
+#   Farsi    - uses ی U+06CC and ک U+06A9 where Arabic uses ي and ك, so the
+#              same word in an Iranian and an Arab outlet is two strings.
+#   Digits   - Arabic-Indic and Eastern Arabic numerals, so "צו 8" and its
+#              equivalents compare against ASCII.
+HEBREW_GERSHAYIM = '\u05f4'
+HEBREW_GERESH = '\u05f3'
+
+RTL_CHAR_MAP = {
+    # Hebrew punctuation -> ASCII equivalents used by this file's keywords
+    HEBREW_GERSHAYIM: '"',
+    HEBREW_GERESH: "'",
+    '\u05be': '-',          # maqaf
+    # Arabic alef family -> bare alef
+    '\u0622': '\u0627', '\u0623': '\u0627', '\u0625': '\u0627',
+    '\u0671': '\u0627',
+    # yeh family (incl. Farsi yeh) -> Arabic yeh
+    '\u0649': '\u064a', '\u06cc': '\u064a', '\u06d0': '\u064a',
+    # kaf family (incl. Farsi keheh) -> Arabic kaf
+    '\u06a9': '\u0643', '\u06aa': '\u0643',
+    # heh / teh marbuta
+    '\u0629': '\u0647', '\u06c1': '\u0647', '\u06d5': '\u0647',
+    # Farsi/Urdu variants
+    '\u06be': '\u0647', '\u0624': '\u0648', '\u0626': '\u064a',
+    # Arabic-Indic digits
+    '\u0660': '0', '\u0661': '1', '\u0662': '2', '\u0663': '3',
+    '\u0664': '4', '\u0665': '5', '\u0666': '6', '\u0667': '7',
+    '\u0668': '8', '\u0669': '9',
+    # Eastern Arabic (Farsi) digits
+    '\u06f0': '0', '\u06f1': '1', '\u06f2': '2', '\u06f3': '3',
+    '\u06f4': '4', '\u06f5': '5', '\u06f6': '6', '\u06f7': '7',
+    '\u06f8': '8', '\u06f9': '9',
+}
+
+# Marks that carry no matching value and only fragment substrings: Hebrew
+# niqqud and cantillation, Arabic harakat, and the tatweel used to stretch
+# Arabic text for justification.
+RTL_STRIP_RANGES = (
+    (0x0591, 0x05c7),   # Hebrew points and accents
+    (0x064b, 0x065f),   # Arabic harakat
+    (0x0670, 0x0670),   # superscript alef
+    (0x06d6, 0x06ed),   # Quranic marks
+    (0x0640, 0x0640),   # tatweel
+    (0x200b, 0x200f),   # zero-width and directional marks
+    (0x202a, 0x202e),   # bidi embedding controls
+)
+
+
+def _rtl_normalize(text):
+    """Fold script variants so one spelling matches all of them."""
+    if not text:
+        return ''
+    out = []
+    for ch in str(text):
+        cp = ord(ch)
+        if any(lo <= cp <= hi for lo, hi in RTL_STRIP_RANGES):
+            continue
+        out.append(RTL_CHAR_MAP.get(ch, ch))
+    return ''.join(out)
+
+
+# Script ranges used to report WHY a signal could not be classified. The
+# threshold exists so one stray glyph in an English headline does not get the
+# whole article labelled as foreign-language.
+SCRIPT_RANGES = (
+    ('hebrew',   ((0x0590, 0x05ff),)),
+    ('arabic',   ((0x0600, 0x06ff), (0x0750, 0x077f), (0xfb50, 0xfdff),
+                  (0xfe70, 0xfeff))),
+    ('cyrillic', ((0x0400, 0x04ff), (0x0500, 0x052f))),
+    ('cjk',      ((0x4e00, 0x9fff), (0x3040, 0x30ff))),
+)
+SCRIPT_MIN_CHARS = 4
+
+
+def _text_scripts(text):
+    """Non-Latin scripts present in text, above a noise threshold."""
+    if not text:
+        return []
+    counts = {}
+    for ch in str(text):
+        cp = ord(ch)
+        for name, ranges in SCRIPT_RANGES:
+            if any(lo <= cp <= hi for lo, hi in ranges):
+                counts[name] = counts.get(name, 0) + 1
+                break
+    return sorted(n for n, c in counts.items() if c >= SCRIPT_MIN_CHARS)
+
+
 def _normalize_direction_text(text):
     """Lowercase and flatten typographic punctuation so cue phrases match.
     Curly quotes are why 'worst deployment' failed to match a headline
     that literally read Worst Deployment."""
     if not text:
         return ''
-    out = str(text).lower()
+    out = _rtl_normalize(str(text)).lower()
     for bad, good in (
         ('\u2018', "'"), ('\u2019', "'"), ('\u201c', '"'), ('\u201d', '"'),
         ('\u2013', '-'), ('\u2014', '-'), ('\u00a0', ' '), ('\n', ' '),
@@ -8369,6 +8516,205 @@ def _actor_windows(text, actor_keyword):
     return text[start:idx], text[idx + len(actor_keyword):end]
 
 
+# =====================================================================
+# MULTILINGUAL DIRECTION VOCABULARY (v3.11)
+# =====================================================================
+# The detection layer has matched Hebrew, Arabic, Farsi and Russian actor and
+# asset keywords since v2.3. The direction layer, bolted on at v3.5, matched
+# only English. The result was a signal class that could be created, weighted
+# and counted but never classified: in the Sep 19 sample, 13 of the 40
+# heaviest neutral signals were Hebrew or Arabic.
+#
+# These tables are defined after _normalize_direction_text so every entry can
+# be folded through the same normaliser the article text goes through. Writing
+# a cue with a gershayim and matching text with an ASCII quote would otherwise
+# fail silently, which is exactly the failure being fixed.
+#
+# Voice matters and maps onto the existing logic. An ACTIVE strike verb makes
+# the actor the striker and belongs in LOSS_VERBS, where a verb near the actor
+# reads as force applied. A PASSIVE or receiving construction makes the actor
+# the target and belongs in RECEIVING_CUES, which wins outright. Hebrew binyan
+# and Arabic form carry that distinction cleanly, so the split is reliable in
+# a way English phrasal verbs often are not.
+
+# ---- Force applied or moved into place -------------------------------
+PROJECTION_CUES_ML = (
+    # Hebrew
+    # NB 'תקף' alone is excluded: it also means 'valid / in force', and
+    # 'ההסכם תקף' would otherwise read as an air strike.
+    'תקיפה', 'תקיפות', 'תקפו', 'תקיפה אווירית', 'גל תקיפות',
+    # תקף takes an object or a preposition when it means 'attacked';
+    # standing alone it usually means 'valid'. These collocations keep
+    # the verb and drop the adjective.
+    'תקף את', 'תקף מטרות', 'תקף יעדים', 'תקף ב', 'תקפה את',
+    'פשיטה', 'פשיטות', 'חיסול', 'חיסלו', 'סיכול ממוקד',
+    'יירט', 'יירטו', 'יירוט', 'שיגר', 'שיגרו', 'שיגור',
+    'הפציץ', 'הפצצה', 'הפצצות', 'תמרון', 'תמרון קרקעי', 'כניסה קרקעית',
+    # 'חדרו' excluded: also 'his room'.
+    'פעילות מבצעית', 'מבצע צבאי', 'השתלטו', 'כבשו', 'חדרו לשטח',
+    'פריסה', 'נפרסו', 'תגבור', 'תגבורת', 'תגברו', 'הזעיק', 'הוזעקו',
+    'כוננות גבוהה', 'כוננות ספיגה', 'גיוס מילואים', 'צו 8', 'צו שמונה',
+    'הוצבו', 'תרגיל משותף', 'אימון משותף',
+    # Arabic (written in normalised form: bare alef, arabic yeh/kaf, heh)
+    'قصف', 'غاره', 'غارات', 'استهدف', 'استهداف', 'ضربه', 'ضربات',
+    'هجوم', 'هجمات', 'اعترض', 'اعتراض', 'اطلاق نار', 'اطلاق صواريخ',
+    'اطلقت صواريخ', 'توغل',
+    # 'حشد' excluded: الحشد الشعبي (the PMF) would make every Iraq story a
+    # force build-up. 'اطلاق' alone excluded: اطلاق سراح is a prisoner
+    # release, not a launch.
+    'نشر قوات', 'تعزيزات', 'حشد قوات', 'استنفار', 'عمليه عسكريه',
+    'مناوره', 'تدريب مشترك', 'مناورات مشتركه',
+    # Farsi
+    # bare 'حمله' excluded: unambiguous in Farsi, an ordinary word in
+    # Arabic, and both scripts normalise to the same string here.
+    'حمله موشكي', 'حمله هوايي', 'شليك', 'رزمايش', 'عمليات نظامي',
+    'استقرار نيرو',
+    # Russian
+    # 'наступление' alone is also 'the onset of' (winter). Needs its target.
+    'нанесли удар', 'авиаудар', 'атаковали', 'наступление на',
+    'перешли в наступление', 'развертывание', 'переброска', 'учения',
+)
+
+# ---- Force pulled back -----------------------------------------------
+WITHDRAWAL_CUES_ML = (
+    # Hebrew
+    'נסיגה', 'נסוג', 'נסוגו', 'סיום המבצע', 'סיום הלחימה',
+    'חזרו לבסיס', 'שבו לבסיס', 'שחרור מילואים', 'שוחררו ממילואים',
+    'צמצום כוחות', 'הוצאת כוחות',
+    # Arabic
+    'انسحاب', 'انسحب', 'انسحبت', 'اخلاء', 'سحب قوات', 'تقليص القوات',
+    # Farsi
+    'عقب نشيني', 'عقبنشيني',
+    # Russian
+    'отвод войск', 'вывод войск', 'отступление', 'отошли',
+)
+
+# ---- Structural capability loss --------------------------------------
+DEGRADATION_CUES_ML = (
+    # Hebrew. שחיקה is the exact word Israeli defence reporting uses for
+    # force erosion, and מילואים strain is where Israeli capability loss
+    # shows up first - months before any of the materiel vocabulary.
+    'שחיקה', 'שחיקת כוחות', 'עייפות קרב', 'מחסור', 'מחסור במלאי',
+    # 'אזל' excluded: it sits inside באזל (Basel).
+    'מחסור במיירטים', 'מלאי מתדלדל', 'אזלו', 'אזל המלאי',
+    'כשירות נמוכה', 'ירידה בכשירות', 'מקורקע', 'מקורקעים',
+    'הארכת שירות', 'עומס מבצעי', 'מילואים ממושכים',
+    'שירות מילואים מוארך', 'בעיות תחזוקה', 'קיצוץ בתקציב',
+    'קיצוץ תקציבי',
+    # Arabic
+    'نقص الذخيره', 'استنزاف', 'تاكل', 'نقص في الجاهزيه', 'تراجع الجاهزيه',
+    # Farsi
+    'كمبود', 'فرسودگي',
+    # Russian
+    'нехватка', 'истощение', 'износ',
+)
+
+# ---- Actor took the blow (passive / receiving voice) ------------------
+RECEIVING_CUES_ML = (
+    # Hebrew - nifal and pual forms put the actor on the receiving end
+    'נפגע', 'נפגעו', 'נפגעים', 'הותקף', 'הותקפה', 'הותקפו',
+    'ספגו', 'ספג פגיעה', 'נהרג', 'נהרגו', 'נפצע', 'נפצעו',
+    'הופל', 'הופלה', 'הופלו', 'אבדות', 'נזק כבד', 'פגיעה ישירה',
+    'ספגה מכה', 'נגרם נזק',
+    # Arabic
+    'اصيب', 'اصابه', 'تعرض ل', 'خسائر', 'قتلي', 'جرحي', 'دمار',
+    'اسقطت', 'تم اسقاط',
+    # Farsi
+    'تلفات', 'خسارت',
+    # Russian
+    'потери', 'сбит', 'сбили', 'погибли', 'ранены', 'попадание',
+)
+
+# ---- Capability supplemented by alliance (v3.11) ---------------------
+# Rachel's ask, and it is a different mechanism from everything above: a
+# security agreement adds nothing to an order of battle on the day it is
+# signed, yet it changes what forces an actor can call on. Israel-KSA and the
+# Mecca Pact are the live examples.
+#
+# NOTE FOR THE ANALYST, deliberately not resolved in code: this is arguably
+# not projection at all. It belongs with procurement on the BUYING side of
+# "is the United States buying capability, or spending it?" - the same side
+# FINANCIAL_INVESTMENT_CUES sits on. Routing it to projection here keeps the
+# five existing classes intact and makes the signal visible, but it does
+# inflate projection_share, which feeds the capability-rhetoric gap cell.
+# Creating a sixth direction class is a doctrine decision, not a coding one.
+ALLIANCE_CUES = (
+    # English
+    'defense pact', 'defence pact', 'security agreement', 'security pact',
+    'mutual defense', 'mutual defence', 'defense treaty', 'defence treaty',
+    'defense cooperation agreement', 'strategic partnership agreement',
+    'mecca pact', 'collective defense', 'collective defence',
+    'status of forces agreement', 'basing agreement', 'basing rights',
+    'joint defense council', 'security guarantee', 'security guarantees',
+    'defense accord', 'defense agreement', 'defence agreement',
+    'military cooperation agreement', 'arms package', 'security assistance',
+    # Hebrew
+    'הסכם ביטחוני', 'ברית הגנה', 'הסכם הגנה', 'שיתוף פעולה ביטחוני',
+    'הסכם אסטרטגי', 'ערבות ביטחונית', 'הסכם ביטחון',
+    # Arabic
+    'اتفاق امني', 'اتفاقيه امنيه', 'ميثاق مكه', 'تحالف دفاعي',
+    'الدفاع المشترك', 'اتفاقيه دفاع مشترك', 'التعاون الدفاعي',
+    'ضمانات امنيه', 'اتفاقيه عسكريه',
+    # Farsi
+    'پيمان دفاعي', 'توافق امنيتي',
+    # Russian
+    'оборонный пакт', 'соглашение о безопасности',
+)
+
+
+# ---- Gapped movement constructions (v3.11) ---------------------------
+# Every other cue in this file is a contiguous substring, which cannot express
+# "VERB ... to PLACE" when the payload sits in the middle. 'US moves MQ-9
+# Reapers to South America' is force being projected, stated in the most
+# ordinary headline shape in defence reporting, and it read neutral.
+#
+# The negative lookahead is what keeps this honest: 'moves to condemn' and
+# 'moved to dismiss' put 'to' immediately after the verb and are political
+# verbs, not movement. Requiring a payload of real length between the verb and
+# 'to' separates a squadron being sent somewhere from a government moving to
+# do something.
+PROJECTION_PATTERNS = (
+    re.compile(
+        r'\b(?:moves?|moved|moving|sends?|sent|sending|transfers?|'
+        r'transferred|transferring|shifts?|shifted|repositions?|'
+        r'repositioned|relocates?|relocated|dispatch(?:es|ed)?|'
+        r'redeploys?|redeployed|flies|flew|ferries|ferried)\b\s+'
+        r'(?!to\b|toward|towards)[^.;:!?]{3,70}?\bto\b',
+        re.IGNORECASE),
+)
+
+
+def _find_patterns(text, patterns):
+    """Regex cues, reported like _find_cues so evidence reads the same."""
+    hits = []
+    for pat in patterns:
+        m = pat.search(text or '')
+        if m:
+            hits.append(' '.join(m.group(0).split())[:60])
+    return hits
+
+
+def _norm_cue_table(cues):
+    """Fold a cue table through the same normaliser article text goes through.
+
+    Without this a cue written with a gershayim, a hamza-carrying alef or a
+    Farsi yeh would never match normalised text, and would do so silently.
+    """
+    seen = []
+    for c in cues:
+        n = _normalize_direction_text(c)
+        if n and n not in seen:
+            seen.append(n)
+    return tuple(seen)
+
+
+ALLIANCE_CUES = _norm_cue_table(ALLIANCE_CUES)
+PROJECTION_CUES = PROJECTION_CUES + _norm_cue_table(PROJECTION_CUES_ML)
+WITHDRAWAL_CUES = WITHDRAWAL_CUES + _norm_cue_table(WITHDRAWAL_CUES_ML)
+DEGRADATION_CUES = DEGRADATION_CUES + _norm_cue_table(DEGRADATION_CUES_ML)
+RECEIVING_CUES = RECEIVING_CUES + _norm_cue_table(RECEIVING_CUES_ML)
+
+
 def classify_signal_direction(text, actor_keyword, asset_id=None,
                               signal_keyword=''):
     """Direction of one signal, relative to that signal's own actor.
@@ -8416,6 +8762,11 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
         'actor_keyword_located': not positionless,
         'financial_burn_cues': fin_burn[:6],
     }
+    # v3.11 - record the script so an unclassified signal can say whether
+    # the vocabulary missed it or the alphabet did.
+    _scripts = _text_scripts(text)
+    if _scripts:
+        evidence['scripts'] = _scripts
     if fin_invest:
         evidence['financial_investment_cues'] = fin_invest[:4]
         evidence['financial_burn_vetoed'] = (
@@ -8550,6 +8901,23 @@ def classify_signal_direction(text, actor_keyword, asset_id=None,
     if evidence['projection_cues']:
         return _done('projection')
 
+    # 6a. v3.11 - 'moves X to Y' and friends.
+    moved = _find_patterns(text, PROJECTION_PATTERNS)
+    if moved:
+        return _done('projection', movement_pattern=moved[:2],
+                     projection_reason='force moved to a named place')
+
+    # 6b. v3.11 - capability supplemented by alliance. Checked after every
+    #     form of actual force so a pact mentioned in a strike story never
+    #     outranks the strike.
+    alliance = _find_cues(text, ALLIANCE_CUES)
+    if alliance:
+        return _done('projection', alliance_cues=alliance[:4],
+                     capability_source='alliance',
+                     projection_reason='security agreement or defence pact: '
+                                       'capability supplemented by partner '
+                                       'forces rather than applied')
+
     # 7. Bare departure words, trusted only when nothing in the text reads as
     #    combat or casualties ("strike leaves 3 dead" is not a withdrawal).
     if not loss_anywhere and not _find_cues(text, CASUALTY_WORDS):
@@ -8643,6 +9011,13 @@ def _neutral_reason(evidence):
         return 'actor keyword not found in text'
     if ev.get('financial_burn_vetoed'):
         return 'cost language read as procurement'
+    # v3.11 - separate 'our phrasing missed it' from 'our alphabet did'.
+    # Before this, both reported 'no directional cue matched', which would
+    # have sent the next vocabulary pass writing English cues for a pile
+    # that was a third unreadable.
+    scripts = ev.get('scripts')
+    if scripts:
+        return 'no cue matched - text in %s' % '+'.join(scripts)
     return 'no directional cue matched'
 
 
