@@ -4848,7 +4848,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.12.0'
+MILITARY_TRACKER_VERSION = '3.13.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4875,6 +4875,7 @@ MILITARY_TRACKER_FEATURES = {
     'multilingual_direction':  True,   # v3.11 - HE/AR/FA/RU direction cues
     'alliance_cues':           True,   # v3.11 - capability supplemented by pact
     'source_health_v2':        True,   # v3.12 - why a feed is dead, not just that it is
+    'gateway_stats_exposed':   True,   # v3.13 - the breaker is visible at last
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -6242,7 +6243,7 @@ def _health_reset():
 
 
 def _health_note(source, configured=True, http_status=None, error=None,
-                 articles=0, duration_ms=None, note=None):
+                 articles=0, duration_ms=None, note=None, blocked=False):
     """Record one fetch attempt. Many attempts aggregate into one source."""
     rec = _SOURCE_HEALTH.setdefault(source, {
         'configured':    configured,
@@ -6252,8 +6253,11 @@ def _health_note(source, configured=True, http_status=None, error=None,
         'errors':        [],
         'notes':         [],
         'duration_ms':   0,
+        'blocked':       False,
     })
     rec['configured'] = configured
+    if blocked:
+        rec['blocked'] = True
     rec['attempts'] += 1
     rec['articles'] += int(articles or 0)
     if http_status is not None:
@@ -6276,14 +6280,27 @@ def _health_status(rec):
         # Never called. Brave sits behind a (gdelt + newsapi) < 10 gate, so a
         # healthy GDELT silently disables it and the old field said 'ZERO'.
         return 'not_attempted'
+    if rec.get('blocked'):
+        # v3.13 - the call was made and refused BEFORE the network, by our
+        # own gateway's circuit breaker. Previously indistinguishable from
+        # 'reached it, got nothing', which made 457 GDELT attempts on
+        # Sep 19 completely unreadable from the payload.
+        return 'blocked_by_gateway'
     statuses = rec.get('http_statuses') or {}
     if any(s in statuses for s in ('401', '403')):
         return 'auth_failed'
+    if '402' in statuses:
+        # Brave answers a spent plan with 402 Payment Required, not 429.
+        # v3.12 filed that under the meaningless 'http_error'.
+        return 'quota_exceeded'
     if '429' in statuses:
         return 'rate_limited'
     non_ok = [s for s in statuses if s not in ('200', 'None')]
     if non_ok:
-        return 'http_error'
+        # A source still delivering articles is not broken. defense_rss
+        # read 'http_error' in v3.12 while returning 695 articles, because
+        # one feed out of dozens answered 202.
+        return 'degraded' if rec.get('articles', 0) > 0 else 'http_error'
     if rec.get('errors'):
         return 'error'
     if rec.get('articles', 0) > 0:
@@ -6298,9 +6315,11 @@ def _health_report(expected=EXPECTED_SOURCES):
         rec = _SOURCE_HEALTH.get(name) or {
             'configured': True, 'attempts': 0, 'articles': 0,
             'http_statuses': {}, 'errors': [], 'notes': [], 'duration_ms': 0,
+            'blocked': False,
         }
         out[name] = {
             'status':        _health_status(rec),
+            'blocked':       rec.get('blocked', False),
             'configured':    rec['configured'],
             'attempts':      rec['attempts'],
             'articles':      rec['articles'],
@@ -6561,10 +6580,15 @@ def fetch_all_defense_rss():
 # and response cache). Original direct call preserved as the fallback.
 try:
     from gdelt_gateway import gdelt_fetch as _gw_gdelt_fetch
+    try:
+        from gdelt_gateway import gateway_stats as _gw_gdelt_stats
+    except ImportError:
+        _gw_gdelt_stats = None      # gateway older than v2.0
     _GDELT_GATEWAY = True
 except ImportError:
     print("[Military GDELT] gdelt_gateway not available -- using direct GDELT calls")
     _GDELT_GATEWAY = False
+    _gw_gdelt_stats = None
 
 
 def fetch_gdelt_military(query, days=7, language='eng'):
@@ -6575,13 +6599,25 @@ def fetch_gdelt_military(query, days=7, language='eng'):
         _t0 = time.time()
         raw = _gw_gdelt_fetch(query, language=language, timespan=f'{days}d',
                               maxrecords=50, label=f'military/{language}')
-        # The gateway hides its own transport detail, so all that is
-        # observable here is whether anything came back. Recorded so a
-        # dead gateway is not mistaken for a dead GDELT.
+        # v3.13 - ask the breaker what it did instead of inferring from an
+        # empty list. An open circuit means this call never reached the
+        # network at all, which is a gateway fault and not a GDELT outage.
+        _gw_state = {}
+        if _gw_gdelt_stats:
+            try:
+                _gw_state = _gw_gdelt_stats() or {}
+            except Exception:
+                _gw_state = {}
+        _gw_blocked = bool(_gw_state.get('circuit_open'))
         _health_note('gdelt', articles=len(raw or []),
-                     http_status=200 if raw else None,
+                     http_status=None if (_gw_blocked or not raw) else 200,
                      duration_ms=(time.time() - _t0) * 1000,
-                     note='routed through shared GDELT gateway')
+                     blocked=_gw_blocked,
+                     note=('gateway circuit OPEN (%ss remaining) - request '
+                           'never reached GDELT'
+                           % _gw_state.get('circuit_remaining_sec', '?'))
+                          if _gw_blocked else
+                          'routed through shared GDELT gateway')
         return [{
             'title':       a.get('title', ''),
             'description': a.get('title', ''),
@@ -9883,6 +9919,12 @@ def _run_full_scan(days=7):
         # spent quota, a soft block, a query matching nothing and a
         # fallback that never fired are five different answers.
         'source_health': _health_report(),
+        # v3.13 - the breaker, visible. gateway_stats() has existed since
+        # July and nothing has ever called it; a high circuit_skips with a
+        # low calls count means the gateway locked itself out, which is
+        # the opposite diagnosis from 'GDELT is down'.
+        'gdelt_gateway': (_gw_gdelt_stats() if _gw_gdelt_stats else
+                          {'note': 'gdelt_gateway < v2.0 or not installed'}),
         # Kept under its old shape for any UI still reading it.
         'source_health_legacy': {
             name: ('ok' if count > 0 else 'ZERO')
@@ -10353,6 +10395,8 @@ def register_military_endpoints(app, start_background=True):
 
         debug = {
             'version':              MILITARY_TRACKER_VERSION,
+            'gdelt_gateway':        (_gw_gdelt_stats() if _gw_gdelt_stats
+                                     else {'note': 'stats unavailable'}),
             'fingerprint_ttl_hours': FINGERPRINT_TTL_SECONDS / 3600,
             'redis_configured':     bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
             'chokepoint_thresholds': CHOKEPOINT_THRESHOLDS,
