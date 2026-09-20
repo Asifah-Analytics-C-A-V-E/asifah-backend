@@ -1132,6 +1132,167 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
 
 
 
+# ── Generic humanitarian country emitters (Sep 20 2026) ─────────────────
+# WHY THIS EXISTS
+#   Audit of CONVERGENCE_REGISTRY on Sep 20 2026: 13 registered convergences,
+#   8 of them waiting on a trigger fingerprint that was specified in a note and
+#   never built. Of the rest, `humanitarian_lebanon` was the ONLY humanitarian
+#   category this file has ever emitted -- which is why the GPI headline has
+#   read wheat-Lebanon every cycle since May. Not because wheat is loud,
+#   because it is alone.
+#
+#   Meanwhile `humanitarian_convergence:bluf:latest` has been sitting in Redis
+#   the whole time, carrying per-country humanitarian signals for Gaza, Sudan,
+#   Yemen, Syria and more. convergence_detector.py reads it. This file never did.
+#
+#   So this is not three copies of _build_lebanon_humanitarian_signal() -- there
+#   is no gaza-stability-backend to copy it against. It is one reader that turns
+#   an existing cache into the trigger categories the registry has been waiting
+#   for. Every country the humanitarian detector covers gets one for free.
+#
+# ABSENCE-HONEST: a missing cache is reported once and returns nothing. It never
+# invents a country, and it never emits a signal for a country the detector did
+# not actually report.
+
+# Level floor. The humanitarian detector's own scale starts at 3, so anything
+# below that is not a signal it emits -- this is a guard, not a filter.
+_HUM_MIN_LEVEL = 3
+
+# Countries with their own richer, dedicated emitter. Lebanon is fetched live
+# from lebanon-stability-backend with casualties, DTM displacement, flash-appeal
+# and food-security detail; this generic path must not shadow it.
+_HUM_DEDICATED = {'lebanon'}
+
+_HUM_CACHE_KEY = 'humanitarian_convergence:bluf:latest'
+_hum_absence_logged = False
+
+
+def _humanitarian_subregion_map():
+    """Sub-national id -> parent country.
+
+    Imported from convergence_detector rather than copied. Today's audit found
+    the same Reddit block duplicated across five repos and the same GDELT query
+    list living in two places; a second copy of this map would be the same
+    mistake. If the import fails, ids are used as-is -- a sub-region signal then
+    simply does not roll up, which is wrong-but-visible rather than silently
+    duplicated and drifting.
+    """
+    try:
+        from convergence_detector import SUBREGION_TO_COUNTRY
+        return SUBREGION_TO_COUNTRY or {}
+    except Exception:
+        return {}
+
+
+def _build_humanitarian_country_signals():
+    """Emit one humanitarian_<country> signal per country in the humanitarian cache.
+
+    Returns a list of signals in the canonical top_signals schema, each carrying
+    category 'humanitarian_<country>' -- which is what CONVERGENCE_REGISTRY
+    entries match on via trigger_signal_category.
+
+    Lebanon is excluded: it has a dedicated emitter with far better data.
+    """
+    global _hum_absence_logged
+
+    payload = _redis_get(_HUM_CACHE_KEY)
+    if not isinstance(payload, dict):
+        if not _hum_absence_logged:
+            print('[ME BLUF] humanitarian convergence cache absent (%s) -- no '
+                  'per-country humanitarian signals this cycle. This is a '
+                  'coverage gap, not calm.' % _HUM_CACHE_KEY)
+            _hum_absence_logged = True
+        return []
+
+    submap = _humanitarian_subregion_map()
+    rolled_up = bool(submap)
+
+    # Collapse to ONE reading per country: the most severe signal wins, and we
+    # keep a count so the prose can say how many independent reports stacked up.
+    by_country = {}
+    for s in (payload.get('signals') or []):
+        if not isinstance(s, dict):
+            continue
+        raw = s.get('country')
+        if not raw:
+            continue
+        cid = submap.get(raw, raw)
+        if cid in _HUM_DEDICATED:
+            continue
+        try:
+            level = int(s.get('level') or 0)
+        except (TypeError, ValueError):
+            level = 0
+        if level < _HUM_MIN_LEVEL:
+            continue
+        rec = by_country.get(cid)
+        if rec is None:
+            rec = {'level': 0, 'count': 0, 'drivers': [], 'subregions': set()}
+            by_country[cid] = rec
+        rec['count'] += 1
+        if raw != cid:
+            rec['subregions'].add(raw)
+        if level > rec['level']:
+            rec['level'] = level
+            rec['top'] = s
+        rec['drivers'].append(s)
+
+    signals = []
+    for cid, rec in by_country.items():
+        top = rec.get('top') or {}
+        level = rec['level']
+        display = cid.replace('_', ' ').title()
+        short = (top.get('short_text') or
+                 top.get('category', '').replace('_', ' ') or
+                 'humanitarian distress reported')
+
+        parts = [
+            f'{display}: humanitarian distress reporting at L{level} '
+            f'({rec["count"]} signal{"s" if rec["count"] != 1 else ""} this cycle). '
+            f'Leading report: "{short}".'
+        ]
+        if rec['subregions']:
+            parts.append(
+                'Sub-national reporting rolled up from %s.'
+                % ', '.join(sorted(r.replace('_', ' ').title() for r in rec['subregions']))
+            )
+        elif not rolled_up:
+            # Say it out loud rather than quietly under-reporting.
+            parts.append(
+                '(Sub-region rollup unavailable this cycle -- convergence_detector '
+                'could not be imported, so sub-national signals may be counted '
+                'separately from their parent country.)')
+
+        signal = {
+            # 6 + level -> L3=9, L4=10, L5=11. Deliberately below a FRESH
+            # Lebanon (12) so the richer dedicated signal still leads -- but
+            # above a STALE Lebanon (9-10), because a live famine signal should
+            # outrank casualty figures nobody has refreshed since April.
+            'priority':      6 + level,
+            'category':      f'humanitarian_{cid}',
+            'theatre':       cid,
+            'level':         level,
+            'icon':          '🆘',
+            'color':         '#a855f7',
+            'pressure_type': 'humanitarian',
+            'short_text':    f'{display} humanitarian L{level} — {short}'[:120],
+            'source':        'humanitarian_convergence',
+        }
+
+        # THE POINT OF ALL THIS: registry-driven convergence enrichment, exactly
+        # as Lebanon gets it. wheat_gaza / wheat_egypt / wheat_syria fire here.
+        _apply_convergence_enrichments(cid, signal, parts)
+
+        signal['long_text'] = ' '.join(parts)
+        signals.append(signal)
+
+    signals.sort(key=lambda s: s['priority'], reverse=True)
+    if signals:
+        print('[ME BLUF] humanitarian country signals: %s'
+              % ', '.join('%s L%d' % (s['theatre'], s['level']) for s in signals))
+    return signals
+
+
 def _build_lebanon_humanitarian_signal(force=False):
     """
     Build a high-priority humanitarian signal for Lebanon, sourced via HTTP
@@ -2146,6 +2307,19 @@ def build_regional_bluf(force=False):
         # Re-sort by priority (humanitarian sig at priority 12 → leads naturally)
         top_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
         print(f'[ME BLUF] Lebanon humanitarian signal injected: {humanitarian_sig["short_text"][:60]}...')
+
+    # Sep 20 2026: every OTHER country the humanitarian detector covers, read
+    # from humanitarian_convergence:bluf:latest. Until today this file emitted
+    # exactly one humanitarian category (Lebanon's), so exactly one humanitarian
+    # convergence could ever fire -- and the GPI said the same thing every cycle.
+    try:
+        _hum_country_sigs = _build_humanitarian_country_signals()
+    except Exception as _e:
+        print(f'[ME BLUF] humanitarian country signals failed (non-fatal): {str(_e)[:140]}')
+        _hum_country_sigs = []
+    if _hum_country_sigs:
+        top_signals = _hum_country_sigs + top_signals
+        top_signals.sort(key=lambda x: x.get('priority', 0), reverse=True)
 
     # v2.3.0: keep full signal pool separate from capped top_signals.
     # `all_signals` retains every BLUF-level signal for downstream axis aggregation
