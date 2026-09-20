@@ -156,13 +156,19 @@ CONVERGENCE_REGISTRY = [
             'against requirement, precipitation forecast over the crossing, IPC '
             'classification, pipeline stocks held outside the perimeter.'
         ),
+        'data_completeness': (
+            'PARTIAL -- structural facts established; live figures not yet sourced. '
+            'This node reads on limited signals: the convergence logic is sound but '
+            'the quantitative picture is incomplete. Absence here is unsourced, '
+            'not zero.'
+        ),
         'facts': {
             'supply_mode':      'aid-delivered; no sovereign import channel',
             'binding_constraint': 'crossing throughput, not import financing',
-            'crossings_open':   '[VERIFY -- desk] principal: Kerem Shalom',
             'covered_storage':  'none at crossing -- precipitation is a spoilage vector',
-            'ipc_phase':        '[VERIFY -- desk] current IPC classification',
-            'trucks_per_day':   '[VERIFY -- desk] actual vs requirement',
+            'crossings_open':   'principal crossing: Kerem Shalom (status not yet sourced)',
+            'ipc_phase':        'not yet sourced',
+            'trucks_per_day':   'not yet sourced -- actual vs requirement',
         },
         'enrichment_text_template': (
             '\u26a0\ufe0f WHEAT-GAZA CONVERGENCE: Global wheat at {alert} '
@@ -207,12 +213,16 @@ CONVERGENCE_REGISTRY = [
             'Watch: GASC tender outcomes and prices, subsidy-reform statements, '
             'FX reserve trend, baladi bread price and ration-card changes.'
         ),
+        'data_completeness': (
+            'PARTIAL -- structural facts established; live figures not yet sourced. '
+            'This node reads on limited signals. Absence here is unsourced, not zero.'
+        ),
         'facts': {
             'import_rank':      'among the largest global wheat importers',
             'failure_mode':     'fiscal first, street second -- distinct from Lebanon/Gaza',
             'state_capacity':   'real reserves and procurement apparatus (GASC)',
-            'import_share':     '[VERIFY -- desk] Black Sea share of Egyptian imports',
-            'subsidy_exposure': '[VERIFY -- desk] beneficiaries / budget line',
+            'import_share':     'not yet sourced -- Black Sea share of Egyptian imports',
+            'subsidy_exposure': 'not yet sourced -- beneficiaries / budget line',
         },
         'enrichment_text_template': (
             '\u26a0\ufe0f WHEAT-EGYPT CONVERGENCE: Global wheat at {alert} '
@@ -256,12 +266,16 @@ CONVERGENCE_REGISTRY = [
             'input availability, Hasakah/Jazira harvest control, donor reconstruction '
             'commitments on agriculture.'
         ),
+        'data_completeness': (
+            'PARTIAL -- structural and historical facts established; current output '
+            'not yet sourced. This node reads on limited signals.'
+        ),
         'facts': {
             'historic_role':    'pre-2011 Levantine breadbasket and regional supplier',
             'current_role':     'import-dependent with limited FX',
             'substitution_link': 'Syrian output loss (2012-) is WHY the Levant moved onto Black Sea supply',
             'long_horizon':     'production rebuild = node-profile change over seasons, not cycles',
-            'current_output':   '[VERIFY -- desk] planted area / yield vs pre-war',
+            'current_output':   'not yet sourced -- planted area / yield vs pre-war',
         },
         'enrichment_text_template': (
             '\u26a0\ufe0f WHEAT-SYRIA CONVERGENCE: Global wheat at {alert} '
