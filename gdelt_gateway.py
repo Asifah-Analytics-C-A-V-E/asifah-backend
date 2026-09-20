@@ -642,6 +642,7 @@ def gateway_stats():
     s['circuit_open'] = s['circuit'] == OPEN and _now() < s['circuit_open_until']
     s['circuit_remaining_sec'] = max(0, int(s['circuit_open_until'] - _now())) \
         if s['circuit_open'] else 0
+    s['gateway_version'] = __version__
     s['cache_entries'] = len(_cache)
     # v2.3 -- these three are now all WINDOW-scoped, so they are directly
     # comparable. In v2.2 requests_seen was cumulative and distinct was
