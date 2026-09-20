@@ -74,7 +74,7 @@ import time
 import threading
 from datetime import datetime, timezone
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 # ── Tunables (env-overridable, like the gateway) ─────────────────────
 # TARGET_LAP_SEC is the contract: walk the WHOLE registered set in about
@@ -375,7 +375,18 @@ def health():
         lap_h = s.get('projected_lap_h')
         out['cache_ttl_h'] = round(ttl_h, 2)
         out['lap_h'] = lap_h
-        if lap_h:
+        if not lap_h:
+            # v1.0.2 -- do NOT report ok while the central check has not run.
+            # Before registration the lap is unknown, so the TTL comparison is
+            # skipped; v1.0.1 skipped it and still returned ok:true, which is a
+            # health check saying 'fine' without having looked.
+            out['ok'] = False
+            out['warnings'].append(
+                'No queries registered yet, so lap time is unknown and the '
+                'TTL-vs-lap check has NOT run. Modules register from inside '
+                'their scan functions -- this is expected for the first few '
+                'minutes after a deploy. Re-check after the first scan.')
+        else:
             ratio = ttl_h / lap_h
             out['ttl_over_lap'] = round(ratio, 2)
             if ratio < 1.0:
