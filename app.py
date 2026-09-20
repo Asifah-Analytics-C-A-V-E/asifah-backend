@@ -8419,6 +8419,24 @@ start_background_refresh()
 # Start Oman rhetoric background refresh (separate scan loop)
 if start_oman_rhetoric_refresh:
     start_oman_rhetoric_refresh()
+
+# ========================================
+# GDELT TRICKLE FETCHER  (Sep 20 2026)
+# ========================================
+# Walks the registered GDELT query set slowly and forever, keeping the
+# shared Upstash cache warm so scans READ instead of fetching. Last thing
+# at boot on purpose: modules register from inside their scan functions,
+# so the set may still be empty here -- the walker idles until it is not.
+#
+# REQUIRES: GDELT_CACHE_TTL_SEC >= one lap (~12h). Set it to 50400.
+# /api/gdelt-trickle/health says so out loud if it is wrong.
+try:
+    from gdelt_trickle import start_trickle, register_trickle_endpoints
+    register_trickle_endpoints(app)
+    start_trickle()
+except ImportError as e:
+    print(f"[ME Backend] ⚠️ gdelt_trickle not available: {e}")
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
