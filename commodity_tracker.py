@@ -118,6 +118,31 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY')
 BRAVE_API_KEY = os.environ.get('BRAVE_API_KEY')
 
+# ── Shared gateways (Sep 19 2026) ───────────────────────────────────
+# This module called GDELT directly with its own short timeout and its
+# own retry loop, unpaced against every other GDELT caller in the same
+# process. The Sep 19 ME log is full of:
+#   [Commodity GDELT] Error: ... Read timed out
+# while the shared gateway, built in July precisely to serialise and
+# pace this traffic, sat unused by this file.
+try:
+    from gdelt_gateway import gdelt_fetch as _gw_gdelt
+    _GDELT_GATEWAY = True
+except ImportError as e:
+    print(f'[Commodity Tracker] gdelt_gateway unavailable ({e}); direct calls')
+    _gw_gdelt = None
+    _GDELT_GATEWAY = False
+
+try:
+    from brave_gateway import brave_fetch as _gw_brave, brave_stats as _gw_brave_stats
+    _BRAVE_GATEWAY = True
+except ImportError as e:
+    print(f'[Commodity Tracker] brave_gateway unavailable ({e}); '
+          f'direct Brave calls, NO shared budget')
+    _gw_brave = None
+    _gw_brave_stats = None
+    _BRAVE_GATEWAY = False
+
 # Upstash Redis (persistent cache across Render cold starts)
 UPSTASH_REDIS_URL = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
@@ -3185,7 +3210,26 @@ def fetch_all_commodity_rss():
 # ========================================
 
 def fetch_gdelt_commodity(query, days=7, language='eng'):
-    """Fetch commodity-relevant articles from GDELT."""
+    """Fetch commodity-relevant articles from GDELT.
+
+    Routed through the shared gateway, which serialises requests to one
+    in flight per process, paces them, backs off on 429 and gives GDELT
+    a realistic read timeout. The direct path below is kept only for a
+    backend that does not have the module.
+    """
+    if _GDELT_GATEWAY and _gw_gdelt:
+        raw = _gw_gdelt(query, language=language, timespan=f'{days}d',
+                        maxrecords=50, label=f'commodity/{language}')
+        return [{
+            'title':       a.get('title', '') or '',
+            'description': a.get('title', '') or '',
+            'url':         a.get('url', '') or '',
+            'publishedAt': a.get('published', '') or '',
+            'source':      {'name': a.get('source') or 'GDELT'},
+            'content':     a.get('title', '') or '',
+            'feed_type':   'gdelt',
+        } for a in (raw or [])]
+
     try:
         params = {
             'query':      query,
@@ -3436,6 +3480,22 @@ def fetch_brave_commodity(query, count=20):
     """
     if not BRAVE_API_KEY:
         return []
+
+    # Through the shared gateway: one daily budget across every repo, so
+    # this module cannot quietly spend the platform's monthly plan on
+    # commodity queries while the other trackers go without.
+    if _BRAVE_GATEWAY and _gw_brave:
+        raw = _gw_brave(query, count=count, label='commodity/brave')
+        return [{
+            'title':       r.get('title', '') or '',
+            'description': (r.get('description', '') or '')[:500],
+            'url':         r.get('url', '') or '',
+            'publishedAt': r.get('published', '') or '',
+            'source':      r.get('source') or {'name': 'Brave'},
+            'content':     r.get('description', '') or '',
+            'feed_type':   'brave',
+        } for r in (raw or [])]
+
     try:
         resp = requests.get(
             'https://api.search.brave.com/res/v1/news/search',
