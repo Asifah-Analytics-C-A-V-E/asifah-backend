@@ -74,7 +74,7 @@ import time
 import threading
 from datetime import datetime, timezone
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 # ── Tunables (env-overridable, like the gateway) ─────────────────────
 # TARGET_LAP_SEC is the contract: walk the WHOLE registered set in about
@@ -167,6 +167,11 @@ def register_queries(label, queries):
     if added:
         print('[GDELT Trickle] %s registered %d queries (total %d, '
               'interval now %.0fs)' % (label, added, len(_queries), current_interval()))
+        # Auto-start. Callers register from inside their scan functions (the
+        # military query blocks are function-local), so registration can land
+        # long after app.py has finished booting. Waiting for an explicit
+        # start_trickle() that already ran would leave the walker dead.
+        start_trickle()
     return added
 
 
@@ -206,7 +211,9 @@ def _walk_once(fetch):
     with _lock:
         n = len(_queries)
         if n == 0:
-            return MAX_INTERVAL_SEC
+            # Idle, not dead. Re-check often enough that a registration landing
+            # mid-scan is picked up within a minute.
+            return 30.0
         if _state['position'] >= n:
             # Lap complete.
             _state['position'] = 0
@@ -288,9 +295,13 @@ def _loop():
     except ImportError as e:
         print('[GDELT Trickle] gdelt_gateway unavailable (%s) -- trickle disabled' % e)
         return
-    print('[GDELT Trickle] walking %d queries at %.0fs intervals '
-          '(target lap %.1fh)'
-          % (len(_queries), current_interval(), TARGET_LAP_SEC / 3600.0))
+    if not _queries:
+        print('[GDELT Trickle] started with 0 queries -- idling until a module '
+              'registers (modules register from inside their scan functions)')
+    else:
+        print('[GDELT Trickle] walking %d queries at %.0fs intervals '
+              '(target lap %.1fh)'
+              % (len(_queries), current_interval(), TARGET_LAP_SEC / 3600.0))
     with _lock:
         _state['started_at'] = _iso()
         _state['lap_started_at'] = _now()
@@ -313,9 +324,6 @@ def start_trickle():
             return False
         if not ENABLED:
             print('[GDELT Trickle] disabled by GDELT_TRICKLE_ENABLED')
-            return False
-        if not _queries:
-            print('[GDELT Trickle] no queries registered -- not starting')
             return False
         _started = True
     t = threading.Thread(target=_loop, daemon=True, name='GDELTTrickle')
