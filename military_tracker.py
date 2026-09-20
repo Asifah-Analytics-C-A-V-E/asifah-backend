@@ -7263,6 +7263,18 @@ def fetch_all_gdelt_military(days=7):
         (japanese_queries, 'jpn', 'Japanese'),
     ]
 
+    # Sep 20 2026 -- hand the whole set to the background trickle fetcher, which
+    # walks it slowly and keeps the shared cache warm. This loop then mostly
+    # gets cache hits instead of 457 network calls in one burst.
+    try:
+        from gdelt_trickle import register_queries as _tk_register
+        _tk_register('military', [
+            {'query': q, 'language': lc, 'timespan': f'{days}d', 'maxrecords': 50}
+            for qs, lc, _nm in query_blocks for q in qs
+        ])
+    except ImportError:
+        pass
+
     for queries, lang_code, lang_name in query_blocks:
         block_count = 0
         for query in queries:
