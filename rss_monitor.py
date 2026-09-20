@@ -142,8 +142,35 @@ OPEC_GULF_RSS_FEEDS = {
     'trump_opec':            'https://news.google.com/rss/search?q=%22Trump%22+OPEC+OR+%22Trump%22+%22oil+prices%22&hl=en&gl=US&ceid=US:en',
 }
 
+# ========================================
+# FEED LANGUAGES — explicit, not guessed from the name
+# ========================================
+# Only non-English feeds need an entry. Anything absent is 'en'.
+FEED_LANGUAGES = {
+    'al_manar_ar':   'ar',
+    'arab_news':     'ar',
+    'iran_wire_fa':  'fa',
+    'haaretz':       'he',
+    'ravid_hebrew':  'he',   # hl=iw&gl=IL feed -- was silently tagged English
+}
+
+# ========================================
+# v3.5.0 — US Press (Sep 20 2026)
+# ========================================
+# US papers covering foreign affairs. Distinct from the DIPLOMATIC feeds,
+# which are Google News queries ABOUT named people -- these are first-party
+# newsroom feeds.
+#
+# NOTE ON URLS: use the bare feed path. The link Rachel had in hand carried
+# a ?_gl=... Google Analytics cross-domain linker token from her own browser
+# session -- it has a timestamp in it, decays, and would have produced a feed
+# that worked on day one and quietly died later.
+US_PRESS_RSS_FEEDS = {
+    'washington_sun': 'https://www.washingtonsun.com/index.rss',
+}
+
 # Combine all feeds
-ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS, **DIPLOMATIC_RSS_FEEDS, **OPEC_GULF_RSS_FEEDS}
+ALL_RSS_FEEDS = {**LEADERSHIP_RSS_FEEDS, **ISRAELI_RSS_FEEDS, **REGIONAL_ARAB_RSS_FEEDS, **DIPLOMATIC_RSS_FEEDS, **OPEC_GULF_RSS_FEEDS, **US_PRESS_RSS_FEEDS}
 
 
 # ========================================
@@ -460,14 +487,15 @@ def fetch_all_rss(feed_dict=None):
                     description = content_elem.text[:500]
 
                 # Determine language
-                lang = 'en'
-                if 'ar' in feed_name or 'arabic' in feed_url.lower():
-                    lang = 'ar'
-                elif 'fa' in feed_name or 'farsi' in feed_url.lower():
-                    lang = 'fa'
-                elif 'haaretz' in feed_name:
-                    lang = 'he'
-
+                # Sep 20 2026: this was a SUBSTRING match on the feed name, so
+                # any name containing 'ar' was tagged Arabic -- including
+                # al_manar_EN, aramco_news, barrack_diplomatic, karam_lebanon
+                # and haaretz. Worse, 'haaretz' contains 'ar', so the first
+                # branch always fired and the elif tagging it Hebrew was
+                # UNREACHABLE: Haaretz has never once been labelled 'he'.
+                # shafaq_news was likewise tagged Farsi. Explicit map now;
+                # anything unlisted is English, which is the honest default.
+                lang = FEED_LANGUAGES.get(feed_name, 'en')
                 # Determine source display name
                 source_names = {
                     'ynet': 'Ynet',
@@ -481,6 +509,7 @@ def fetch_all_rss(feed_dict=None):
                     'iran_wire_en': 'Iran Wire',
                     'iran_wire_fa': 'Iran Wire (FA)',
                     'arab_news': 'Arab News',
+                    'washington_sun': 'Washington Sun',
                 }
                 source_display = source_names.get(feed_name, feed_name.upper().replace('_', ' '))
 
