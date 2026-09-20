@@ -89,6 +89,9 @@ USAGE
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
+import os
+import json
+import hashlib
 import time
 import threading
 from datetime import datetime, timezone
@@ -121,6 +124,20 @@ CYCLE_IDLE_SEC   = 120
 # interval_now still read 1.0.
 THROTTLE_MEMORY_SEC = 1800
 
+# v2.2, Sep 20 2026: budget + shared cache.
+# 457 GDELT attempts in one scan, 36 answered 429. By then the breaker was
+# not the problem -- the request volume was. And CACHE_TTL_SEC above is
+# in-process only, so it dies on restart: the ME backend restarted four
+# times that morning and cache_hits read 0. These are the actual fix.
+SHARED_CACHE_TTL_SEC = int(os.environ.get('GDELT_CACHE_TTL_SEC', '21600'))  # 6h
+MAX_CALLS_PER_CYCLE  = int(os.environ.get('GDELT_MAX_CALLS_PER_CYCLE', '150'))
+
+UPSTASH_URL = (os.environ.get('UPSTASH_REDIS_URL')
+               or os.environ.get('UPSTASH_REDIS_REST_URL'))
+UPSTASH_TOKEN = (os.environ.get('UPSTASH_REDIS_TOKEN')
+                 or os.environ.get('UPSTASH_REDIS_REST_TOKEN'))
+REDIS_OK = bool(UPSTASH_URL and UPSTASH_TOKEN)
+
 # An open breaker used to log once per skipped call. With 16 language
 # variants across several trackers that is hundreds of identical lines per
 # scan, which is how the real failures became invisible.
@@ -144,25 +161,77 @@ _state = {
     'skips_since_log':  0,
     'last_error':       '',
     'throttled_until':  0.0,   # v2.1 -- survives _maybe_new_cycle()
+    'cycle_calls':      0,     # v2.2 -- calls spent in the current cycle
+    'budget_skips':     0,     # v2.2 -- refused because the budget was spent
+    'redis_hits':       0,     # v2.2 -- served from the shared 6h cache
+    'redis_writes':     0,
+    'requests_seen':    0,     # v2.2 -- every gdelt_fetch call
     'cycles':           0,
     'calls': 0, 'ok': 0, 'timeouts': 0, 'rate_limited': 0,
     'cache_hits': 0, 'circuit_skips': 0, 'articles': 0,
 }
-_cache = {}   # key -> (expires_at, articles)
+_cache = {}   # key -> (expires_at, articles)   L1, in-process
+_cycle_keys = set()   # v2.2 -- distinct cache keys seen this cycle
 
 
 def _now():
     return time.time()
 
 
+def _redis(cmd):
+    """One Upstash REST command. Returns the 'result' value or None.
+
+    Same shape as brave_gateway's helper, deliberately: one way to talk to
+    Upstash across the platform, so a credential change is one change.
+    """
+    if not REDIS_OK:
+        return None
+    try:
+        r = requests.post(UPSTASH_URL, headers={
+            'Authorization': 'Bearer %s' % UPSTASH_TOKEN},
+            json=cmd, timeout=6)
+        if r.ok:
+            return (r.json() or {}).get('result')
+    except Exception as e:
+        with _state_lock:
+            _state['last_error'] = 'redis: %s' % str(e)[:100]
+    return None
+
+
+def _redis_key(key):
+    """Hashed -- queries carry Arabic, Hebrew, Farsi, spaces and quotes."""
+    return 'gdelt:cache:' + hashlib.md5(key.encode('utf-8')).hexdigest()
+
+
 def _cache_get(key):
+    """L1 in-process, then L2 Upstash.
+
+    L1 is fast and dies on restart. L2 survives restarts AND is shared
+    across every backend, so a query another repo already answered costs
+    this one nothing. That is the whole point: on Sep 20 the ME backend
+    restarted four times and every restart began from an empty cache.
+    """
     hit = _cache.get(key)
-    if not hit:
-        return None
-    expires, data = hit
-    if _now() > expires:
+    if hit:
+        expires, data = hit
+        if _now() <= expires:
+            return data
         _cache.pop(key, None)
+
+    if not REDIS_OK:
         return None
+    raw = _redis(['GET', _redis_key(key)])
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(data, list):
+        return None
+    _cache[key] = (_now() + CACHE_TTL_SEC, data)   # promote into L1
+    with _state_lock:
+        _state['redis_hits'] += 1
     return data
 
 
@@ -171,6 +240,20 @@ def _cache_put(key, data):
     if len(_cache) > 400:                     # bounded; oldest out first
         for k in sorted(_cache, key=lambda k: _cache[k][0])[:100]:
             _cache.pop(k, None)
+    if not REDIS_OK or not data:
+        return
+
+    def _write():
+        # Fire-and-forget: a failed cache write costs one future miss and
+        # must never add latency to a request that already succeeded.
+        try:
+            _redis(['SET', _redis_key(key), json.dumps(data),
+                    'EX', str(SHARED_CACHE_TTL_SEC)])
+            with _state_lock:
+                _state['redis_writes'] += 1
+        except Exception:
+            pass
+    threading.Thread(target=_write, daemon=True).start()
 
 
 def _parse(payload):
@@ -212,6 +295,8 @@ def _maybe_new_cycle():
             _state['interval'] = MIN_INTERVAL_SEC
         _state['consecutive_fail'] = 0
         _state['cycles'] += 1
+        _state['cycle_calls'] = 0        # v2.2 -- budget resets with the cycle
+        _cycle_keys.clear()
         if _state['circuit'] == OPEN and _now() >= _state['circuit_open_until']:
             _state['circuit'] = HALF_OPEN
 
@@ -244,6 +329,20 @@ def _admit(tag):
         print('[GDELT Gateway] %s: cooldown served after %d skipped calls '
               '-- probing' % (tag, _state['skips_since_log']))
         _state['skips_since_log'] = 0
+
+    # v2.2 -- the budget. gdelt_fetch checks the cache BEFORE calling this,
+    # so cached answers are always free; only calls that would actually
+    # reach GDELT are counted. A probe is exempt: refusing the one request
+    # that could close the breaker would wedge it open for the whole cycle.
+    if _state['circuit'] != HALF_OPEN and \
+            _state['cycle_calls'] >= MAX_CALLS_PER_CYCLE:
+        _state['budget_skips'] += 1
+        if _state['budget_skips'] == 1 or _state['budget_skips'] % 50 == 0:
+            print('[GDELT Gateway] %s: cycle budget spent (%d calls); '
+                  '%d further requests refused. This is a BUDGET '
+                  'stand-down, not a GDELT outage.'
+                  % (tag, _state['cycle_calls'], _state['budget_skips']))
+        return False, False
 
     if _state['circuit'] == HALF_OPEN:
         if _state['probe_in_flight']:
@@ -289,22 +388,33 @@ def _record_failure(is_probe, reason):
         return tripped
 
 
-def gdelt_fetch(query, language='eng', timespan='3d', maxrecords=75, label=''):
+def gdelt_fetch(query, language='eng', timespan='3d', maxrecords=75, label='',
+                refresh=False):
     """
     Fetch from GDELT through the shared gateway.
 
     Returns a list of article dicts -- empty on failure, never None, never
     fabricated. Callers keep their own fallback logic; this only makes the
     attempt survivable.
+
+    refresh=True skips the cache READ for this query only, and still writes
+    the fresh result back. That is what a user pressing Refresh on a
+    regional page should pass; every existing caller keeps the default and
+    is unaffected.
     """
     tag = label or language
     cache_key = '%s|%s|%s|%s' % (query, language, timespan, maxrecords)
 
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        with _state_lock:
-            _state['cache_hits'] += 1
-        return list(cached)
+    with _state_lock:
+        _state['requests_seen'] += 1
+        _cycle_keys.add(cache_key)
+
+    if not refresh:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            with _state_lock:
+                _state['cache_hits'] += 1
+            return list(cached)
 
     with _state_lock:
         allowed, is_probe = _admit(tag)
@@ -434,6 +544,11 @@ def gateway_stats():
     s['circuit_remaining_sec'] = max(0, int(s['circuit_open_until'] - _now())) \
         if s['circuit_open'] else 0
     s['cache_entries'] = len(_cache)
+    s['distinct_queries_this_cycle'] = len(_cycle_keys)
+    s['budget_max'] = MAX_CALLS_PER_CYCLE
+    s['budget_left'] = max(0, MAX_CALLS_PER_CYCLE - s['cycle_calls'])
+    s['shared_cache'] = 'upstash' if REDIS_OK else 'in-process only'
+    s['shared_cache_ttl_h'] = round(SHARED_CACHE_TTL_SEC / 3600.0, 1)
     s['throttled'] = _now() < s['throttled_until']
     s['throttled_remaining_sec'] = max(0, int(s['throttled_until'] - _now()))
     s['generated_at'] = datetime.now(timezone.utc).isoformat()
