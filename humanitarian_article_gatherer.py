@@ -62,6 +62,29 @@ from email.utils import parsedate_to_datetime
 
 import requests
 
+# ── Shared gateways (Sep 19 2026) ───────────────────────────────────
+# Both are portable modules already in this backend. Routing through
+# them is what makes this module's GDELT traffic paced and its Brave
+# spend visible and capped alongside every other repo's.
+try:
+    from gdelt_gateway import gdelt_fetch as _gw_gdelt
+    _GDELT_GATEWAY = True
+except ImportError as e:
+    print(f'[humanitarian_gatherer] gdelt_gateway unavailable ({e}); '
+          f'falling back to direct GDELT calls')
+    _gw_gdelt = None
+    _GDELT_GATEWAY = False
+
+try:
+    from brave_gateway import brave_fetch as _gw_brave, brave_stats as _gw_brave_stats
+    _BRAVE_GATEWAY = True
+except ImportError as e:
+    print(f'[humanitarian_gatherer] brave_gateway unavailable ({e}); '
+          f'falling back to direct Brave calls (NO shared budget)')
+    _gw_brave = None
+    _gw_brave_stats = None
+    _BRAVE_GATEWAY = False
+
 
 # ============================================================
 # CONFIG
@@ -87,6 +110,12 @@ RSS_TIMEOUT         = 12
 GDELT_TIMEOUT       = 30
 BRAVE_TIMEOUT       = 10
 GDELT_MIN_RESULTS   = 5             # threshold below which Brave fallback kicks in
+# Sep 19 2026: with GDELT down, every one of the 33 GDELT queries fell
+# below that threshold and queued a paid Brave call. The shared daily
+# budget in brave_gateway is the real backstop, but a per-module cap
+# keeps this gatherer from spending the whole platform's allowance
+# before the other trackers have run.
+BRAVE_FALLBACK_MAX_PER_SCAN = 8
 GDELT_INTER_QUERY_DELAY = 0.5       # 429-defense pacing between GDELT calls
 
 # Global state for scheduler
@@ -432,7 +461,25 @@ def fetch_all_rss():
 # GDELT FETCH
 # ============================================================
 def _fetch_gdelt_query(query, lang='eng', days=7):
-    """Fetch one GDELT query. Returns list of article dicts."""
+    """Fetch one GDELT query. Returns list of article dicts.
+
+    Routed through the shared gateway so this module's traffic is
+    serialised and paced with every other GDELT caller in the process.
+    Unpaced concurrent requests from one IP is what put GDELT into a
+    429 spiral platform-wide; see gdelt_gateway's docstring.
+    """
+    if _GDELT_GATEWAY and _gw_gdelt:
+        raw = _gw_gdelt(query, language=lang, timespan=f'{days}d',
+                        maxrecords=30, label=f'humanitarian/{lang}')
+        return [{
+            'title':       (a.get('title') or '')[:300],
+            'url':         a.get('url') or '',
+            'published':   a.get('published') or '',
+            'description': (a.get('title') or '')[:500],
+            'source':      f"GDELT/{lang}: {query[:30]}",
+            'weight':      0.95,
+        } for a in (raw or [])]
+
     articles = []
     try:
         params = {
@@ -607,6 +654,23 @@ def _fetch_brave_query(query, force_refresh=False):
         if cached and isinstance(cached, list):
             return cached
 
+    # Through the shared gateway: one daily budget across every repo,
+    # spend attributed per caller, and a 402 stands the whole platform
+    # down instead of each module rediscovering it request by request.
+    if _BRAVE_GATEWAY and _gw_brave:
+        raw = _gw_brave(query, count=20, label='humanitarian/brave')
+        articles = [{
+            'title':       (a.get('title') or '')[:300],
+            'url':         a.get('url') or '',
+            'published':   a.get('published') or '',
+            'description': (a.get('description') or '')[:500],
+            'source':      f"Brave: {query[:30]}",
+            'weight':      0.9,
+        } for a in (raw or [])]
+        if articles:
+            _redis_set(cache_key, articles, ttl=BRAVE_CACHE_TTL)
+        return articles
+
     articles = []
     try:
         resp = requests.get(
@@ -659,14 +723,25 @@ def fetch_brave_subregions():
 
 
 def fetch_brave_gdelt_fallback(fallback_queries):
-    """For GDELT queries that returned <5 results, try Brave as backup."""
+    """For GDELT queries that returned <5 results, try Brave as backup.
+
+    Capped at BRAVE_FALLBACK_MAX_PER_SCAN. When GDELT is healthy only a
+    handful of niche queries come up short and the cap never binds; when
+    GDELT is down every query comes up short, and without a cap this
+    function converts an outage directly into a bill.
+    """
     all_articles = []
     if not BRAVE_API_KEY:
         return all_articles
-    for query, lang in fallback_queries:
-        # Only English fallback for Brave (Brave's Arabic coverage less reliable)
-        if lang != 'eng':
-            continue
+    eligible = [(q, l) for q, l in fallback_queries if l == 'eng']
+    capped = eligible[:BRAVE_FALLBACK_MAX_PER_SCAN]
+    if len(eligible) > len(capped):
+        print('[humanitarian_gatherer] Brave fallback: %d eligible, '
+              'firing %d (cap %d). A large number here means GDELT '
+              'is failing, not that these topics are quiet.'
+              % (len(eligible), len(capped),
+                 BRAVE_FALLBACK_MAX_PER_SCAN))
+    for query, lang in capped:
         articles = _fetch_brave_query(query)
         all_articles.extend(articles)
         time.sleep(1.1)
@@ -916,6 +991,11 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
             'gdelt_queries':    len(GDELT_HUMANITARIAN_QUERIES),
             'brave_subregions': len(BRAVE_SUBREGION_QUERIES),
             'brave_configured': bool(BRAVE_API_KEY),
+            'gdelt_gateway_in_use': _GDELT_GATEWAY,
+            'brave_gateway_in_use': _BRAVE_GATEWAY,
+            'brave_budget': (_gw_brave_stats() if _gw_brave_stats else
+                             {'note': 'brave_gateway not installed -- '
+                                      'spend is uncapped and unattributed'}),
             'redis_configured': bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
             'scan_interval_h':  SCAN_INTERVAL_HOURS,
             'currently_running': _gatherer_running,
@@ -949,6 +1029,6 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__   = '1.5.0'
+__version__   = '1.6.0'
 __module_id__ = 'humanitarian_article_gatherer'
 print(f'[Humanitarian Article Gatherer] Module loaded -- v{__version__}')

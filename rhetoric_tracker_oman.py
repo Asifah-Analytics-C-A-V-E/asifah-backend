@@ -120,6 +120,30 @@ except ImportError as e:
 # Imports the Brave fetcher from app.py (the ME backend's main module).
 # Fires when GDELT+RSS underperform. Critical for Arabic/Persian coverage of
 # Iran rhetoric about Salalah and Persian-language IRGC commentary on Oman.
+# ── Shared gateways (Sep 19 2026) ───────────────────────────────────
+# GDELT: serialised + paced + circuit-broken across every caller in the
+# process. Brave: one daily budget shared across every repo, with spend
+# attributed per caller.
+try:
+    from gdelt_gateway import gdelt_fetch as _gw_gdelt
+    _GDELT_GATEWAY = True
+    print('[Oman Rhetoric] GDELT gateway loaded')
+except ImportError as e:
+    print(f'[Oman Rhetoric] gdelt_gateway unavailable ({e}); direct calls')
+    _gw_gdelt = None
+    _GDELT_GATEWAY = False
+
+try:
+    from brave_gateway import brave_fetch as _gw_brave, brave_stats as _gw_brave_stats
+    _BRAVE_GATEWAY = True
+    print('[Oman Rhetoric] Brave gateway loaded (shared daily budget)')
+except ImportError as e:
+    print(f'[Oman Rhetoric] brave_gateway unavailable ({e}); '
+          f'direct Brave calls, NO shared budget')
+    _gw_brave = None
+    _gw_brave_stats = None
+    _BRAVE_GATEWAY = False
+
 try:
     from app import fetch_brave_news as _fetch_brave
     _BRAVE_AVAILABLE = True
@@ -605,6 +629,26 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
 # GDELT FETCH
 # ============================================
 def _fetch_gdelt(query, language='eng', max_records=20):
+    """Fetch one GDELT query.
+
+    Routed through the shared gateway. The direct path below is kept only
+    as a fallback for a backend without the module; note its timeout=8,
+    which is one of the two faults the gateway exists to fix.
+    """
+    if _GDELT_GATEWAY and _gw_gdelt:
+        raw = _gw_gdelt(query + ' sourcelang:' + language,
+                        language=language, timespan='2d',
+                        maxrecords=max_records, label=f'oman/{language}')
+        return [{
+            'title':       a.get('title', '') or '',
+            'description': a.get('title', '') or '',
+            'url':         a.get('url', '') or '',
+            'publishedAt': a.get('published', '') or '',
+            'source':      {'name': a.get('source') or 'GDELT'},
+            'feed_type':   'gdelt',
+            'language':    language[:2],
+        } for a in (raw or [])]
+
     articles = []
     try:
         params = {
@@ -725,13 +769,27 @@ def _fetch_all_articles():
     # ── Brave Search fallback (multi-language) ──
     # Per Rachel: EN + AR + FA + HE
     brave_count = 0
-    if _BRAVE_AVAILABLE and _fetch_brave and (gdelt_count + newsapi_count) < 15:
+    # Prefer the shared gateway; fall back to app.fetch_brave_news only if
+    # the gateway module is absent. The gateway is what keeps this
+    # module's spend inside the platform's daily budget rather than
+    # competing with every other tracker for the same monthly pool.
+    _brave_call = None
+    if _BRAVE_GATEWAY and _gw_brave:
+        def _brave_call(q, count=15, freshness='pw', search_lang=None,
+                        country=None):
+            return _gw_brave(q, count=count, freshness=freshness,
+                             search_lang=search_lang, country=country,
+                             label=f'oman/{search_lang or "en"}')
+    elif _BRAVE_AVAILABLE and _fetch_brave:
+        _brave_call = _fetch_brave
+
+    if _brave_call and (gdelt_count + newsapi_count) < 15:
         print(f"[Oman Brave] GDELT+NewsAPI returned {gdelt_count + newsapi_count} -- triggering Brave multi-lang fallback")
         # English
         for q in ['Oman Sultan Haitham mediation', 'Salalah Duqm Oman security']:
             try:
-                fetched = _fetch_brave(q, count=15, freshness='pw',
-                                       search_lang='en', country='us')
+                fetched = _brave_call(q, count=15, freshness='pw',
+                                      search_lang='en', country='us')
                 articles.extend(fetched)
                 brave_count += len(fetched)
                 time.sleep(1.1)
@@ -740,8 +798,8 @@ def _fetch_all_articles():
         # Arabic
         for q in ['عمان السلطان هيثم وساطة', 'صلالة الدقم عمان']:
             try:
-                fetched = _fetch_brave(q, count=10, freshness='pw',
-                                       search_lang='ar', country='us')
+                fetched = _brave_call(q, count=10, freshness='pw',
+                                      search_lang='ar', country='us')
                 articles.extend(fetched)
                 brave_count += len(fetched)
                 time.sleep(1.1)
@@ -750,8 +808,8 @@ def _fetch_all_articles():
         # Persian
         for q in ['عمان مسقط مذاکرات']:
             try:
-                fetched = _fetch_brave(q, count=10, freshness='pw',
-                                       search_lang='fa', country='ir')
+                fetched = _brave_call(q, count=10, freshness='pw',
+                                      search_lang='fa', country='ir')
                 articles.extend(fetched)
                 brave_count += len(fetched)
                 time.sleep(1.1)
@@ -760,8 +818,8 @@ def _fetch_all_articles():
         # Hebrew
         for q in ['עומאן תיווך איראן']:
             try:
-                fetched = _fetch_brave(q, count=10, freshness='pw',
-                                       search_lang='he', country='il')
+                fetched = _brave_call(q, count=10, freshness='pw',
+                                      search_lang='he', country='il')
                 articles.extend(fetched)
                 brave_count += len(fetched)
                 time.sleep(1.1)
@@ -982,7 +1040,7 @@ def run_oman_rhetoric_scan(force=False):
             'success':              True,
             'theatre':              'Oman',
             'theatre_color':        '#0ea5e9',
-            'version':              '1.0 - April 2026',
+            'version':              '1.1 - September 2026 (shared gateways)',
 
             # Composite scoring
             'threat_level':         composite['threat_level'],
@@ -994,6 +1052,10 @@ def run_oman_rhetoric_scan(force=False):
             'actors':               actors_out,
             'articles_scanned':     len(articles),
             'source_counts':        _compute_source_counts(articles),
+            'gdelt_gateway_in_use': _GDELT_GATEWAY,
+            'brave_gateway_in_use': _BRAVE_GATEWAY,
+            'brave_budget':         (_gw_brave_stats() if _gw_brave_stats
+                                     else {'note': 'brave_gateway not installed'}),
             'cross_theater_boosts': composite['cross_theater_boosts'],
             'cross_theater_signals': cross_signals,
             'scan_time_seconds':    round(time.time() - scan_start, 2),
