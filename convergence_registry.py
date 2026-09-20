@@ -64,6 +64,7 @@ CONVERGENCE_REGISTRY = [
         'id':                      'wheat_lebanon',
         'commodity':               'wheat',
         'country':                 'lebanon',
+        'cluster':                 'levant_wheat',
         'trigger_signal_category': 'humanitarian_lebanon',
         'trigger_region':          'me',
         'commodity_threshold':     'elevated',          # fires at elevated, high, or surge
@@ -106,6 +107,175 @@ CONVERGENCE_REGISTRY = [
         'notes': (
             'Founding convergence -- shipped May 3, 2026. Lebanese wheat reserves '
             'have NOT been rebuilt since 2020 explosion; this is structural fragility.'
+        ),
+    },
+
+    # ───────────────────────────────────────────────────────────────
+    # LEVANT WHEAT CLUSTER  (Sep 20 2026)
+    # Siblings of wheat_lebanon. Kept as SEPARATE entries rather than one
+    # widened entry because the whole analytic value is that the same shock
+    # lands differently: Lebanon has no FX and no silos, Gaza has no state
+    # and one crossing, Egypt has a subsidy that is fiscally load-bearing,
+    # Syria was the breadbasket and is now an importer. Collapsing them
+    # would erase exactly the distinction worth reporting.
+    #
+    # WFP REFRAME (Sep 2026): production is NOT the constraint. Russia and
+    # Ukraine are growing the wheat; the Black Sea is mined, drone-struck
+    # and uninsurable, so ~95% cannot move. The binding constraint is
+    # TRANSIT, and for Gaza it is the LAST HUNDRED METRES.
+    #
+    # ⚠️ TRIGGER CATEGORIES BELOW ARE UNVERIFIED. Eight of the thirteen
+    # convergences in this registry have never fired because their trigger
+    # fingerprint was specified in a note and never built. Confirm these
+    # categories exist in me_regional_bluf before expecting these to fire.
+    # ───────────────────────────────────────────────────────────────
+    {
+        'id':                      'wheat_gaza',
+        'commodity':               'wheat',
+        'country':                 'gaza',
+        'cluster':                 'levant_wheat',
+        'trigger_signal_category': 'humanitarian_gaza',   # [VERIFY exists in ME BLUF]
+        'trigger_region':          'me',
+        'commodity_threshold':     'elevated',
+        'regions':                 ['me', 'europe'],
+        'priority':                15,
+        'icon':                    '\U0001f33e',
+        'color':                   '#dc2626',
+        'headline_template':       'Wheat-Gaza convergence -- aid-dependent population, single crossing, global wheat {alert}',
+        'watch_priority':          7,
+        'watch_headline_template': 'Wheat-Gaza structural exposure -- standing watch (global wheat {alert}, no fresh escalation this cycle)',
+        'detail': (
+            'Gaza has no sovereign wheat imports and no state buffer: supply is '
+            'aid-delivered, which makes the binding constraint CROSSING THROUGHPUT '
+            'rather than import financing or reserve depth. With Kerem Shalom the '
+            'principal functioning crossing and no covered storage there, a shipment '
+            'that survives the Black Sea, the insurance market and the sea leg can '
+            'still be lost to rain in the last hundred metres. This is the only node '
+            'in the cluster where WEATHER AT A SINGLE COORDINATE is a food-security '
+            'variable. Watch: crossing open/closed status, daily truck throughput '
+            'against requirement, precipitation forecast over the crossing, IPC '
+            'classification, pipeline stocks held outside the perimeter.'
+        ),
+        'facts': {
+            'supply_mode':      'aid-delivered; no sovereign import channel',
+            'binding_constraint': 'crossing throughput, not import financing',
+            'crossings_open':   '[VERIFY -- desk] principal: Kerem Shalom',
+            'covered_storage':  'none at crossing -- precipitation is a spoilage vector',
+            'ipc_phase':        '[VERIFY -- desk] current IPC classification',
+            'trucks_per_day':   '[VERIFY -- desk] actual vs requirement',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f WHEAT-GAZA CONVERGENCE: Global wheat at {alert} '
+            '({signals} signals). Gaza is aid-dependent with no sovereign import '
+            'channel; the constraint is crossing throughput, not financing. No covered '
+            'storage at the principal crossing means precipitation is itself a '
+            'spoilage vector. Compound risk: upstream corridor disruption and '
+            'last-mile bottleneck are INDEPENDENT failure points -- clearing one '
+            'does not clear the other.'
+        ),
+        'notes': (
+            'Sep 20 2026 -- WFP-informed. The last-mile physical-conditions angle '
+            'has no analog in any other registry entry and needs LOGISTICS_NODES '
+            'plus a weather consumer to fire properly. Desk to supply facts marked '
+            '[VERIFY].'
+        ),
+    },
+    {
+        'id':                      'wheat_egypt',
+        'commodity':               'wheat',
+        'country':                 'egypt',
+        'cluster':                 'levant_wheat',
+        'trigger_signal_category': 'humanitarian_egypt',  # [VERIFY exists in ME BLUF]
+        'trigger_region':          'me',
+        'commodity_threshold':     'high',                # higher bar: real reserves + state capacity
+        'regions':                 ['me', 'africa', 'europe'],
+        'priority':                12,
+        'icon':                    '\U0001f33e',
+        'color':                   '#f59e0b',
+        'headline_template':       'Wheat-Egypt convergence -- subsidy fiscal exposure compounded by global wheat {alert}',
+        'watch_priority':          5,
+        'watch_headline_template': 'Wheat-Egypt structural subsidy exposure -- standing watch (global wheat {alert})',
+        'detail': (
+            'Egypt is among the world\'s largest wheat importers and operates a bread '
+            'subsidy that is politically load-bearing rather than merely fiscal. The '
+            'failure mode here is NOT hunger first -- it is the budget. A wheat shock '
+            'arrives as an FX and subsidy-cost problem, and only becomes a street '
+            'problem if the state chooses, or is forced, to pass the cost through. '
+            'That makes Egypt the cluster node where FISCAL headroom, not reserve '
+            'depth, is the variable to watch. Threshold deliberately set at HIGH '
+            'rather than elevated: Egypt absorbs shocks that break Lebanon. '
+            'Watch: GASC tender outcomes and prices, subsidy-reform statements, '
+            'FX reserve trend, baladi bread price and ration-card changes.'
+        ),
+        'facts': {
+            'import_rank':      'among the largest global wheat importers',
+            'failure_mode':     'fiscal first, street second -- distinct from Lebanon/Gaza',
+            'state_capacity':   'real reserves and procurement apparatus (GASC)',
+            'import_share':     '[VERIFY -- desk] Black Sea share of Egyptian imports',
+            'subsidy_exposure': '[VERIFY -- desk] beneficiaries / budget line',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f WHEAT-EGYPT CONVERGENCE: Global wheat at {alert} '
+            '({signals} signals). Egypt is a top-tier importer with a politically '
+            'load-bearing bread subsidy. Failure mode is FISCAL before it is '
+            'humanitarian: the shock lands on the budget and FX position first. '
+            'Watch GASC tender prices, subsidy-reform language, baladi price.'
+        ),
+        'notes': (
+            'Sep 20 2026. Activates the wheat_egypt sketch that has sat commented '
+            'out at the bottom of this registry since v1.0. Higher commodity '
+            'threshold on purpose -- Egypt is the cluster\'s resilient node, and '
+            'firing it at the Lebanon bar would make the cluster count meaningless.'
+        ),
+    },
+    {
+        'id':                      'wheat_syria',
+        'commodity':               'wheat',
+        'country':                 'syria',
+        'cluster':                 'levant_wheat',
+        'trigger_signal_category': 'humanitarian_syria',  # [VERIFY exists in ME BLUF]
+        'trigger_region':          'me',
+        'commodity_threshold':     'elevated',
+        'regions':                 ['me', 'europe'],
+        'priority':                13,
+        'icon':                    '\U0001f33e',
+        'color':                   '#f59e0b',
+        'headline_template':       'Wheat-Syria convergence -- former Levantine breadbasket now import-exposed, global wheat {alert}',
+        'watch_priority':          6,
+        'watch_headline_template': 'Wheat-Syria structural exposure -- standing watch (global wheat {alert})',
+        'detail': (
+            'Syria was the breadbasket of the Levant before 2011 and supplied much of '
+            'the region\'s wheat. The war moved Levantine import dependence onto the '
+            'Black Sea -- which is precisely the corridor now blocked. The substitution '
+            'chain closed on itself: the region swapped a local supplier for a distant '
+            'one, and the distant one is mined. LONG-HORIZON SIGNAL: WFP interest in '
+            'rebuilding Syrian production would, over seasons rather than cycles, move '
+            'this node from consumer back toward producer and structurally de-risk the '
+            'whole cluster. That is a node-profile change to watch across years, not a '
+            'scan-cycle signal. Watch: planted area and yield reporting, irrigation and '
+            'input availability, Hasakah/Jazira harvest control, donor reconstruction '
+            'commitments on agriculture.'
+        ),
+        'facts': {
+            'historic_role':    'pre-2011 Levantine breadbasket and regional supplier',
+            'current_role':     'import-dependent with limited FX',
+            'substitution_link': 'Syrian output loss (2012-) is WHY the Levant moved onto Black Sea supply',
+            'long_horizon':     'production rebuild = node-profile change over seasons, not cycles',
+            'current_output':   '[VERIFY -- desk] planted area / yield vs pre-war',
+        },
+        'enrichment_text_template': (
+            '\u26a0\ufe0f WHEAT-SYRIA CONVERGENCE: Global wheat at {alert} '
+            '({signals} signals). Syria was the pre-2011 Levantine breadbasket; its '
+            'output loss is the reason regional dependence shifted onto the Black Sea '
+            'corridor now blocked. The substitution chain closed on itself. Watch '
+            'planted area, input availability, harvest-zone control, agricultural '
+            'reconstruction commitments.'
+        ),
+        'notes': (
+            'Sep 20 2026 -- WFP-informed. Carries the cluster\'s only multi-year '
+            'structural thesis: rebuilding Syrian production de-risks Lebanon, Gaza '
+            'and Jordan simultaneously. Worth surfacing as context even when the '
+            'node itself is quiet.'
         ),
     },
 
@@ -918,3 +1088,78 @@ def format_enrichment_text(entry, alert_level, signal_count):
         alert=alert_level.upper(),
         signals=signal_count,
     )
+
+
+# ════════════════════════════════════════════════════════════════════
+# CLUSTERS (Sep 20 2026)
+# ════════════════════════════════════════════════════════════════════
+# A cluster groups sibling convergences that share a commodity and a
+# region but differ in how the shock LANDS. It gives the GPI a way to say
+# "three of four Levant wheat nodes are firing" instead of naming the same
+# single country every cycle -- which is what it has done since May,
+# because wheat_lebanon is one of the only entries whose trigger was ever
+# actually wired.
+#
+# Entries without a 'cluster' key simply do not participate.
+
+CLUSTER_LABELS = {
+    'levant_wheat': 'Levant wheat / food security',
+}
+
+
+def find_cluster(cluster_id):
+    """All registry entries belonging to a cluster (empty list if none)."""
+    return [e for e in CONVERGENCE_REGISTRY if e.get('cluster') == cluster_id]
+
+
+def all_clusters():
+    """Every cluster id present in the registry."""
+    return sorted({e['cluster'] for e in CONVERGENCE_REGISTRY if e.get('cluster')})
+
+
+def cluster_status(cluster_id, active_ids):
+    """How much of a cluster is currently firing.
+
+    active_ids is whatever the caller considers active this cycle (the GPI
+    passes the ids of convergences whose triggers fired). Returns counts,
+    member lists and a ready-made headline.
+
+    ABSENCE-HONEST: reports the members that are NOT firing as well, so a
+    thin reading is visibly thin rather than silently partial.
+    """
+    members = find_cluster(cluster_id)
+    if not members:
+        return None
+    active = set(active_ids or [])
+    lit = [e for e in members if e['id'] in active]
+    dark = [e for e in members if e['id'] not in active]
+    total = len(members)
+    n = len(lit)
+
+    label = CLUSTER_LABELS.get(cluster_id, cluster_id.replace('_', ' '))
+    countries = [e['country'].replace('_', ' ').title() for e in lit]
+
+    if n == 0:
+        headline = f'{label}: no nodes firing this cycle.'
+    elif n == 1:
+        headline = (f'{label}: {countries[0]} only -- single-node reading, '
+                    f'not yet a regional pattern.')
+    elif n >= total:
+        headline = (f'{label}: ALL {total} nodes firing ({", ".join(countries)}) '
+                    f'-- region-wide, not country-specific.')
+    else:
+        headline = (f'{label}: {n} of {total} nodes firing '
+                    f'({", ".join(countries)}) -- broader than one country.')
+
+    return {
+        'cluster':      cluster_id,
+        'label':        label,
+        'total':        total,
+        'active_count': n,
+        'active':       [e['id'] for e in lit],
+        'inactive':     [e['id'] for e in dark],
+        'countries':    countries,
+        'max_priority': max([e['priority'] for e in lit], default=0),
+        'headline':     headline,
+        'is_regional':  n >= 2,
+    }
