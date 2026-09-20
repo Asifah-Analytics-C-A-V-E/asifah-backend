@@ -232,7 +232,12 @@ HUMANITARIAN_RSS_FEEDS = [
     ("https://www.unhcr.org/rss/news.xml",                                 1.0),  # UNHCR refugees
     # ── Tier 3: Generalist regional outlets with humanitarian beats ──
     ("https://www.aljazeera.com/xml/rss/all.xml",                          0.95), # Al Jazeera (Africa/Asia)
-    ("https://feeds.reuters.com/reuters/africaNews",                       0.95), # Reuters Africa
+    # PULLED Sep 20 2026 -- feeds.reuters.com was retired by Reuters; the
+    # host no longer resolves and every scan spent a full timeout on it:
+    #   RSS error (https://feeds.reuters.com/reuters/africaNews...):
+    #   HTTPSConnectionPool(host='feeds.reuters.com', port=443): Max retries exceeded
+    # Kept as a comment, not deleted, so nobody re-adds it in six months.
+    # ("https://feeds.reuters.com/reuters/africaNews",                     0.95), # Reuters Africa -- DEAD
     # ── Tier 4: Broader Google News humanitarian queries ──
     ("https://news.google.com/rss/search?q=famine+OR+%22food+crisis%22+OR+%22acute+food+insecurity%22&hl=en&gl=US&ceid=US:en", 0.9),
     ("https://news.google.com/rss/search?q=%22mass+displacement%22+OR+%22refugee+surge%22+OR+%22IDP+camps%22&hl=en&gl=US&ceid=US:en", 0.9),
@@ -1048,6 +1053,6 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__   = '1.6.1'
+__version__   = '1.6.2'
 __module_id__ = 'humanitarian_article_gatherer'
 print(f'[Humanitarian Article Gatherer] Module loaded -- v{__version__}')
