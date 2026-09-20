@@ -292,6 +292,23 @@ HUMANITARIAN_RSS_FEEDS = [
 # Queries kept short (GDELT errors on long queries).
 # Languages limited to English + Arabic to avoid Farsi/load issues
 # experienced elsewhere on the platform.
+#
+# Sep 20 2026 -- every one of the 33 queries below carried a hardcoded
+# "2026". GDELT's doc API treats that as a required full-text token, so
+# each query was asking for articles that literally contain the string
+# 2026. Most reporting on a famine does not. The timespan parameter
+# already scopes recency, so the year was doing nothing but throwing
+# away the corpus -- and every empty result queued a paid Brave call.
+# Stripped at fetch time rather than edited out of the list, so next
+# January nobody has to remember to do this again.
+
+def _strip_year(q):
+    """Drop bare 4-digit year tokens (1900-2099) from a GDELT query."""
+    return ' '.join(
+        t for t in q.split()
+        if not (len(t) == 4 and t.isdigit() and t.startswith(('19', '20')))
+    )
+
 
 GDELT_HUMANITARIAN_QUERIES = [
     # ── Africa-focused (heavy humanitarian load) ──
@@ -468,6 +485,8 @@ def _fetch_gdelt_query(query, lang='eng', days=7):
     Unpaced concurrent requests from one IP is what put GDELT into a
     429 spiral platform-wide; see gdelt_gateway's docstring.
     """
+    query = _strip_year(query)
+
     if _GDELT_GATEWAY and _gw_gdelt:
         raw = _gw_gdelt(query, language=lang, timespan=f'{days}d',
                         maxrecords=30, label=f'humanitarian/{lang}')
@@ -1029,6 +1048,6 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__   = '1.6.0'
+__version__   = '1.6.1'
 __module_id__ = 'humanitarian_article_gatherer'
 print(f'[Humanitarian Article Gatherer] Module loaded -- v{__version__}')
