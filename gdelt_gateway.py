@@ -114,6 +114,12 @@ CIRCUIT_COOLDOWN = 300    # how long the breaker stays open before a probe
 # ever called it, so state accumulated for the life of the process --
 # which on Render is days.
 CYCLE_IDLE_SEC   = 120
+# How long a 429 is remembered ACROSS cycle resets. v2.0 reset `interval`
+# back to the floor on every new cycle, and a 300s breaker cooldown always
+# counts as a new cycle -- so the 4s backoff could never survive the very
+# event it was raised for. Sep 20 2026: 36 rate-limited responses and
+# interval_now still read 1.0.
+THROTTLE_MEMORY_SEC = 1800
 
 # An open breaker used to log once per skipped call. With 16 language
 # variants across several trackers that is hundreds of identical lines per
@@ -137,6 +143,7 @@ _state = {
     'probe_in_flight':  False,
     'skips_since_log':  0,
     'last_error':       '',
+    'throttled_until':  0.0,   # v2.1 -- survives _maybe_new_cycle()
     'cycles':           0,
     'calls': 0, 'ok': 0, 'timeouts': 0, 'rate_limited': 0,
     'cache_hits': 0, 'circuit_skips': 0, 'articles': 0,
@@ -191,9 +198,18 @@ def _parse(payload):
 # Call with _state_lock held.
 
 def _maybe_new_cycle():
-    """A long silence means the last scan finished. Start clean."""
+    """A long silence means the last scan finished. Start clean.
+
+    v2.1: 'clean' no longer means 'forget that GDELT was throttling us'.
+    A recent 429 keeps the slower interval, because the thing that caused
+    it -- our own request volume -- has not changed just because the
+    breaker sat out a cooldown.
+    """
     if _state['last_call'] and (_now() - _state['last_call']) > CYCLE_IDLE_SEC:
-        _state['interval'] = MIN_INTERVAL_SEC
+        if _now() < _state['throttled_until']:
+            _state['interval'] = max(_state['interval'], BACKOFF_INTERVAL)
+        else:
+            _state['interval'] = MIN_INTERVAL_SEC
         _state['consecutive_fail'] = 0
         _state['cycles'] += 1
         if _state['circuit'] == OPEN and _now() >= _state['circuit_open_until']:
@@ -365,6 +381,8 @@ def _do_fetch(query, language, timespan, maxrecords, tag, cache_key, is_probe):
                     # Slow the whole process down for the rest of the cycle
                     # rather than letting each caller retry into the wall.
                     _state['interval'] = max(_state['interval'], BACKOFF_INTERVAL)
+                    # v2.1 -- and remember it past the next cycle reset.
+                    _state['throttled_until'] = _now() + THROTTLE_MEMORY_SEC
                 print('[GDELT Gateway] %s: 429 -- interval raised to %.1fs'
                       % (tag, _state['interval']))
                 if attempt < MAX_RETRIES and not is_probe:
@@ -416,6 +434,8 @@ def gateway_stats():
     s['circuit_remaining_sec'] = max(0, int(s['circuit_open_until'] - _now())) \
         if s['circuit_open'] else 0
     s['cache_entries'] = len(_cache)
+    s['throttled'] = _now() < s['throttled_until']
+    s['throttled_remaining_sec'] = max(0, int(s['throttled_until'] - _now()))
     s['generated_at'] = datetime.now(timezone.utc).isoformat()
     s['note'] = ('Serialised, paced GDELT access. A zero article count with '
                  'timeouts logged means the gateway could not reach GDELT -- it '
