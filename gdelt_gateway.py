@@ -1,6 +1,6 @@
 """
 Asifah Analytics -- GDELT Gateway
-v2.0.0 -- September 19 2026  |  portable, drop into any backend
+v2.3.0 -- September 20 2026  |  portable, drop into any backend
 
 ═══════════════════════════════════════════════════════════════════════
 WHAT v1.0 GOT RIGHT
@@ -79,6 +79,36 @@ which is the same class of error as reading a dead RSS feed as regional
 calm. v1.0 was honest about the empty result and silent about the reason,
 which turned out to be the more expensive half.
 
+══════════════════════════════════════════════════════════════════════
+v2.1 -- THE BACKOFF WITH AMNESIA
+══════════════════════════════════════════════════════════════════════
+A 429 raised `interval` to BACKOFF_INTERVAL "for the rest of the cycle".
+But CIRCUIT_COOLDOWN is 300s and CYCLE_IDLE_SEC is 120s, so every breaker
+cooldown was read as a new cycle, which reset `interval` to the floor. The
+backoff could not survive the event that raised it. Sep 20: 36 rate-limited
+responses, interval_now still 1.0. Fixed with throttled_until, which has
+its own clock.
+
+══════════════════════════════════════════════════════════════════════
+v2.3 -- THE SAME MISTAKE, ONE FUNCTION DOWN
+══════════════════════════════════════════════════════════════════════
+v2.2 hung the call budget off _maybe_new_cycle() -- the same unreliable
+signal. Sep 20, one scan: calls=139 with budget_left=150, which is
+arithmetically impossible unless the budget reset mid-scan. It did, every
+time the breaker cooled down. 139 calls got through a 150-call budget and
+rate_limited went from 36 to 67. A limit whose clock someone else winds
+is not a limit.
+
+v2.3 gives the budget its own window (BUDGET_WINDOW_SEC), independent of
+cycles, breakers and idle gaps.
+
+v2.3 also adds SPEND ATTRIBUTION. The gateway has always seen a `label` on
+every call -- me/ara, humanitarian/eng, commodity/brave, oman/fas -- and
+never counted by it. Sep 20 measured 609 DISTINCT queries in one scan, so
+the cache cannot help and the budget can only ration. The query set has to
+come down, and spend_by_label is what turns that from guesswork into a
+list of which module is asking for what.
+
 USAGE
     from gdelt_gateway import gdelt_fetch, gateway_stats
     articles = gdelt_fetch(query='Cuba OR Havana', language='eng', timespan='3d')
@@ -98,12 +128,15 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '2.0.0'
+__version__ = '2.3.0'
 
 # ── Tunables ────────────────────────────────────────────────────────────
+# Every tunable is env-overridable so pacing can be retuned from the Render
+# dashboard without a deploy -- which matters when the thing being tuned is
+# how hard we lean on a service that is currently refusing us.
 MAX_CONCURRENT   = 1      # one in flight per process; the whole point
-MIN_INTERVAL_SEC = 1.0    # floor between requests
-BACKOFF_INTERVAL = 4.0    # interval after a 429, for the rest of the cycle
+MIN_INTERVAL_SEC = float(os.environ.get('GDELT_MIN_INTERVAL_SEC', '1.0'))
+BACKOFF_INTERVAL = float(os.environ.get('GDELT_BACKOFF_INTERVAL', '4.0'))
 CONNECT_TIMEOUT  = 10
 READ_TIMEOUT     = 25     # was 5-8s at call sites; GDELT needs room
 MAX_RETRIES      = 2
@@ -130,7 +163,14 @@ THROTTLE_MEMORY_SEC = 1800
 # in-process only, so it dies on restart: the ME backend restarted four
 # times that morning and cache_hits read 0. These are the actual fix.
 SHARED_CACHE_TTL_SEC = int(os.environ.get('GDELT_CACHE_TTL_SEC', '21600'))  # 6h
-MAX_CALLS_PER_CYCLE  = int(os.environ.get('GDELT_MAX_CALLS_PER_CYCLE', '150'))
+
+# v2.3 -- the budget, on its own clock.
+# BUDGET_WINDOW_SEC is a wall-clock window, not a 'cycle'. Nothing the
+# breaker or an idle gap does can reset it early. GDELT_MAX_CALLS_PER_CYCLE
+# is kept as the env name so an existing Render variable still works.
+BUDGET_WINDOW_SEC = int(os.environ.get('GDELT_BUDGET_WINDOW_SEC', '3600'))
+MAX_CALLS_PER_WINDOW = int(os.environ.get('GDELT_MAX_CALLS_PER_CYCLE', '150'))
+MAX_CALLS_PER_CYCLE = MAX_CALLS_PER_WINDOW   # back-compat alias
 
 UPSTASH_URL = (os.environ.get('UPSTASH_REDIS_URL')
                or os.environ.get('UPSTASH_REDIS_REST_URL'))
@@ -161,17 +201,35 @@ _state = {
     'skips_since_log':  0,
     'last_error':       '',
     'throttled_until':  0.0,   # v2.1 -- survives _maybe_new_cycle()
-    'cycle_calls':      0,     # v2.2 -- calls spent in the current cycle
-    'budget_skips':     0,     # v2.2 -- refused because the budget was spent
-    'redis_hits':       0,     # v2.2 -- served from the shared 6h cache
+    'window_start':     0.0,   # v2.3 -- the budget's OWN clock
+    'window_calls':     0,     # v2.3 -- GDELT calls spent in this window
+    'windows':          0,
+    'budget_skips':     0,     # refused because the budget was spent
+    'redis_hits':       0,     # served from the shared 6h cache
     'redis_writes':     0,
-    'requests_seen':    0,     # v2.2 -- every gdelt_fetch call
+    'requests_seen':    0,     # v2.3 -- gdelt_fetch calls THIS WINDOW
+    'requests_total':   0,     # v2.3 -- and cumulative, so the two are
+                               #         never confused again
     'cycles':           0,
     'calls': 0, 'ok': 0, 'timeouts': 0, 'rate_limited': 0,
     'cache_hits': 0, 'circuit_skips': 0, 'articles': 0,
 }
 _cache = {}   # key -> (expires_at, articles)   L1, in-process
-_cycle_keys = set()   # v2.2 -- distinct cache keys seen this cycle
+_window_keys = set()   # v2.3 -- distinct cache keys seen this WINDOW
+
+# v2.3 -- spend attribution. label -> counters. Reset with the window, so
+# a reading always answers 'in the last hour, who asked for what'.
+_label_spend = {}
+
+
+def _label_bump(label, field, n=1):
+    """Count one event against a label. Call with _state_lock held."""
+    rec = _label_spend.get(label)
+    if rec is None:
+        rec = {'requests': 0, 'calls': 0, 'cache_hits': 0,
+               'budget_refused': 0, 'circuit_refused': 0, 'articles': 0}
+        _label_spend[label] = rec
+    rec[field] = rec.get(field, 0) + n
 
 
 def _now():
@@ -295,10 +353,34 @@ def _maybe_new_cycle():
             _state['interval'] = MIN_INTERVAL_SEC
         _state['consecutive_fail'] = 0
         _state['cycles'] += 1
-        _state['cycle_calls'] = 0        # v2.2 -- budget resets with the cycle
-        _cycle_keys.clear()
+        # v2.3 -- the budget is NOT reset here. That was the v2.2 bug: a
+        # 300s breaker cooldown looks exactly like an idle gap, so the
+        # budget refreshed itself every time the breaker tripped and never
+        # bound at all. See _maybe_new_window().
         if _state['circuit'] == OPEN and _now() >= _state['circuit_open_until']:
             _state['circuit'] = HALF_OPEN
+
+
+def _maybe_new_window():
+    """Roll the budget window on its own wall clock.
+
+    Deliberately independent of _maybe_new_cycle(). A breaker cooldown, a
+    quiet period, a restarted scan -- none of them are reasons to hand out
+    a fresh allowance of requests to a service that is rate-limiting us.
+    Call with _state_lock held.
+    """
+    now = _now()
+    if not _state['window_start']:
+        _state['window_start'] = now
+        return
+    if now - _state['window_start'] >= BUDGET_WINDOW_SEC:
+        _state['window_start'] = now
+        _state['window_calls'] = 0
+        _state['requests_seen'] = 0
+        _state['budget_skips'] = 0
+        _state['windows'] += 1
+        _window_keys.clear()
+        _label_spend.clear()
 
 
 def _admit(tag):
@@ -310,10 +392,12 @@ def _admit(tag):
     against a failure counter that had never been cleared.
     """
     _maybe_new_cycle()
+    _maybe_new_window()
 
     if _state['circuit'] == OPEN:
         if _now() < _state['circuit_open_until']:
             _state['circuit_skips'] += 1
+            _label_bump(tag, 'circuit_refused')
             _state['skips_since_log'] += 1
             if _state['skips_since_log'] == 1 or \
                     _state['skips_since_log'] % SKIP_LOG_EVERY == 0:
@@ -330,23 +414,26 @@ def _admit(tag):
               '-- probing' % (tag, _state['skips_since_log']))
         _state['skips_since_log'] = 0
 
-    # v2.2 -- the budget. gdelt_fetch checks the cache BEFORE calling this,
-    # so cached answers are always free; only calls that would actually
-    # reach GDELT are counted. A probe is exempt: refusing the one request
-    # that could close the breaker would wedge it open for the whole cycle.
+    # The budget. gdelt_fetch checks the cache BEFORE calling this, so a
+    # cached answer is always free; only calls that would actually reach
+    # GDELT are counted. A probe is exempt: refusing the one request that
+    # could close the breaker would wedge it open for the whole window.
     if _state['circuit'] != HALF_OPEN and \
-            _state['cycle_calls'] >= MAX_CALLS_PER_CYCLE:
+            _state['window_calls'] >= MAX_CALLS_PER_WINDOW:
         _state['budget_skips'] += 1
+        _label_bump(tag, 'budget_refused')
         if _state['budget_skips'] == 1 or _state['budget_skips'] % 50 == 0:
-            print('[GDELT Gateway] %s: cycle budget spent (%d calls); '
-                  '%d further requests refused. This is a BUDGET '
-                  'stand-down, not a GDELT outage.'
-                  % (tag, _state['cycle_calls'], _state['budget_skips']))
+            print('[GDELT Gateway] %s: budget spent (%d/%d calls this '
+                  '%dmin window); %d further requests refused. This is a '
+                  'BUDGET stand-down, not a GDELT outage.'
+                  % (tag, _state['window_calls'], MAX_CALLS_PER_WINDOW,
+                     BUDGET_WINDOW_SEC // 60, _state['budget_skips']))
         return False, False
 
     if _state['circuit'] == HALF_OPEN:
         if _state['probe_in_flight']:
             _state['circuit_skips'] += 1
+            _label_bump(tag, 'circuit_refused')
             return False, False
         _state['probe_in_flight'] = True
         return True, True
@@ -406,14 +493,18 @@ def gdelt_fetch(query, language='eng', timespan='3d', maxrecords=75, label='',
     cache_key = '%s|%s|%s|%s' % (query, language, timespan, maxrecords)
 
     with _state_lock:
+        _maybe_new_window()
         _state['requests_seen'] += 1
-        _cycle_keys.add(cache_key)
+        _state['requests_total'] += 1
+        _window_keys.add(cache_key)
+        _label_bump(tag, 'requests')
 
     if not refresh:
         cached = _cache_get(cache_key)
         if cached is not None:
             with _state_lock:
                 _state['cache_hits'] += 1
+                _label_bump(tag, 'cache_hits')
             return list(cached)
 
     with _state_lock:
@@ -465,6 +556,8 @@ def _do_fetch(query, language, timespan, maxrecords, tag, cache_key, is_probe):
                 with _state_lock:
                     _state['last_call'] = _now()
                     _state['calls'] += 1
+                    _state['window_calls'] += 1
+                    _label_bump(tag, 'calls')
                     _state['timeouts'] += 1
                 print('[GDELT Gateway] %s: timeout after %ds (attempt %d/%d)'
                       % (tag, READ_TIMEOUT, attempt + 1, MAX_RETRIES + 1))
@@ -477,6 +570,8 @@ def _do_fetch(query, language, timespan, maxrecords, tag, cache_key, is_probe):
                 with _state_lock:
                     _state['last_call'] = _now()
                     _state['calls'] += 1
+                    _state['window_calls'] += 1
+                    _label_bump(tag, 'calls')
                 _record_failure(is_probe, e)
                 print('[GDELT Gateway] %s: %s: %s' % (tag, type(e).__name__, str(e)[:110]))
                 return []
@@ -484,6 +579,8 @@ def _do_fetch(query, language, timespan, maxrecords, tag, cache_key, is_probe):
             with _state_lock:
                 _state['last_call'] = _now()
                 _state['calls'] += 1
+                _state['window_calls'] += 1
+                _label_bump(tag, 'calls')
 
             if resp.status_code == 429:
                 with _state_lock:
@@ -519,6 +616,8 @@ def _do_fetch(query, language, timespan, maxrecords, tag, cache_key, is_probe):
             # failure: GDELT was reached and answered. Counting it as a
             # failure would let a quiet query open the breaker for
             # everybody, which is the reverse of what a breaker is for.
+            with _state_lock:
+                _label_bump(tag, 'articles', len(articles))
             _record_success(is_probe, len(articles))
             _cache_put(cache_key, articles)
             print('[GDELT Gateway] %s: %d articles' % (tag, len(articles)))
@@ -544,19 +643,29 @@ def gateway_stats():
     s['circuit_remaining_sec'] = max(0, int(s['circuit_open_until'] - _now())) \
         if s['circuit_open'] else 0
     s['cache_entries'] = len(_cache)
-    s['distinct_queries_this_cycle'] = len(_cycle_keys)
-    s['budget_max'] = MAX_CALLS_PER_CYCLE
-    s['budget_left'] = max(0, MAX_CALLS_PER_CYCLE - s['cycle_calls'])
+    # v2.3 -- these three are now all WINDOW-scoped, so they are directly
+    # comparable. In v2.2 requests_seen was cumulative and distinct was
+    # per-cycle, and comparing them was meaningless.
+    s['distinct_queries'] = len(_window_keys)
+    s['budget_max'] = MAX_CALLS_PER_WINDOW
+    s['budget_left'] = max(0, MAX_CALLS_PER_WINDOW - s['window_calls'])
+    s['budget_window_min'] = BUDGET_WINDOW_SEC // 60
+    s['window_age_sec'] = int(_now() - s['window_start']) if s['window_start'] else 0
+    s['min_interval'] = MIN_INTERVAL_SEC
+    with _state_lock:
+        s['spend_by_label'] = {k: dict(v) for k, v in sorted(
+            _label_spend.items(), key=lambda kv: -kv[1]['requests'])}
     s['shared_cache'] = 'upstash' if REDIS_OK else 'in-process only'
     s['shared_cache_ttl_h'] = round(SHARED_CACHE_TTL_SEC / 3600.0, 1)
     s['throttled'] = _now() < s['throttled_until']
     s['throttled_remaining_sec'] = max(0, int(s['throttled_until'] - _now()))
     s['generated_at'] = datetime.now(timezone.utc).isoformat()
-    s['note'] = ('Serialised, paced GDELT access. A zero article count with '
-                 'timeouts logged means the gateway could not reach GDELT -- it '
-                 'does NOT mean the world was quiet. A high circuit_skips with '
-                 'circuit_opens=1 means the breaker latched: that is a gateway '
-                 'fault, not a GDELT outage.')
+    s['note'] = ('Serialised, paced, budgeted GDELT access. A zero article '
+                 'count with timeouts logged means the gateway could not reach '
+                 'GDELT -- it does NOT mean the world was quiet. circuit_skips '
+                 'high with circuit_opens=1 means the breaker latched (gateway '
+                 'fault). budget_skips high means we asked for more than the '
+                 'window allows -- read spend_by_label to see who asked.')
     return s
 
 
@@ -596,6 +705,8 @@ if __name__ == '__main__':
     def _fresh():
         """Reset all module state between tests."""
         _cache.clear()
+        _window_keys.clear()
+        _label_spend.clear()
         calls['n'] = 0
         with _state_lock:
             _state.update({
@@ -606,6 +717,10 @@ if __name__ == '__main__':
                 'last_error': '', 'cycles': 0,
                 'calls': 0, 'ok': 0, 'timeouts': 0, 'rate_limited': 0,
                 'cache_hits': 0, 'circuit_skips': 0, 'articles': 0,
+                'throttled_until': 0.0, 'window_start': 0.0,
+                'window_calls': 0, 'windows': 0, 'budget_skips': 0,
+                'redis_hits': 0, 'redis_writes': 0,
+                'requests_seen': 0, 'requests_total': 0,
             })
 
     def ok_get(url, **k):
@@ -733,6 +848,69 @@ if __name__ == '__main__':
     s = gateway_stats()
     assert out == [] and s['timeouts'] > 0
     print('  returned %r, timeouts=%d\n' % (out, s['timeouts']))
+
+    print('TEST 10 -- v2.2 BUG: a breaker cooldown must not refill the budget')
+    _fresh(); requests.get = ok_get
+    _saved_budget = MAX_CALLS_PER_WINDOW
+    globals()['MAX_CALLS_PER_WINDOW'] = 5
+    for i in range(5):
+        gdelt_fetch('B%d' % i, label='budget')
+    assert gateway_stats()['budget_left'] == 0
+    # Simulate exactly what broke v2.2: a long idle gap (breaker cooldown).
+    with _state_lock:
+        _state['last_call'] = _now() - (CYCLE_IDLE_SEC + 5)
+    gdelt_fetch('AFTER_COOLDOWN', label='budget')
+    s = gateway_stats()
+    print('  after a %ds idle gap: budget_left=%d, budget_skips=%d'
+          % (CYCLE_IDLE_SEC + 5, s['budget_left'], s['budget_skips']))
+    assert s['budget_left'] == 0, 'budget refilled -- the v2.2 bug is back'
+    assert s['budget_skips'] >= 1
+    print('  OK -- the budget held. v2.2 would have handed out 5 more.\n')
+
+    print('TEST 11 -- the window DOES roll on its own clock')
+    with _state_lock:
+        _state['window_start'] = _now() - (BUDGET_WINDOW_SEC + 1)
+    gdelt_fetch('NEW_WINDOW', label='budget')
+    s = gateway_stats()
+    print('  window rolled: windows=%d, budget_left=%d'
+          % (s['windows'], s['budget_left']))
+    assert s['windows'] == 1 and s['budget_left'] == MAX_CALLS_PER_WINDOW - 1
+    globals()['MAX_CALLS_PER_WINDOW'] = _saved_budget
+    print('  OK -- time, and only time, refills the budget.\n')
+
+    print('TEST 12 -- spend attribution names the spender')
+    _fresh(); requests.get = ok_get
+    for i in range(6):
+        gdelt_fetch('MIL%d' % i, label='me/ara')
+    for i in range(2):
+        gdelt_fetch('HUM%d' % i, label='humanitarian/eng')
+    gdelt_fetch('MIL0', label='me/ara')            # cache hit
+    s = gateway_stats()
+    for lbl, rec in s['spend_by_label'].items():
+        print('  %-20s requests=%d calls=%d cache_hits=%d articles=%d'
+              % (lbl, rec['requests'], rec['calls'],
+                 rec['cache_hits'], rec['articles']))
+    assert s['spend_by_label']['me/ara']['calls'] == 6
+    assert s['spend_by_label']['me/ara']['cache_hits'] == 1
+    assert s['spend_by_label']['humanitarian/eng']['calls'] == 2
+    print('  OK -- this is the list we trim query sets from.\n')
+
+    print('TEST 13 -- requests_seen and distinct_queries share a scope')
+    _fresh(); requests.get = ok_get
+    for i in range(5):
+        gdelt_fetch('D%d' % i, label='scope')
+    for i in range(3):
+        gdelt_fetch('D0', label='scope')           # repeats
+    s = gateway_stats()
+    print('  requests_seen=%d distinct=%d requests_total=%d'
+          % (s['requests_seen'], s['distinct_queries'], s['requests_total']))
+    assert s['requests_seen'] == 8 and s['distinct_queries'] == 5
+    print('  OK -- comparable at last; v2.2 compared cumulative to per-cycle.\n')
+
+    print('TEST 14 -- stats payload is JSON-serialisable')
+    import json as _json
+    _json.dumps(gateway_stats())
+    print('  OK -- a set or a lock in _state would break every endpoint.\n')
 
     requests.get = _real_get
     print('ALL GATEWAY TESTS PASSED')
