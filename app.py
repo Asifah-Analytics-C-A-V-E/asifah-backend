@@ -4982,6 +4982,15 @@ def fetch_reddit_posts(target, keywords, days=7):
             time.sleep(2)
             
             response = requests.get(url, params=params, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                # Sep 20 2026: this branch did not exist. Every non-200 --
+                # including the 403 a spoofed browser User-Agent earns from
+                # a datacenter IP -- fell through in silence, which is why
+                # source_health could say 'auth_failed' but never why.
+                print('[Reddit] r/%s: HTTP %s :: %s'
+                      % (subreddit, response.status_code,
+                         (response.text or '')[:140].replace('\n', ' ')))
             
             if response.status_code == 200:
                 data = response.json()
@@ -5007,7 +5016,9 @@ def fetch_reddit_posts(target, keywords, days=7):
                         
                         all_posts.append(normalized_post)
             
-        except Exception:
+        except Exception as e:
+            print('[Reddit] r/%s: %s: %s'
+                  % (subreddit, type(e).__name__, str(e)[:130]))
             continue
     
     return all_posts
