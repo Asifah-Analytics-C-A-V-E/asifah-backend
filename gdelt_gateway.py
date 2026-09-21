@@ -1,6 +1,6 @@
 """
 Asifah Analytics -- GDELT Gateway
-v2.3.0 -- September 20 2026  |  portable, drop into any backend
+v2.3.1 -- September 21 2026  |  portable, drop into any backend
 
 ═══════════════════════════════════════════════════════════════════════
 WHAT v1.0 GOT RIGHT
@@ -128,7 +128,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '2.3.0'
+__version__ = '2.3.1'
 
 # ── Tunables ────────────────────────────────────────────────────────────
 # Every tunable is env-overridable so pacing can be retuned from the Render
@@ -590,11 +590,12 @@ def _do_fetch(query, language, timespan, maxrecords, tag, cache_key, is_probe):
                     _state['interval'] = max(_state['interval'], BACKOFF_INTERVAL)
                     # v2.1 -- and remember it past the next cycle reset.
                     _state['throttled_until'] = _now() + THROTTLE_MEMORY_SEC
-                print('[GDELT Gateway] %s: 429 -- interval raised to %.1fs'
-                      % (tag, _state['interval']))
-                if attempt < MAX_RETRIES and not is_probe:
-                    time.sleep(BACKOFF_INTERVAL)
-                    continue
+                print('[GDELT Gateway] %s: 429 -- interval raised to %.1fs, '
+                      'no retry' % (tag, _state['interval']))
+                # v2.3.1 -- DO NOT RETRY A 429. A 429 is GDELT saying "stop",
+                # and retrying spent up to 3 calls to hear it 3 times. Sep 21:
+                # rate_limited=369 of calls=709. Timeouts still retry (a slow
+                # server is not a refusal); refusals do not.
                 _record_failure(is_probe, 'HTTP 429 rate limited')
                 return []
 
@@ -834,12 +835,14 @@ if __name__ == '__main__':
           % (FAILURE_CIRCUIT + 2, s['circuit_state']))
     print('  OK -- a quiet query cannot open the breaker for everyone.\n')
 
-    print('TEST 8 -- 429 raises the interval')
+    print('TEST 8 -- 429 raises the interval, and is NOT retried (v2.3.1)')
     _fresh()
     requests.get = lambda url, **k: FakeResp(429)
     gdelt_fetch('RL', label='ratelimited')
     s = gateway_stats()
     assert s['interval_now'] >= BACKOFF_INTERVAL
+    assert s['calls'] == 1, 'a 429 was retried -- %d calls' % s['calls']
+    assert s['rate_limited'] == 1
     print('  interval now %.1fs, rate_limited=%d\n'
           % (s['interval_now'], s['rate_limited']))
 
