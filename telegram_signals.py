@@ -1,6 +1,6 @@
 """
 Telegram Signal Source for Asifah Analytics
-v2.0.0 — August 15, 2026  (was v1.1.0 / v1.2.0 header drift, now reconciled)
+v2.1.0 — September 21, 2026  (entity cache — the FloodWait fix)
 
 Bridges Telethon (async) with Flask (sync) to pull messages
 from monitored Telegram channels across theatres:
@@ -12,6 +12,41 @@ from monitored Telegram channels across theatres:
 - Iran / IRGC / proxy network
 - Libya / GNU-LNA / Africa Corps (Wagner)
 - Extended OSINT / Regional
+
+v2.1.0 CHANGES — ENTITY CACHE
+-----------------------------
+THE PROBLEM. Every sweep called client.get_entity(handle) for every channel.
+With a handle string, that is a ResolveUsernameRequest — Telegram's most
+tightly rate-limited call. The session is decoded fresh from
+TELEGRAM_SESSION_BASE64 on each cold start, so Telethon's own entity cache
+was thrown away on every deploy/restart. Result: ~199 resolutions per sweep
+and an 11-hour FloodWait that silenced every theatre at once.
+
+THE FIX. A handle only needs resolving ONCE. The answer (channel id +
+access_hash) is stable for this account, so it is cached:
+    L1  in-process dict              — free, dies on restart
+    L2  Upstash  telegram:entity:*   — survives restarts, 30-day TTL
+and the fetch uses InputPeerChannel(id, access_hash) directly. Steady state:
+~0 resolutions per sweep.
+
+GUARDRAILS.
+  - FloodWaitError is caught, logged with its length, and remembered (in
+    process AND in Upstash) so no worker keeps knocking. Cached channels
+    keep fetching during a resolve-FloodWait; only NEW resolutions stop.
+    A FloodWait on history itself stands the whole sweep down.
+  - RESOLVE BUDGET (TELEGRAM_RESOLVE_BUDGET, default 30 per rolling HOUR,
+    shared by every theatre fetch in the process) paces the first fill, so
+    a cold cache warms over a few scans instead of tripping a FloodWait in
+    one. Per-hour, not per-call: seven theatre fetches per scan would
+    otherwise each get their own allowance.
+  - Dead handles (username not occupied / invalid) are negatively cached
+    for 7 days instead of being re-resolved every sweep.
+  - A cached entry that stops working (channel went private, hash rejected)
+    is dropped and re-resolved on a later sweep.
+  - 'idfonline' removed everywhere (reported 404 since v2.0.0 — it was
+    costing a resolution every sweep to learn nothing).
+  - get_telegram_status() now reports 'entity_cache' counters, so
+    "resolved" trending to zero is visible, not assumed.
 
 v2.0.0 CHANGES
 --------------
@@ -46,13 +81,24 @@ Usage:
 """
 
 import os
+import json
+import time
 import asyncio
 import base64
+import threading
 from datetime import datetime, timezone, timedelta
+
+try:
+    import requests
+except ImportError:          # the cache degrades to in-process only
+    requests = None
 
 try:
     from telethon import TelegramClient
     from telethon.tl.functions.messages import GetHistoryRequest
+    from telethon.tl.types import InputPeerChannel, InputPeerUser
+    from telethon.errors import (FloodWaitError, UsernameNotOccupiedError,
+                                 UsernameInvalidError)
     TELETHON_AVAILABLE = True
 except ImportError:
     TELETHON_AVAILABLE = False
@@ -68,13 +114,26 @@ TELEGRAM_API_HASH = os.environ.get('TELEGRAM_API_HASH')
 TELEGRAM_PHONE    = os.environ.get('TELEGRAM_PHONE')
 SESSION_NAME      = 'asifah_session'
 
-VERSION = '2.0.0'
+VERSION = '2.1.0'
 
 # Per-channel message cap. Scales with the requested window so a 24h pull on
 # a high-volume channel is not silently truncated at 50.
 MSGS_PER_HOUR    = 4
 MSG_LIMIT_MIN    = 50
 MSG_LIMIT_MAX    = 200
+
+# ---- v2.1.0 entity cache ----
+ENTITY_TTL_SEC      = 30 * 24 * 3600   # id + access_hash are stable; refresh monthly
+DEAD_TTL_SEC        = 7 * 24 * 3600    # a handle that does not exist, re-checked weekly
+RESOLVE_BUDGET      = int(os.environ.get('TELEGRAM_RESOLVE_BUDGET', '30'))  # per rolling hour, whole process
+RESOLVE_SPACING_SEC = 1.0              # breathe between live resolutions
+FLOOD_KEY           = 'telegram:floodwait_until'
+
+UPSTASH_URL = (os.environ.get('UPSTASH_REDIS_URL')
+               or os.environ.get('UPSTASH_REDIS_REST_URL'))
+UPSTASH_TOKEN = (os.environ.get('UPSTASH_REDIS_TOKEN')
+                 or os.environ.get('UPSTASH_REDIS_REST_TOKEN'))
+REDIS_OK = bool(UPSTASH_URL and UPSTASH_TOKEN and requests is not None)
 
 
 # ========================================
@@ -95,7 +154,6 @@ MSG_LIMIT_MAX    = 200
 CHANNEL_META = {
     # ---------- Official government / military ----------
     'idfofficial':        {'tier': 'official',   'lang': ['en'],       'note': 'IDF English official'},
-    'idfonline':          {'tier': 'official',   'lang': ['en'],       'note': 'IDF English legacy handle — reported 404, kept as fallback'},
     'avichay_adraee':     {'tier': 'official',   'lang': ['ar'],       'note': 'IDF Arabic spokesperson — evacuation warnings'},
     'pikudHaoref':        {'tier': 'official',   'lang': ['he'],       'note': 'Home Front Command official'},
     'tzevaadom_en':       {'tier': 'official',   'lang': ['en'],       'note': 'Tzeva Adom alert relay'},
@@ -248,7 +306,6 @@ LEBANON_CHANNELS = [
     'QudsN',
     # Israeli/IDF sources
     'idfofficial',
-    'idfonline',
     'avichay_adraee',
     'AbuAliExpress',
     'kann_news',
@@ -283,7 +340,6 @@ YEMEN_CHANNELS = [
     # Israeli/IDF — watching IDF actions against Houthis
     'avichay_adraee',
     'idfofficial',
-    'idfonline',
     'AbuAliExpress',
     'kann_news',
     # Red Sea / Maritime OSINT
@@ -318,7 +374,6 @@ SYRIA_CHANNELS = [
     # Israeli strikes in Syria
     'avichay_adraee',
     'idfofficial',
-    'idfonline',
     'AbuAliExpress',
     'amitsegal',            # NEW v2.0.0
     # Druze / Suwayda watch
@@ -405,7 +460,6 @@ ISRAEL_CHANNELS = [
     'pikudHaoref',
     # IDF / Military
     'idfofficial',
-    'idfonline',
     'avichay_adraee',
     'Yair_Altman_channel14',
     'osintisraelgroup',
@@ -568,6 +622,147 @@ def _ensure_session_file():
     return False
 
 
+# ========================================
+# ENTITY CACHE  (v2.1.0)
+# ========================================
+# L1 in-process, L2 Upstash. Values are small dicts:
+#     {'type': 'channel'|'user', 'id': int, 'hash': int, 'at': epoch}
+# or  {'dead': True, 'reason': str, 'at': epoch}   (negative cache)
+
+_entity_l1 = {}
+_ec_lock = threading.Lock()
+_ec_stats = {
+    'l1_hits': 0, 'redis_hits': 0, 'resolved': 0, 'dead_skipped': 0,
+    'budget_skipped': 0, 'flood_skipped': 0, 'flood_waits': 0,
+    'last_flood_seconds': 0, 'stale_dropped': 0, 'last_sweep': {},
+}
+_flood_until_local = 0.0
+_resolve_times = []   # epoch of each live resolution in the last hour
+
+
+def _budget_take():
+    """Spend one resolution from the rolling-hour budget. False = none left."""
+    now = time.time()
+    with _ec_lock:
+        _resolve_times[:] = [t for t in _resolve_times if now - t < 3600]
+        if len(_resolve_times) >= RESOLVE_BUDGET:
+            return False
+        _resolve_times.append(now)
+        return True
+
+
+def _redis(cmd):
+    """One Upstash REST command -> 'result' or None. Same shape as the gateways."""
+    if not REDIS_OK:
+        return None
+    try:
+        r = requests.post(UPSTASH_URL, headers={
+            'Authorization': 'Bearer %s' % UPSTASH_TOKEN}, json=cmd, timeout=5)
+        if r.ok:
+            return (r.json() or {}).get('result')
+    except Exception as e:
+        print(f"[Telegram] entity cache redis error: {str(e)[:80]}")
+    return None
+
+
+def _ec_key(handle):
+    return 'telegram:entity:' + handle.lower()
+
+
+def _ec_bump(field, n=1):
+    with _ec_lock:
+        _ec_stats[field] = _ec_stats.get(field, 0) + n
+
+
+def _ec_get(handle):
+    """Cached record for a handle, or None. Never touches Telegram."""
+    key = handle.lower()
+    rec = _entity_l1.get(key)
+    if rec:
+        _ec_bump('l1_hits')
+        return rec
+    raw = _redis(['GET', _ec_key(handle)])
+    if raw:
+        try:
+            rec = json.loads(raw)
+            _entity_l1[key] = rec
+            _ec_bump('redis_hits')
+            return rec
+        except Exception:
+            pass
+    return None
+
+
+def _ec_put(handle, rec, ttl):
+    _entity_l1[handle.lower()] = rec
+    _redis(['SET', _ec_key(handle), json.dumps(rec), 'EX', int(ttl)])
+
+
+def _ec_drop(handle):
+    _entity_l1.pop(handle.lower(), None)
+    _redis(['DEL', _ec_key(handle)])
+    _ec_bump('stale_dropped')
+
+
+def _record_from_peer(peer):
+    """Turn a Telethon InputPeer into a cacheable record (or None)."""
+    if isinstance(peer, InputPeerChannel):
+        return {'type': 'channel', 'id': peer.channel_id,
+                'hash': peer.access_hash, 'at': int(time.time())}
+    if isinstance(peer, InputPeerUser):
+        return {'type': 'user', 'id': peer.user_id,
+                'hash': peer.access_hash, 'at': int(time.time())}
+    return None
+
+
+def _peer_from_record(rec):
+    if rec.get('type') == 'channel':
+        return InputPeerChannel(int(rec['id']), int(rec['hash']))
+    if rec.get('type') == 'user':
+        return InputPeerUser(int(rec['id']), int(rec['hash']))
+    return None
+
+
+def _flood_remaining():
+    """Seconds left on a known ResolveUsername FloodWait (any worker's)."""
+    global _flood_until_local
+    now = time.time()
+    if _flood_until_local > now:
+        return int(_flood_until_local - now)
+    raw = _redis(['GET', FLOOD_KEY])
+    try:
+        until = float(raw) if raw else 0.0
+    except (TypeError, ValueError):
+        until = 0.0
+    if until > now:
+        _flood_until_local = until
+        return int(until - now)
+    return 0
+
+
+def _flood_set(seconds):
+    global _flood_until_local
+    until = time.time() + int(seconds)
+    _flood_until_local = until
+    _redis(['SET', FLOOD_KEY, str(until), 'EX', max(int(seconds), 1)])
+    with _ec_lock:
+        _ec_stats['flood_waits'] += 1
+        _ec_stats['last_flood_seconds'] = int(seconds)
+
+
+def get_entity_cache_stats():
+    with _ec_lock:
+        s = dict(_ec_stats)
+    s['l1_size'] = len(_entity_l1)
+    s['redis_ok'] = REDIS_OK
+    s['resolve_budget_per_hour'] = RESOLVE_BUDGET
+    now = time.time()
+    s['resolve_budget_left'] = max(0, RESOLVE_BUDGET - len(
+        [t for t in _resolve_times if now - t < 3600]))
+    s['flood_wait_remaining_sec'] = _flood_remaining()
+    return s
+
+
 def _msg_limit(hours_back):
     """Scale the per-channel cap to the window (was a flat 50)."""
     return max(MSG_LIMIT_MIN, min(MSG_LIMIT_MAX, int(hours_back) * MSGS_PER_HOUR))
@@ -608,10 +803,58 @@ async def _async_fetch_messages(channels, hours_back=24):
         print(f"[Telegram] ✅ Connected, fetching from {len(unique_channels)} channels "
               f"(limit {limit}/channel) — tiers: {tier_counts}")
 
+        # v2.1.0 -- per-sweep resolution accounting
+        sweep = {'cached': 0, 'resolved': 0, 'dead': 0, 'budget_skipped': 0,
+                 'flood_skipped': 0, 'fetched': 0}
+        flood_left = _flood_remaining()
+        if flood_left:
+            print(f"[Telegram] ⏸ ResolveUsername FloodWait active ({flood_left}s left) "
+                  f"— cached channels only this sweep")
+
         for channel in unique_channels:
             meta = get_channel_meta(channel)
             try:
-                entity = await client.get_entity(channel)
+                # ---- v2.1.0: cache first, resolve only when we must ----
+                rec = _ec_get(channel)
+                if rec and rec.get('dead'):
+                    sweep['dead'] += 1
+                    _ec_bump('dead_skipped')
+                    continue
+                entity = _peer_from_record(rec) if rec else None
+                if entity is not None:
+                    sweep['cached'] += 1
+                else:
+                    if flood_left:
+                        sweep['flood_skipped'] += 1
+                        _ec_bump('flood_skipped')
+                        continue
+                    if not _budget_take():
+                        sweep['budget_skipped'] += 1
+                        _ec_bump('budget_skipped')
+                        continue
+                    try:
+                        entity = await client.get_input_entity(channel)
+                    except FloodWaitError as fw:
+                        _flood_set(fw.seconds)
+                        flood_left = int(fw.seconds)
+                        sweep['flood_skipped'] += 1
+                        print(f"[Telegram] ⛔ FloodWait {fw.seconds}s on resolving @{channel} "
+                              f"— no more resolutions until it clears; cached channels continue")
+                        continue
+                    except (UsernameNotOccupiedError, UsernameInvalidError, ValueError) as dead:
+                        _ec_put(channel, {'dead': True, 'reason': type(dead).__name__,
+                                          'at': int(time.time())}, DEAD_TTL_SEC)
+                        sweep['dead'] += 1
+                        print(f"[Telegram] @{channel}: handle does not resolve "
+                              f"({type(dead).__name__}) — skipped for 7 days")
+                        continue
+                    sweep['resolved'] += 1
+                    _ec_bump('resolved')
+                    new_rec = _record_from_peer(entity)
+                    if new_rec:
+                        _ec_put(channel, new_rec, ENTITY_TTL_SEC)
+                    await asyncio.sleep(RESOLVE_SPACING_SEC)
+
                 history = await client(GetHistoryRequest(
                     peer=entity,
                     limit=limit,
@@ -642,15 +885,33 @@ async def _async_fetch_messages(channels, hours_back=24):
                         })
                         channel_count += 1
 
+                sweep['fetched'] += 1
                 print(f"[Telegram] @{channel}: {channel_count} messages "
                       f"[{meta['tier']}/{'+'.join(meta['lang'])}] (last {hours_back}h)")
 
+            except FloodWaitError as fw:
+                # A FloodWait on history itself: stop the whole sweep, do not
+                # keep knocking channel after channel.
+                _flood_set(fw.seconds)
+                print(f"[Telegram] ⛔ FloodWait {fw.seconds}s fetching @{channel} "
+                      f"— standing the sweep down")
+                break
             except Exception as e:
+                # A cached peer that no longer works (channel went private,
+                # access_hash rejected) is dropped so a later sweep re-resolves.
+                if rec and not rec.get('dead'):
+                    _ec_drop(channel)
+                    print(f"[Telegram] @{channel}: cached entity rejected — dropped for re-resolve")
                 print(f"[Telegram] @{channel} error: {str(e)[:100]}")
                 continue
 
         await client.disconnect()
-        print(f"[Telegram] ✅ Total: {len(messages)} messages from {len(unique_channels)} channels")
+        with _ec_lock:
+            _ec_stats['last_sweep'] = dict(sweep, at=datetime.now(timezone.utc).isoformat())
+        print(f"[Telegram] ✅ Total: {len(messages)} messages from {len(unique_channels)} channels "
+              f"| entities: {sweep['cached']} cached, {sweep['resolved']} resolved, "
+              f"{sweep['dead']} dead, {sweep['budget_skipped']} deferred (budget), "
+              f"{sweep['flood_skipped']} deferred (FloodWait)")
 
     except Exception as e:
         print(f"[Telegram] ❌ Connection error: {str(e)[:200]}")
@@ -799,6 +1060,8 @@ def get_telegram_status():
         # --- v2.0.0 ---
         'coverage': get_language_coverage(),
         'needs_verification': channels_needing_verification(),
+        # --- v2.1.0 ---
+        'entity_cache': get_entity_cache_stats(),
         'ready': _telegram_available() and (
             os.path.exists(f'{SESSION_NAME}.session') or
             bool(os.environ.get('TELEGRAM_SESSION_BASE64'))
