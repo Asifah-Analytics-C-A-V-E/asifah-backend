@@ -7281,7 +7281,7 @@ def fetch_all_gdelt_military(days=7):
             articles = fetch_gdelt_military(query, days, language=lang_code)
             all_articles.extend(articles)
             block_count += len(articles)
-            time.sleep(0.5)
+            # (v3.x Sep 21) sleep removed -- the gateway already paces every call.
         if block_count > 0:
             print(f"[Military GDELT] {lang_name} ({lang_code}): {block_count} articles from {len(queries)} queries")
 
