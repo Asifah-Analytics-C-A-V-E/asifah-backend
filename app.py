@@ -1,6 +1,11 @@
 """
-Asifah Analytics Backend v3.0.0
-February 8, 2026
+Asifah Analytics Backend v3.2.0
+February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)
+
+v3.2.0 — Reddit moved to search.rss with an honest User-Agent (the spoofed
+Chrome UA was the cause of auth_failed), 30-min platform cooldown on 429,
+per-target outcome counts on /health. /health version now reads
+ME_BACKEND_VERSION instead of a stale '2.3.0-IRAQ'.
 
 All endpoints working:
 - /api/threat/<target> (hezbollah, iran, houthis, syria)
@@ -1483,7 +1488,10 @@ ALPHA_VANTAGE_KEY = os.environ.get('ALPHA_VANTAGE_KEY', '6V1C73D5FYVIDWM5')
 GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 # Reddit User Agent
-REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+# v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
+# was the only disguise on the platform and the only UA Reddit refused.
+ME_BACKEND_VERSION = '3.2.0'
+REDDIT_USER_AGENT = f"AsifahAnalytics-ME/{ME_BACKEND_VERSION} (OSINT monitoring tool)"
 
 # Rate limiting
 RATE_LIMIT = 100
@@ -4947,14 +4955,49 @@ def fetch_gdelt_articles(query, days=7, language='eng'):
     except Exception:
         return []
 
+# v3.2.0 (Sep 21 2026) — Reddit platform-wide cooldown + outcome counts.
+# A 429 pauses ALL Reddit calls for 30 minutes (Asia's v1.1.0 idea, proven
+# there) instead of letting 18 targets each knock on the same closed door.
+_REDDIT_COOLDOWN_UNTIL = 0  # unix timestamp
+_REDDIT_COOLDOWN_SECONDS = 30 * 60
+REDDIT_HEALTH = {'mechanism': 'search.rss', 'targets': {}, 'last_run': None,
+                 'cooldown_until': None}
+
+
 def fetch_reddit_posts(target, keywords, days=7):
-    """Fetch Reddit posts from relevant subreddits"""
+    """Fetch Reddit posts via search.rss (Atom). v3.2.0 — Sep 21, 2026.
+
+    Was search.json with a SPOOFED CHROME User-Agent -- the only backend on
+    the platform pretending to be a browser, and the only one Reddit refused
+    (source_health: auth_failed). search.rss needs no OAuth and no disguise;
+    verified live Sep 20 and now running on Europe and Asia.
+
+    Keywords are joined as (a) OR (b) OR (c): parentheses keep a multi-word
+    keyword like 'Red Sea' meaning both words, not 'Red' OR 'Sea'.
+    Every outcome is counted in REDDIT_HEALTH (on /health), never silent.
+    """
+    global _REDDIT_COOLDOWN_UNTIL
+    from html import unescape as _unescape
+
     subreddits = REDDIT_SUBREDDITS.get(target, [])
     if not subreddits:
+        REDDIT_HEALTH['targets'][target] = {
+            'status': 'no_subreddits_configured',
+            'at': datetime.now(timezone.utc).isoformat()}
         return []
-    
+
+    now_ts = time.time()
+    if _REDDIT_COOLDOWN_UNTIL > now_ts:
+        remaining = int(_REDDIT_COOLDOWN_UNTIL - now_ts)
+        print(f"[Reddit] In cooldown ({remaining}s remaining) — skipping {target}")
+        REDDIT_HEALTH['targets'][target] = {
+            'status': 'skipped_cooldown', 'cooldown_remaining_sec': remaining,
+            'at': datetime.now(timezone.utc).isoformat()}
+        return []
+
     all_posts = []
-    
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
     if days <= 1:
         time_filter = "day"
     elif days <= 7:
@@ -4963,64 +5006,99 @@ def fetch_reddit_posts(target, keywords, days=7):
         time_filter = "month"
     else:
         time_filter = "year"
-    
-    for subreddit in subreddits:
-        try:
-            query = " OR ".join(keywords[:3])
-            
-            url = f"https://www.reddit.com/r/{subreddit}/search.json"
-            params = {
-                "q": query,
-                "restrict_sr": "true",
-                "sort": "new",
-                "t": time_filter,
-                "limit": 25
-            }
-            
-            headers = {"User-Agent": REDDIT_USER_AGENT}
-            
-            time.sleep(2)
-            
-            response = requests.get(url, params=params, headers=headers, timeout=10)
 
+    query = ' OR '.join(f'({k})' for k in keywords[:3])
+    atom = '{http://www.w3.org/2005/Atom}'
+    counts = {'ok': 0, 'empty': 0, 'forbidden': 0, 'http_error': 0,
+              'rate_limited': 0, 'timeout': 0, 'parse_error': 0,
+              'exception': 0, 'skipped_after_429': 0}
+
+    for i, subreddit in enumerate(subreddits):
+        try:
+            time.sleep(2)
+            response = requests.get(
+                f"https://www.reddit.com/r/{subreddit}/search.rss",
+                params={"q": query, "restrict_sr": "on", "sort": "new",
+                        "t": time_filter, "limit": 25},
+                headers={"User-Agent": REDDIT_USER_AGENT},
+                timeout=10
+            )
+
+            if response.status_code == 429:
+                counts['rate_limited'] += 1
+                counts['skipped_after_429'] = len(subreddits) - i - 1
+                _REDDIT_COOLDOWN_UNTIL = time.time() + _REDDIT_COOLDOWN_SECONDS
+                REDDIT_HEALTH['cooldown_until'] = datetime.fromtimestamp(
+                    _REDDIT_COOLDOWN_UNTIL, tz=timezone.utc).isoformat()
+                print(f"[Reddit] r/{subreddit}: HTTP 429 — all Reddit paused "
+                      f"{_REDDIT_COOLDOWN_SECONDS // 60}min")
+                break
+            if response.status_code == 403:
+                counts['forbidden'] += 1
+                print(f"[Reddit] r/{subreddit}: HTTP 403 forbidden — skipping")
+                continue
             if response.status_code != 200:
-                # Sep 20 2026: this branch did not exist. Every non-200 --
-                # including the 403 a spoofed browser User-Agent earns from
-                # a datacenter IP -- fell through in silence, which is why
-                # source_health could say 'auth_failed' but never why.
-                print('[Reddit] r/%s: HTTP %s :: %s'
-                      % (subreddit, response.status_code,
-                         (response.text or '')[:140].replace('\n', ' ')))
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if "data" in data and "children" in data["data"]:
-                    posts = data["data"]["children"]
-                    
-                    for post in posts:
-                        post_data = post.get("data", {})
-                        
-                        normalized_post = {
-                            "title": post_data.get("title", "")[:200],
-                            "description": post_data.get("selftext", "")[:300],
-                            "url": f"https://www.reddit.com{post_data.get('permalink', '')}",
-                            "publishedAt": datetime.fromtimestamp(
-                                post_data.get("created_utc", 0), 
-                                tz=timezone.utc
-                            ).isoformat(),
-                            "source": {"name": f"r/{subreddit}"},
-                            "content": post_data.get("selftext", ""),
-                            "language": "en"
-                        }
-                        
-                        all_posts.append(normalized_post)
-            
+                counts['http_error'] += 1
+                print(f"[Reddit] r/{subreddit}: HTTP {response.status_code} — skipping")
+                continue
+
+            try:
+                root = ET.fromstring(response.content)
+            except ET.ParseError:
+                counts['parse_error'] += 1
+                print(f"[Reddit] r/{subreddit}: unparseable feed "
+                      f"({len(response.content)} bytes)")
+                continue
+
+            sub_count = 0
+            for entry in root.findall(f'{atom}entry'):
+                published = (entry.findtext(f'{atom}published')
+                             or entry.findtext(f'{atom}updated') or '')
+                try:
+                    post_time = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                    if post_time.tzinfo is None:
+                        post_time = post_time.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    post_time = None
+                if post_time is not None and post_time < since:
+                    continue
+
+                link_el = entry.find(f'{atom}link')
+                link = link_el.get('href', '') if link_el is not None else ''
+                text = _unescape(re.sub(r'<[^>]+>', ' ', entry.findtext(f'{atom}content') or ''))
+                text = re.sub(r'\s+', ' ', text).strip()
+                text = re.sub(r'submitted by\s+/u/\S+.*$', '', text).strip()
+
+                all_posts.append({
+                    "title": (entry.findtext(f'{atom}title') or '').strip()[:200],
+                    "description": text[:300],
+                    "url": link,
+                    "publishedAt": post_time.isoformat() if post_time else published,
+                    "source": {"name": f"r/{subreddit}"},
+                    "content": text,
+                    "language": "en"
+                })
+                sub_count += 1
+
+            if sub_count:
+                counts['ok'] += 1
+            else:
+                counts['empty'] += 1
+
+        except requests.Timeout:
+            counts['timeout'] += 1
+            print(f"[Reddit] r/{subreddit}: timeout — skipping")
         except Exception as e:
+            counts['exception'] += 1
             print('[Reddit] r/%s: %s: %s'
                   % (subreddit, type(e).__name__, str(e)[:130]))
-            continue
-    
+
+    REDDIT_HEALTH['targets'][target] = dict(
+        counts, posts=len(all_posts), subreddits=len(subreddits),
+        at=datetime.now(timezone.utc).isoformat())
+    REDDIT_HEALTH['last_run'] = datetime.now(timezone.utc).isoformat()
+    print(f"[Reddit] {target}: {len(all_posts)} posts from "
+          f"{counts['ok']}/{len(subreddits)} subs | {counts}")
     return all_posts
 
 # ========================================
@@ -8224,8 +8302,9 @@ def health():
     """Health check"""
     return jsonify({
         'status': 'healthy',
-        'version': '2.3.0-IRAQ',
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'version': f'{ME_BACKEND_VERSION}-me',   # was a stale '2.3.0-IRAQ'
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'reddit': REDDIT_HEALTH,
     })
 
 @app.route('/flight-cancellations', methods=['GET'])

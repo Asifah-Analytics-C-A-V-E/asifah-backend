@@ -4848,7 +4848,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.13.0'
+MILITARY_TRACKER_VERSION = '3.14.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4876,6 +4876,7 @@ MILITARY_TRACKER_FEATURES = {
     'alliance_cues':           True,   # v3.11 - capability supplemented by pact
     'source_health_v2':        True,   # v3.12 - why a feed is dead, not just that it is
     'gateway_stats_exposed':   True,   # v3.13 - the breaker is visible at last
+    'reddit_rss':              True,   # v3.14 - search.rss + honest UA; auth_failed fix
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -4998,7 +4999,10 @@ REDDIT_MILITARY_SUBREDDITS = [
     'NCD', 'DefenseNews'
 ]
 
-REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+# v3.14 (Sep 21 2026) -- honest UA. The spoofed browser string here is what
+# earned source_health 'auth_failed': Reddit refuses a "browser" calling
+# from a datacenter IP. Europe/Asia never spoofed and never failed.
+REDDIT_USER_AGENT = "AsifahAnalytics-MilitaryTracker/3.14 (OSINT monitoring tool)"
 
 
 # ========================================
@@ -7484,20 +7488,29 @@ def fetch_all_brave_military(days=7):
 
 
 def fetch_reddit_military(days=7):
-    """Fetch military-related Reddit posts"""
+    """Fetch military-related Reddit posts. v3.14 -- search.rss (Atom).
+
+    Was search.json with a spoofed browser UA -> 'auth_failed'. Same fix
+    as app.py v3.2.0 and the Europe/Asia backends. A 429 stops the loop
+    instead of knocking on the remaining subreddits.
+    """
+    from html import unescape as _unescape
     _t0 = time.time()
     all_posts = []
     keywords = ['deployment', 'military', 'carrier', 'strike group', 'NATO', 'CENTCOM',
                 'evacuation', 'Ukraine']
-    query = " OR ".join(keywords[:4])
+    # Parentheses keep 'strike group' as both words, not 'strike' OR 'group'.
+    query = " OR ".join(f"({k})" for k in keywords[:4])
     time_filter = "week" if days <= 7 else "month"
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    atom = '{http://www.w3.org/2005/Atom}'
 
     for subreddit in REDDIT_MILITARY_SUBREDDITS[:5]:
         try:
-            url = f"https://www.reddit.com/r/{subreddit}/search.json"
+            url = f"https://www.reddit.com/r/{subreddit}/search.rss"
             params = {
                 "q": query,
-                "restrict_sr": "true",
+                "restrict_sr": "on",
                 "sort": "new",
                 "t": time_filter,
                 "limit": 15
@@ -7508,31 +7521,46 @@ def fetch_reddit_military(days=7):
             response = requests.get(url, params=params, headers=headers, timeout=10)
 
             if response.status_code != 200:
-                # Reddit blocks datacenter IPs and generic user agents with
-                # 403, and rate limits with 429. Both previously fell
-                # through this `if` in silence and then out of the bare
-                # `except ... continue` below, leaving zero trace.
                 _health_note('reddit', http_status=response.status_code,
                              error=(response.text or '')[:160],
                              note=f'r/{subreddit}')
-            if response.status_code == 200:
-                _health_note('reddit', http_status=200)
-                data = response.json()
-                if "data" in data and "children" in data["data"]:
-                    for post in data["data"]["children"]:
-                        post_data = post.get("data", {})
-                        all_posts.append({
-                            'title': post_data.get('title', '')[:200],
-                            'description': post_data.get('selftext', '')[:300],
-                            'url': f"https://www.reddit.com{post_data.get('permalink', '')}",
-                            'publishedAt': datetime.fromtimestamp(
-                                post_data.get('created_utc', 0),
-                                tz=timezone.utc
-                            ).isoformat(),
-                            'source': {'name': f'r/{subreddit}'},
-                            'content': post_data.get('selftext', ''),
-                            'feed_type': 'reddit'
-                        })
+                if response.status_code == 429:
+                    print(f"[Military Reddit] r/{subreddit}: 429 -- stopping Reddit for this scan")
+                    break
+                continue
+
+            try:
+                root = ET.fromstring(response.content)
+            except ET.ParseError as pe:
+                _health_note('reddit', http_status=200, error=pe,
+                             note=f'r/{subreddit} unparseable feed')
+                continue
+            _health_note('reddit', http_status=200)
+
+            for entry in root.findall(f'{atom}entry'):
+                published = (entry.findtext(f'{atom}published')
+                             or entry.findtext(f'{atom}updated') or '')
+                try:
+                    post_time = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                    if post_time.tzinfo is None:
+                        post_time = post_time.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    post_time = None
+                if post_time is not None and post_time < since:
+                    continue
+                link_el = entry.find(f'{atom}link')
+                text = _unescape(re.sub(r'<[^>]+>', ' ', entry.findtext(f'{atom}content') or ''))
+                text = re.sub(r'\s+', ' ', text).strip()
+                text = re.sub(r'submitted by\s+/u/\S+.*$', '', text).strip()
+                all_posts.append({
+                    'title': (entry.findtext(f'{atom}title') or '').strip()[:200],
+                    'description': text[:300],
+                    'url': link_el.get('href', '') if link_el is not None else '',
+                    'publishedAt': post_time.isoformat() if post_time else published,
+                    'source': {'name': f'r/{subreddit}'},
+                    'content': text,
+                    'feed_type': 'reddit'
+                })
         except Exception as e:
             _health_note('reddit', error=e, note=f'r/{subreddit}')
             continue
