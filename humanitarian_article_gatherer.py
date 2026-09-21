@@ -1,8 +1,20 @@
 """
 humanitarian_article_gatherer.py
 Asifah Analytics -- ME Backend Module
+v1.6.3 -- September 21, 2026 (no gather on restart if the pool is still fresh)
+v1.6.x -- Sep 19-20, 2026 (gateways, year-strip, Reuters Africa pulled)
 v1.4.0 -- May 23, 2026 (Health/Pandemic + Africa Expansion)
 (prior: v1.0.0 May 19 2026 baseline)
+
+v1.6.3 -- RESTART STORM FIX
+  The scheduler gathered IMMEDIATELY on every process start. Every deploy
+  or Render restart therefore fired a full gather -- 33 GDELT queries and
+  up to 26 Brave calls -- even when the pool was minutes old. Sep 21: three
+  deploys in one evening, gathers at 22:29 and again ~22:58, into a GDELT
+  that was already refusing half our calls. Now the loop reads the last-run
+  timestamp from Redis first and waits out the remainder of the 12h
+  interval if the pool is still fresh. A manual /scan?force=true still
+  gathers on demand.
 
 GLOBAL HUMANITARIAN ARTICLE GATHERER
 
@@ -901,6 +913,23 @@ def run_gather():
 # ============================================================
 # BACKGROUND SCHEDULER
 # ============================================================
+def _seconds_until_due():
+    """Seconds until the next gather is due, from the Redis last-run stamp.
+    0 means gather now (no stamp, unreadable stamp, or interval elapsed).
+    Fail-open: if Redis can't be read we gather, as before."""
+    lastrun = _redis_get(LASTRUN_KEY)
+    if not isinstance(lastrun, dict):
+        return 0
+    try:
+        last_dt = datetime.fromisoformat(lastrun.get('last_run_at'))
+        if last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - last_dt).total_seconds()
+        return max(0, int(SCAN_INTERVAL_HOURS * 3600 - age))
+    except Exception:
+        return 0
+
+
 def _scheduler_loop():
     """Background thread: run gather every SCAN_INTERVAL_HOURS."""
     global _gatherer_running
@@ -911,6 +940,13 @@ def _scheduler_loop():
             # a non-owner re-checks hourly so it can take over if the owner dies.
             if not _acquire_scheduler_lock('humanitarian', 46800):
                 time.sleep(3600)
+                continue
+            # v1.6.3 -- don't re-gather a pool that is still fresh (restart storm).
+            wait_s = _seconds_until_due()
+            if wait_s > 0:
+                print(f"[humanitarian_gatherer] Pool still fresh -- next gather in "
+                      f"{wait_s / 3600:.1f}h (skipping restart-triggered gather)")
+                time.sleep(min(wait_s, 3600))   # re-check hourly; keeps lock renewing
                 continue
             with _gatherer_lock:
                 if _gatherer_running:
@@ -1053,6 +1089,6 @@ def register_humanitarian_gatherer_routes(app, start_scheduler=True):
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__   = '1.6.2'
+__version__   = '1.6.3'
 __module_id__ = 'humanitarian_article_gatherer'
 print(f'[Humanitarian Article Gatherer] Module loaded -- v{__version__}')

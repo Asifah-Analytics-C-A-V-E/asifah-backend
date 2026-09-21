@@ -1,6 +1,8 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.8.0 -- September 21, 2026 (BACKGROUND WARMER -- the cold-cache fix, see below)
+v1.7.0 -- (header never updated for this one; code said 1.7.0, header said 1.6.2)
 v1.6.2 -- June 22, 2026 (WB exposure/distress split: food-import is exposure; L5 needs distress)
 v1.6.1 -- June 22, 2026 (WB calibration: amplifier-only gate + named mechanisms)
 v1.6.0 -- June 22, 2026 (World Bank structural-stress signals)
@@ -8,6 +10,21 @@ v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
 (prior: v1.4.0 May 23 2026; v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
 
 GLOBAL HUMANITARIAN CONVERGENCE DETECTOR
+
+v1.8.0 -- WHY humanitarian_warm WAS FALSE (Sep 21 2026)
+  The BLUF was only ever built when someone HTTP-called /bluf, and it was
+  cached for 30 minutes. Two readers -- convergence_detector (CAX) and the
+  ME Regional BLUF's humanitarian emitter -- read the Redis key DIRECTLY and
+  never call the endpoint. So for every minute outside a 30-min window after
+  a /bluf call, the key did not exist and both readers saw nothing.
+  Proven live Sep 21: /api/cax/probe humanitarian_warm False -> call /bluf
+  once -> True.
+  Fix: a background warmer rebuilds + writes the key every WARM_INTERVAL_SEC
+  (20 min) with a TTL (60 min) that EXCEEDS the interval, so one missed cycle
+  never lets the key lapse. (Same invariant as GDELT cache TTL > trickle lap.)
+  No new network calls: the build reads Redis only (gatherer pool, rhetoric
+  caches, UNHCR, World Bank). /health now says whether the key is warm and
+  how old it is -- including "could not assess" when Redis is unreachable.
 
 Solves the "weak signal aggregation" problem for humanitarian crises:
 no single article about Egypt vegetable prices, Ethiopia fertilizer,
@@ -56,6 +73,20 @@ from datetime import datetime, timezone, timedelta
 import json
 import os
 import re
+import threading
+import time
+
+# ── v1.8.0 background warmer ──
+BLUF_CACHE_KEY    = 'humanitarian_convergence:bluf:latest'
+WARM_INTERVAL_SEC = int(os.environ.get('HUMANITARIAN_WARM_INTERVAL_SEC', '1200'))  # 20 min
+BLUF_TTL_SEC      = int(os.environ.get('HUMANITARIAN_BLUF_TTL_SEC', '3600'))       # 60 min -- MUST exceed the interval
+WARM_START_DELAY  = 60   # let the app finish booting before the first build
+_warm_state = {
+    'started': False, 'runs': 0, 'ok': 0, 'failed': 0,
+    'last_run_at': None, 'last_ok_at': None, 'last_error': None,
+    'last_duration_sec': None, 'last_signal_count': None, 'last_article_count': None,
+}
+_warm_lock = threading.Lock()
 
 # ============================================================
 # SIGNAL CATEGORIES + KEYWORDS
@@ -1532,7 +1563,8 @@ def detect_and_build_bluf(articles, extra_signals=None):
 # the app.py registration zone stays uncluttered. Reads articles from
 # existing ME rhetoric tracker Redis caches — zero new API calls.
 
-def register_humanitarian_convergence_routes(app, redis_client=None, json_module=None):
+def register_humanitarian_convergence_routes(app, redis_client=None, json_module=None,
+                                             start_warmer=True):
     """
     Register humanitarian convergence endpoints on the Flask app.
 
@@ -1695,6 +1727,81 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
         return articles
 
     # ────────────────────────────────────────────────────────────
+    # v1.8.0 -- ONE build path, used by the route AND the warmer
+    # ────────────────────────────────────────────────────────────
+    def _build_and_cache(source='request'):
+        """Build a fresh BLUF from Redis inputs and write it with BLUF_TTL_SEC."""
+        articles = _gather_articles()
+        # UNHCR structured displacement surges (shared Redis; gated by TRACKED_COUNTRIES)
+        unhcr_signals = []
+        try:
+            _unhcr_all = _upstash_get('unhcr:all:latest')
+            if isinstance(_unhcr_all, dict):
+                unhcr_signals = detect_unhcr_displacement_signals(_unhcr_all)
+        except Exception as _ue:
+            print(f'[humanitarian_convergence] UNHCR signal read skipped: {str(_ue)[:80]}')
+        # World Bank structural-stress sweep (shared Redis; de-weighted by tracked set)
+        wb_signals = []
+        try:
+            _wb_struct = _upstash_get('worldbank:structural:latest')
+            if isinstance(_wb_struct, dict):
+                wb_signals = detect_worldbank_structural_signals(_wb_struct)
+        except Exception as _we:
+            print(f'[humanitarian_convergence] World Bank signal read skipped: {str(_we)[:80]}')
+        bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals + wb_signals)
+        bluf.setdefault('meta', {})
+        bluf['meta']['built_by'] = source            # 'warmer' or 'request'
+        bluf['meta']['article_count'] = len(articles)
+        bluf['meta']['cache_ttl_sec'] = BLUF_TTL_SEC
+        written = _upstash_setex(BLUF_CACHE_KEY, BLUF_TTL_SEC, bluf)
+        return bluf, written, len(articles)
+
+    def _warm_once():
+        t0 = time.time()
+        with _warm_lock:
+            _warm_state['runs'] += 1
+            _warm_state['last_run_at'] = datetime.now(timezone.utc).isoformat()
+        try:
+            bluf, written, n_articles = _build_and_cache(source='warmer')
+            with _warm_lock:
+                _warm_state['last_duration_sec'] = round(time.time() - t0, 1)
+                _warm_state['last_signal_count'] = len(bluf.get('signals', []) or [])
+                _warm_state['last_article_count'] = n_articles
+                if written:
+                    _warm_state['ok'] += 1
+                    _warm_state['last_ok_at'] = datetime.now(timezone.utc).isoformat()
+                    _warm_state['last_error'] = None
+                else:
+                    _warm_state['failed'] += 1
+                    _warm_state['last_error'] = 'built OK but Redis write failed'
+            print(f'[humanitarian_convergence] warmer: {n_articles} articles -> '
+                  f'{len(bluf.get("signals", []) or [])} signals, level '
+                  f'{bluf.get("max_level")}, written={written} '
+                  f'({time.time() - t0:.1f}s)')
+        except Exception as e:
+            with _warm_lock:
+                _warm_state['failed'] += 1
+                _warm_state['last_error'] = f'{type(e).__name__}: {str(e)[:150]}'
+            print(f'[humanitarian_convergence] warmer error: {e}')
+
+    def _warm_loop():
+        time.sleep(WARM_START_DELAY)
+        while True:
+            _warm_once()
+            time.sleep(WARM_INTERVAL_SEC)
+
+    if start_warmer and not _warm_state['started']:
+        if BLUF_TTL_SEC <= WARM_INTERVAL_SEC:
+            print(f'[humanitarian_convergence] ⚠️ BLUF_TTL_SEC ({BLUF_TTL_SEC}) <= '
+                  f'WARM_INTERVAL_SEC ({WARM_INTERVAL_SEC}) -- the key WILL lapse '
+                  f'between builds. Raise the TTL.')
+        _warm_state['started'] = True
+        threading.Thread(target=_warm_loop, daemon=True,
+                         name='HumanitarianBlufWarmer').start()
+        print(f'[humanitarian_convergence] Background warmer started: every '
+              f'{WARM_INTERVAL_SEC}s, TTL {BLUF_TTL_SEC}s, first build in {WARM_START_DELAY}s')
+
+    # ────────────────────────────────────────────────────────────
     # GET /api/humanitarian-convergence/bluf
     # ────────────────────────────────────────────────────────────
     @app.route('/api/humanitarian-convergence/bluf', methods=['GET'])
@@ -1714,35 +1821,14 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
         force = request.args.get('force', '').lower() in ('true', '1', 'yes')
 
         try:
-            # Try cached BLUF first (30-min TTL) — unless force=true
+            # Cached BLUF first (kept warm by the v1.8.0 warmer) — unless force=true
             if not force:
-                cached = _upstash_get('humanitarian_convergence:bluf:latest')
+                cached = _upstash_get(BLUF_CACHE_KEY)
                 if cached and isinstance(cached, dict):
                     return jsonify(cached), 200
 
-            # Build fresh
-            articles = _gather_articles()
-            # UNHCR structured displacement surges (shared Redis; gated by TRACKED_COUNTRIES)
-            unhcr_signals = []
-            try:
-                _unhcr_all = _upstash_get('unhcr:all:latest')
-                if isinstance(_unhcr_all, dict):
-                    unhcr_signals = detect_unhcr_displacement_signals(_unhcr_all)
-            except Exception as _ue:
-                print(f'[humanitarian_convergence] UNHCR signal read skipped: {str(_ue)[:80]}')
-            # World Bank structural-stress sweep (shared Redis; de-weighted by tracked set)
-            wb_signals = []
-            try:
-                _wb_struct = _upstash_get('worldbank:structural:latest')
-                if isinstance(_wb_struct, dict):
-                    wb_signals = detect_worldbank_structural_signals(_wb_struct)
-            except Exception as _we:
-                print(f'[humanitarian_convergence] World Bank signal read skipped: {str(_we)[:80]}')
-            bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals + wb_signals)
-
-            # Cache for 30 min
-            _upstash_setex('humanitarian_convergence:bluf:latest', 1800, bluf)
-
+            # Build fresh (same path the warmer uses)
+            bluf, _written, _n = _build_and_cache(source='request')
             return jsonify(bluf), 200
 
         except Exception as e:
@@ -1802,13 +1888,40 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
     # ────────────────────────────────────────────────────────────
     @app.route('/api/humanitarian-convergence/health', methods=['GET'])
     def humanitarian_convergence_health():
+        # v1.8.0 -- report whether the key the readers depend on actually exists.
+        # "could not assess" is distinct from "assessed and fine" (handover 5.5).
+        cache = {'key': BLUF_CACHE_KEY}
+        if not (UPSTASH_URL and UPSTASH_TOKEN):
+            cache['state'] = 'could_not_assess'
+            cache['reason'] = 'Upstash not configured'
+        else:
+            cached = _upstash_get(BLUF_CACHE_KEY)
+            if isinstance(cached, dict):
+                cache['state'] = 'warm'
+                cache['updated_at'] = cached.get('updated_at')
+                cache['built_by'] = (cached.get('meta') or {}).get('built_by')
+                try:
+                    ts = datetime.fromisoformat(cached.get('updated_at'))
+                    cache['age_min'] = round((datetime.now(timezone.utc) - ts).total_seconds() / 60, 1)
+                except Exception:
+                    cache['age_min'] = None
+            else:
+                cache['state'] = 'cold'
+        with _warm_lock:
+            warmer = dict(_warm_state)
+        warmer['interval_sec'] = WARM_INTERVAL_SEC
+        warmer['ttl_sec'] = BLUF_TTL_SEC
+        warmer['ttl_exceeds_interval'] = BLUF_TTL_SEC > WARM_INTERVAL_SEC
         return jsonify({
             'module':           __module_id__,
             'version':          __version__,
             'signal_categories': list(SIGNAL_CATEGORIES.keys()),
             'category_count':   len(SIGNAL_CATEGORIES),
             'countries_tracked': len(COUNTRY_PATTERNS),
-            'status':           'operational',
+            'bluf_cache':       cache,
+            'warmer':           warmer,
+            'status':           'operational' if cache.get('state') == 'warm' else
+                                ('degraded' if cache.get('state') == 'cold' else 'unknown'),
         }), 200
 
     print('[Humanitarian Convergence] Routes registered: /api/humanitarian-convergence/bluf, /details, /health')
@@ -1817,6 +1930,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.7.0'
+__version__ = '1.8.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
