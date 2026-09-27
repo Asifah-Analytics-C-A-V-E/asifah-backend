@@ -1106,8 +1106,20 @@ def get_oman_rhetoric_cache():
 # BACKGROUND REFRESH
 # ============================================
 def _background_refresh():
+    # Sep 27 2026 -- ONE instance scans. Render runs two instances of this
+    # backend, and each one started its own copy of this thread: two full
+    # Oman scans every 12h, hitting the same RSS, GDELT and Brave sources.
+    try:
+        from instance_lock import own_this_job as _own_job
+    except ImportError:
+        _own_job = None
+        print("[Oman Rhetoric] instance_lock not installed -- "
+              "this thread scans on EVERY instance (duplicated work)")
     time.sleep(90)  # boot delay
     while True:
+        if _own_job and not _own_job('oman_rhetoric_scan'):
+            time.sleep(300)     # standby: take over if the owner dies
+            continue
         try:
             print("[Oman Rhetoric] Background refresh starting...")
             run_oman_rhetoric_scan(force=True)
