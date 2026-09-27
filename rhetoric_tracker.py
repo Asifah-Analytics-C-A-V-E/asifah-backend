@@ -3202,14 +3202,27 @@ def register_rhetoric_endpoints(app):
         return
 
     def _periodic_rhetoric_scan():
+        # Sep 27 2026 -- ONE instance scans. Render runs two instances of this
+        # backend and each started its own copy of this thread, so every cycle
+        # ran twice against the same sources.
+        try:
+            from instance_lock import own_this_job as _own_job
+        except ImportError:
+            _own_job = None
+            print("[Rhetoric Tracker] instance_lock not installed -- "
+                  "this thread scans on EVERY instance (duplicated work)")
         time.sleep(180)
-        print("[Rhetoric Tracker] Starting initial scan...")
-        _run_rhetoric_scan_safe()
+        first = True
         while True:
+            if _own_job and not _own_job('lebanon_rhetoric_scan'):
+                time.sleep(300)     # standby: take over if the owner dies
+                continue
+            print("[Rhetoric Tracker] %s scan starting..."
+                  % ('Initial' if first else 'Periodic'))
+            _run_rhetoric_scan_safe()
+            first = False
             print(f"[Rhetoric Tracker] Sleeping {SCAN_INTERVAL_HOURS}h until next scan...")
             time.sleep(SCAN_INTERVAL_SECONDS)
-            print("[Rhetoric Tracker] Periodic scan starting...")
-            _run_rhetoric_scan_safe()
 
     thread = threading.Thread(target=_periodic_rhetoric_scan, daemon=True)
     thread.start()
