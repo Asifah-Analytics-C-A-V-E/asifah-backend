@@ -1507,7 +1507,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.3.0'
+ME_BACKEND_VERSION = '3.4.0'
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
@@ -3996,17 +3996,25 @@ def fetch_israel_news_rss():
     }
     
     for source_name, feed_url in feeds.items():
+        _t0 = time.time()
+        _before = len(articles)
         try:
             response = requests.get(feed_url, timeout=15, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             })
             
             if response.status_code != 200:
+                # v3.4.0 -- this used to be a bare continue: a feed could 403
+                # on every scan forever and never appear anywhere.
+                _rss_record(feed_url, source_name,
+                            http_status=response.status_code, t0=_t0)
                 continue
             
             try:
                 root = ET.fromstring(response.content)
             except ET.ParseError:
+                _rss_record(feed_url, source_name, http_status=200,
+                            error='XML parse error (HTTP 200 but not RSS)', t0=_t0)
                 continue
             
             items = root.findall('.//item')
@@ -4032,9 +4040,12 @@ def fetch_israel_news_rss():
                     })
             
             print(f"[{source_name}] ✓ Fetched {len([a for a in articles if a['source']['name'] == source_name])} articles")
+            _rss_record(feed_url, source_name, items=len(articles) - _before,
+                        http_status=200, t0=_t0)
             
         except Exception as e:
             print(f"[{source_name}] Error: {str(e)[:100]}")
+            _rss_record(feed_url, source_name, error=e, t0=_t0)
             continue
     
     return articles
@@ -4980,6 +4991,42 @@ def fetch_gdelt_articles(query, days=7, language='eng'):
     except Exception:
         return []
 
+# ── Feed health (v3.4.0, Sep 27 2026) ─────────────────────────────────
+# rss_monitor.py already reports its 35 feeds. THIS file has seven more,
+# first-party ones: Times of Israel, JPost, i24NEWS, Syria Direct, SOHR,
+# Jordan Times, Roya News. Both write under backend 'me', so /health shows
+# one combined picture instead of two partial ones.
+try:
+    from feed_health import record_fetch as _feed_record, feed_report as _feed_report
+    _FEED_HEALTH = True
+except ImportError:
+    _feed_record = None
+    _feed_report = None
+    _FEED_HEALTH = False
+    print("[ME Backend] feed_health not installed -- feed deaths will stay silent")
+
+
+def _rss_record(feed_url, label, items=0, http_status=None, error=None, t0=None):
+    """One line per fetch outcome. Never raises: instrumentation must not be
+    able to break the thing it is measuring."""
+    if not _feed_record:
+        return
+    try:
+        _feed_record('me', feed_url, items=items, label=label,
+                     http_status=http_status, error=error,
+                     duration_ms=((time.time() - t0) * 1000) if t0 else None)
+    except Exception as _e:
+        print(f"[ME Backend] feed_health record failed: {str(_e)[:80]}")
+
+
+def get_feed_health_report():
+    """Combined feed status for /health -- this file AND rss_monitor."""
+    if not _feed_report:
+        return {'state': 'could_not_assess',
+                'reason': 'feed_health module not installed'}
+    return _feed_report('me')
+
+
 # v3.2.0 (Sep 21 2026) — Reddit platform-wide cooldown + outcome counts.
 # A 429 pauses ALL Reddit calls for 30 minutes (Asia's v1.1.0 idea, proven
 # there) instead of letting 18 targets each knock on the same closed door.
@@ -5144,16 +5191,20 @@ def fetch_syria_direct_rss():
             'Accept': 'application/rss+xml, application/xml, text/xml, */*'
         }
         
+        _t0 = time.time()
         response = requests.get(feed_url, headers=headers, timeout=20)
         
         if response.status_code != 200:
             print(f"[Syria Direct] HTTP {response.status_code}")
+            _rss_record(feed_url, 'Syria Direct', http_status=response.status_code, t0=_t0)
             return []
         
         try:
             root = ET.fromstring(response.content)
         except ET.ParseError as e:
             print(f"[Syria Direct] XML parse error: {e}")
+            _rss_record(feed_url, 'Syria Direct', http_status=200,
+                        error=f'XML parse error: {e}', t0=_t0)
             return []
         
         items = root.findall('.//item')
@@ -5185,10 +5236,12 @@ def fetch_syria_direct_rss():
                 })
         
         print(f"[Syria Direct] ✓ Fetched {len(articles)} articles")
+        _rss_record(feed_url, 'Syria Direct', items=len(articles), http_status=200, t0=_t0)
         return articles
         
     except Exception as e:
         print(f"[Syria Direct] Error: {str(e)[:100]}")
+        _rss_record(feed_url, 'Syria Direct', error=e, t0=_t0)
         return []
 
 def fetch_sohr_rss():
@@ -5206,16 +5259,20 @@ def fetch_sohr_rss():
             'Accept': 'application/rss+xml, application/xml, text/xml, */*'
         }
         
+        _t0 = time.time()
         response = requests.get(feed_url, headers=headers, timeout=20)
         
         if response.status_code != 200:
             print(f"[SOHR] HTTP {response.status_code}")
+            _rss_record(feed_url, 'SOHR', http_status=response.status_code, t0=_t0)
             return []
         
         try:
             root = ET.fromstring(response.content)
         except ET.ParseError as e:
             print(f"[SOHR] XML parse error: {e}")
+            _rss_record(feed_url, 'SOHR', http_status=200,
+                        error=f'XML parse error: {e}', t0=_t0)
             return []
         
         items = root.findall('.//item')
@@ -5247,10 +5304,12 @@ def fetch_sohr_rss():
                 })
         
         print(f"[SOHR] ✓ Fetched {len(articles)} articles")
+        _rss_record(feed_url, 'SOHR', items=len(articles), http_status=200, t0=_t0)
         return articles
         
     except Exception as e:
         print(f"[SOHR] Error: {str(e)[:100]}")
+        _rss_record(feed_url, 'SOHR', error=e, t0=_t0)
         return []
 
 # ========================================
@@ -7571,17 +7630,25 @@ def fetch_jordan_news_rss():
     }
     
     for source_name, feed_url in feeds.items():
+        _t0 = time.time()
+        _before = len(articles)
         try:
             response = requests.get(feed_url, timeout=15, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             })
             
             if response.status_code != 200:
+                # v3.4.0 -- this used to be a bare continue: a feed could 403
+                # on every scan forever and never appear anywhere.
+                _rss_record(feed_url, source_name,
+                            http_status=response.status_code, t0=_t0)
                 continue
             
             try:
                 root = ET.fromstring(response.content)
             except ET.ParseError:
+                _rss_record(feed_url, source_name, http_status=200,
+                            error='XML parse error (HTTP 200 but not RSS)', t0=_t0)
                 continue
             
             items = root.findall('.//item')
@@ -7607,9 +7674,12 @@ def fetch_jordan_news_rss():
                     })
             
             print(f"[{source_name}] ✓ Fetched {len([a for a in articles if a['source']['name'] == source_name])} articles")
+            _rss_record(feed_url, source_name, items=len(articles) - _before,
+                        http_status=200, t0=_t0)
             
         except Exception as e:
             print(f"[{source_name}] Error: {str(e)[:100]}")
+            _rss_record(feed_url, source_name, error=e, t0=_t0)
             continue
     
     return articles
@@ -8330,9 +8400,9 @@ def health():
         'version': f'{ME_BACKEND_VERSION}-me',   # was a stale '2.3.0-IRAQ'
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'reddit': REDDIT_HEALTH,
-        'feeds': (__import__('rss_monitor').get_feed_health_report()
-                  if 'rss_monitor' in __import__('sys').modules else
-                  {'state': 'could_not_assess', 'reason': 'rss_monitor not imported'}),
+        # v3.4.0 -- one combined report: this file's 7 first-party feeds
+        # plus rss_monitor's 35, all recorded under backend 'me'.
+        'feeds': get_feed_health_report(),
         # v3.3.0 -- which background jobs THIS instance owns.
         'instance_jobs': (_lock_status() if _lock_status else
                           {'note': 'instance_lock not installed'}),
