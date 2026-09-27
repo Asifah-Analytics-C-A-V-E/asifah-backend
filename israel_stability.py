@@ -755,24 +755,91 @@ OPPOSITION_KW = [
     'anti-Netanyahu bloc', 'opposition bloc Israel', 'Zionist opposition',
     'change bloc', 'opposition coalition Israel',
     # Early elections / electoral pressure
-    'early elections Israel', 'October 2026 elections', 'Israel election 2026',
-    'Knesset election', 'Israel election by October', 'snap election Israel',
+    # v2.2.0 (Sep 27 2026): hardcoded '2026' / 'by October' removed -- year
+    # variants are generated at scan time by elections_proximity_keywords().
+    'early elections Israel', 'Knesset election', 'snap election Israel',
     'dissolve Knesset', 'Israel goes to elections',
+    # Hebrew opposition + electoral pressure (Israeli politics breaks in
+    # Hebrew first; the English wires follow by a day)
+    'בחירות מוקדמות', 'פיזור הכנסת', 'ממשלת מעבר', 'הצבעת אי אמון',
+    'בנט', 'לפיד', 'איזנקוט', 'גנץ', 'ליברמן', 'האופוזיציה',
     # Polling signals
     'Israel poll', 'Channel 12 poll Israel', 'Channel 13 poll Israel',
     'Maariv poll', 'Walla poll Israel', 'Israeli poll seats',
 ]
 
 # ── ELECTIONS PROXIMITY signals — high-priority subset ──
-# These specifically trigger the new Elections Vector. When these surface,
+# These specifically trigger the Elections Vector. When these surface,
 # elections are imminent / called / being debated.
-ELECTIONS_PROXIMITY_KW = [
-    'early elections Israel', 'October 2026 elections', 'Israel election 2026',
-    'snap election Israel', 'dissolve Knesset', 'Israel goes to elections',
-    'Knesset dissolved', 'no confidence Netanyahu', 'no confidence vote Israel',
-    'budget vote fails', 'coalition collapse', 'caretaker government Israel',
-    'Israel election by October',
+#
+# v2.2.0 (Sep 27 2026) — THREE FIXES
+#   1. NO HARDCODED YEARS. The old list carried 'October 2026 elections',
+#      'Israel election 2026' and 'Israel election by October'. Those go stale
+#      the moment the cycle moves, and Israel's cycle does not end at the
+#      vote: formation, failure to form, and a re-run in the FOLLOWING year
+#      are the bigger instability window. Year variants are now generated at
+#      scan time for the current year AND the next one.
+#   2. HEBREW + ARABIC. Israeli political breaks happen in Hebrew first;
+#      Palestinian coverage of an Israeli election runs in Arabic. An
+#      English-only net finds both a day late, or not at all.
+#   3. See the scoring change in scan_israel_conflict() — the old
+#      hits * 10 saturated at ten articles.
+ELECTIONS_PROXIMITY_BASE_EN = [
+    'early elections Israel', 'snap election Israel', 'dissolve Knesset',
+    'Israel goes to elections', 'Knesset dissolved', 'no confidence Netanyahu',
+    'no confidence vote Israel', 'budget vote fails', 'coalition collapse',
+    'caretaker government Israel', 'election date set Israel',
+    'mandate to form a government', 'unable to form a government',
+    'coalition talks collapse',
 ]
+
+ELECTIONS_PROXIMITY_HE = [
+    'בחירות מוקדמות',        # early elections
+    'פיזור הכנסת',           # dissolution of the Knesset
+    'חוק פיזור',             # dissolution bill
+    'ממשלת מעבר',            # caretaker/transition government
+    'הצבעת אי אמון',         # no-confidence vote
+    'אי אמון בממשלה',        # no confidence in the government
+    'מועד הבחירות',          # the election date
+    'הרכבת הממשלה',          # forming the government
+    'לא הצליח להרכיב',       # failed to form
+    'קריסת הקואליציה',       # coalition collapse
+]
+
+ELECTIONS_PROXIMITY_AR = [
+    'انتخابات مبكرة',         # early elections
+    'حل الكنيست',             # dissolving the Knesset
+    'حكومة انتقالية',          # transitional government
+    'سحب الثقة',              # withdrawal of confidence
+    'فشل تشكيل الحكومة',      # failure to form the government
+    'أزمة الائتلاف',           # coalition crisis
+]
+
+
+def elections_proximity_keywords(now=None):
+    """Elections-proximity keyword net, with year variants derived at CALL time.
+
+    Called from the scan (not frozen at import) so a process that stays up
+    across New Year does not keep hunting last year's election. Covers the
+    current year and the next one, because in Israel the vote is the middle
+    of the story, not the end of it.
+    """
+    y = (now or datetime.now(timezone.utc)).year
+    kws = (list(ELECTIONS_PROXIMITY_BASE_EN)
+           + list(ELECTIONS_PROXIMITY_HE)
+           + list(ELECTIONS_PROXIMITY_AR))
+    for yr in (y, y + 1):
+        kws += [
+            f'Israel election {yr}', f'{yr} Israel elections',
+            f'Knesset election {yr}', f'Israeli elections {yr}',
+            f'בחירות {yr}', f'انتخابات إسرائيل {yr}',
+        ]
+    return kws
+
+
+# Back-compat: anything importing the old constant still works. The scan
+# itself calls elections_proximity_keywords() so the years stay live.
+ELECTIONS_PROXIMITY_KW = elections_proximity_keywords()
 
 SEVERITY_HIGH = [
     'war', 'explosion', 'killed', 'dead', 'casualties', 'attack', 'strike',
@@ -797,6 +864,24 @@ RSS_SOURCES = [
     ('https://news.google.com/rss/search?q=Israel+hostage+deal+Gaza+ceasefire&hl=en&gl=US&ceid=US:en', 'Google News - Hostages'),
     # Ynet (English via Google)
     ('https://news.google.com/rss/search?q=Ynet+Israel&hl=en&gl=US&ceid=US:en', 'Ynet'),
+
+    # ── v2.2.0 (Sep 27 2026) HEBREW + ARABIC SOURCING ──
+    # Hebrew and Arabic KEYWORDS are inert without Hebrew and Arabic SOURCES:
+    # a keyword net that can never fire reads as 'quiet' forever, which is the
+    # failure mode this platform spent two weekends removing. Keywords and
+    # sources ship together or not at all.
+    ('https://news.google.com/rss/search?q=%D7%91%D7%97%D7%99%D7%A8%D7%95%D7%AA%20%D7%9B%D7%A0%D7%A1%D7%AA%20OR%20%D7%A4%D7%99%D7%96%D7%95%D7%A8%20%D7%94%D7%9B%D7%A0%D7%A1%D7%AA&hl=iw&gl=IL&ceid=IL:iw',
+     'Google News HE - Elections'),
+    ('https://news.google.com/rss/search?q=%D7%A7%D7%95%D7%90%D7%9C%D7%99%D7%A6%D7%99%D7%94%20%D7%A0%D7%AA%D7%A0%D7%99%D7%94%D7%95%20OR%20%D7%9E%D7%9E%D7%A9%D7%9C%D7%AA%20%D7%9E%D7%A2%D7%91%D7%A8&hl=iw&gl=IL&ceid=IL:iw',
+     'Google News HE - Coalition'),
+    ('https://news.google.com/rss/search?q=%D8%A7%D9%86%D8%AA%D8%AE%D8%A7%D8%A8%D8%A7%D8%AA%20%D8%A5%D8%B3%D8%B1%D8%A7%D8%A6%D9%8A%D9%84%20OR%20%D8%AD%D9%84%20%D8%A7%D9%84%D9%83%D9%86%D9%8A%D8%B3%D8%AA&hl=ar&gl=EG&ceid=EG:ar',
+     'Google News AR - Israeli Politics'),
+
+    # Second Haaretz path. rss_monitor.py uses this URL; this file has used
+    # cmlink/1.628765. One of them is probably dead -- feed_health will say
+    # which, and then the dead one gets pulled with a dated comment (standing
+    # source rule). Until then, keep both rather than guess.
+    ('https://www.haaretz.com/srv/haaretz-latest-news', 'Haaretz (alt path)'),
 ]
 
 
@@ -985,6 +1070,9 @@ def scan_israel_conflict(days=7):
     bennett_articles   = []   # v2.1.0 — opposition articles (Bennett, Lapid, Eisenkot, Gantz, Together, etc.)
     elections_articles = []   # v2.1.0 — articles specifically mentioning early elections / dissolution / etc.
 
+    # v2.2.0 -- derive the year-bearing keywords once per scan, not at import
+    _elections_kw = elections_proximity_keywords()
+
     for a in all_articles:
         t = a['title'].lower()
         d = a.get('description', '').lower()
@@ -995,7 +1083,7 @@ def scan_israel_conflict(days=7):
         is_hostage    = any(kw.lower() in combined for kw in WAR_KW_HOSTAGE)
         is_coalition  = any(kw.lower() in combined for kw in WAR_KW_COALITION)
         is_opposition = any(kw.lower() in combined for kw in OPPOSITION_KW)
-        is_elections  = any(kw.lower() in combined for kw in ELECTIONS_PROXIMITY_KW)
+        is_elections  = any(kw.lower() in combined for kw in _elections_kw)
         is_severe     = any(kw in combined for kw in SEVERITY_HIGH)
 
         if is_war:
@@ -1032,7 +1120,11 @@ def scan_israel_conflict(days=7):
     # Powers the new Elections Vector — reflects how imminent / publicly debated
     # an early dissolution actually is. Different from coalition fragility because
     # a coalition can be fragile WITHOUT election triggers firing yet.
-    elections_proximity_score = min(100, elections_hits * 10)
+    # v2.2.0 -- was hits * 10, which pinned at 100 from ten articles, so a
+    # dissolution crisis and a chatty news week read identically. This curve
+    # rises fast at the low end and never quite saturates:
+    #   1 hit -> 8 | 5 -> 34 | 10 -> 57 | 20 -> 81 | 40 -> 96
+    elections_proximity_score = int(round(100 * (1 - (0.92 ** elections_hits))))
 
     # Hostage/ceasefire status heuristic
     ceasefire_active = hostage_hits > 0 and any(
