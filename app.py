@@ -8307,6 +8307,23 @@ def health():
         'reddit': REDDIT_HEALTH,
     })
 
+@app.route('/api/telegram-status', methods=['GET'])
+def telegram_status():
+    """Telegram health + v2.1.0 entity-cache counters.
+
+    Added Sep 27 2026: get_telegram_status() has existed since v2.0.0 and
+    nothing ever called it -- the same bug as gateway_stats() (handover 5.3).
+    """
+    if not TELEGRAM_AVAILABLE:
+        return jsonify({'available': False,
+                        'error': 'telegram_signals not importable on this backend'}), 200
+    try:
+        from telegram_signals import get_telegram_status
+        return jsonify(get_telegram_status()), 200
+    except Exception as e:
+        return jsonify({'available': False, 'error': str(e)[:200]}), 200
+
+
 @app.route('/flight-cancellations', methods=['GET'])
 def flight_cancellations():
     """Flight disruption data — cached, background refresh"""
