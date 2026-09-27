@@ -590,11 +590,28 @@ def _background_refresh_all_caches():
 
     TARGETS = ['iran', 'hezbollah', 'houthis', 'syria', 'jordan', 'israel', 'iraq']
 
+    # v3.3.0 (Sep 27 2026) -- ONE instance refreshes. Render runs two
+    # instances of this backend, each with its own copy of this thread, so
+    # every four hours BOTH were running the same seven full scans: double
+    # the GDELT calls, double the Telegram sweeps, double the Reddit
+    # requests racing each other into the same 429.
+    try:
+        from instance_lock import own_this_job as _own_job
+    except ImportError:
+        _own_job = None
+        print("[Background Refresh] instance_lock not installed -- "
+              "this thread runs on EVERY instance (duplicated work)")
+
     # On startup, wait 30 seconds before first refresh to let the app boot
     print("[Background Refresh] Waiting 30s for app to stabilize before first refresh...")
     _time.sleep(30)
 
     while True:
+        if _own_job and not _own_job('me_background_refresh'):
+            # Another instance owns the refresh. Re-check every 5 minutes so
+            # this one takes over within the lock TTL if the owner dies.
+            _time.sleep(300)
+            continue
         print(f"\n[Background Refresh] Starting full cache refresh at {datetime.now(timezone.utc).isoformat()}")
         start = _time.time()
 
@@ -1490,7 +1507,15 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.2.0'
+ME_BACKEND_VERSION = '3.3.0'
+
+# v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
+# backend; background threads must not run twice). Optional import so the
+# backend still boots if the file is missing.
+try:
+    from instance_lock import lock_status as _lock_status
+except ImportError:
+    _lock_status = None
 REDDIT_USER_AGENT = f"AsifahAnalytics-ME/{ME_BACKEND_VERSION} (OSINT monitoring tool)"
 
 # Rate limiting
@@ -8305,6 +8330,9 @@ def health():
         'version': f'{ME_BACKEND_VERSION}-me',   # was a stale '2.3.0-IRAQ'
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'reddit': REDDIT_HEALTH,
+        # v3.3.0 -- which background jobs THIS instance owns.
+        'instance_jobs': (_lock_status() if _lock_status else
+                          {'note': 'instance_lock not installed'}),
     })
 
 @app.route('/api/telegram-status', methods=['GET'])
