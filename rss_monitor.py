@@ -27,6 +27,28 @@ import json
 import time
 import re
 
+# ── Feed health (Sep 27 2026) ─────────────────────────────────────────
+# Every feed reports its own outcome, so a retired feed announces itself
+# instead of quietly shrinking the corpus. Reuters Africa was dead for
+# days before anyone read the log; these 35 feeds now keep their own
+# history in Upstash. Import is optional: no module, no behaviour change.
+try:
+    from feed_health import record_fetch as _feed_record, feed_report as _feed_report
+    _FEED_HEALTH = True
+except ImportError:
+    _feed_record = None
+    _feed_report = None
+    _FEED_HEALTH = False
+    print("[RSS] feed_health not installed -- feed deaths will stay silent")
+
+
+def get_feed_health_report():
+    """Feed-by-feed status for /health. 'needs_attention' is the list to read."""
+    if not _feed_report:
+        return {'state': 'could_not_assess',
+                'reason': 'feed_health module not installed'}
+    return _feed_report('me')
+
 
 # ========================================
 # RSS FEEDS - LEADERSHIP & NEWS
@@ -447,10 +469,15 @@ def fetch_all_rss(feed_dict=None):
                 'Cache-Control': 'no-cache',
             }
 
+            _t0 = time.time()
             response = requests.get(feed_url, headers=headers, timeout=15)
 
             if response.status_code != 200:
                 print(f"[RSS] {feed_name} HTTP {response.status_code}")
+                if _feed_record:
+                    _feed_record('me', feed_url, items=0, label=feed_name,
+                                 http_status=response.status_code,
+                                 duration_ms=(time.time() - _t0) * 1000)
                 continue
 
             try:
@@ -461,9 +488,17 @@ def fetch_all_rss(feed_dict=None):
                 # vs. genuinely malformed XML
                 preview = response.text[:120].replace('\n', ' ').strip()
                 if '<html' in preview.lower() or '<!doctype' in preview.lower():
-                    print(f"[RSS] {feed_name}: returned HTML not RSS (likely blocked/challenged) — preview: {preview[:80]}")
+                    _why = 'returned HTML not RSS (likely blocked/challenged)'
+                    print(f"[RSS] {feed_name}: {_why} — preview: {preview[:80]}")
                 else:
-                    print(f"[RSS] {feed_name}: XML parse error: {e} — preview: {preview[:80]}")
+                    _why = f'XML parse error: {e}'
+                    print(f"[RSS] {feed_name}: {_why} — preview: {preview[:80]}")
+                if _feed_record:
+                    # HTTP 200 + unparseable is its own failure mode: the host
+                    # is alive and serving something that is not our feed.
+                    _feed_record('me', feed_url, items=0, label=feed_name,
+                                 http_status=200, error=_why,
+                                 duration_ms=(time.time() - _t0) * 1000)
                 continue
 
             items = root.findall('.//item')
@@ -524,9 +559,18 @@ def fetch_all_rss(feed_dict=None):
                 })
 
             print(f"[RSS] ✅ {feed_name}: {len(items)} articles")
+            if _feed_record:
+                # A 200 carrying zero items is a SUCCESS that delivered
+                # nothing -- feed_health keeps those apart, and only calls it
+                # 'silent' once it has been empty for days.
+                _feed_record('me', feed_url, items=len(items), label=feed_name,
+                             http_status=200,
+                             duration_ms=(time.time() - _t0) * 1000)
 
         except Exception as e:
             print(f"[RSS] {feed_name} error: {str(e)[:100]}")
+            if _feed_record:
+                _feed_record('me', feed_url, items=0, label=feed_name, error=e)
             continue
 
     print(f"[RSS] Total fetched: {len(all_articles)} articles from {len(feed_dict)} feeds")
