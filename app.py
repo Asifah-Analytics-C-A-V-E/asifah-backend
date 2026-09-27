@@ -8330,6 +8330,9 @@ def health():
         'version': f'{ME_BACKEND_VERSION}-me',   # was a stale '2.3.0-IRAQ'
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'reddit': REDDIT_HEALTH,
+        'feeds': (__import__('rss_monitor').get_feed_health_report()
+                  if 'rss_monitor' in __import__('sys').modules else
+                  {'state': 'could_not_assess', 'reason': 'rss_monitor not imported'}),
         # v3.3.0 -- which background jobs THIS instance owns.
         'instance_jobs': (_lock_status() if _lock_status else
                           {'note': 'instance_lock not installed'}),
