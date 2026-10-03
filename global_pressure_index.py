@@ -112,12 +112,24 @@ REGION_DISPLAY = {
 CARD_ORDER = ['africa', 'asia', 'europe', 'me', 'wha']
 
 # Global level labels + colors (matches canonical regional schema)
+# ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────────
+# Aligned to the five regional BLUFs and asifah-standard-shell.js. This dict
+# used to read BASELINE / MONITORING--RHETORIC / WARNING / ELEVATED /
+# INCIDENT, which meant L3 was "ELEVATED" here, "Direct Threat" on the ME
+# BLUF and "Confrontation" on the Asia page -- one number, three words.
+#
+# L6 is kept and is GPI-ONLY. A global index legitimately exceeds any single
+# theatre: five theatres each at Active Conflict is a different world from
+# one, and RED-LINE BREACH is the rung that says so. The regional ladders
+# stop at 5 because a theatre cannot exceed its own ceiling.
+#
+# CHIP language. For prose use theatre_state.py, which is axis-aware.
 GLOBAL_LEVEL_LABELS = {
-    0: 'BASELINE',
-    1: 'MONITORING -- RHETORIC',
+    0: 'MONITORING',
+    1: 'RHETORIC',
     2: 'WARNING',
-    3: 'ELEVATED',
-    4: 'INCIDENT',
+    3: 'CONFRONTATION',
+    4: 'COERCION',
     5: 'ACTIVE CONFLICT',
     6: 'RED-LINE BREACH',
 }

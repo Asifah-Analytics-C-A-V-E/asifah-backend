@@ -220,12 +220,31 @@ THEATRE_FLAGS = {
     'uae':          '\U0001f1e6\U0001f1ea',
 }
 
+# ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────────
+# One vocabulary across all five regional BLUFs, the GPI and every page.
+# Before this, L3 was "Direct Threat" here, "Confrontation" on Africa and
+# the Asia/WHA pages, and "ELEVATED" on the GPI -- same scan, three words,
+# depending which element you looked at.
+#
+# Every rung describes what the ACTOR is doing, except L0, which honestly
+# describes what WE are doing: watching, with nothing above normal.
+# "Baseline" would imply we assessed it as normal; "Monitoring" says the
+# scan is running and found nothing -- which on a page that sits at L0 for
+# months is the difference between reading dead and reading alive.
+#
+# This dict is CHIP language: it labels a pill sitting next to a legend.
+# For PROSE use theatre_state.py, which is axis-aware -- a magnitude-9
+# earthquake is a legitimate L5, and calling it "active conflict" is not
+# imprecise, it is false.
+#
+# Mirrored in asifah-standard-shell.js (window.AsifahLadder), which the
+# pages read. If you change a word here, change it there.
 ESCALATION_LABELS = {
     0: 'Monitoring',
     1: 'Rhetoric',
     2: 'Warning',
-    3: 'Direct Threat',
-    4: 'Incident',
+    3: 'Confrontation',
+    4: 'Coercion',
     5: 'Active Conflict',
 }
 
