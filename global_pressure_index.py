@@ -444,6 +444,28 @@ CATEGORY_AXIS_HINTS = {
 }
 
 
+# ── v3 (Oct 3 2026) ─────────────────────────────────────────────────
+# THEATRE_STATE / CATEGORY_STATE above were written here in July and called
+# in exactly ONE place -- the landing-page banner. The ME regional BLUF and
+# every tracker long_text below kept emitting raw levels, so the vocabulary
+# that was designed to make this legible to a stranger reached one line of
+# one page. theatre_state.py now carries it as a shared primitive, and the
+# tables above are kept as the in-file fallback so this module still works
+# if dropped into a backend without it.
+try:
+    from theatre_state import (theatre_state as _ts_shared,
+                               state_with_level as _ts_level,
+                               named_state as _ts_named)
+    _TS_SHARED = True
+except ImportError:
+    _TS_SHARED = False
+    def _ts_level(level, category=None, pressure_type=None, upper=False):
+        p = _theatre_state(level, category, pressure_type)
+        return '%s (L%s)' % (p.upper() if upper else p, level)
+    def _ts_named(name, level, category=None, pressure_type=None):
+        return '%s -- %s (L%s)' % (name, _theatre_state(level, category, pressure_type), level)
+
+
 def _theatre_state(level, category=None, pressure_type=None):
     """Plain-language state, resolved by AXIS then level.
 
@@ -985,8 +1007,8 @@ def _narrative_hub_network_breadth(blufs):
                 _rd = _rd[0].upper() + _rd[1:]   # sentence-initial: "The Western Hemisphere"
                 detail += ('%s — %s. ' % (
                     _rd,
-                    _serial(['%s (%s, L%d)' % (d['name'], _nc_label(d.get('node_class')),
-                                               _decay_int(d.get('level'), 0))
+                    _serial(['%s (%s, %s)' % (d['name'], _nc_label(d.get('node_class')),
+                                              _ts_level(_decay_int(d.get('level'), 0)))
                              for d in entries])))
             else:
                 detail += ('%s: %s. ' % (_REGION_DISPLAY.get(r, r),
@@ -1312,8 +1334,8 @@ def _narrative_contested_spoke(blufs):
         detail = ('%d hubs register %s on their rim in the same cycle -- '
                   % (len(hubs), disp))
         detail += '; '.join(
-            '%s at L%d as %s%s' % (_hub_label(h.get('hub')),
-                                   _decay_int(h.get('level'), 0),
+            '%s at %s as %s%s' % (_hub_label(h.get('hub')),
+                                  _ts_level(_decay_int(h.get('level'), 0)),
                                    _nc_label(h.get('node_class')),
                                    (' — "%s"' % h['top_signal'][:100]) if h.get('top_signal') else '')
             for h in (c.get('hubs') or []))
@@ -3415,20 +3437,21 @@ def _narrative_iran_axis_convergence(blufs):
 
     # ---- Prose: LEAD with Unity of Fronts, drift toward influence ----
     if uof_level >= 2:
-        lead = ("Unity of Fronts (wahdat al-sahat) is elevated (L%d): Iran-aligned fronts are "
-                "speaking and acting as a single arena rather than as separate theaters" % uof_level)
+        lead = ("Unity of Fronts (wahdat al-sahat) is elevated -- %s: Iran-aligned fronts are "
+                "speaking and acting as a single arena rather than as separate theaters"
+                % _ts_level(uof_level))
         if uof_grievance:
             lead += " around a shared grievance (%s)" % str(uof_grievance)
         lead += ". "
-        headline = ("Iran Axis convergence -- Unity of Fronts L%d, %d proxy fronts active"
-                    % (uof_level, n))
+        headline = ("Iran Axis convergence -- Unity of Fronts %s, %d proxy fronts active"
+                    % (_ts_level(uof_level), n))
     else:
         lead = "Iran-aligned proxy fronts are simultaneously active across separated theaters. "
         headline = "Iran Axis convergence -- %d proxy fronts active simultaneously" % n
 
     detail = lead
     detail += ("Active fronts: " + ", ".join(names_titled)
-               + " (recomputed activation L%d). " % proxy_level)
+               + " (recomputed activation %s). " % _ts_level(proxy_level))
     if shared_targets:
         detail += ("Shared named targets across fronts (" + ", ".join(list(shared_targets)[:3])
                    + ") sharpen the read from parallel noise toward coordination. ")
@@ -3448,10 +3471,10 @@ def _narrative_iran_axis_convergence(blufs):
                    "counted in the activation but flagged as a potential off-ramp if implementation advances. ")
     if vz_iran_reach >= ACTIVE_LEVEL:
         detail += ("Iran's reach extends to the Caribbean: Venezuela registers Iranian expeditionary "
-                   "presence (L%d) as a FAR node -- surfaced as global reach, NOT counted in the regional "
+                   "presence (%s) as a FAR node -- surfaced as global reach, NOT counted in the regional "
                    "proxy activation. The Axis arena (Levant) and the expeditionary footprint (Caribbean) "
                    "are distinct reads; together they mark the span of Iran's influence rather than its "
-                   "kinetic weight. " % vz_iran_reach)
+                   "kinetic weight. " % _ts_level(vz_iran_reach))
     if is_command or iran_level >= 2:
         detail += "Tehran's own posture reads as command-node (hub) rather than a co-equal front. "
     if chokepoint:

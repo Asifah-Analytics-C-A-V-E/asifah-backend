@@ -1005,6 +1005,16 @@ def interpret_signals(scan_data):
 #                                   off-ramps active in Lebanon/Iran/etc.)
 # ============================================================
 
+# v1.1.0 (Oct 3 2026) -- long_text from this emitter is read as PROSE by the
+# ME regional BLUF and the GPI. "ISRAEL inbound from Iran L4" is legible to us
+# and to nobody else, and it travelled three pages up the stack unexplained.
+# State phrase leads; the level rides in parentheses. Fails soft.
+try:
+    from theatre_state import state_with_level as _ts_level
+except ImportError:
+    def _ts_level(level, category=None, pressure_type=None, upper=False):
+        return 'L%s' % level
+
 ISRAEL_FLAG = '\U0001f1ee\U0001f1f1'  # 🇮🇱
 
 _ISR_ESC_LABELS = {
@@ -1214,8 +1224,8 @@ def build_top_signals(scan_data):
             'color':      lvl_color(strike_lvl),
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Outbound strike posture '
                            f'L{strike_lvl}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL IDF outbound strike posture '
-                           f'L{strike_lvl} {_ISR_ESC_LABELS.get(strike_lvl, "")} — '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL IDF outbound strike posture — '
+                           f'{_ts_level(strike_lvl)}: '
                            f'mobilization, target language, strike '
                            f'authorizations elevated.'),
         })
@@ -1231,8 +1241,8 @@ def build_top_signals(scan_data):
             'color':      lvl_color(inbound_lvl),
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Inbound threat composite '
                            f'L{inbound_lvl}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound threat L{inbound_lvl} '
-                           f'{_ISR_ESC_LABELS.get(inbound_lvl, "")} — composite '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound threat — '
+                           f'{_ts_level(inbound_lvl)}, composite '
                            f'across Iran, Lebanon, Yemen, Syria, Iraq '
                            f'fingerprints.'),
         })
@@ -1248,7 +1258,7 @@ def build_top_signals(scan_data):
             'color':      '#7c3aed',
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Iran threat L{iran_lvl}'
                            f'{" (command node)" if iran_cmd_node else ""}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Iran L{iran_lvl} — '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Iran — {_ts_level(iran_lvl)}: '
                            f'IRGC / Khamenei / OTP signaling read from Iran '
                            f'command node fingerprint.'),
         })
@@ -1262,7 +1272,7 @@ def build_top_signals(scan_data):
             'color':      '#7c3aed',
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Hezbollah (Hizbullah) threat '
                            f'L{hez_lvl}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Lebanon L{hez_lvl} — '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Lebanon — {_ts_level(hez_lvl)}: '
                            f'Hezbollah kinetic / rocket / cross-border activity '
                            f'read from Lebanon fingerprint.'),
         })
@@ -1298,7 +1308,7 @@ def build_top_signals(scan_data):
             'icon':       '🇾🇪',
             'color':      '#7c3aed',
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Houthi threat L{houthi_lvl}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Yemen L{houthi_lvl} — '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Yemen — {_ts_level(houthi_lvl)}: '
                            f'Houthi missile / drone / Bab el-Mandeb activity '
                            f'read from Yemen fingerprint.'),
         })
@@ -1311,7 +1321,7 @@ def build_top_signals(scan_data):
             'icon':       '🇸🇾',
             'color':      '#7c3aed',
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Syria threat L{syria_lvl}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Syria L{syria_lvl} — '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Syria — {_ts_level(syria_lvl)}: '
                            f'corridor / weapons-transfer / HTS activity read '
                            f'from Syria fingerprint.'),
         })
@@ -1324,7 +1334,7 @@ def build_top_signals(scan_data):
             'icon':       '🇮🇶',
             'color':      '#7c3aed',
             'short_text': (f'{ISRAEL_FLAG} ISRAEL: Iraq threat L{iraq_lvl}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Iraq L{iraq_lvl} — '
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL inbound from Iraq — {_ts_level(iraq_lvl)}: '
                            f'PMF / Kataib Hezbollah / Iran-aligned militia '
                            f'activity read from Iraq fingerprint.'),
         })
@@ -1340,10 +1350,11 @@ def build_top_signals(scan_data):
             'color':      lvl_color(theatre_level),
             'short_text': (f'{ISRAEL_FLAG} ISRAEL L{theatre_level} — '
                            f'{_ISR_ESC_LABELS.get(theatre_level, "")}'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL theatre composite L{theatre_level} '
-                           f'{_ISR_ESC_LABELS.get(theatre_level, "")} '
-                           f'(score {theatre_score}/100). Inbound L{inbound_lvl}, '
-                           f'outbound L{outbound_lvl}.'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL theatre composite — '
+                           f'{_ts_level(theatre_level)} '
+                           f'(score {theatre_score}/100). Inbound '
+                           f'{_ts_level(inbound_lvl)}, outbound '
+                           f'{_ts_level(outbound_lvl)}.'),
         })
 
     # ── 12. Silence anomalies (war cabinet / US coord quiet) ────────

@@ -73,6 +73,21 @@ LEBANON_HUMANITARIAN_BACKEND = os.environ.get(
 LEBANON_HUMANITARIAN_CACHE_KEY = 'me_bluf:lebanon_humanitarian'
 LEBANON_HUMANITARIAN_CACHE_TTL = 12 * 3600    # 12 hours — humanitarian data is structural, not minute-by-minute
 
+# ── v2.x (Oct 3 2026) PLAIN-LANGUAGE STATE VOCABULARY ────────────────
+# The prose used to say "peak escalation L4". L4 is legible to us and to
+# nobody else. theatre_state.py carries the axis-aware vocabulary that
+# global_pressure_index.py has had since July and called exactly once.
+# Rule: the state phrase LEADS, the level follows in parentheses.
+# Fails soft -- if the module is missing the prose keeps its old shape
+# rather than the page going blank.
+try:
+    from theatre_state import named_state as _ts_named, state_with_level as _ts_level
+except ImportError:
+    def _ts_named(name, level, category=None, pressure_type=None):
+        return '%s (L%s)' % (name, level)
+    def _ts_level(level, category=None, pressure_type=None, upper=False):
+        return 'L%s' % level
+
 BLUF_CACHE_KEY = 'rhetoric:me:regional_bluf'
 BLUF_CACHE_TTL = 14 * 3600  # 14h -- outlasts any individual tracker TTL
 BLUF_LASTGOOD_TTL   = 7 * 24 * 3600   # 7d ceiling for held last-known-good tracker snapshots (C)
@@ -509,9 +524,9 @@ def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int,
             'icon':      '🔴',
             'color':     ESCALATION_COLORS.get(effective_level, '#6b7280'),
             'short_text': raw_data.get('signal_text_short') or
-                          f'{flag} {theatre.upper()} L{effective_level} — {tracker_label}',
+                          f'{flag} {theatre.upper()} — {_ts_level(effective_level)}',
             'long_text':  raw_data.get('signal_text_long') or
-                          f'{flag} {theatre.upper()} at L{effective_level} {tracker_label} (score {score}/100)',
+                          f'{flag} {theatre.upper()} at {_ts_level(effective_level)} — {tracker_label} (score {score}/100)',
         })
 
     # Influence-side high (Oman pattern)
@@ -1247,7 +1262,8 @@ def _build_humanitarian_country_signals():
                  'humanitarian distress reported')
 
         parts = [
-            f'{display}: humanitarian distress reporting at L{level} '
+            f'{display}: humanitarian distress reporting at '
+            f'{_ts_level(level, pressure_type="humanitarian")} '
             f'({rec["count"]} signal{"s" if rec["count"] != 1 else ""} this cycle). '
             f'Leading report: "{short}".'
         ]
@@ -1793,18 +1809,19 @@ def _build_bluf_prose_v2(posture, trackers):
     n_live = len(trackers)
     if theatres_at_l3plus >= 2:
         posture_sentence = (
-            f"Regional posture at {posture_label}, with {theatres_at_l3plus} theaters "
-            f"at L3 or higher simultaneously across {n_live} live trackers."
+            f"Regional posture at {posture_label} -- {theatres_at_l3plus} theaters "
+            f"at standoff hardening or above, simultaneously, across {n_live} "
+            f"live trackers."
         )
     elif peak_level >= 3:
         posture_sentence = (
-            f"Regional posture at {posture_label}, with peak escalation L{peak_level} "
-            f"across {n_live} live trackers."
+            f"Regional posture at {posture_label} -- peak theatre at "
+            f"{_ts_level(peak_level)} across {n_live} live trackers."
         )
     else:
         posture_sentence = (
             f"Regional posture at {posture_label} -- {n_live} live trackers, "
-            f"peak L{peak_level} (baseline range)."
+            f"highest theatre at {_ts_level(peak_level)}."
         )
     if breached >= 1:
         posture_sentence += f" {breached} red line{'s' if breached > 1 else ''} breached."
@@ -1823,21 +1840,24 @@ def _build_bluf_prose_v2(posture, trackers):
     top_vectors = _extract_active_vectors(top_raw, threshold=2)
 
     if top_level >= 3:
-        dive = f"The most volatile theater is **{top_name}** (composite L{top_level}"
+        # v2.x -- state phrase leads, level rides along inside _ts_level().
+        # Direction is appended only when there IS one, so we never emit a
+        # dangling "( )" the way a naive always-open-paren would.
+        dive = (f"The most volatile theater is **{top_name}** -- "
+                f"{_ts_level(top_level)}")
         if top_direction.get('phrase'):
             dive += f", {top_direction['phrase']}"
-        dive += ")"
         if top_factor:
             dive += f" -- analytical read: {top_factor}."
         else:
             dive += "."
         if top_vectors:
             top_3 = top_vectors[:3]
-            vec_phrases = [f"{name} L{lvl}" for name, lvl in top_3]
+            vec_phrases = [_ts_named(name, lvl) for name, lvl in top_3]
             dive += f" Active vectors: {', '.join(vec_phrases)}."
         para1_parts.append(dive)
     elif top_level >= 1:
-        dive = f"Highest tracker is **{top_name}** at L{top_level}"
+        dive = f"Highest tracker is **{top_name}** -- {_ts_level(top_level)}"
         if top_direction.get('phrase'):
             dive += f" ({top_direction['phrase']})"
         if top_factor:
@@ -1872,7 +1892,7 @@ def _build_bluf_prose_v2(posture, trackers):
         direction = _compute_direction(level, history)
         factor = _extract_so_what_phrase(raw)
 
-        sent = f"**{name}** registers L{level}"
+        sent = f"**{name}** -- {_ts_level(level)}"
         if direction.get('phrase'):
             sent += f" ({direction['phrase']})"
         if factor:
@@ -1880,7 +1900,7 @@ def _build_bluf_prose_v2(posture, trackers):
         else:
             vecs = _extract_active_vectors(raw, threshold=2)
             if vecs:
-                sent += f" -- {vecs[0][0]} elevated at L{vecs[0][1]}."
+                sent += f" -- {_ts_named(vecs[0][0], vecs[0][1])}."
             else:
                 sent += "."
         if theatre == 'yemen':
@@ -1908,14 +1928,16 @@ def _build_bluf_prose_v2(posture, trackers):
     para3_parts = []
     if theatres_at_l3plus >= 3:
         para3_parts.append(
-            f"**Why this matters:** {theatres_at_l3plus} simultaneous L3+ theaters in the "
+            f"**Why this matters:** {theatres_at_l3plus} theaters simultaneously at "
+            f"standoff hardening or above in the "
             "Middle East is a structurally rare convergence. Concrete cascade risks "
             "across migration corridors, sanctions-evasion routes (oil/gold/wheat), and "
             "adversary-access vectors (Russia/China/Iran) are now active simultaneously."
         )
     elif theatres_at_l3plus == 2:
         para3_parts.append(
-            "**Why this matters:** Two simultaneous L3+ theaters create real migration and "
+            "**Why this matters:** Two theaters simultaneously at standoff hardening "
+            "or above create real migration and "
             "sanctions cascade risk. Monitor for adversary-axis amplification."
         )
     elif peak_level >= 4:
@@ -2043,7 +2065,7 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
         iran_directing = leb_so.get('iran_directing', False)
         laf_gap        = leb_so.get('laf_enforcement_gap', False)
         parts.append(
-            f'Hezbollah operating at L{leb_level}'
+            f'Hezbollah at {_ts_level(leb_level)}'
             f'{" under Iranian direction" if iran_directing else ""}'
             f'{"; LAF enforcement gap persists" if laf_gap else ""}.'
         )
@@ -2087,18 +2109,21 @@ def _write_bluf_prose(trackers, levels, scores, max_level,
 
         if oman_influence >= 4:
             parts.append(
-                f'Oman in active mediation posture (influence L{oman_influence}); '
+                f'Oman in active mediation posture '
+                f'({_ts_level(oman_influence, pressure_type="diplomatic")} influence); '
                 f'Muscat back-channel engaged — de-escalation lever available.'
             )
         elif oman_influence >= 3:
             parts.append(
-                f'Oman influence vector elevated (L{oman_influence}); '
+                f'Oman influence vector elevated '
+                f'({_ts_level(oman_influence, pressure_type="diplomatic")}); '
                 f'mediation channels engaged.'
             )
         elif oman_threat >= 3:
             # Threat to Oman itself (Salalah/Duqm/succession) — escalatory, not stabilizing
             parts.append(
-                f'Oman threat vector at L{oman_threat} ({oman_scenario or "external pressure"}); '
+                f'Oman threat vector at {_ts_level(oman_threat)} '
+                f'({oman_scenario or "external pressure"}); '
                 f'stability anchor function compromised.'
             )
 
