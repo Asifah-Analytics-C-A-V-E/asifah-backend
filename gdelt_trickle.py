@@ -459,3 +459,102 @@ def health():
 
     A TTL shorter than the lap means entries expire before the walker
     returns to them, so the scan finds a half-warm cache -- which looks
+    exactly like a working one from the outside. Said out loud here.
+    """
+    s = stats()
+    out = {'version': __version__, 'ok': True, 'warnings': [],
+           'trickle': s, 'generated_at': _iso()}
+
+    # v1.0.3 -- a standby instance is healthy by definition. It is not
+    # walking because the other instance is, which is the whole point.
+    if s.get('role') == 'standby':
+        out['role_note'] = ('This instance is STANDBY -- another instance holds '
+                            'the walk. Its counters are idle on purpose. Check '
+                            'the owner instance for lap health.')
+    elif s.get('role') == 'unknown':
+        out['warnings'].append(
+            'Instance lock unavailable, so this instance is walking without '
+            'knowing whether another one is too. On a multi-instance service '
+            'that doubles GDELT load. Check instance_lock.py and UPSTASH_REDIS_*.')
+
+    try:
+        from gdelt_gateway import SHARED_CACHE_TTL_SEC, gateway_stats
+        ttl_h = SHARED_CACHE_TTL_SEC / 3600.0
+
+        # v1.0.3 -- prefer the MEASURED lap over the projected one.
+        # projected_lap_h is query_count x interval: what we hope a lap
+        # takes. last_lap_sec is what one actually took. Checking the
+        # invariant against the hope is how this endpoint reported ok:true
+        # on Oct 3 while running a 14.4h lap against a 14h TTL.
+        measured_h = (s.get('last_lap_sec') / 3600.0) if s.get('last_lap_sec') else None
+        lap_h = round(measured_h, 2) if measured_h else s.get('projected_lap_h')
+        out['cache_ttl_h'] = round(ttl_h, 2)
+        out['lap_h'] = lap_h
+        out['lap_basis'] = 'measured' if measured_h else 'projected'
+        if not measured_h and lap_h:
+            out['warnings'].append(
+                'No lap has completed yet, so the TTL check is running against '
+                'the PROJECTED lap (%.1fh), not a measured one. Treat this '
+                'result as provisional until lap 1 finishes.' % lap_h)
+
+        if not lap_h:
+            # v1.0.2 -- do NOT report ok while the central check has not run.
+            # Before registration the lap is unknown, so the TTL comparison is
+            # skipped; v1.0.1 skipped it and still returned ok:true, which is a
+            # health check saying 'fine' without having looked.
+            out['ok'] = False
+            out['warnings'].append(
+                'No queries registered yet, so lap time is unknown and the '
+                'TTL-vs-lap check has NOT run. Modules register from inside '
+                'their scan functions -- this is expected for the first few '
+                'minutes after a deploy. Re-check after the first scan.')
+        else:
+            ratio = ttl_h / lap_h
+            out['ttl_over_lap'] = round(ratio, 2)
+            if ratio < 1.0:
+                out['ok'] = False
+                out['warnings'].append(
+                    'CACHE TTL (%.1fh) IS SHORTER THAN ONE %s LAP (%.1fh). Entries '
+                    'expire before the walker returns to them, so the scan will '
+                    'find a HALF-WARM cache that looks healthy from outside. '
+                    'Raise GDELT_CACHE_TTL_SEC to at least %d.'
+                    % (ttl_h, out['lap_basis'].upper(), lap_h,
+                       int(lap_h * 1.2 * 3600)))
+            elif ratio < 1.15:
+                out['warnings'].append(
+                    'Cache TTL (%.1fh) barely exceeds one %s lap (%.1fh). Little '
+                    'margin for a slow lap. Consider %d.'
+                    % (ttl_h, out['lap_basis'], lap_h, int(lap_h * 1.2 * 3600)))
+        g = gateway_stats() or {}
+        out['gateway'] = {
+            'circuit_state': g.get('circuit_state'),
+            'budget_left':   g.get('budget_left'),
+            'cache_entries': g.get('cache_entries'),
+            'shared_cache':  g.get('shared_cache'),
+            'throttled':     g.get('throttled'),
+        }
+        if g.get('shared_cache') != 'upstash':
+            out['ok'] = False
+            out['warnings'].append(
+                'Shared cache is NOT Upstash. The trickle writes into an '
+                'in-process cache that dies on restart, so the scan will see '
+                'nothing after a redeploy. Check UPSTASH_REDIS_* env vars.')
+    except Exception as e:
+        out['ok'] = False
+        out['warnings'].append('Could not read gateway state: %s' % str(e)[:120])
+    return out
+
+
+def register_trickle_endpoints(app):
+    from flask import jsonify
+
+    @app.route('/api/gdelt-trickle/stats', methods=['GET'])
+    def _trickle_stats():
+        return jsonify(stats())
+
+    @app.route('/api/gdelt-trickle/health', methods=['GET'])
+    def _trickle_health():
+        h = health()
+        return jsonify(h), (200 if h['ok'] else 503)
+
+    print('[GDELT Trickle] Registered: /api/gdelt-trickle/{stats,health}')
