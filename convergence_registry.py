@@ -1012,6 +1012,231 @@ CONVERGENCE_REGISTRY = [
     # },
     # NOTE: cobalt_drc has been ACTIVATED above as cobalt_drc_active (May 23 2026).
     # See the Africa / Belt-and-Road / Sanctions Convergences block.
+
+    # ───────────────────────────────────────────────────────────────
+    # PALESTINIAN FINANCIAL ACCESS CLUSTER  (Oct 3 2026)
+    # ───────────────────────────────────────────────────────────────
+    # The cluster doctrine above says siblings are kept separate because the
+    # same shock LANDS DIFFERENTLY. That is this lane's entire argument:
+    # correspondent-banking failure is PLUMBING -- trade finance and
+    # remittances freeze even if the PA is solvent -- while clearance
+    # withholding is a POLITICAL ACT that hits payroll directly. Collapsing
+    # them would produce one blurred reading that cannot tell a banking
+    # crisis from a coercion decision.
+    #
+    # SCHEMA NOTE, stated rather than hidden: 'commodity' here is
+    # 'financial_access', which is not a traded good. The registry's actual
+    # logic is "a country depends on an externally controlled supply, and
+    # that supply is under stress" -- and Palestinian dependence on
+    # Israeli-controlled shekel clearing is a supply dependency in every
+    # sense that matters. The field is used as intended even though the
+    # word was chosen for wheat.
+    #
+    # The 'country' on each entry is where the failure LANDS, not where the
+    # decision is taken. Clearance withholding is decided in Jerusalem and
+    # lands on the PA; reconstruction conditionality is decided in the Board
+    # of Peace and lands in Gaza.
+    #
+    # ALERT MAPPING: the lane states from rhetoric_tracker_israel
+    # (quiet / narrative_only / mobilization_language / violence_linked) map
+    # onto the registry's normal/elevated/high/surge ladder via
+    # financial_access_alert() below, so the existing threshold machinery
+    # works unchanged.
+    {
+        'id':                      'fin_access_correspondent_banking',
+        'commodity':               'financial_access',
+        'country':                 'palestinian_territories',
+        'cluster':                 'palestinian_financial_access',
+        'trigger_signal_category': 'financial_access_stress',
+        'trigger_region':          'me',
+        'commodity_threshold':     'high',   # mobilization language or above
+        'regions':                 ['me'],
+        'priority':                10,
+        'icon':                    '\U0001f3e6',   # 🏦
+        'color':                   '#f59e0b',
+        'headline_template':       'Palestinian correspondent banking -- shekel clearing access under strain ({alert})',
+        'watch_priority':          5,
+        'watch_headline_template': 'Palestinian correspondent-banking exposure -- standing watch (no fresh escalation this cycle, {alert})',
+        'detail': (
+            'Palestinian banks reach the shekel clearing system only through '
+            'Israeli correspondent banks, which operate under a periodically '
+            'renewed indemnity waiver from the Israeli finance ministry. If the '
+            'waiver lapses, shekel clearing stops: trade finance, remittances and '
+            'salary transfers lose their rails even if the PA is fiscally solvent. '
+            'That is a PLUMBING failure, structurally different from a political '
+            'decision to withhold funds. Watch: waiver renewal dates, PMA '
+            'statements, Israeli banking supervision guidance, US Treasury and '
+            'OFAC posture. Compound risk: a clearing failure during a payroll '
+            'crisis removes both the money and the means to move it.'
+        ),
+        'facts': {
+            'mechanism':     'Israeli bank indemnity waiver; shekel clearing for Palestinian banks',
+            'failure_mode':  'cash economy; trade finance and remittance rails freeze',
+            'decided_by':    'Israeli finance ministry',
+            'lands_on':      'West Bank and Gaza banking sector',
+        },
+        'enrichment_text_template': (
+            '⚠️ PALESTINIAN CORRESPONDENT BANKING: financial-access '
+            'signalling at {alert} ({signals} signals). Palestinian banks reach '
+            'shekel clearing only via Israeli correspondent banks under a renewable '
+            'indemnity waiver; a lapse freezes trade finance and remittances '
+            'independently of PA solvency.'
+        ),
+        # Scoping note, step 5: the cluster carries completeness honestly.
+        # None of these are sensed yet, and the entry says so rather than
+        # letting a reader assume the mechanism is being measured.
+        'data_completeness': {
+            'verified_state_sensed': False,
+            'would_settle_it': 'Israeli finance ministry waiver decisions; PMA statements',
+            'note': ('Evidence-only. Reporting about this mechanism is sensed; the '
+                     'state of the waiver is not.'),
+        },
+        'notes': 'Lane A of the Palestinian financial access scoping note (Sep 27 2026).',
+    },
+    {
+        'id':                      'fin_access_clearance_revenue',
+        'commodity':               'financial_access',
+        'country':                 'palestinian_authority',
+        'cluster':                 'palestinian_financial_access',
+        'trigger_signal_category': 'financial_access_stress',
+        'trigger_region':          'me',
+        'commodity_threshold':     'high',
+        'regions':                 ['me'],
+        'priority':                11,
+        'icon':                    '\U0001f4b8',   # 💸
+        'color':                   '#f97316',
+        'headline_template':       'PA clearance revenue -- transfer withheld or contested ({alert})',
+        'watch_priority':          6,
+        'watch_headline_template': 'PA clearance-revenue dependency -- standing watch ({alert}, no fresh escalation)',
+        'detail': (
+            'Under the Paris Protocol, Israel collects Palestinian customs and VAT '
+            'and transfers the proceeds to the PA. Those transfers are the PA\'s '
+            'largest single revenue line, which makes withholding a political '
+            'instrument rather than an accident of plumbing. Withholding produces a '
+            'payroll gap within weeks and service failure behind it. Watch: Israeli '
+            'cabinet decisions, PA finance ministry monthly statements, World Bank '
+            'AHLC reporting, donor bridge financing.'
+        ),
+        'facts': {
+            'mechanism':    'Israel collects and transfers PA customs/VAT (Paris Protocol)',
+            'failure_mode': 'withholding -> payroll gap -> service failure',
+            'decided_by':   'Israeli cabinet',
+            'lands_on':     'PA budget',
+        },
+        'enrichment_text_template': (
+            '⚠️ PA CLEARANCE REVENUE: financial-access signalling at '
+            '{alert} ({signals} signals). Israel collects PA customs and VAT under '
+            'the Paris Protocol; withholding is a political instrument and produces '
+            'a payroll gap within weeks.'
+        ),
+        'data_completeness': {
+            'verified_state_sensed': False,
+            'would_settle_it': 'PA finance ministry monthly statement; World Bank AHLC report',
+            'note': 'Evidence-only. Transfer status and arrears are not sensed.',
+        },
+        'notes': 'Lane B of the Palestinian financial access scoping note.',
+    },
+    {
+        'id':                      'fin_access_security_payroll',
+        'commodity':               'financial_access',
+        'country':                 'west_bank',
+        'cluster':                 'palestinian_financial_access',
+        'trigger_signal_category': 'financial_access_stress',
+        'trigger_region':          'me',
+        'commodity_threshold':     'high',
+        'regions':                 ['me'],
+        # Highest priority in the cluster. This is the lane where fiscal
+        # stress converts into a policing vacuum, and the conversion is
+        # invisible to headcount: a force nominally at strength whose members
+        # work second jobs is a force delivering a fraction of its function.
+        # Compare the LAF at $200-300/month -- intact on paper, present two
+        # or three days a week in practice.
+        'priority':                13,
+        'icon':                    '\U0001f46e',   # 👮
+        'color':                   '#dc2626',
+        'headline_template':       'PA security-force payroll -- pay failure and policing-vacuum risk ({alert})',
+        'watch_priority':          7,
+        'watch_headline_template': 'PA security-force payroll dependency -- standing watch ({alert})',
+        'detail': (
+            'PA security-force salaries depend on the same revenue stream as the '
+            'civil service, but fail differently. When police and security services '
+            'go unpaid, the force does not shrink -- it thins: second jobs, reduced '
+            'presence, selective enforcement. No roster or headcount reports that '
+            'gap, which is why this lane is tracked separately from general PA '
+            'payroll rather than averaged into it. Watch: PA interior ministry '
+            'statements, donor security-assistance reporting, reporting on '
+            'attendance and enforcement in Jenin, Tulkarm and Nablus. Compound '
+            'risk: a policing vacuum co-occurring with Iran-aligned faction '
+            'activation is the West Bank compound read.'
+        ),
+        'facts': {
+            'mechanism':    'pay for PA security forces and police specifically',
+            'failure_mode': 'second jobs, reduced presence, selective enforcement -> policing vacuum',
+            'why_separate': 'the capability gap does not show up in headcount',
+            'lands_on':     'West Bank policing',
+        },
+        'enrichment_text_template': (
+            '⚠️ PA SECURITY-FORCE PAYROLL: financial-access signalling at '
+            '{alert} ({signals} signals). Unpaid security services thin rather than '
+            'shrink -- second jobs, reduced presence, selective enforcement -- a '
+            'policing vacuum no headcount reports. Historically precedes a widening '
+            'security gap; reported as co-occurrence, not as an outcome.'
+        ),
+        'data_completeness': {
+            'verified_state_sensed': False,
+            'would_settle_it': 'PA interior ministry; donor security-assistance reporting',
+            'note': ('Evidence-only. Attendance and enforcement effects are '
+                     'ANALYST-VERIFIED ONLY -- no automated source exists.'),
+        },
+        'notes': 'Lane C1 of the scoping note, separated from general PA payroll by decision.',
+    },
+    {
+        'id':                      'fin_access_reconstruction',
+        'commodity':               'financial_access',
+        'country':                 'gaza',
+        'cluster':                 'palestinian_financial_access',
+        'trigger_signal_category': 'financial_access_stress',
+        'trigger_region':          'me',
+        'commodity_threshold':     'high',
+        'regions':                 ['me'],
+        'priority':                9,
+        'icon':                    '\U0001f3d7',   # 🏗
+        'color':                   '#f59e0b',
+        'headline_template':       'Gaza reconstruction finance -- disbursement tied to conditionality ({alert})',
+        'watch_priority':          5,
+        'watch_headline_template': 'Gaza reconstruction-finance conditionality -- standing watch ({alert})',
+        'detail': (
+            'Board of Peace disbursement for Gaza reconstruction is coupled to '
+            'conditionality, with the disarmament question the dominant variable. '
+            'A deadlock stalls reconstruction without any single actor refusing it, '
+            'which is why the read is about the coupling rather than about intent. '
+            'Watch: Board of Peace statements, donor conference outcomes, '
+            'Egypt and Qatar channel reporting.'
+        ),
+        'facts': {
+            'mechanism':    'Board of Peace disbursement, conditionality, aid-payment rails',
+            'failure_mode': 'conditionality deadlock -> reconstruction stall',
+            'lands_on':     'Gaza reconstruction',
+        },
+        'enrichment_text_template': (
+            '⚠️ GAZA RECONSTRUCTION FINANCE: financial-access signalling '
+            'at {alert} ({signals} signals). Disbursement is coupled to '
+            'conditionality with disarmament the dominant variable; deadlock stalls '
+            'reconstruction without any actor refusing it.'
+        ),
+        # Rachel's call, Oct 3 2026: lane D launches evidence-only. Board of
+        # Peace disbursement is not publicly sensed, and reporting zero
+        # disbursement would assert a fact we have not got. Unknown and zero
+        # are different claims.
+        'data_completeness': {
+            'verified_state_sensed': False,
+            'would_settle_it': 'NOT SENSED -- no public Board of Peace disbursement feed exists',
+            'note': ('Evidence-only BY DECISION, not by oversight. This lane reports '
+                     'what is being SAID about reconstruction finance and asserts '
+                     'nothing about what has been PAID.'),
+        },
+        'notes': 'Lane D of the scoping note. Evidence-only at launch by decision.',
+    },
 ]
 
 
@@ -1037,6 +1262,83 @@ def alert_meets_threshold(actual_alert, threshold):
         return _ALERT_ORDER.index(actual_alert) >= _ALERT_ORDER.index(threshold)
     except ValueError:
         return False
+
+
+# ── (Oct 3 2026) lane state -> registry alert ladder ─────────────────
+# rhetoric_tracker_israel emits ORDERED STATES describing where language has
+# reached; the registry speaks normal/elevated/high/surge. This is the only
+# place the two vocabularies meet, deliberately -- a mapping that lived in
+# three callers would drift in three directions.
+#
+# narrative_only maps to 'elevated', which is BELOW the firing threshold on
+# every entry above: a lane being argued about is context, not a convergence.
+# A convergence requires language that has actually turned operational.
+_FIN_ACCESS_STATE_ALERT = {
+    'quiet':                 'normal',
+    'narrative_only':        'elevated',
+    'mobilization_language': 'high',
+    'violence_linked':       'surge',
+}
+
+
+def financial_access_alert(lane_state):
+    """Map a financial-access lane state onto the registry alert ladder.
+
+    An unrecognised state returns 'normal' rather than raising: a state this
+    module does not know is not evidence of pressure, and guessing upward
+    would manufacture a convergence out of a typo.
+    """
+    return _FIN_ACCESS_STATE_ALERT.get(str(lane_state or '').lower(), 'normal')
+
+
+def cluster_completeness(cluster_id):
+    """How much of a cluster's state is SENSED versus inferred from reporting.
+
+    Returns None for clusters whose entries carry no data_completeness block
+    (every pre-October entry), so this is purely additive and never reshapes
+    an existing reading.
+
+    WHY THIS EXISTS: in a payload, a convergence firing entirely on press
+    coverage looks identical to one backed by verified state. The GPI and the
+    reader are both entitled to know which one they are looking at.
+    """
+    members = find_cluster(cluster_id)
+    if not members:
+        return None
+    # Only entries whose data_completeness is a STRUCTURED block count. Some
+    # pre-October entries carry data_completeness as a free-text string, and
+    # this helper is meant to be purely additive -- it must read those as
+    # "not declared" rather than crash on them. Found by the self-test below,
+    # which is why the self-test exists.
+    declared = [e for e in members
+                if isinstance(e.get('data_completeness'), dict)]
+    if not declared:
+        return None
+    sensed = [e for e in declared
+              if e['data_completeness'].get('verified_state_sensed')]
+    n, total = len(sensed), len(declared)
+    return {
+        'cluster':        cluster_id,
+        'nodes_declared': total,
+        'nodes_sensed':   n,
+        'pct_sensed':     int(round(100.0 * n / total)) if total else 0,
+        'unsensed': [
+            {'id': e['id'],
+             'would_settle_it': e['data_completeness'].get('would_settle_it'),
+             'note': e['data_completeness'].get('note')}
+            for e in declared
+            if not e['data_completeness'].get('verified_state_sensed')
+        ],
+        'note': (
+            ('All %d node(s) in this cluster are EVIDENCE-ONLY: the mechanisms are '
+             'sensed through reporting, not through state sources. A convergence '
+             'here means the subject is being discussed and acted on in the press, '
+             'not that the underlying state has been verified.' % total)
+            if n == 0 else
+            ('%d of %d node(s) carry verified state; the rest are evidence-only.'
+             % (n, total))
+        ),
+    }
 
 
 def find_convergence_by_country_commodity(country, commodity):
@@ -1118,6 +1420,7 @@ def format_enrichment_text(entry, alert_level, signal_count):
 
 CLUSTER_LABELS = {
     'levant_wheat': 'Levant wheat / food security',
+    'palestinian_financial_access': 'Palestinian financial access',
 }
 
 
