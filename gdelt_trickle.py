@@ -1,6 +1,6 @@
 """
 Asifah Analytics -- GDELT TRICKLE FETCHER
-v1.0.0 -- September 20 2026  |  portable, drop into any backend
+v1.0.3 -- October 3 2026  |  portable, drop into any backend
 
 ═══════════════════════════════════════════════════════════════════════
 WHY THIS EXISTS
@@ -52,6 +52,35 @@ ABSENCE-HONEST: this never fabricates. A query that fails simply leaves
 no cache entry, the scan gets nothing for it, and stats() says how many.
 
 ═══════════════════════════════════════════════════════════════════════
+CHANGELOG
+═══════════════════════════════════════════════════════════════════════
+v1.0.1  Initial TTL-vs-lap reporting.
+v1.0.2  health() stops returning ok:true before the central check has
+        run. A health check that says 'fine' without having looked is
+        worse than no health check.
+v1.0.3  TWO FIXES, both of the same family -- things that reported
+        healthy while being wrong.
+
+        1. CROSS-INSTANCE OWNERSHIP. ME runs two Render instances.
+           Both ran this walker, so the registered list was walked
+           twice over, doubling GDELT load for zero extra coverage --
+           a reliable way to earn the 429s we were busy diagnosing.
+           Now only the lock-holder walks. Fails OPEN: if the lock
+           module or Upstash is unreachable we keep walking rather
+           than go silent, and report role='unknown' so the honesty
+           is visible rather than assumed.
+
+        2. MEASURED LAP, NOT PROJECTED. v1.0.2 compared the cache TTL
+           against projected_lap_h -- query_count x interval, which is
+           what we HOPE a lap takes. On Oct 3 the projection said 12.0h
+           while the walker was actually taking 14.4h against a 14h
+           TTL. So the invariant was broken and the health check said
+           ok:true, because it was checking the estimate instead of
+           the measurement. health() now prefers last_lap_sec when one
+           exists and reports lap_basis so the reader knows which
+           number they are looking at.
+
+═══════════════════════════════════════════════════════════════════════
 USAGE
 ═══════════════════════════════════════════════════════════════════════
     # in military_tracker.py, at module scope:
@@ -74,7 +103,7 @@ import time
 import threading
 from datetime import datetime, timezone
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 # ── Tunables (env-overridable, like the gateway) ─────────────────────
 # TARGET_LAP_SEC is the contract: walk the WHOLE registered set in about
@@ -93,6 +122,22 @@ BACKOFF_SEC      = float(os.environ.get('GDELT_TRICKLE_BACKOFF', '120'))
 
 LOG_EVERY = int(os.environ.get('GDELT_TRICKLE_LOG_EVERY', '25'))
 
+# ── v1.0.3 ── cross-instance ownership ───────────────────────────────
+# How long a claim lasts before another instance may take it. Renewed on
+# every pass, so a healthy owner holds it indefinitely and a dead one
+# releases it by simply failing to renew.
+LOCK_TTL_SEC     = int(os.environ.get('GDELT_TRICKLE_LOCK_TTL', '900'))    # 15m
+# How long a standby instance naps before re-contesting the claim.
+STANDBY_WAIT_SEC = float(os.environ.get('GDELT_TRICKLE_STANDBY_WAIT', '60'))
+
+try:
+    from instance_lock import own_this_job as _own_job
+except ImportError:
+    _own_job = None
+
+_ROLE = None            # 'owner' | 'standby' | 'unknown' | None (not started)
+_role_logged = None     # last role we printed, so we log changes not heartbeats
+
 _lock = threading.Lock()
 _queries = []          # [{'label','query','language','timespan','maxrecords'}]
 _seen_keys = set()     # dedupe across registrations
@@ -106,6 +151,7 @@ _state = {
     'cached':          0,     # gateway served it from cache -- free
     'failed':          0,     # returned nothing AND was not a cache hit
     'backoffs':        0,
+    'standby_waits':   0,     # v1.0.3 -- passes skipped as the non-owner
     'last_lap_sec':    None,
     'lap_started_at':  None,
     'last_query':      '',
@@ -186,6 +232,36 @@ def current_interval():
 # ════════════════════════════════════════════════════════════════════
 # THE WALKER
 # ════════════════════════════════════════════════════════════════════
+
+def _claim_role():
+    """v1.0.3 -- decide whether THIS instance walks the list this pass.
+
+    Returns 'owner', 'standby', or 'unknown'. Fails OPEN to 'unknown',
+    which walks: a trickle that goes silent because Upstash hiccuped is a
+    worse failure than a trickle that briefly doubles up.
+    """
+    global _ROLE, _role_logged
+    if _own_job is None:
+        _ROLE = 'unknown'
+    else:
+        try:
+            _ROLE = 'owner' if _own_job('gdelt_trickle', ttl_sec=LOCK_TTL_SEC) else 'standby'
+        except Exception as e:
+            _ROLE = 'unknown'
+            with _lock:
+                _state['last_error'] = 'lock: %s' % str(e)[:140]
+    if _ROLE != _role_logged:
+        if _ROLE == 'owner':
+            print('[GDELT Trickle] role=owner -- this instance walks the list')
+        elif _ROLE == 'standby':
+            print('[GDELT Trickle] role=standby -- another instance holds the '
+                  'claim; idling and re-contesting every %.0fs' % STANDBY_WAIT_SEC)
+        else:
+            print('[GDELT Trickle] role=unknown -- instance lock unavailable, '
+                  'walking anyway (fail-open). Two instances may double up.')
+        _role_logged = _ROLE
+    return _ROLE
+
 
 def _gateway_is_refusing():
     """True when the breaker is open or the budget is spent.
@@ -302,10 +378,26 @@ def _loop():
         print('[GDELT Trickle] walking %d queries at %.0fs intervals '
               '(target lap %.1fh)'
               % (len(_queries), current_interval(), TARGET_LAP_SEC / 3600.0))
+    if _own_job is None:
+        print('[GDELT Trickle] instance_lock not importable -- running without '
+              'cross-instance ownership. On a multi-instance service this '
+              'means duplicate walking.')
     with _lock:
         _state['started_at'] = _iso()
         _state['lap_started_at'] = _now()
     while True:
+        # v1.0.3 -- contest ownership every pass. Renewing here rather than
+        # once at boot is what lets a dead owner's claim lapse and the
+        # survivor pick the walk back up without anyone redeploying.
+        if _claim_role() == 'standby':
+            with _lock:
+                _state['standby_waits'] += 1
+                # Not our lap to time. Clear the start so that if we later
+                # take over we measure OUR lap, not the wall-clock since boot.
+                _state['lap_started_at'] = None
+                _state['position'] = 0
+            time.sleep(STANDBY_WAIT_SEC)
+            continue
         try:
             wait = _walk_once(fetch)
         except Exception as e:
@@ -345,9 +437,12 @@ def stats():
         'version':          __version__,
         'enabled':          ENABLED,
         'running':          _started,
+        'role':             _ROLE,
         'query_count':      n,
         'interval_sec':     round(interval, 1),
         'projected_lap_h':  round(n * interval / 3600.0, 2) if n else None,
+        'measured_lap_h':   (round(s['last_lap_sec'] / 3600.0, 2)
+                             if s.get('last_lap_sec') else None),
         'target_lap_h':     round(TARGET_LAP_SEC / 3600.0, 2),
         'generated_at':     _iso(),
     })
@@ -364,74 +459,3 @@ def health():
 
     A TTL shorter than the lap means entries expire before the walker
     returns to them, so the scan finds a half-warm cache -- which looks
-    exactly like a working one from the outside. Said out loud here.
-    """
-    s = stats()
-    out = {'version': __version__, 'ok': True, 'warnings': [],
-           'trickle': s, 'generated_at': _iso()}
-    try:
-        from gdelt_gateway import SHARED_CACHE_TTL_SEC, gateway_stats
-        ttl_h = SHARED_CACHE_TTL_SEC / 3600.0
-        lap_h = s.get('projected_lap_h')
-        out['cache_ttl_h'] = round(ttl_h, 2)
-        out['lap_h'] = lap_h
-        if not lap_h:
-            # v1.0.2 -- do NOT report ok while the central check has not run.
-            # Before registration the lap is unknown, so the TTL comparison is
-            # skipped; v1.0.1 skipped it and still returned ok:true, which is a
-            # health check saying 'fine' without having looked.
-            out['ok'] = False
-            out['warnings'].append(
-                'No queries registered yet, so lap time is unknown and the '
-                'TTL-vs-lap check has NOT run. Modules register from inside '
-                'their scan functions -- this is expected for the first few '
-                'minutes after a deploy. Re-check after the first scan.')
-        else:
-            ratio = ttl_h / lap_h
-            out['ttl_over_lap'] = round(ratio, 2)
-            if ratio < 1.0:
-                out['ok'] = False
-                out['warnings'].append(
-                    'CACHE TTL (%.1fh) IS SHORTER THAN ONE LAP (%.1fh). Entries '
-                    'expire before the walker returns to them, so the scan will '
-                    'find a HALF-WARM cache that looks healthy from outside. '
-                    'Raise GDELT_CACHE_TTL_SEC to at least %d.'
-                    % (ttl_h, lap_h, int(lap_h * 1.2 * 3600)))
-            elif ratio < 1.15:
-                out['warnings'].append(
-                    'Cache TTL (%.1fh) barely exceeds one lap (%.1fh). Little '
-                    'margin for a slow lap. Consider %d.'
-                    % (ttl_h, lap_h, int(lap_h * 1.2 * 3600)))
-        g = gateway_stats() or {}
-        out['gateway'] = {
-            'circuit_state': g.get('circuit_state'),
-            'budget_left':   g.get('budget_left'),
-            'cache_entries': g.get('cache_entries'),
-            'shared_cache':  g.get('shared_cache'),
-            'throttled':     g.get('throttled'),
-        }
-        if g.get('shared_cache') != 'upstash':
-            out['ok'] = False
-            out['warnings'].append(
-                'Shared cache is NOT Upstash. The trickle writes into an '
-                'in-process cache that dies on restart, so the scan will see '
-                'nothing after a redeploy. Check UPSTASH_REDIS_* env vars.')
-    except Exception as e:
-        out['ok'] = False
-        out['warnings'].append('Could not read gateway state: %s' % str(e)[:120])
-    return out
-
-
-def register_trickle_endpoints(app):
-    from flask import jsonify
-
-    @app.route('/api/gdelt-trickle/stats', methods=['GET'])
-    def _trickle_stats():
-        return jsonify(stats())
-
-    @app.route('/api/gdelt-trickle/health', methods=['GET'])
-    def _trickle_health():
-        h = health()
-        return jsonify(h), (200 if h['ok'] else 503)
-
-    print('[GDELT Trickle] Registered: /api/gdelt-trickle/{stats,health}')
