@@ -891,7 +891,7 @@ def _refresh_target(target):
         for wq in war_queries:
             try:
                 feed_url = f"https://news.google.com/rss/search?q={wq}&hl=en&gl=US&ceid=US:en"
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                headers = {'User-Agent': ASIFAH_USER_AGENT}
                 resp = requests.get(feed_url, timeout=10, headers=headers)
                 if resp.status_code == 200:
                     root = ET.fromstring(resp.content)
@@ -1507,7 +1507,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.4.0'
+ME_BACKEND_VERSION = '3.5.0'
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
@@ -1517,6 +1517,22 @@ try:
 except ImportError:
     _lock_status = None
 REDDIT_USER_AGENT = f"AsifahAnalytics-ME/{ME_BACKEND_VERSION} (OSINT monitoring tool)"
+
+# v3.5.0 (Oct 3 2026) -- ONE User-Agent for everything this backend fetches.
+# Reddit got an honest UA in v3.2.0 and the refusals stopped; eleven other
+# call sites kept a copy-pasted Chrome string. The same string in eleven
+# places is eleven places to forget, so it is one constant now, and the
+# version travels with it -- a 403 in a publisher's log is traceable to a
+# release rather than to "some bot".
+#
+# WATCH AFTER DEPLOY: ten of the eleven are RSS feeds and JSON APIs that do
+# not inspect the UA. scrape_acaps_syria() is the exception -- it scrapes an
+# HTML page built for humans, and is the one that could legitimately start
+# returning 403. feed_health will say so if it does. The fix then is a
+# documented per-site exception AT THAT CALL SITE, not reverting this
+# constant: one honest default with a named, dated exception beats eleven
+# silent disguises.
+ASIFAH_USER_AGENT = f"AsifahAnalytics-ME/{ME_BACKEND_VERSION} (OSINT monitoring tool; +https://asifahanalytics.com)"
 
 # Rate limiting
 RATE_LIMIT = 100
@@ -3933,7 +3949,7 @@ def fetch_ravid_articles(target='general'):
     
     queries += target_queries.get(target, [])
     
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {'User-Agent': ASIFAH_USER_AGENT}
     
     for query in queries:
         try:
@@ -4000,7 +4016,7 @@ def fetch_israel_news_rss():
         _before = len(articles)
         try:
             response = requests.get(feed_url, timeout=15, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': ASIFAH_USER_AGENT
             })
             
             if response.status_code != 200:
@@ -5187,7 +5203,7 @@ def fetch_syria_direct_rss():
         print(f"[Syria Direct] Fetching RSS...")
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': ASIFAH_USER_AGENT,
             'Accept': 'application/rss+xml, application/xml, text/xml, */*'
         }
         
@@ -5255,7 +5271,7 @@ def fetch_sohr_rss():
         print(f"[SOHR] Fetching RSS...")
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': ASIFAH_USER_AGENT,
             'Accept': 'application/rss+xml, application/xml, text/xml, */*'
         }
         
@@ -5475,7 +5491,7 @@ def fetch_unhcr_syria_data():
         }
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': ASIFAH_USER_AGENT
         }
         
         response = requests.get(url, params=params, headers=headers, timeout=15)
@@ -5555,7 +5571,7 @@ def scrape_acaps_syria():
         url = "https://www.acaps.org/countries/syria"
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': ASIFAH_USER_AGENT
         }
         
         response = requests.get(url, headers=headers, timeout=15)
@@ -5622,7 +5638,7 @@ def fetch_alhol_camp_data():
         url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en&gl=US&ceid=US:en"
         
         response = requests.get(url, timeout=10, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': ASIFAH_USER_AGENT
         })
         
         articles = []
@@ -5871,7 +5887,7 @@ def fetch_airline_disruptions():
                 url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en&gl=US&ceid=US:en"
                 
                 response = requests.get(url, timeout=10, headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': ASIFAH_USER_AGENT
                 })
                 
                 if response.status_code != 200:
@@ -7159,7 +7175,7 @@ def api_israel_threat():
         for wq in war_queries:
             try:
                 feed_url = f"https://news.google.com/rss/search?q={wq}&hl=en&gl=US&ceid=US:en"
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                headers = {'User-Agent': ASIFAH_USER_AGENT}
                 resp = requests.get(feed_url, timeout=10, headers=headers)
                 if resp.status_code == 200:
                     root = ET.fromstring(resp.content)
@@ -7634,7 +7650,7 @@ def fetch_jordan_news_rss():
         _before = len(articles)
         try:
             response = requests.get(feed_url, timeout=15, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': ASIFAH_USER_AGENT
             })
             
             if response.status_code != 200:
