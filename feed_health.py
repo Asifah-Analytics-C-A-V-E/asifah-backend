@@ -1,6 +1,6 @@
 """
 Asifah Analytics -- FEED HEALTH
-v1.0.0 -- September 27 2026  |  portable, drop into any backend
+v1.0.1 -- October 3 2026  |  portable, drop into any backend
 
 WHY THIS EXISTS
 ═══════════════════════════════════════════════════════════════════════
@@ -29,6 +29,38 @@ classified by its OWN history, not by one bad night:
 ABSENCE-HONEST BY CONSTRUCTION. 'quiet' and 'silent' and 'dead' are three
 different claims, and this module refuses to collapse them. A world that
 got calmer and a feed that got retired are not the same finding.
+
+CHANGELOG
+═══════════════════════════════════════════════════════════════════════
+v1.0.0  Initial. Classification by a feed's own history.
+v1.0.1  Two fixes, both found on Oct 3 2026, both the same shape: this
+        module reporting something it had not actually established.
+
+        1. REACHED NO LONGER MEANS EXACTLY HTTP 200.
+           Africa's twenty-two Google News feeds each recorded twelve
+           consecutive 'failures' against HTTP 302. A 302 is the host
+           answering. If items came back behind it, the feed was reached
+           -- that is arithmetic, not inference: you cannot parse
+           articles out of a connection you never made.
+           But the correction is NOT 'treat all 3xx as success'. A
+           redirect with nothing behind it is still a failure, and it
+           must not be laundered into 'quiet' -- a bounce to a consent
+           wall and a calm news day are different findings, and keeping
+           them apart is this module's entire job. So: items decide, and
+           an empty redirect is reported as an empty redirect, by name.
+
+        2. THE REPORT COULD SILENTLY DROP A FEED.
+           feeds{} was keyed on the label alone, so two feeds sharing a
+           label overwrote each other and one VANISHED from the report
+           with no trace -- a silent sensor loss inside the module built
+           to prevent silent sensor loss.
+           Labels differing only in case ('i24NEWS' from app.py,
+           'i24news' from rss_monitor) are additionally legal JSON that
+           strict clients -- PowerShell 5.1 among them -- refuse to
+           parse AT ALL, which is how this surfaced: the entire /health
+           payload became unreadable.
+           Collisions are now disambiguated by host AND reported upward
+           in 'duplicate_labels'. Never resolved quietly.
 
 USAGE
 ═══════════════════════════════════════════════════════════════════════
@@ -60,7 +92,7 @@ try:
 except ImportError:
     requests = None
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 UPSTASH_URL = (os.environ.get('UPSTASH_REDIS_URL')
                or os.environ.get('UPSTASH_REDIS_REST_URL'))
@@ -90,6 +122,21 @@ def _iso(ts=None):
 def _feed_key(feed_id):
     """Stable short key. Feed ids are URLs: Arabic, query strings, colons."""
     return hashlib.md5(feed_id.encode('utf-8')).hexdigest()[:16]
+
+
+def _host_of(url):
+    """Hostname out of a URL, for telling apart two feeds sharing a label.
+
+    String-sliced rather than urlparse'd on purpose: this module's whole
+    value is that it drops into any backend with no imports it lacks.
+    """
+    try:
+        s = str(url or '')
+        if '//' in s:
+            s = s.split('//', 1)[1]
+        return s.split('/', 1)[0][:40] or 'unknown'
+    except Exception:
+        return 'unknown'
 
 
 def _redis(cmd, timeout=5):
@@ -152,7 +199,29 @@ def record_fetch(backend, feed_id, items=0, http_status=None, error=None,
     if label:
         rec['label'] = label
 
-    reached = (error is None) and (http_status is None or int(http_status) == 200)
+    # ── v1.0.1 ── what counts as REACHED ─────────────────────────────
+    # v1.0.0 said: exactly HTTP 200. That was wrong in both directions.
+    #
+    # Items are decisive. If articles came back, the source was reached,
+    # whatever code sat in front of them -- you cannot parse articles out
+    # of a connection you never made. Africa's Google News feeds logged
+    # twelve consecutive "failures" on 302 under the old rule.
+    #
+    # An EMPTY redirect is still a failure, and is reported as one by
+    # name. Calling it 'reached and quiet' would convert a bot wall into
+    # a finding about the world, which is the one mistake this module
+    # exists to make impossible.
+    try:
+        code = int(http_status) if http_status is not None else None
+    except (TypeError, ValueError):
+        code = None
+    got_items = int(items or 0) > 0
+
+    reached = (error is None) and (
+        got_items or code is None or (200 <= code < 300))
+    redirect_empty = (error is None) and (not got_items) \
+        and code is not None and 300 <= code < 400
+
     rec['checks'] += 1
     rec['last_check'] = _iso()
     rec['last_items'] = int(items or 0)
@@ -165,7 +234,13 @@ def record_fetch(backend, feed_id, items=0, http_status=None, error=None,
                              if isinstance(error, BaseException) else str(error))[:160]
         rec['consecutive_failed'] += 1
     elif not reached:
-        rec['last_error'] = 'HTTP %s' % http_status
+        if redirect_empty:
+            rec['last_error'] = (
+                'HTTP %s redirect with no content. The host answered and '
+                'pointed elsewhere -- commonly a consent screen, a login '
+                'wall, or bot detection. This is NOT a quiet feed.' % code)
+        else:
+            rec['last_error'] = 'HTTP %s' % http_status
         rec['consecutive_failed'] += 1
     else:
         rec['last_ok_at'] = _iso()
@@ -279,6 +354,8 @@ def feed_report(backend, include_healthy=True):
 
     keys = _redis(['SMEMBERS', '%sindex:%s' % (KEY_PREFIX, backend)]) or []
     feeds, summary = {}, {}
+    # v1.0.1 -- collision tracking; see the note at the assignment below.
+    _used_names, dup_labels = set(), set()
     for fkey in keys:
         rec = _load(backend, fkey)
         if not rec:
@@ -289,7 +366,23 @@ def feed_report(backend, include_healthy=True):
         summary[status] = summary.get(status, 0) + 1
         if status == 'healthy' and not include_healthy:
             continue
-        feeds[rec.get('label') or rec.get('feed_id')] = {
+        # ── v1.0.1 ── COLLISION SAFETY ────────────────────────────────
+        # This dict was keyed on the label alone, so two feeds sharing a
+        # label overwrote each other and one DISAPPEARED from the report
+        # with no trace. Labels differing only in case are additionally
+        # legal JSON that strict clients refuse to parse at all, taking
+        # the whole payload down with them.
+        # Disambiguate by host, and SAY SO in duplicate_labels. A name
+        # collision is a fact about our configuration, not a formatting
+        # detail to smooth over.
+        name = rec.get('label') or rec.get('feed_id')
+        if name.lower() in _used_names:
+            dup_labels.add(name)
+            name = '%s [%s]' % (name, _host_of(rec.get('feed_id')))
+            if name.lower() in _used_names:
+                name = rec.get('feed_id')
+        _used_names.add(name.lower())
+        feeds[name] = {
             'status':        status,
             'why':           why,
             'last_check':    rec.get('last_check'),
@@ -310,6 +403,14 @@ def feed_report(backend, include_healthy=True):
     out['needs_attention'] = sorted(
         name for name, f in feeds.items()
         if f['status'] in ('dead', 'never_worked', 'failing', 'silent'))
+    if dup_labels:
+        out['duplicate_labels'] = sorted(dup_labels)
+        out['duplicate_label_note'] = (
+            'These labels were registered by more than one feed. Each is now '
+            'listed separately with its host appended. Usually it means two '
+            'call sites are fetching the same outlet -- duplicate requests '
+            'against one rate limit, and two half-counts instead of one '
+            'whole one. Worth reconciling at the source.')
     out['feeds'] = feeds
     return out
 
@@ -424,7 +525,55 @@ if __name__ == '__main__':
     assert len(rpt['needs_attention']) == 4
     print('  OK\n')
 
-    print('TEST 8 -- no Redis is NOT a clean bill of health')
+    # ── v1.0.1 tests ─────────────────────────────────────────────────
+
+    print('TEST 8 -- v1.0.1: a 302 WITH items is healthy, not failing')
+    # The Africa case. Google News answers 302 and serves the feed anyway.
+    # v1.0.0 scored this as a failure three times and called the feed dead.
+    for _ in range(4):
+        record_fetch('redir', 'https://news.google.com/rss/search?q=chad',
+                     items=9, http_status=302, label='Chad (Google News)')
+    r = _load('redir', _feed_key('https://news.google.com/rss/search?q=chad'))
+    assert r['consecutive_failed'] == 0, r['consecutive_failed']
+    assert r['last_ok_at'] is not None
+    st, why = classify(r)
+    assert st == 'healthy', st
+    print('  %s -- items decide, not the status code\n' % st)
+
+    print('TEST 9 -- v1.0.1: a 302 with NO items is still a failure, by name')
+    for _ in range(3):
+        record_fetch('redir', 'https://news.google.com/rss/search?q=wall',
+                     items=0, http_status=302, label='Consent Wall')
+    r = _load('redir', _feed_key('https://news.google.com/rss/search?q=wall'))
+    assert r['consecutive_failed'] == 3, r['consecutive_failed']
+    assert 'NOT a quiet feed' in (r['last_error'] or ''), r['last_error']
+    st, why = classify(r)
+    assert st == 'failing', st
+    print('  %s -- %s\n' % (st, r['last_error'][:72]))
+
+    print('TEST 10 -- v1.0.1: a real 404 is unchanged')
+    for _ in range(3):
+        record_fetch('redir', 'https://gone.example/rss', items=0,
+                     http_status=404, label='Gone')
+    r = _load('redir', _feed_key('https://gone.example/rss'))
+    assert r['consecutive_failed'] == 3 and r['last_error'] == 'HTTP 404'
+    print('  OK\n')
+
+    print('TEST 11 -- v1.0.1: colliding labels BOTH survive the report')
+    record_fetch('dup', 'https://www.i24news.tv/rss', items=5, http_status=200,
+                 label='i24NEWS')
+    record_fetch('dup', 'https://feeds.i24news.example/en', items=5,
+                 http_status=200, label='i24news')
+    rpt = feed_report('dup')
+    assert len(rpt['feeds']) == 2, 'a feed was overwritten: %s' % list(rpt['feeds'])
+    assert 'duplicate_labels' in rpt, 'collision happened but was not reported'
+    # And no two keys may differ only in case, or strict JSON clients choke.
+    lowered = [k.lower() for k in rpt['feeds']]
+    assert len(set(lowered)) == len(lowered), lowered
+    print('  keys: %s' % list(rpt['feeds']))
+    print('  duplicate_labels: %s\n' % rpt['duplicate_labels'])
+
+    print('TEST 12 -- no Redis is NOT a clean bill of health')
     globals()['REDIS_OK'] = False
     rpt = feed_report('test')
     assert rpt['state'] == 'could_not_assess' and 'NOT a clean bill' in rpt['reason']
