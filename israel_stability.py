@@ -882,6 +882,20 @@ RSS_SOURCES = [
     # which, and then the dead one gets pulled with a dated comment (standing
     # source rule). Until then, keep both rather than guess.
     ('https://www.haaretz.com/srv/haaretz-latest-news', 'Haaretz (alt path)'),
+
+    # ── v2.3.0 (Oct 3 2026) PALESTINIAN FINANCIAL ACCESS SOURCING ──
+    # The correspondent-banking and clearance decisions are covered in the
+    # Israeli business press and the Arabic Palestinian press days before the
+    # English wires carry them. Shipping the lane keywords without these feeds
+    # would produce a net that can never fire, which reads as 'quiet' forever.
+    ('https://news.google.com/rss/search?q=%D7%9B%D7%A1%D7%A4%D7%99%20%D7%94%D7%9E%D7%A1%D7%99%D7%9D%20%D7%94%D7%A4%D7%9C%D7%A1%D7%98%D7%99%D7%A0%D7%99%D7%9D%20OR%20%D7%9B%D7%AA%D7%91%20%D7%A9%D7%99%D7%A4%D7%95%D7%99%20%D7%91%D7%A0%D7%A7%D7%99%D7%9D%20OR%20%D7%A1%D7%9C%D7%99%D7%A7%D7%94%20%D7%A4%D7%9C%D7%A1%D7%98%D7%99%D7%A0%D7%99%D7%AA&hl=iw&gl=IL&ceid=IL:iw',
+     'Google News HE - Palestinian Finance'),
+    ('https://news.google.com/rss/search?q=%D8%A3%D9%85%D9%88%D8%A7%D9%84%20%D8%A7%D9%84%D9%85%D9%82%D8%A7%D8%B5%D8%A9%20OR%20%D8%B1%D9%88%D8%A7%D8%AA%D8%A8%20%D8%A7%D9%84%D9%85%D9%88%D8%B8%D9%81%D9%8A%D9%86%20%D8%A7%D9%84%D9%81%D9%84%D8%B3%D8%B7%D9%8A%D9%86%D9%8A%D9%8A%D9%86%20OR%20%D8%A7%D9%84%D8%A8%D9%86%D9%88%D9%83%20%D8%A7%D9%84%D9%81%D9%84%D8%B3%D8%B7%D9%8A%D9%86%D9%8A%D8%A9&hl=ar&gl=EG&ceid=EG:ar',
+     'Google News AR - Clearance & Salaries'),
+    ('https://news.google.com/rss/search?q=%D8%A5%D8%B9%D9%85%D8%A7%D8%B1%20%D8%BA%D8%B2%D8%A9%20%D8%AA%D9%85%D9%88%D9%8A%D9%84%20OR%20%D9%85%D8%AC%D9%84%D8%B3%20%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%BA%D8%B2%D8%A9&hl=ar&gl=EG&ceid=EG:ar',
+     'Google News AR - Gaza Reconstruction Finance'),
+    ('https://news.google.com/rss/search?q=Palestinian%20Authority%20clearance%20revenue%20OR%20correspondent%20banking%20waiver%20OR%20PA%20salaries&hl=en&gl=US&ceid=US:en',
+     'Google News - Palestinian Financial Access'),
 ]
 
 
@@ -1017,6 +1031,329 @@ def _parse_rss_articles(url, source_name, days=7):
     return articles
 
 
+# ============================================================================
+# PALESTINIAN FINANCIAL ACCESS — STATE BLOCK  (v2.3.0, Oct 3 2026)
+# ----------------------------------------------------------------------------
+# WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT.
+#
+# This block reports the STATE of Palestinian financial access: is the banking
+# indemnity waiver in force, are clearance revenues moving, are salaries being
+# paid, is reconstruction money flowing. Those are facts about the world, and
+# they come from state sources -- PMA statements, Israeli finance ministry
+# decisions, World Bank AHLC reporting, IMF Article IV.
+#
+# WE DO NOT HAVE THOSE SOURCES WIRED YET. So this block does NOT assert them.
+# Every verified-state field reports sensed=False and names the source that
+# would settle it. That is the honest position and it is the whole point:
+#
+#   A keyword count measures how much JOURNALISM exists about salary delays.
+#   It tracks news cycles, not salaries. A sensor built on article counts
+#   would rise when a think tank publishes and fall over Christmas, and it
+#   would be reporting the press, not the Palestinian economy.
+#
+# What this block DOES do is surface EVIDENCE: reporting in EN/HE/AR that
+# touches each mechanism, lane-separated, for an analyst to verify. Sensors
+# below, analyst above. The reader completes the inference.
+#
+# THEREFORE: NO SCORE. Not a 0-100, not a weighted index, not a rollup. A
+# score here would be prediction smuggled in as plumbing.
+#
+# LANE SEPARATION IS LOAD-BEARING. A and B fail differently: correspondent
+# banking failure is PLUMBING -- it freezes trade finance and remittances even
+# if the PA is solvent. Clearance withholding is a POLITICAL ACT that hits
+# payroll directly. Collapsing them yields one blurred number that cannot tell
+# a banking crisis from a coercion decision.
+#
+# C1 (security-force payroll) is separated from C on purpose. It is the lane
+# where fiscal stress converts most directly into a policing vacuum, and the
+# conversion is not about headcount. A force nominally at strength whose
+# members work second jobs to eat is a force at a fraction of its capability,
+# and no roster will show it. Averaging that into "PA payroll" alongside
+# municipal services would hide the one number that changes the ground.
+# ============================================================================
+
+FINANCIAL_ACCESS_LANES = {
+    'A_correspondent_banking': {
+        'label': 'Correspondent banking',
+        'mechanism': ('Israeli bank indemnity waiver; shekel clearing for '
+                      'Palestinian banks'),
+        'actors': 'Israeli finance ministry, Israeli banks, PMA, US Treasury',
+        'failure_mode': ('Shekel clearing stops -> cash economy, trade finance '
+                         'and remittance rails freeze even if the PA is solvent'),
+        'kw_en': [
+            'correspondent banking', 'indemnity waiver', 'bank indemnity',
+            'shekel clearing', 'clearing services', 'palestinian banks',
+            'palestine monetary authority', 'de-risking', 'banking channel',
+        ],
+        'kw_he': [
+            'כתב שיפוי', 'שירותי סליקה', 'בנקים פלסטיניים', 'סליקת שקלים',
+            'הקשר הבנקאי',
+        ],
+        'kw_ar': [
+            'المراسلة المصرفية', 'البنوك الفلسطينية', 'سلطة النقد الفلسطينية',
+            'المقاصة المصرفية', 'خطاب الضمان',
+        ],
+        'state_fields': {
+            'waiver_in_force': 'Israeli finance ministry decision / Knesset record',
+            'waiver_expiry': 'Israeli finance ministry decision text',
+            'clearing_operational': 'PMA statement; Israeli banking supervision',
+        },
+    },
+    'B_clearance_revenue': {
+        'label': 'Clearance revenue',
+        'mechanism': 'Israel collects and transfers PA customs/VAT (Paris Protocol)',
+        'actors': 'Israeli cabinet, PA finance ministry, donors',
+        'failure_mode': 'Withholding -> payroll gap -> service failure',
+        'kw_en': [
+            'clearance revenue', 'clearance funds', 'tax revenues withheld',
+            'withholding revenues', 'customs revenue', 'paris protocol',
+            'palestinian authority revenue', 'revenue transfer',
+        ],
+        'kw_he': [
+            'כספי המסים', 'כספי הסליקה', 'הקפאת כספי המסים',
+            'העברת כספי המסים', 'קיזוז כספי',
+        ],
+        'kw_ar': [
+            'أموال المقاصة', 'عائدات الضرائب', 'حجز أموال المقاصة',
+            'اقتطاع أموال المقاصة', 'بروتوكول باريس',
+        ],
+        'state_fields': {
+            'transfer_status': 'PA finance ministry monthly statement',
+            'amount_withheld': 'PA finance ministry / World Bank AHLC report',
+            'months_in_arrears': 'PA finance ministry statement',
+        },
+    },
+    'C_pa_payroll': {
+        'label': 'PA payroll & services',
+        'mechanism': 'Civil service salaries; municipal services',
+        'actors': 'PA, unions, municipalities',
+        'failure_mode': 'Partial or deferred salaries -> service degradation',
+        'kw_en': [
+            'pa salaries', 'palestinian authority salaries', 'partial salaries',
+            'civil servants salaries', 'public sector salaries', 'salary arrears',
+            'unpaid salaries', 'percentage of salaries',
+        ],
+        'kw_he': [
+            'משכורות הרשות', 'שכר עובדי הרשות', 'תשלום משכורות חלקי',
+        ],
+        'kw_ar': [
+            'رواتب الموظفين', 'رواتب السلطة', 'أزمة الرواتب',
+            'صرف الرواتب', 'رواتب جزئية',
+        ],
+        'state_fields': {
+            'salary_payment_ratio': 'PA finance ministry monthly payroll announcement',
+            'months_since_full_salary': 'PA finance ministry announcements (derived)',
+        },
+    },
+    'C1_security_force_payroll': {
+        'label': 'Security-force payroll',
+        'mechanism': 'Pay for PA security forces and police, specifically',
+        'actors': 'PA security forces, PA interior ministry, donor security assistance',
+        'failure_mode': (
+            'Pay failure -> second jobs, reduced presence, selective enforcement '
+            '-> POLICING VACUUM. The force remains on the roster at full strength '
+            'while delivering a fraction of its function, which no headcount '
+            'reports. Compare the LAF at $200-300/month: nominally intact, '
+            'functionally present two or three days a week.'),
+        'kw_en': [
+            'security forces salaries', 'security forces pay',
+            'palestinian security forces salaries', 'police salaries',
+            'security personnel salaries', 'security services payroll',
+        ],
+        'kw_he': [
+            'משכורות כוחות הביטחון', 'שכר כוחות הביטחון הפלסטיניים',
+        ],
+        'kw_ar': [
+            'رواتب الأجهزة الأمنية', 'رواتب الأمن الفلسطيني',
+            'الأجهزة الأمنية الفلسطينية رواتب', 'رواتب الشرطة',
+        ],
+        'state_fields': {
+            'security_payroll_status': 'PA interior ministry / donor security assistance reporting',
+            'reported_attendance_effect': 'ANALYST-VERIFIED ONLY — no automated source',
+        },
+    },
+    'D_reconstruction_finance': {
+        'label': 'Gaza reconstruction finance',
+        'mechanism': 'Board of Peace disbursement, conditionality, aid-payment rails',
+        'actors': 'Board of Peace, donors, Hamas, Israel, Egypt, Qatar',
+        'failure_mode': ('Conditionality deadlock -> reconstruction stall tied to '
+                         'the disarmament question'),
+        'kw_en': [
+            'gaza reconstruction', 'board of peace', 'reconstruction funding',
+            'reconstruction disbursement', 'donor conference gaza',
+            'reconstruction conditionality', 'rebuilding gaza funds',
+        ],
+        'kw_he': [
+            'שיקום עזה', 'מועצת השלום', 'מימון שיקום',
+        ],
+        'kw_ar': [
+            'إعمار غزة', 'إعادة الإعمار', 'مجلس السلام', 'تمويل الإعمار',
+            'مؤتمر المانحين',
+        ],
+        # Rachel's call, Oct 3 2026: lane D launches RHETORIC/EVIDENCE ONLY.
+        # Board of Peace disbursement data is not public enough to sense, and
+        # reporting zero disbursement would assert a fact we have not got.
+        # Unknown and zero are different claims.
+        'state_fields': {
+            'disbursement_status': 'NOT SENSED — no public BoP disbursement feed wired',
+        },
+        'state_note': ('Lane D is evidence-only at launch by decision, not by '
+                       'oversight. Board of Peace disbursement is not publicly '
+                       'sensed; this lane reports what is being SAID about '
+                       'reconstruction finance, and asserts nothing about what '
+                       'has been PAID.'),
+    },
+}
+
+# Cross-lane. These actors frequently move FIRST, because they are the ones who
+# decide -- a US Treasury posture shift or an IMF Article IV finding lands
+# before the consequence shows up in Ramallah.
+FINANCIAL_ACCESS_STAKEHOLDERS = {
+    'label': 'International stakeholder voice',
+    'kw_en': [
+        'us treasury', 'treasury department', 'ofac', 'imf', 'article iv',
+        'world bank', 'ahlc', 'ad hoc liaison committee', 'eu funding palestinian',
+        'donor funding palestinian', 'un ocha funding',
+    ],
+    'kw_he': ['האוצר האמריקאי', 'קרן המטבע הבינלאומית', 'הבנק העולמי'],
+    'kw_ar': ['وزارة الخزانة الأمريكية', 'صندوق النقد الدولي', 'البنك الدولي',
+              'لجنة الارتباط'],
+}
+
+
+def _fin_access_lane_hits(articles, lane):
+    """Evidence matching for one lane. Returns (matched_articles, per-language counts).
+
+    Matching is case-folded for Latin script and left alone for Hebrew and
+    Arabic, which have no case. A hit is EVIDENCE that the mechanism is being
+    discussed -- never evidence of the mechanism's state.
+    """
+    matched = []
+    counts = {'en': 0, 'he': 0, 'ar': 0}
+    for a in articles:
+        blob = ((a.get('title') or '') + ' ' + (a.get('description') or ''))
+        low = blob.lower()
+        hit_lang = None
+        if any(kw in low for kw in lane.get('kw_en', [])):
+            hit_lang = 'en'
+        elif any(kw in blob for kw in lane.get('kw_he', [])):
+            hit_lang = 'he'
+        elif any(kw in blob for kw in lane.get('kw_ar', [])):
+            hit_lang = 'ar'
+        if hit_lang:
+            counts[hit_lang] += 1
+            matched.append(a)
+    return matched, counts
+
+
+def scan_financial_access(all_articles):
+    """Palestinian financial access STATE block. Informational. No score.
+
+    Consumes the article corpus scan_israel_conflict already fetched, so this
+    costs no extra network calls.
+
+    Returns a block whose verified-state fields are honestly unsensed and whose
+    evidence is lane-separated. Steps 3-5 of the build (rhetoric actor,
+    compound interpreter, canonical emission) reference the field names set
+    here, so they are the contract.
+    """
+    articles = all_articles or []
+    lanes_out = {}
+    total_evidence = 0
+    langs_seen = {'en': 0, 'he': 0, 'ar': 0}
+
+    for key, lane in FINANCIAL_ACCESS_LANES.items():
+        matched, counts = _fin_access_lane_hits(articles, lane)
+        total_evidence += len(matched)
+        for k in langs_seen:
+            langs_seen[k] += counts[k]
+
+        if matched:
+            reading = (
+                '%d item(s) in this scan window reference this mechanism '
+                '(EN %d / HE %d / AR %d). This is CO-OCCURRENCE in reporting. '
+                'It is consistent with the mechanism being in play and asserts '
+                'nothing about its state -- the verified-state fields below '
+                'remain unsensed.'
+                % (len(matched), counts['en'], counts['he'], counts['ar']))
+        else:
+            reading = (
+                'No reporting matched this lane in the scan window. This is an '
+                'ABSENCE OF OBSERVATION, not an observation of absence. It is '
+                'not evidence that the mechanism is functioning.')
+
+        lanes_out[key] = {
+            'label':         lane['label'],
+            'mechanism':     lane['mechanism'],
+            'actors':        lane['actors'],
+            'failure_mode':  lane['failure_mode'],
+            'verified_state': {
+                field: {'value': None, 'sensed': False, 'source_needed': src}
+                for field, src in lane['state_fields'].items()
+            },
+            'evidence_count':     len(matched),
+            'evidence_by_language': counts,
+            'evidence_articles':  matched[:4],
+            'reading':            reading,
+        }
+        if lane.get('state_note'):
+            lanes_out[key]['state_note'] = lane['state_note']
+
+    sh_matched, sh_counts = _fin_access_lane_hits(
+        articles, FINANCIAL_ACCESS_STAKEHOLDERS)
+
+    # Honest completeness: how much of what this block WANTS to know it
+    # actually knows. Right now: none of it, and it says so.
+    total_fields = sum(len(l['state_fields']) for l in FINANCIAL_ACCESS_LANES.values())
+
+    return {
+        'block_version': '1.0.0',
+        'state': 'evidence_only',
+        'scored': False,
+        'doctrine_note': (
+            'This block carries STATE and EVIDENCE, and produces no score. '
+            'Verified-state fields come from state sources and are currently '
+            'unsensed; evidence counts come from reporting and measure how '
+            'much is being WRITTEN about a mechanism, never how that mechanism '
+            'is behaving. Treating the second as the first would produce a '
+            'number that rises when a think tank publishes.'),
+        'lanes': lanes_out,
+        'stakeholder_voice': {
+            'label': FINANCIAL_ACCESS_STAKEHOLDERS['label'],
+            'why_it_matters': (
+                'These actors decide rather than react, so their posture often '
+                'moves before the consequence is visible on the ground.'),
+            'evidence_count': len(sh_matched),
+            'evidence_by_language': sh_counts,
+            'evidence_articles': sh_matched[:4],
+        },
+        'evidence_total': total_evidence,
+        'evidence_by_language': langs_seen,
+        'data_completeness': {
+            'verified_state_fields_total': total_fields,
+            'verified_state_fields_sensed': 0,
+            'pct_sensed': 0,
+            'note': ('No verified state source is wired yet. Every state field '
+                     'reports sensed=False and names what would settle it. '
+                     'Articles are evidence for an analyst to verify, not a '
+                     'substitute for the fact.'),
+            'next_sources': [
+                'PMA (Palestine Monetary Authority) statements',
+                'Israeli finance ministry waiver decisions',
+                'PA finance ministry monthly payroll announcements',
+                'World Bank AHLC reports',
+                'IMF Article IV',
+            ],
+        },
+        'language_coverage_warning': (
+            None if (langs_seen['he'] or langs_seen['ar']) else
+            'No Hebrew or Arabic evidence matched in this window. If this '
+            'persists across scans, check the HE/AR feeds in feed_health '
+            'before reading it as quiet -- inert keywords look exactly like '
+            'a calm week.'),
+    }
+
+
 def scan_israel_conflict(days=7):
     """
     Scan RSS feeds + Telegram for conflict, coalition, and hostage indicators.
@@ -1147,8 +1484,27 @@ def scan_israel_conflict(days=7):
         election_cycle = {'state': 'unknown', 'decision_freeze': False,
                           'note': 'detection failed', 'days_in_state': 0}
 
+    # v2.3.0 -- Palestinian financial access state block. Reuses the corpus
+    # already fetched above, so it costs no extra network calls.
+    try:
+        financial_access = scan_financial_access(all_articles)
+        print('[Israel Conflict] Financial access: %d evidence items '
+              '(EN %d / HE %d / AR %d), 0%% verified state sensed'
+              % (financial_access['evidence_total'],
+                 financial_access['evidence_by_language']['en'],
+                 financial_access['evidence_by_language']['he'],
+                 financial_access['evidence_by_language']['ar']))
+    except Exception as _e:
+        print('[Israel Conflict] Financial access block failed: %s' % str(_e)[:120])
+        financial_access = {
+            'state': 'could_not_assess', 'scored': False,
+            'error': str(_e)[:160],
+            'doctrine_note': ('Block failed to build. This is NOT a reading of '
+                              'zero financial stress -- it is no reading at all.')}
+
     return {
         'election_cycle': election_cycle,
+        'financial_access': financial_access,
         'conflict_score': conflict_score,
         'coalition_score': coalition_score,
         'elections_proximity_score': elections_proximity_score,
@@ -2018,6 +2374,11 @@ def scan_israel_stability():
                 # (informational). Also read by the Lebanon/Gaza gate ladders so
                 # a stall during a freeze is labelled PARKED, not FAILING.
                 'election_cycle': conflict.get('election_cycle', {}),
+                # v2.3.0 -- Palestinian financial access: lanes A-D plus C1
+                # (security-force payroll, separated). Informational, unscored,
+                # verified-state fields honestly unsensed. Steps 3-5 of the
+                # build reference these field names, so they are the contract.
+                'financial_access': conflict.get('financial_access', {}),
                 'opposition_mentions': conflict.get('opposition_mentions', 0),
                 'elections_mentions': conflict.get('elections_mentions', 0),
                 'opposition_articles': conflict.get('articles', {}).get('opposition', [])[:6],
@@ -2048,7 +2409,7 @@ def scan_israel_stability():
             'leadership': leadership,
             'all_articles': conflict.get('all_articles', [])[:30],
             'last_updated': datetime.now(timezone.utc).isoformat(),
-            'version': '1.0.0-israel',
+            'version': '2.3.0-israel',
             'from_cache': False
         }
 
