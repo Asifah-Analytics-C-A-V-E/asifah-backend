@@ -1,0 +1,1593 @@
+<!-- Asifah Analytics — Western Hemisphere Rhetoric Monitor v1.0.0 — April 2026 -->
+<!-- COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved. -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<title>Western Hemisphere Rhetoric Monitor — Asifah Analytics</title>
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Asifah-Analytics-C-A-V-E/asifah-analytics/refs/heads/main/Asifah_Analytics_1_25_26_V1_LOGO.png"/>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --bg-color: #f0f4f8;
+        --card-bg: #ffffff;
+        --card-border: #cbd5e1;
+        --text-primary: #0f172a;
+        --text-secondary: #334155;
+        --text-muted: #64748b;
+        --article-bg: #f1f5f9;
+        --watermark-opacity: 0.5;
+        --watermark-size: 500px;
+        --watermark-filter: none;
+        --grid-color: transparent;
+        --scanline-opacity: 0;
+        --glow-opacity: 0;
+        --card-glow: none;
+        --card-hover-glow: 0 8px 20px rgba(0,0,0,0.10);
+        --accent: #0284c7;
+        --cyber-cyan: #0284c7;
+        --cyber-cyan-glow: rgba(2,132,199,0.15);
+        --header-gradient-start: #050e1c;
+        --header-gradient-end: #0a1f3d;
+        --header-text: #ffffff;
+    }
+
+    [data-theme="dark"] {
+        --bg-color: #060d1a;
+        --card-bg: #0d1b2e;
+        --card-border: #1e3a5f;
+        --text-primary: #e2f0fb;
+        --text-secondary: #93c5fd;
+        --text-muted: #4a7fa5;
+        --article-bg: #091525;
+        --watermark-opacity: 1;
+        --watermark-size: 800px;
+        --watermark-filter: saturate(3) brightness(0.8) hue-rotate(185deg);
+        --grid-color: rgba(0,212,255,0.04);
+        --scanline-opacity: 0.03;
+        --glow-opacity: 1;
+        --accent: #38bdf8;
+        --cyber-cyan: #38bdf8;
+        --cyber-cyan-glow: rgba(56,189,248,0.18);
+        --card-glow: 0 0 6px rgba(30,58,95,0.5), 0 0 1px rgba(56,189,248,0.15);
+        --card-hover-glow: 0 0 22px rgba(56,189,248,0.18), 0 8px 25px rgba(0,0,0,0.5);
+        --header-gradient-start: #050e1c;
+        --header-gradient-end: #0a1f3d;
+        --header-text: #e2f0fb;
+    }
+
+    body {
+        font-family: 'Times New Roman', Times, serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        min-height: 100vh;
+        transition: background-color 0.3s ease, color 0.3s ease;
+        position: relative;
+    }
+
+    /* Watermark gold standard (May 11 2026 — from military.html) */
+    .watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    /* Canonical watermark spec (matches resources/asifah-standard-shell.css). */
+    width: 110vmin; height: 110vmin;
+    min-width: 760px; min-height: 760px;
+    max-width: 1400px; max-height: 1400px;
+    background-image: url('https://raw.githubusercontent.com/Asifah-Analytics-C-A-V-E/asifah-analytics/refs/heads/main/Asifah_Analytics_1_25_26_V1_LOGO.png');
+    background-size: 135%;
+    background-repeat: no-repeat;
+    background-position: center;
+    border-radius: 50%;
+    opacity: var(--watermark-opacity, 0.07);
+    filter: var(--watermark-filter, none);
+    z-index: 0; pointer-events: none; user-select: none;
+    transition: opacity 0.4s ease;
+}
+
+/* Jul 23 2026 watermark spec -- DARK MODE: zooming past 100% and clipping to
+   a circle crops away the logo's white square backing, so the artwork's own
+   dark navy field reads as black while the cyan stays bright. */
+ /* Grid overlay (body::before) — gold standard */
+    body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image:
+            linear-gradient(var(--grid-color) 1px, transparent 1px),
+            linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+        background-size: 40px 40px;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Scanlines overlay (body::after) — gold standard */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0,212,255,var(--scanline-opacity)) 2px,
+            rgba(0,212,255,var(--scanline-opacity)) 4px
+        );
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+
+    /* ── HEADER ── */
+    header {
+        background: linear-gradient(135deg, var(--header-gradient-start), var(--header-gradient-end));
+        border-radius: 12px; padding: 20px;
+        margin-bottom: 24px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas: "logo title controls";
+        align-items: center;
+        gap: 16px;
+        border: 1px solid rgba(56,189,248,0.3);
+        min-height: 110px;
+        position: relative;
+        overflow: hidden;
+    }
+    [data-theme="dark"] header::after {
+        content: '';
+        position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+        background: linear-gradient(90deg, transparent, var(--cyber-cyan), transparent);
+        opacity: 0.5;
+    }
+    .header-logo-wrap { grid-area: logo; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .header-logo { width: 65px; height: 65px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(56,189,248,0.4); }
+    .back-link {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 12px; background: rgba(255,255,255,0.15);
+        color: var(--header-text); text-decoration: none;
+        border-radius: 6px; border: 2px solid rgba(255,255,255,0.3);
+        font-size: 12px; font-weight: bold; transition: all 0.2s ease; white-space: nowrap;
+    }
+    .back-link:hover { background: rgba(255,255,255,0.25); }
+    .header-content { grid-area: title; text-align: center; }
+    h1 { font-size: 26px; font-weight: bold; letter-spacing: 1px; margin-bottom: 5px; color: var(--header-text); }
+    [data-theme="dark"] h1 { color: var(--cyber-cyan); text-shadow: 0 0 20px rgba(56,189,248,0.25); }
+    .subtitle { font-size: 13px; opacity: 0.85; font-style: italic; color: var(--header-text); }
+    .last-updated { font-size: 11px; opacity: 0.7; color: var(--header-text); margin-top: 4px; }
+    .header-controls { grid-area: controls; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    .lang-row { display: flex; gap: 4px; }
+    .lang-btn {
+        background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85);
+        border: 1px solid rgba(255,255,255,0.25); border-radius: 5px;
+        padding: 3px 8px; font-size: 10px; font-weight: bold;
+        cursor: pointer; transition: all 0.2s ease;
+        font-family: 'Times New Roman', Times, serif;
+    }
+    .lang-btn:hover { background: rgba(255,255,255,0.2); }
+    .lang-btn.active { background: rgba(255,255,255,0.3); border-color: white; }
+    .theme-toggle { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.1); padding: 6px 10px; border-radius: 8px; }
+    .theme-toggle-label { font-size: 11px; color: rgba(255,255,255,0.85); text-transform: uppercase; letter-spacing: 0.5px; }
+    .theme-toggle-switch { position: relative; width: 44px; height: 24px; background: rgba(255,255,255,0.2); border-radius: 12px; cursor: pointer; transition: all 0.3s ease; border: 2px solid rgba(255,255,255,0.3); }
+    .theme-toggle-slider { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: transform 0.3s ease; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+    .theme-toggle-slider::before { content: '☀️'; }
+    [data-theme="dark"] .theme-toggle-slider { transform: translateX(20px); }
+    [data-theme="dark"] .theme-toggle-slider::before { content: '🌙'; }
+
+    /* ── NAV SIDEBAR (canonical pattern across Asifah pages) ── */
+    .page-with-sidebar { display: flex; flex-direction: row; align-items: flex-start; gap: 20px; }
+    .nav-sidebar { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 4px; position: sticky; top: 20px; height: fit-content; }
+    .nav-sidebar-label { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: rgba(56,189,248,0.5); font-family: 'Courier New', monospace; margin-bottom: 4px; padding-left: 2px; }
+    .nav-btn { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-family: 'Times New Roman', Times, serif; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; transition: all 0.3s ease; cursor: pointer; overflow: hidden; border: 1.5px solid rgba(56,189,248,0.2); background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(14,165,233,0.04) 100%); color: rgba(255,255,255,0.7); }
+    [data-theme="light"] .nav-btn { color: var(--text-secondary); }
+    .nav-btn .nav-btn-label { position: relative; z-index: 2; font-size: 12px; line-height: 1.3; }
+    .nav-btn .nav-btn-status { position: relative; z-index: 2; font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px; opacity: 0.7; color: var(--cyber-cyan); }
+    .nav-btn.active-nav { background: linear-gradient(135deg, rgba(56,189,248,0.15) 0%, rgba(14,165,233,0.10) 100%); border-color: rgba(56,189,248,0.5); color: var(--text-primary); box-shadow: 0 0 14px rgba(56,189,248,0.12); }
+    .nav-btn.current-page { background: linear-gradient(135deg, rgba(34,197,94,0.18) 0%, rgba(22,163,74,0.12) 100%); border-color: rgba(34,197,94,0.6); color: var(--text-primary); box-shadow: 0 0 18px rgba(34,197,94,0.2); }
+    .nav-btn.current-page .nav-btn-status { color: #4ade80; }
+    .nav-btn.inactive-nav { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.25); cursor: default; }
+    [data-theme="light"] .nav-btn.inactive-nav { color: rgba(0,0,0,0.3); border-color: rgba(0,0,0,0.08); background: rgba(0,0,0,0.02); }
+    .nav-btn.inactive-nav .nav-btn-status { color: rgba(255,255,255,0.2); }
+    .nav-btn.rhetoric-btn { border-color: rgba(34,197,94,0.35); background: linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(22,163,74,0.05) 100%); }
+    .nav-btn.rhetoric-btn .nav-btn-status { color: #4ade80; }
+    .nav-btn.military-btn { border-color: rgba(100,116,139,0.4); background: linear-gradient(135deg, rgba(100,116,139,0.08) 0%, rgba(51,65,85,0.05) 100%); }
+    .nav-btn.military-btn .nav-btn-status { color: #94a3b8; }
+    .nav-divider { height: 1px; background: rgba(56,189,248,0.15); margin: 6px 0; }
+    /* ── Canonical mobile drawer (Jun 2026 retrofit) ── */
+    .mobile-hamburger { display: none; }
+    .mobile-drawer-backdrop { display: none; }
+    @media (max-width: 1199px) {
+        .page-with-sidebar { display: block; }
+        .mobile-hamburger {
+            display: flex; position: fixed; top: 16px; left: 16px;
+            width: 44px; height: 44px;
+            background: var(--card-bg, #0d1b2e);
+            border: 1px solid var(--card-border, #1e3a5f);
+            border-radius: 8px; cursor: pointer; z-index: 1001;
+            align-items: center; justify-content: center;
+            font-size: 22px; color: var(--text-primary, #e2f0fb);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-family: monospace;
+        }
+        .mobile-hamburger:active { transform: scale(0.95); }
+        .nav-sidebar {
+            display: flex; position: fixed; top: 0; left: 0;
+            width: min(82vw, 280px); max-width: 280px; height: 100dvh;
+            background: var(--card-bg, #0d1b2e);
+            border-right: 1px solid var(--card-border, #1e3a5f);
+            padding: 70px 12px 20px 12px; overflow-y: auto;
+            z-index: 1000; transform: translateX(-105%);
+            transition: transform 0.25s ease-in-out;
+            box-shadow: 4px 0 16px rgba(0,0,0,0.4);
+        }
+        .nav-sidebar.open { transform: translateX(0); }
+        .mobile-drawer-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 999; backdrop-filter: blur(2px);
+        }
+        .mobile-drawer-backdrop.open { display: block; }
+    }
+
+    /* ── REGIONAL POSTURE BANNER ── */
+    .posture-banner {
+        background: var(--card-bg); border: 2px solid var(--card-border);
+        border-radius: 12px; padding: 16px 24px; margin-bottom: 24px;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 12px; box-shadow: var(--card-glow);
+    }
+    [data-theme="dark"] .posture-banner { border-color: var(--cyber-cyan); box-shadow: 0 0 14px rgba(56,189,248,0.12), var(--card-glow); }
+    .posture-left { display: flex; flex-direction: column; gap: 4px; }
+    .posture-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--cyber-cyan); font-weight: bold; }
+    .posture-value { font-size: 20px; font-weight: 900; }
+    .posture-right { display: flex; gap: 24px; flex-wrap: wrap; }
+    .posture-stat { text-align: center; }
+    .posture-stat-num { font-size: 22px; font-weight: bold; }
+    .posture-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── SECTION TITLE ── */
+    /* ── CONVERGENCE PANEL (spoke & wheel) — Jul 24 2026 ─────────────
+       Cloned from the Africa wheel-junction card. Fully data-driven: this
+       stylesheet knows nothing about which countries or hubs exist. */
+    .cvg-card { background: var(--card-bg); border: 1px solid var(--card-border);
+        border-left: 4px solid #f59e0b; border-radius: 12px; padding: 18px 22px;
+        margin-bottom: 22px; }
+    .cvg-card.converged { border-left-color: #dc2626;
+        box-shadow: 0 0 22px rgba(220,38,38,0.13); }
+    .cvg-head { display:flex; align-items:flex-start; justify-content:space-between;
+        gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+    .cvg-title { font-family:'Courier New',monospace; font-size:0.72rem; letter-spacing:2.5px;
+        text-transform:uppercase; color:#f59e0b; }
+    .cvg-sub { font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:12px; }
+    .cvg-pill { font-size:0.6rem; font-weight:800; letter-spacing:1.4px; padding:4px 11px;
+        border-radius:20px; color:#fff; white-space:nowrap; text-transform:uppercase; }
+    .cvg-wheel { margin-bottom:16px; }
+    .cvg-wheel-label { font-family:'Courier New',monospace; font-size:0.62rem; letter-spacing:2px;
+        text-transform:uppercase; color:var(--text-muted); margin:10px 0 7px; display:flex;
+        align-items:center; gap:8px; flex-wrap:wrap; }
+    .cvg-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:9px; }
+    .cvg-spoke { background:rgba(56,189,248,0.04); border:1px solid var(--card-border);
+        border-radius:9px; padding:11px 9px; text-align:center; }
+    .cvg-spoke.lit { background:rgba(220,38,38,0.09); border-color:rgba(220,38,38,0.42); }
+    .cvg-spoke-icon { font-size:1.15rem; line-height:1.2; }
+    .cvg-spoke-name { font-family:'Courier New',monospace; font-size:0.56rem; letter-spacing:1.3px;
+        text-transform:uppercase; color:var(--text-muted); margin:5px 0 2px; }
+    .cvg-spoke-lvl { font-size:1.05rem; font-weight:800; }
+    .cvg-spoke-class { font-size:0.5rem; color:var(--text-muted); letter-spacing:0.6px;
+        text-transform:uppercase; margin-top:3px; opacity:0.75; }
+    .cvg-spoke-sig { font-size:0.56rem; color:var(--text-secondary); margin-top:5px;
+        line-height:1.35; }
+    /* Silent spokes collapse behind a summary — the gap stays visible without
+       letting absence dominate a panel about presence. */
+    .cvg-silent { margin-top:9px; }
+    .cvg-silent > summary { cursor:pointer; list-style:none; font-family:'Courier New',monospace;
+        font-size:0.6rem; letter-spacing:1.3px; text-transform:uppercase; color:var(--text-muted);
+        padding:6px 9px; border:1px dashed var(--card-border); border-radius:7px; }
+    .cvg-silent > summary::-webkit-details-marker { display:none; }
+    .cvg-silent > summary:hover { color:var(--text-secondary); border-color:var(--text-muted); }
+    .cvg-silent[open] > summary { margin-bottom:7px; }
+    .cvg-silent-list { display:flex; flex-wrap:wrap; gap:6px; }
+    .cvg-silent-chip { font-size:0.56rem; font-family:'Courier New',monospace; letter-spacing:0.8px;
+        padding:3px 8px; border-radius:5px; border:1px dashed var(--card-border);
+        color:var(--text-muted); }
+    .cvg-emanating { margin-top:14px; padding-top:12px; border-top:1px solid var(--card-border); }
+    .cvg-eman-row { display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:7px;
+        background:rgba(29,78,216,0.06); border-left:3px solid #1d4ed8; margin-bottom:5px;
+        flex-wrap:wrap; }
+    .cvg-eman-arrow { color:var(--text-muted); font-size:0.75rem; }
+    .cvg-note { font-size:0.78rem; color:var(--text-secondary); font-style:italic;
+        line-height:1.55; margin-top:12px; }
+    .cvg-disclaimer { font-family:'Courier New',monospace; font-size:0.58rem; color:var(--text-muted);
+        letter-spacing:0.4px; margin-top:11px; padding-top:9px; border-top:1px solid var(--card-border); }
+
+    .section-title {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+        color: var(--cyber-cyan); font-weight: bold;
+        margin-bottom: 12px; padding-bottom: 6px;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    /* ── BLUF CARD ── */
+    .bluf-card {
+        background: var(--card-bg); border: 1px solid var(--card-border);
+        border-radius: 10px; padding: 18px 22px; margin-bottom: 18px;
+        box-shadow: var(--card-glow); transition: border-color 0.3s ease;
+    }
+    [data-theme="dark"] .bluf-card { border-color: rgba(56,189,248,0.25); box-shadow: 0 0 10px rgba(56,189,248,0.06); }
+    .bluf-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+    .bluf-label { font-size:0.6rem; letter-spacing:2.5px; text-transform:uppercase; color:var(--cyber-cyan); font-family:'Courier New',monospace; font-weight:700; }
+    .bluf-posture-pill { font-size:0.6rem; font-weight:700; letter-spacing:1.5px; padding:2px 8px; border-radius:4px; text-transform:uppercase; font-family:'Courier New',monospace; color:#fff; flex-shrink:0; }
+    .bluf-prose { font-size:0.82rem; line-height:1.7; font-family:'Times New Roman',Times,serif; color:var(--text-primary); margin-bottom:14px; }
+    .bluf-prose strong { font-weight: 700; color: var(--cyber-cyan); font-family: 'Courier New', monospace; font-size: 0.78rem; letter-spacing: 0.5px; }
+    .bluf-prose p { margin-bottom: 12px; }
+    .bluf-prose p:last-child { margin-bottom: 0; }
+    .bluf-signals { display:flex; flex-direction:column; gap:6px; padding-top:12px; border-top:1px solid var(--card-border); }
+    .bluf-signal-item { display:flex; align-items:flex-start; gap:8px; font-size:0.72rem; font-family:'Courier New',monospace; padding:5px 10px; border-radius:6px; background:rgba(0,0,0,0.05); border-left:3px solid var(--card-border); }
+    [data-theme="dark"] .bluf-signal-item { background:rgba(255,255,255,0.04); }
+    .bluf-signal-icon { font-size:0.9rem; flex-shrink:0; margin-top:1px; }
+    .bluf-signal-text { flex:1; line-height:1.5; }
+    /* ── GPI escalation badge — appears when Global Pressure Index also flags this signal ── */
+    .gpi-badge { display:inline-flex; align-items:center; gap:3px; font-family:'Courier New',monospace; font-size:0.58rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:2px 6px; border-radius:3px; background:rgba(245,158,11,0.18); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); flex-shrink:0; margin-top:1px; cursor:help; }
+    [data-theme="dark"] .gpi-badge { background:rgba(245,158,11,0.12); color:#fbbf24; border-color:rgba(245,158,11,0.35); }
+    .bluf-signal-item.gpi-only { border-left-width:3px; border-left-color:#f59e0b; background:rgba(245,158,11,0.06); }
+    [data-theme="dark"] .bluf-signal-item.gpi-only { background:rgba(245,158,11,0.05); }
+    /* Approach B readability (Jun 13 2026) */
+    .bluf-para { margin-bottom:12px; line-height:1.7; font-family:'Times New Roman',Times,serif; font-size:0.9rem; color:var(--text-primary); }
+    .bluf-para:last-child { margin-bottom:0; }
+    .bluf-para .bluf-para-label { font-weight:800; letter-spacing:0.3px; color:var(--cyber-cyan,#38bdf8); }
+    .bluf-para.bluf-header-para .bluf-para-label { font-size:1.0rem; letter-spacing:0.5px; }
+    .bluf-signals-scroll { max-height:420px; overflow-y:auto; padding-right:6px; margin-top:6px; }
+    .bluf-signals-scroll::-webkit-scrollbar { width:8px; }
+    .bluf-signals-scroll::-webkit-scrollbar-thumb { background:var(--card-border); border-radius:4px; }
+    .sigrow { display:flex; align-items:flex-start; gap:9px; padding:9px 12px; border-radius:7px; background:rgba(0,0,0,0.05); border-left:4px solid var(--card-border); margin-bottom:7px; }
+    [data-theme="dark"] .sigrow { background:rgba(255,255,255,0.04); }
+    .sigrow.gpi-only { border-left-color:#f59e0b !important; background:rgba(245,158,11,0.06); }
+    [data-theme="dark"] .sigrow.gpi-only { background:rgba(245,158,11,0.05); }
+    .sigrow-icon { font-size:1rem; flex-shrink:0; margin-top:1px; }
+    .sigrow-body { flex:1; min-width:0; }
+    .sigrow-head { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:3px; }
+    .sigrow-chip { font-family:'Courier New',monospace; font-size:0.58rem; font-weight:700; letter-spacing:0.5px; padding:2px 7px; border-radius:4px; color:#fff; flex-shrink:0; }
+    .sigrow-loc { font-weight:800; font-size:0.78rem; font-family:'Times New Roman',Times,serif; text-decoration:none; border-bottom:1px dotted currentColor; }
+    .sigrow-loc:hover { opacity:0.8; }
+    .sigrow-loc.nolink { border-bottom:none; cursor:default; }
+    .sigrow-gpi-badge { font-family:'Courier New',monospace; font-size:0.54rem; font-weight:700; letter-spacing:0.5px; padding:2px 6px; border-radius:4px; background:rgba(245,158,11,0.18); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
+    .sigrow-text { font-size:0.78rem; line-height:1.55; font-family:'Times New Roman',Times,serif; color:var(--text-secondary); }
+    .sigrow-foot { margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
+    .sigrow-axis { font-family:'Courier New',monospace; font-size:0.56rem; font-weight:700; letter-spacing:0.5px; padding:2px 9px; border-radius:999px; }
+    .ax-kinetic { background:rgba(220,38,38,0.14); color:#f87171; border:1px solid #f8717166; }
+    .ax-economic { background:rgba(245,158,11,0.14); color:#fbbf24; border:1px solid #fbbf2466; }
+    .ax-diplomatic { background:rgba(14,165,233,0.14); color:#38bdf8; border:1px solid #38bdf866; }
+    .ax-humanitarian { background:rgba(168,85,247,0.14); color:#c084fc; border:1px solid #c084fc66; }
+    .bluf-footer { font-size:0.6rem; color:var(--text-muted); font-family:'Courier New',monospace; margin-top:10px; font-style:italic; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; }
+
+    /* ── TRACKER BANNERS ── */
+    .trackers-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+    .tracker-banner {
+        background: var(--card-bg); border: 2px solid var(--card-border);
+        border-radius: 12px; padding: 16px 22px;
+        display: grid; grid-template-columns: 2fr 1fr auto;
+        align-items: center; gap: 20px;
+        box-shadow: var(--card-glow);
+        transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .tracker-banner:hover { box-shadow: var(--card-hover-glow); }
+    [data-theme="dark"] .tracker-banner:hover { border-color: var(--cyber-cyan); }
+    .tracker-name { font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    [data-theme="dark"] .tracker-name { color: #7dd3fc; }
+    .tracker-actors { font-size: 11px; color: var(--text-muted); }
+    .tracker-middle { display: flex; flex-direction: column; gap: 6px; }
+    .tracker-vectors { display: flex; gap: 6px; flex-wrap: wrap; }
+    .vector-pill {
+        font-size: 10px; padding: 2px 8px; border-radius: 4px;
+        font-weight: bold; white-space: nowrap;
+        background: rgba(56,189,248,0.08); color: var(--cyber-cyan);
+        border: 1px solid rgba(56,189,248,0.2);
+    }
+    .tracker-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .level-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 14px; border-radius: 8px; font-size: 12px;
+        font-weight: bold; color: white; white-space: nowrap;
+        letter-spacing: 0.5px;
+    }
+    .open-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 14px; border-radius: 8px;
+        background: rgba(56,189,248,0.1); color: var(--cyber-cyan);
+        text-decoration: none; font-size: 11px; font-weight: bold;
+        border: 1px solid rgba(56,189,248,0.3); transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+    .open-btn:hover { background: rgba(56,189,248,0.2); box-shadow: 0 0 12px rgba(56,189,248,0.15); }
+
+    /* ── COMING SOON BANNERS ── */
+    .coming-soon-banner {
+        background: var(--card-bg); border: 2px solid var(--card-border);
+        border-radius: 12px; padding: 14px 22px;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; opacity: 0.5;
+    }
+    .coming-soon-name { font-size: 14px; font-weight: bold; color: var(--text-muted); }
+    .coming-soon-badge {
+        font-size: 11px; padding: 3px 10px; border-radius: 6px;
+        background: rgba(100,116,139,0.1); color: var(--text-muted);
+        border: 1px solid rgba(100,116,139,0.2); white-space: nowrap;
+    }
+
+    /* ── DELTA ── */
+    .tracker-delta { font-size: 11px; font-weight: bold; }
+    .delta-rising  { color: #ef4444; }
+    .delta-falling { color: #22c55e; }
+    .delta-stable  { color: #9ca3af; }
+
+    /* ── LOADING DOTS (used in tracker banners while data populates) ── */
+    .loading-dot { animation: blink 1.4s infinite both; }
+    .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100% { opacity: 0; } 40% { opacity: 1; } }
+
+    /* ── FULL-PAGE LOADING OVERLAY (Gold Standard — matches venezuela-stability.html) ── */
+    .loading-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: var(--bg-color);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    .loading-overlay.fade-out { opacity: 0; visibility: hidden; pointer-events: none; }
+    .loading-spinner {
+        width: 50px; height: 50px;
+        border: 4px solid var(--card-border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+        margin-top: 16px;
+        color: var(--text-primary);
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+    }
+    .loading-subtext {
+        margin-top: 6px;
+        color: var(--text-muted);
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 0.78rem;
+        font-style: italic;
+        max-width: 400px;
+        text-align: center;
+        padding: 0 20px;
+    }
+
+    /* ── FOOTER ── */
+    footer { text-align: center; padding: 30px 20px; color: var(--text-muted); font-size: 12px; line-height: 1.8; border-top: 1px solid var(--card-border); margin-top: 30px; }
+
+    /* ── MOBILE ── */
+    @media (max-width: 768px) {
+        header { grid-template-columns: 1fr; grid-template-areas: "title" "logo" "controls"; text-align: center; }
+        .header-controls { align-items: center; }
+        .tracker-banner { grid-template-columns: 1fr; }
+        .tracker-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+    }
+    .nav-btn.tracker-btn { border-color: rgba(245,158,11,0.5); background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(217,119,6,0.05) 100%); }
+    .nav-btn.tracker-btn .nav-btn-status { color: #f59e0b; }
+</style>
+    <!-- Asifah standard shell (Oct 3 2026). These pages previously carried a
+         HAND-COPIED watermark spec with a comment saying it "matches"
+         asifah-standard-shell.css, while never loading that stylesheet or its
+         script. That is why the five regional BLUFs drifted apart on sizing,
+         why the mobile drawer was missing, and why the escalation guide rail
+         could not appear. The shell is now loaded, as it already is on the
+         country stability pages. -->
+    <link rel="stylesheet" href="resources/asifah-standard-shell.css">
+    <script src="resources/asifah-standard-shell.js" defer></script>
+</head>
+<body>
+
+<!-- ── FULL-PAGE LOADING OVERLAY (auto-hides when loadAll() completes) ── -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" data-i18n="loadingText">Loading WHA Rhetoric Monitor</div>
+    <div class="loading-subtext" data-i18n="loadingSubtext">Pulling cached tracker data and regional synthesis…</div>
+</div>
+
+<div class="watermark"></div>
+<div class="container">
+<!-- ── Mobile drawer (hamburger + backdrop, inside .container for stacking) ── -->
+<button class="mobile-hamburger" id="mobileHamburger" onclick="toggleMobileDrawer()" aria-label="Open menu">☰</button>
+<div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" onclick="closeMobileDrawer()"></div>
+
+<!-- HEADER -->
+<header>
+    <div class="header-logo-wrap">
+        <a href="wha.html" class="back-link" data-i18n="backBtn">← Back to WHA</a>
+        <img src="https://raw.githubusercontent.com/Asifah-Analytics-C-A-V-E/asifah-analytics/refs/heads/main/Asifah_Analytics_1_25_26_V1_LOGO.png"
+             alt="Asifah Analytics Logo" class="header-logo"/>
+    </div>
+    <div class="header-content">
+        <h1>🌎 <span data-i18n="pageTitle">WESTERN HEMISPHERE RHETORIC MONITOR</span></h1>
+        <div class="subtitle" data-i18n="pageSubtitle">U.S. pressure · Regime fracture signals · Adversary access · Migration pressure</div>
+        <div class="last-updated" id="lastUpdated" data-i18n="connecting">Connecting to trackers...</div>
+    </div>
+    <div class="header-controls">
+        <div class="lang-row">
+            <button class="lang-btn active" onclick="switchLang('en',this)">EN</button>
+            <button class="lang-btn" onclick="switchLang('es',this)">ES</button>
+            <button class="lang-btn" onclick="switchLang('pt',this)">PT</button>
+        </div>
+        <div class="theme-toggle">
+            <span class="theme-toggle-label" data-i18n="themeLabel">Theme</span>
+            <div class="theme-toggle-switch" onclick="toggleTheme()">
+                <div class="theme-toggle-slider"></div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="page-with-sidebar">
+
+<!-- ── NAV SIDEBAR (canonical Asifah pattern) ── -->
+<nav class="nav-sidebar" id="navSidebar">
+    <div class="nav-sidebar-label" data-i18n="navDashboards">Dashboards</div>
+    <a href="africa.html" class="nav-btn active-nav"><span class="nav-btn-label">🌍 Africa</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="asia.html" class="nav-btn active-nav"><span class="nav-btn-label">🌏 Asia &amp; Pacific</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="europe.html" class="nav-btn active-nav"><span class="nav-btn-label">🌍 Europe</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="middle-east.html" class="nav-btn active-nav"><span class="nav-btn-label">🕌 Middle East</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="wha.html" class="nav-btn active-nav"><span class="nav-btn-label">🌎 Western Hemisphere</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-divider"></div>
+    <div class="nav-sidebar-label" data-i18n="navGlobalTrackers">Global Trackers</div>
+    <a href="commodities.html" class="nav-btn tracker-btn"><span class="nav-btn-label">🛢️ Commodities</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="gpi.html" class="nav-btn tracker-btn"><span class="nav-btn-label">🌐 Global Pressure Index</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="market-watch.html" class="nav-btn tracker-btn"><span class="nav-btn-label">📈 Market Watch</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="military.html" class="nav-btn tracker-btn"><span class="nav-btn-label">🎖️ Military Tracker</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-divider"></div>
+    <div class="nav-sidebar-label" data-i18n="navRegionalRhetoric">Regional Rhetoric</div>
+    <a href="rhetoric-africa.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">📡 Africa</span><span class="nav-btn-status">● Live</span></a>
+    <a href="rhetoric-index.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🕌 Middle East</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="rhetoric-asia.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🌏 Asia</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="rhetoric-europe.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🌍 Europe</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-btn rhetoric-btn current-page"><span class="nav-btn-label">🌎 Western Hemisphere</span><span class="nav-btn-status" data-i18n="navYouAreHere">◉ You are here</span></div>
+    <div class="nav-divider"></div>
+    <a href="rhetoric-cuba.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇨🇺 Cuba Rhetoric Tracker</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="cuba-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">📊 Cuba Stability</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-divider"></div>
+    <a href="rhetoric-peru.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇵🇪 Peru Rhetoric Tracker</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="peru-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">📊 Peru Stability</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-divider"></div>
+    <a href="rhetoric-chile.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇨🇱 Chile Rhetoric Tracker</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="chile-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">📊 Chile Stability</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-divider"></div>
+    <a href="rhetoric-venezuela.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇻🇪 Venezuela Rhetoric Tracker</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="venezuela-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">📊 Venezuela Stability</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <div class="nav-divider"></div>
+    <a href="rhetoric-us.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇺🇸 U.S. Rhetoric Tracker</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+    <a href="us-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">📊 U.S. Stability</span><span class="nav-btn-status" data-i18n="navLive">● Live</span></a>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div style="flex:1;min-width:0;">
+
+<!-- REGIONAL POSTURE BANNER -->
+<div class="posture-banner">
+    <div class="posture-left">
+        <div class="posture-label">🌎 <span data-i18n="postureLabel">Western Hemisphere Regional Posture</span></div>
+        <div class="posture-value" id="postureValue" style="color:var(--text-muted);">
+            <span class="loading-dot">●</span>
+            <span class="loading-dot">●</span>
+            <span class="loading-dot">●</span>
+        </div>
+    </div>
+    <div class="posture-right" id="postureStats"></div>
+</div>
+
+<!-- WHA BLUF -->
+<div class="bluf-card" id="blufCard">
+    <div id="blufContent">
+        <div class="bluf-header">
+            <span class="bluf-label" data-i18n="blufLabel">BLUF</span>
+            <span class="bluf-posture-pill" id="blufPosturePill" style="background:#6b7280;" data-i18n="blufLoading">Loading</span>
+        </div>
+        <div class="bluf-prose" id="blufProse" data-i18n="blufInitial">
+            Loading Western Hemisphere regional assessment...
+        </div>
+        <div class="bluf-signals" id="blufSignals"></div>
+        <div class="bluf-footer">
+            <span id="blufTimestamp"></span>
+            <span data-i18n="blufSource">Asifah Analytics · Western Hemisphere Regional Synthesis · Open-source signals only</span>
+        </div>
+    </div>
+</div>
+
+<!-- ── CONVERGENCE PANEL (spoke & wheel) — rendered entirely from
+     data.convergence_panel. No country, hub, or spoke is named in this
+     markup; adding a tracker requires no edit here. ── -->
+<div class="cvg-card" id="cvgCard" style="display:none;">
+    <div class="cvg-head">
+        <div>
+            <div class="cvg-title" id="cvgTitle">⚙️ SPOKE &amp; WHEEL — CONVERGENCE READ</div>
+            <div class="cvg-sub" id="cvgSub"></div>
+        </div>
+        <span class="cvg-pill" id="cvgPill" style="background:#6b7280;">DORMANT</span>
+    </div>
+    <div id="cvgWheels"></div>
+    <div id="cvgEmanating"></div>
+    <div class="cvg-note" id="cvgNote"></div>
+    <div class="cvg-disclaimer" id="cvgDisclaimer"></div>
+</div>
+
+<!-- ACTIVE TRACKERS -->
+<div class="section-title">📡 <span data-i18n="activeTitle">Active Rhetoric Trackers — Western Hemisphere</span></div>
+<div class="trackers-list" id="trackersList"></div>
+
+<!-- COMING SOON -->
+<div class="section-title" style="margin-top:24px;">🔜 <span data-i18n="comingSoonTitle">In Development</span></div>
+<div class="trackers-list">
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇲🇽 <span data-i18n="soon_mx">Mexico Rhetoric Tracker</span></div>
+        <span class="coming-soon-badge" data-i18n="soon_badge">In Development</span>
+    </div>
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇨🇴 <span data-i18n="soon_co">Colombia Rhetoric Tracker</span></div>
+        <span class="coming-soon-badge" data-i18n="soon_badge">In Development</span>
+    </div>
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇧🇷 <span data-i18n="soon_br">Brazil Rhetoric Tracker</span></div>
+        <span class="coming-soon-badge" data-i18n="soon_badge">In Development</span>
+    </div>
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇭🇹 <span data-i18n="soon_ht">Haiti Rhetoric Tracker</span></div>
+        <span class="coming-soon-badge" data-i18n="soon_badge">In Development</span>
+    </div>
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇵🇦 <span data-i18n="soon_pa">Panama Rhetoric Tracker</span></div>
+        <span class="coming-soon-badge" data-i18n="soon_badge">In Development</span>
+    </div>
+</div>
+
+</div><!-- /MAIN CONTENT -->
+</div><!-- /page-with-sidebar -->
+
+<!-- FOOTER -->
+<footer>
+    <p style="margin:0 0 6px;"><strong>ASIFAH ANALYTICS · WESTERN HEMISPHERE RHETORIC MONITOR</strong></p>
+    <p style="margin:0 0 6px;">asifah-wha-backend.onrender.com · Updates every 12 hours · Force refresh via Scan OSINT</p>
+    <p style="margin:0;" data-i18n="footerSources">Data Sources: RSS (EN/ES/PT), GDELT, NewsAPI, Telegram OSINT channels, Bluesky mirrors</p>
+
+    <!-- Support + Contact CTAs -->
+    <div style="margin:22px auto 10px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://buymeacoffee.com/asifahanalytics" target="_blank" rel="noopener" style="padding:10px 18px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1f1f1f;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px;box-shadow:0 3px 10px rgba(245,158,11,0.3);transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 5px 16px rgba(245,158,11,0.45)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 3px 10px rgba(245,158,11,0.3)'">☕ Buy Me a Coffee</a>
+        <a href="mailto:asifahanalytics@gmail.com" style="padding:10px 18px;background:linear-gradient(135deg,#1e3a5f,#38bdf8);color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px;box-shadow:0 3px 10px rgba(56,189,248,0.3);transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 5px 16px rgba(56,189,248,0.45)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 3px 10px rgba(56,189,248,0.3)'">✉️ Contact Asifah</a>
+    </div>
+
+    <p style="margin-top:14px;font-size:10px;opacity:0.7;">© 2025-2026 Asifah Analytics · <span data-i18n="footerDisclaimer">Research & Educational Use Only. Not for operational decision-making.</span></p>
+    <p style="margin-top:10px;">
+        <a href="mission.html">Mission Statement</a> · 
+        <a href="privacy.html">Privacy Policy</a> · 
+        <a href="https://asifahanalytics.com">Home</a>
+    </p>
+</footer>
+
+</div>
+
+<script>
+    const WHA_BACKEND = 'https://asifah-wha-backend.onrender.com';
+
+    const ESCALATION_LEVELS = {
+    0: { label: 'Monitoring',      color: '#6b7280' },
+    1: { label: 'Rhetoric',        color: '#3b82f6' },
+    2: { label: 'Warning',         color: '#f59e0b' },
+    3: { label: 'Confrontation',   color: '#f97316' },
+    4: { label: 'Coercion',        color: '#ef4444' },
+    5: { label: 'Active Conflict', color: '#dc2626' },
+};
+    // ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────
+    // The ladder lives in asifah-standard-shell.js (window.AsifahLadder).
+    // This page used to declare its own table, which is how L4 came to read
+    // one word here and a different one in the backend that fed it.
+    //
+    // The object below is a FALLBACK, used only if the shell fails to load,
+    // and it is OVERWRITTEN from the shell at DOMContentLoaded -- deferred
+    // scripts run before that event, so window.AsifahLadder always exists by
+    // the time any chip renders. Do not edit these words here; edit the
+    // shell and they follow.
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!window.AsifahLadder) return;
+        window.AsifahLadder.levels.forEach(function (r) {
+            ESCALATION_LEVELS[r.level] = { label: r.label, color: r.color };
+        });
+    });
+
+
+    // ── TRACKER DEFINITIONS ──
+    // One entry per live tracker. Add new WHA trackers here as they launch.
+    // ── TRACKER METADATA (OPTIONAL ENRICHMENT) ──────────────────────────
+    // v1.x Jul 25 2026. NOT the source of truth -- the BLUF's theatre_summary
+    // is. Entries here only supply nicer prose.
+    //
+    // WHY: this list drifted worse than any other region. Brazil, Colombia,
+    // Haiti, Mexico and Panama were ALL live in wha_regional_bluf.py
+    // TRACKER_KEYS and completely invisible on this page. Five silent
+    // omissions is what a hardcoded roster costs.
+    const TRACKERS = [
+        {
+            id:         'cuba',
+            name:       'Cuba Rhetoric & Pressure Tracker',
+            flag:       '🇨🇺',
+            actors:     'US Gov · US Sanctions · US Military · Cuban Gov · Cuban Military · Dissidents · Russia/China/Iran Axes',
+            vectors:    ['US Pressure', 'Regime Fracture', 'Adversary Access', 'Red Lines', 'Cross-Theater'],
+            summaryUrl: WHA_BACKEND + '/api/rhetoric/cuba/summary',
+            url:        'https://www.asifahanalytics.com/rhetoric-cuba.html',
+        },
+        {
+            id:         'peru',
+            name:       'Peru Rhetoric & Pressure Tracker',
+            flag:       '🇵🇪',
+            actors:     'Presidency · Cancillería · FFAA · Mining Sector · Las Bambas · VRAEM/Sendero · US-Peru · China-Peru/BRI',
+            vectors:    ['Domestic Stability', 'Resource-Sector Politics', 'US Alignment', 'China Alignment'],
+            summaryUrl: WHA_BACKEND + '/api/rhetoric/peru',
+            url:        'https://www.asifahanalytics.com/rhetoric-peru.html',
+        },
+        {
+            id:         'chile',
+            name:       'Chile Rhetoric & Pressure Tracker',
+            flag:       '🇨🇱',
+            actors:     'Presidency · Cancillería · Mining Sector · Mapuche Conflict · Constitutional Politics · US-Chile · China-Chile/Lithium',
+            vectors:    ['Domestic Stability', 'Resource-Sector Politics', 'US Alignment', 'China Alignment'],
+            summaryUrl: WHA_BACKEND + '/api/rhetoric/chile',
+            url:        'https://www.asifahanalytics.com/rhetoric-chile.html',
+        },
+        {
+            id:         'venezuela',
+            name:       'Venezuela Rhetoric & Pressure Tracker',
+            flag:       '🇻🇪',
+            actors:     'US Gov · US Sanctions · US Military · US-VZ Envoys · Delcy Rodríguez · Jorge Rodríguez · Yván Gil · Cabello · Internal Security · Opposition · Chavismo Residual · Russia/China/Iran Axes · Hezbollah Watch · Essequibo Dispute',
+            vectors:    ['U.S. Pressure', 'Regime Legitimacy', 'Adversary Access', 'Oil Extraction', 'Migration Outflow', 'Essequibo Dispute'],
+            summaryUrl: WHA_BACKEND + '/api/rhetoric/venezuela',
+            url:        'https://www.asifahanalytics.com/rhetoric-venezuela.html',
+        },
+        {
+            id:         'us',
+            name:       'U.S. Rhetoric & Divergence Tracker',
+            flag:       '🇺🇸',
+            actors:     'Executive · State Dept · Defense · Congress Majority · Congress Opposition · Judicial · DHS/ICE · Federal Reserve · State Governors',
+            vectors:    ['Executive Branch', 'Legislative Branch', 'Institutional', 'Domestic Fracture'],
+            summaryUrl: WHA_BACKEND + '/api/rhetoric/us',
+            url:        'https://www.asifahanalytics.com/rhetoric-us.html',
+        },
+    ];
+
+    // ── TRANSLATIONS (EN / ES / PT) ──
+    const TRANSLATIONS = {
+        en: {
+            backBtn:            '← Back to WHA',
+            pageTitle:          'WESTERN HEMISPHERE RHETORIC MONITOR',
+            pageSubtitle:       'U.S. pressure · Regime fracture signals · Adversary access · Migration pressure',
+            connecting:         'Connecting to trackers...',
+            themeLabel:         'Theme',
+            postureLabel:       'Western Hemisphere Regional Posture',
+            blufLabel:          'BLUF',
+            blufLoading:        'Loading',
+            blufInitial:        'Loading Western Hemisphere regional assessment...',
+            loadingText:        'Loading WHA Rhetoric Monitor',
+            loadingSubtext:     'Pulling cached tracker data and regional synthesis…',
+            blufSource:         'Asifah Analytics · Western Hemisphere Regional Synthesis · Open-source signals only',
+            activeTitle:        'Active Rhetoric Trackers — Western Hemisphere',
+            comingSoonTitle:    'In Development',
+            soon_mx:            'Mexico Rhetoric Tracker',
+            soon_ve:            'Venezuela Rhetoric Tracker',
+            soon_co:            'Colombia Rhetoric Tracker',
+            soon_br:            'Brazil Rhetoric Tracker',
+            soon_ht:            'Haiti Rhetoric Tracker',
+            soon_pa:            'Panama Rhetoric Tracker',
+            soon_badge:         'In Development',
+            footerSources:      'Data Sources: RSS (EN/ES/PT), GDELT, NewsAPI, Telegram OSINT channels, Bluesky mirrors',
+            footerMethodology:  'Methodology: Three-question analytical frame (U.S. pressure · Regime fracture · Adversary access) · Red Lines · So What factor · Cross-theater fingerprints',
+            footerDisclaimer:   'Research & Educational Use Only. Not for operational decision-making.',
+            footerCoffee:       'If you find Asifah Analytics useful, you can ',
+            footerCoffeeLink:   'buy me a coffee',
+            navDashboards:        'Dashboards',
+            navGlobalTrackers:    'Global Trackers',
+            navRegionalRhetoric:  'Regional Rhetoric',
+            navLive:              '● Live',
+            navFuture:            '🔒 Future',
+            navYouAreHere:        '◉ You are here',
+            peakLevel:          'Peak Level',
+            avgScore:           'Avg Score',
+            theatersL3:         'Theaters L3+',
+            trackersLive:       'Trackers Live',
+            openTracker:        '🔍 Open Tracker →',
+            noData:             'No tracker data available yet — check back after first scan.',
+            baselinePosture:    'All WHA theaters at baseline — monitoring for regime fracture and adversary access signals',
+        },
+        es: {
+            backBtn:            '← Volver a WHA',
+            pageTitle:          'MONITOR DE RETÓRICA DEL HEMISFERIO OCCIDENTAL',
+            pageSubtitle:       'Presión de EE.UU. · Señales de fractura del régimen · Acceso adversario · Presión migratoria',
+            connecting:         'Conectando con rastreadores...',
+            themeLabel:         'Tema',
+            postureLabel:       'Postura Regional del Hemisferio Occidental',
+            blufLabel:          'BLUF',
+            blufLoading:        'Cargando',
+            loadingText:        'Cargando Monitor de Retórica WHA',
+            loadingSubtext:     'Obteniendo datos de rastreadores en caché y síntesis regional…',
+            blufInitial:        'Cargando evaluación regional del Hemisferio Occidental...',
+            blufSource:         'Asifah Analytics · Síntesis Regional del Hemisferio Occidental · Solo fuentes abiertas',
+            activeTitle:        'Rastreadores de Retórica Activos — Hemisferio Occidental',
+            comingSoonTitle:    'En Desarrollo',
+            soon_mx:            'Rastreador de Retórica de México',
+            soon_ve:            'Rastreador de Retórica de Venezuela',
+            soon_co:            'Rastreador de Retórica de Colombia',
+            soon_br:            'Rastreador de Retórica de Brasil',
+            soon_ht:            'Rastreador de Retórica de Haití',
+            soon_pa:            'Rastreador de Retórica de Panamá',
+            soon_badge:         'En Desarrollo',
+            footerSources:      'Fuentes de Datos: RSS (EN/ES/PT), GDELT, NewsAPI, canales OSINT de Telegram, espejos de Bluesky',
+            footerMethodology:  'Metodología: Marco analítico de tres preguntas (Presión EE.UU. · Fractura del régimen · Acceso adversario) · Líneas Rojas · Factor Significado · Huellas multi-teatro',
+            footerDisclaimer:   'Solo para Investigación y Uso Educativo. No para decisiones operativas.',
+            footerCoffee:       'Si Asifah Analytics te resulta útil, puedes ',
+            footerCoffeeLink:   'invitarme un café',
+            navDashboards:        'Paneles',
+            navGlobalTrackers:    'Rastreadores Globales',
+            navRegionalRhetoric:  'Retórica Regional',
+            navLive:              '● En Vivo',
+            navFuture:            '🔒 Futuro',
+            navYouAreHere:        '◉ Estás aquí',
+            peakLevel:          'Nivel Máximo',
+            avgScore:           'Puntuación Media',
+            theatersL3:         'Teatros L3+',
+            trackersLive:       'Rastreadores Activos',
+            openTracker:        '🔍 Abrir Rastreador →',
+            noData:             'Sin datos de rastreadores todavía — vuelve después del primer escaneo.',
+            baselinePosture:    'Todos los teatros del WHA en línea base — monitoreando señales de fractura del régimen y acceso adversario',
+        },
+        pt: {
+            backBtn:            '← Voltar ao WHA',
+            pageTitle:          'MONITOR DE RETÓRICA DO HEMISFÉRIO OCIDENTAL',
+            pageSubtitle:       'Pressão dos EUA · Sinais de fratura do regime · Acesso de adversários · Pressão migratória',
+            connecting:         'Conectando aos rastreadores...',
+            themeLabel:         'Tema',
+            postureLabel:       'Postura Regional do Hemisfério Ocidental',
+            blufLabel:          'BLUF',
+            blufLoading:        'Carregando',
+            loadingText:        'Carregando Monitor de Retórica WHA',
+            loadingSubtext:     'Buscando dados de rastreadores em cache e síntese regional…',
+            blufInitial:        'Carregando avaliação regional do Hemisfério Ocidental...',
+            blufSource:         'Asifah Analytics · Síntese Regional do Hemisfério Ocidental · Apenas sinais de código aberto',
+            activeTitle:        'Rastreadores de Retórica Ativos — Hemisfério Ocidental',
+            comingSoonTitle:    'Em Desenvolvimento',
+            soon_mx:            'Rastreador de Retórica do México',
+            soon_ve:            'Rastreador de Retórica da Venezuela',
+            soon_co:            'Rastreador de Retórica da Colômbia',
+            soon_br:            'Rastreador de Retórica do Brasil',
+            soon_ht:            'Rastreador de Retórica do Haiti',
+            soon_pa:            'Rastreador de Retórica do Panamá',
+            soon_badge:         'Em Desenvolvimento',
+            footerSources:      'Fontes de Dados: RSS (EN/ES/PT), GDELT, NewsAPI, canais OSINT do Telegram, espelhos do Bluesky',
+            footerMethodology:  'Metodologia: Estrutura analítica de três perguntas (Pressão EUA · Fratura do regime · Acesso de adversários) · Linhas Vermelhas · Fator Significado · Impressões multi-teatro',
+            footerDisclaimer:   'Apenas para Pesquisa e Uso Educacional. Não para decisões operacionais.',
+            footerCoffee:       'Se Asifah Analytics for útil, você pode ',
+            footerCoffeeLink:   'me pagar um café',
+            navDashboards:        'Painéis',
+            navGlobalTrackers:    'Rastreadores Globais',
+            navRegionalRhetoric:  'Retórica Regional',
+            navLive:              '● Ao Vivo',
+            navFuture:            '🔒 Futuro',
+            navYouAreHere:        '◉ Você está aqui',
+            peakLevel:          'Nível Máximo',
+            avgScore:           'Pontuação Média',
+            theatersL3:         'Teatros L3+',
+            trackersLive:       'Rastreadores Ativos',
+            openTracker:        '🔍 Abrir Rastreador →',
+            noData:             'Sem dados de rastreadores ainda — volte após o primeiro escaneamento.',
+            baselinePosture:    'Todos os teatros do WHA em linha de base — monitorando sinais de fratura do regime e acesso de adversários',
+        },
+    };
+
+    let currentLang = localStorage.getItem('asifah-lang-wha') || 'en';
+
+    function applyTranslations() {
+        const T = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (T[key]) el.textContent = T[key];
+        });
+    }
+
+    function switchLang(lang, btn) {
+        currentLang = lang;
+        localStorage.setItem('asifah-lang-wha', lang);
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        applyTranslations();
+        // Re-render tracker banners in new language (level labels + vector pills)
+        loadAll();
+    }
+
+    // ── THEME ──
+    function loadTheme() {
+        const saved = localStorage.getItem('asifah-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+    }
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next    = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('asifah-theme', next);
+    }
+
+    // ── RENDER TRACKER BANNER ──
+    function renderTrackerBanner(tracker, data) {
+        const T = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+        let level = 0, color = '#6b7280', label = '---';
+
+        if (data) {
+            level = data.theatre_level ?? data.theatre_escalation_level ?? 0;
+            const lv = ESCALATION_LEVELS[Math.min(level, 5)] || ESCALATION_LEVELS[0];
+            color = data.theatre_color || data.theatre_escalation_color || lv.color;
+            label = lv.label;
+        }
+
+        const vectorPills = tracker.vectors.map(v =>
+            `<span class="vector-pill">${v}</span>`
+        ).join('');
+
+        const metaLine = data
+            ? `<span style="font-size:10px;color:var(--text-muted);">${data.total_articles ?? data.articles_scanned ?? '--'} articles · ${data.red_lines_count ?? 0} red lines</span>`
+            : '';
+
+        // Scenario line from Cuba's so_what scenario field
+        const scenarioLine = data && data.scenario
+            ? `<span style="font-size:10px;color:var(--text-secondary);font-style:italic;margin-top:2px;">${data.scenario.substring(0, 80)}${data.scenario.length > 80 ? '…' : ''}</span>`
+            : '';
+
+        const div = document.createElement('div');
+        div.className = 'tracker-banner';
+        div.innerHTML = `
+            <div class="tracker-left">
+                <div class="tracker-name">
+                    <span style="font-size:22px;">${tracker.flag}</span>
+                    ${tracker.name}
+                </div>
+                <div class="tracker-actors">${tracker.actors}</div>
+                ${scenarioLine}
+            </div>
+            <div class="tracker-middle">
+                <div class="tracker-vectors">${vectorPills}</div>
+                ${metaLine}
+            </div>
+            <div class="tracker-right">
+                ${data
+                    ? `<div class="level-badge" style="background:${color};">⚡ Level ${level} — ${label}</div>`
+                    : `<div class="level-badge" style="background:#374151;min-width:120px;justify-content:center;"><span class="loading-dot">●</span><span class="loading-dot">●</span><span class="loading-dot">●</span></div>`
+                }
+                <a href="${tracker.url}" class="open-btn">${T.openTracker}</a>
+            </div>
+        `;
+        return div;
+    }
+
+    // ── REGIONAL POSTURE ──
+    // ── POSTURE — driven by regional BLUF endpoint (server-side synthesis) ──
+    function updatePosture(blufData, resolvedTrackers) {
+        const T = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+        const loadedCount = resolvedTrackers.filter(r => r.data).length;
+
+        // Fallback if BLUF endpoint failed: derive from tracker summaries (legacy behavior)
+        if (!blufData || !blufData.success) {
+            const loaded = resolvedTrackers.filter(r => r.data);
+            if (loaded.length === 0) return;
+            const levels = loaded.map(r => r.data.theatre_level ?? r.data.theatre_escalation_level ?? 0);
+            const maxLevel = Math.max(...levels);
+            const elevated = levels.filter(l => l >= 3).length;
+            let postureLabel = 'BASELINE', postureColor = '#6b7280';
+            if (maxLevel >= 5)      { postureLabel = 'ACTIVE CONFLICT';      postureColor = '#dc2626'; }
+            else if (maxLevel >= 4) { postureLabel = 'ELEVATED — COERCION';   postureColor = '#ef4444'; }
+            else if (maxLevel >= 3) { postureLabel = 'ELEVATED — CONFRONTATION'; postureColor = '#f97316'; }
+            else if (maxLevel >= 2) { postureLabel = 'WARNING';               postureColor = '#f59e0b'; }
+            else if (maxLevel >= 1) { postureLabel = 'MONITORING — RHETORIC'; postureColor = '#3b82f6'; }
+            document.getElementById('postureValue').innerHTML =
+                `<span style="color:${postureColor};">${postureLabel}</span>`;
+            const cyanColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#38bdf8' : '#0284c7';
+            document.getElementById('postureStats').innerHTML = `
+                <div class="posture-stat">
+                    <div class="posture-stat-num" style="color:${(ESCALATION_LEVELS[Math.min(maxLevel,5)] || ESCALATION_LEVELS[0]).color};">${maxLevel}</div>
+                    <div class="posture-stat-label">${T.peakLevel}</div>
+                </div>
+                <div class="posture-stat">
+                    <div class="posture-stat-num" style="color:${elevated > 0 ? '#ef4444' : cyanColor};">${elevated}</div>
+                    <div class="posture-stat-label">${T.theatersL3}</div>
+                </div>
+                <div class="posture-stat">
+                    <div class="posture-stat-num" style="color:${cyanColor};">${loaded.length}/${resolvedTrackers.length}</div>
+                    <div class="posture-stat-label">${T.trackersLive}</div>
+                </div>
+            `;
+            document.getElementById('lastUpdated').textContent =
+                `Last updated: ${new Date().toLocaleString()} · ${loaded.length} of ${resolvedTrackers.length} trackers live (BLUF unavailable)`;
+            return;
+        }
+
+        // ── Server-side BLUF data path ──
+        const maxLevel       = blufData.max_level ?? blufData.peak_level ?? 0;
+        const avgScore       = blufData.avg_score ?? 0;
+        const theatresAtL3   = blufData.theatres_at_l3plus ?? 0;
+        const theatresLive   = blufData.theatres_live ?? blufData.trackers_live ?? loadedCount;
+        const theatresTotal  = blufData.trackers_total ?? resolvedTrackers.length;
+        const postureLabel   = blufData.posture_label ?? 'BASELINE';
+        const postureColor   = blufData.posture_color ?? '#6b7280';
+
+        document.getElementById('postureValue').innerHTML =
+            `<span style="color:${postureColor};">${postureLabel}</span>`;
+
+        const cyanColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#38bdf8' : '#0284c7';
+
+        document.getElementById('postureStats').innerHTML = `
+            <div class="posture-stat">
+                <div class="posture-stat-num" style="color:${(ESCALATION_LEVELS[Math.min(maxLevel,5)] || ESCALATION_LEVELS[0]).color};">${maxLevel}</div>
+                <div class="posture-stat-label">${T.peakLevel}</div>
+            </div>
+            <div class="posture-stat">
+                <div class="posture-stat-num" style="color:${postureColor};">${avgScore}</div>
+                <div class="posture-stat-label">${T.avgScore}</div>
+            </div>
+            <div class="posture-stat">
+                <div class="posture-stat-num" style="color:${theatresAtL3 > 0 ? '#ef4444' : cyanColor};">${theatresAtL3}</div>
+                <div class="posture-stat-label">${T.theatersL3}</div>
+            </div>
+            <div class="posture-stat">
+                <div class="posture-stat-num" style="color:${cyanColor};">${theatresLive}/${theatresTotal}</div>
+                <div class="posture-stat-label">${T.trackersLive}</div>
+            </div>
+        `;
+
+        let updatedStr = `Last updated: ${new Date().toLocaleString()}`;
+        if (blufData.from_cache) updatedStr += ' · cached';
+        updatedStr += ` · ${theatresLive} of ${theatresTotal} trackers live`;
+        document.getElementById('lastUpdated').textContent = updatedStr;
+    }
+
+    // ── BLUF — regional synthesis ──
+    // ── BLUF — server-side regional synthesis (canonical schema) ──
+    function updateBluf(blufData, resolvedTrackers) {
+        const T = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+        const blufProseEl     = document.getElementById('blufProse');
+        const pillEl          = document.getElementById('blufPosturePill');
+        const signalsEl       = document.getElementById('blufSignals');
+        const timestampEl     = document.getElementById('blufTimestamp');
+
+        // Server BLUF unavailable — fall back to client-side synthesis from tracker summaries
+        if (!blufData || !blufData.success) {
+            const loaded = resolvedTrackers.filter(r => r.data);
+            if (!loaded.length) {
+                blufProseEl.textContent = T.noData;
+                hideLoadingOverlay();
+                pillEl.textContent = 'NO DATA';
+                pillEl.style.background = '#6b7280';
+                signalsEl.innerHTML = '';
+                return;
+            }
+            // Cuba-centric legacy fallback
+            const cubaData = loaded.find(r => r.tracker.id === 'cuba')?.data;
+            const cu_level = cubaData ? (cubaData.theatre_level ?? 0) : 0;
+            const cu_label = cubaData ? (ESCALATION_LEVELS[Math.min(cu_level, 5)].label) : 'Baseline';
+            const cu_color = cubaData ? (ESCALATION_LEVELS[Math.min(cu_level, 5)].color) : '#6b7280';
+            pillEl.textContent = (cu_label || 'BASELINE').toUpperCase();
+            pillEl.style.background = cu_color;
+            blufProseEl.textContent = `WHA Rhetoric Monitor (server BLUF unavailable, fallback view): ${loaded.length} tracker live — Cuba posture at L${cu_level} (${cu_label}). Mexico, Colombia, Brazil, Haiti, Panama trackers in development.`;
+            signalsEl.innerHTML = '';
+            timestampEl.textContent = `Generated: ${new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true})}`;
+            return;
+        }
+
+        // ── Server BLUF available — render canonical schema ──
+
+        // Posture pill
+        const postureLabel = blufData.posture_label || 'BASELINE';
+        const postureColor = blufData.posture_color || '#6b7280';
+        // Strip "WHA -- " or "WESTERN HEMISPHERE -- " prefix if present (already implied by page header)
+        let pillText = postureLabel.toUpperCase()
+            .replace(/^WHA\s*[-—]+\s*/i, '')
+            .replace(/^WESTERN HEMISPHERE\s*[-—]+\s*/i, '')
+            .trim();
+        pillEl.textContent = pillText;
+        pillEl.style.background = postureColor;
+
+        // Prose
+        // Prefer bluf_v2 (May 22 2026 richer human-language prose, with **bold** markers)
+        // Fall back to legacy bluf, then to fallback message.
+        if (Array.isArray(blufData.bluf_v2) && blufData.bluf_v2.length) {
+            blufProseEl.innerHTML = _whaRenderBlufBlocks(blufData.bluf_v2);
+        } else if (typeof blufData.bluf_v2_md === 'string' && blufData.bluf_v2_md) {
+            blufProseEl.innerHTML = _whaFallbackMd(blufData.bluf_v2_md);
+        } else if (blufData.bluf) {
+            blufProseEl.innerHTML = _whaFallbackMd(blufData.bluf);
+        } else {
+            blufProseEl.textContent = 'No BLUF prose available.';
+        }
+
+        // Top signals — render canonical {priority, category, theatre, level, icon, color, short_text, long_text}
+        // v2.1 Three-Altitude Synthesis: GPI-flagged signals get 🌍 badge.
+        // GPI-only (cross-region escalation that regional BLUF missed) appears at TOP.
+        signalsEl.innerHTML = '';
+        signalsEl.classList.add('bluf-signals-scroll');
+        const signals = blufData.top_signals || blufData.signals || [];
+        const gpiSignals = (window._gpiSignalsForRegion || []);
+
+        // Approach B helpers (Jun 13 2026)
+        const _WHA_RHET_PAGE = { cuba:'rhetoric-cuba.html', peru:'rhetoric-peru.html', chile:'rhetoric-chile.html', venezuela:'rhetoric-venezuela.html', us:'rhetoric-us.html' };
+        const _WHA_LOC_NAME = { cuba:'Cuba', peru:'Peru', chile:'Chile', venezuela:'Venezuela', us:'United States', mexico:'Mexico', colombia:'Colombia', brazil:'Brazil', haiti:'Haiti', panama:'Panama', regional:'Western Hemisphere' };
+        const _WHA_AXIS_LABEL = { kinetic:'Kinetic', economic:'Economic', diplomatic:'Diplomatic', humanitarian:'Humanitarian' };
+        function _whaEsc(s){ if(s==null)return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function _whaEscMd(s){ return _whaEsc(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'); }
+        function _whaLvlChip(sig){ let lv=sig.level,txt,bg; if(typeof lv==='number'){txt='L'+lv;bg=['#22c55e','#3b82f6','#eab308','#f97316','#ef4444','#dc2626'][Math.max(0,Math.min(5,lv))];}else{const t=String(lv||'').toLowerCase();txt=(t||'L0').toUpperCase();bg=t==='surge'?'#dc2626':t==='high'?'#ef4444':t==='elevated'?'#f97316':'#6b7280';} return '<span class="sigrow-chip" style="background:'+bg+';">'+txt+'</span>'; }
+        function _whaAxisPills(sig){ let axes=Array.isArray(sig.axes)&&sig.axes.length?sig.axes:(sig.pressure_type?[sig.pressure_type]:[]); const seen={}; const clean=axes.map(a=>String(a).toLowerCase()).filter(a=>_WHA_AXIS_LABEL[a]&&!seen[a]&&(seen[a]=true)); return clean.map(a=>'<span class="sigrow-axis ax-'+a+'">'+_WHA_AXIS_LABEL[a]+'</span>').join(''); }
+        function _whaLocName(theatre){ const t=String(theatre||'').toLowerCase(); return _WHA_LOC_NAME[t]||(t?t.charAt(0).toUpperCase()+t.slice(1):'Western Hemisphere'); }
+        function _whaSplitBody(sig, locName){ let full=(sig.long_text||sig.short_text||sig.text||'').trim(); const m=full.match(/^([^:]{2,40}):\s*([\s\S]*)$/); if(m){const lead=m[1].replace(/[\u{1F000}-\u{1FFFF}\u2600-\u27BF\uFE0F]/gu,'').trim(); if(lead&&lead.toLowerCase().replace(/[^a-z]/g,'')===locName.toLowerCase().replace(/[^a-z]/g,''))full=m[2].trim();} return full; }
+        function _whaRenderBlufBlocks(blocks){ return blocks.map((b,i)=>{ const isHeader=(i===0&&!b.text); const cls='bluf-para'+(isHeader?' bluf-header-para':''); if(b.label&&b.text)return '<div class="'+cls+'"><span class="bluf-para-label">'+_whaEsc(b.label)+':</span> '+_whaEscMd(b.text)+'</div>'; if(b.label)return '<div class="'+cls+'"><span class="bluf-para-label">'+_whaEsc(b.label)+':</span></div>'; return '<div class="'+cls+'">'+_whaEscMd(b.text||'')+'</div>'; }).join(''); }
+        function _whaFallbackMd(md){ return String(md||'').replace(/^WHA /,'').split(/\n\n/).map(p=>p.trim()).filter(Boolean).map(p=>'<div class="bluf-para">'+_whaEscMd(p)+'</div>').join(''); }
+
+        function _gpiMatchKey(s) {
+            return ((s && s.short_text) || (s && s.text) || '').slice(0, 40).toLowerCase().trim();
+        }
+        function _renderSignalItem(sig, opts) {
+            opts = opts || {};
+            const div = document.createElement('div');
+            div.className = 'sigrow' + (opts.gpiOnly ? ' gpi-only' : '');
+            const color = opts.gpiOnly ? '#f59e0b' : (sig.color || '#6b7280');
+            div.style.borderLeftColor = color;
+            const theatre = (sig.theatre || '').toLowerCase();
+            const locName = _whaLocName(theatre);
+            const href = _WHA_RHET_PAGE[theatre] || null;
+            const chip = _whaLvlChip(sig);
+            const body = _whaSplitBody(sig, locName);
+            const pills = _whaAxisPills(sig);
+            const gpiTip = opts.gpiTooltip ? _whaEsc(opts.gpiTooltip) : '';
+            const badge = opts.gpiFlagged ? ('<span class="sigrow-gpi-badge" title="Also flagged by Global Pressure Index. '+gpiTip+'">\uD83C\uDF0D GPI'+(opts.gpiOnly?' \u00b7 global':'')+'</span>') : '';
+            const locHtml = href ? ('<a class="sigrow-loc" style="color:'+color+';" href="'+href+'">'+_whaEsc(locName)+':</a>') : ('<span class="sigrow-loc nolink" style="color:'+color+';">'+_whaEsc(locName)+':</span>');
+            div.innerHTML = '<span class="sigrow-icon">'+(sig.icon||'\u2022')+'</span>'
+                + '<div class="sigrow-body">'
+                + '<div class="sigrow-head">'+chip+locHtml+badge+'</div>'
+                + '<div class="sigrow-text">'+_whaEsc(body)+'</div>'
+                + '<div class="sigrow-foot">'+pills+'</div>'
+                + '</div>';
+            return div;
+        }
+
+        const regionalKeys = new Set(signals.map(_gpiMatchKey));
+        const gpiKeyMap = new Map();
+        gpiSignals.forEach(g => { gpiKeyMap.set(_gpiMatchKey(g), g); });
+
+        // 1) GPI-only signals first (regional analyst missed; GPI escalated)
+        gpiSignals.forEach(g => {
+            if (!regionalKeys.has(_gpiMatchKey(g))) {
+                signalsEl.appendChild(_renderSignalItem(g, {
+                    gpiFlagged: true, gpiOnly: true,
+                    gpiTooltip: g.long_text || g.short_text || ''
+                }));
+            }
+        });
+
+        // 2) Regional signals (with badge if also in GPI), or baseline placeholder if none
+        if (!signals.length && !gpiSignals.length) {
+            const div = document.createElement('div');
+            div.className = 'bluf-signal-item';
+            div.style.borderLeftColor = '#6b7280';
+            div.innerHTML = `<span class="bluf-signal-icon">🌎</span>
+                <span class="bluf-signal-text" style="color:#6b7280;">${T.baselinePosture || 'All theaters at baseline.'}</span>`;
+            signalsEl.appendChild(div);
+        } else {
+            signals.forEach(sig => {
+                const matched = gpiKeyMap.get(_gpiMatchKey(sig));
+                signalsEl.appendChild(_renderSignalItem(sig, {
+                    gpiFlagged: !!matched, gpiOnly: false,
+                    gpiTooltip: matched ? (matched.long_text || matched.short_text || '') : ''
+                }));
+            });
+        }
+
+        // Timestamp
+        let tsText;
+        if (blufData.generated_at) {
+            try {
+                const d = new Date(blufData.generated_at);
+                tsText = `Generated: ${d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true})}`;
+                if (blufData.from_cache) tsText += ' (cached)';
+            } catch(e) {
+                tsText = `Generated: ${new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true})}`;
+            }
+        } else {
+            tsText = `Generated: ${new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true})}`;
+        }
+        timestampEl.textContent = tsText;
+    }
+
+    // ── MARKDOWN RENDERER (for bluf_v2 prose — May 22 2026) ──
+    // Safe-HTML: escape first, THEN convert **x** → <strong>x</strong>, then paragraph breaks
+    function renderBlufMarkdown(text) {
+        if (!text) return '';
+        // Step 1: HTML-escape everything (security)
+        const escaped = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        // Step 2: Convert **x** → <strong>x</strong> (non-greedy)
+        const bolded = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Step 3: Split on double-newlines into paragraphs
+        const paragraphs = bolded.split(/\n\n+/).filter(p => p.trim());
+        return paragraphs.map(p => `<p>${p}</p>`).join('');
+    }
+
+    // ── HIDE LOADING OVERLAY (auto-fades when first scan-data populates) ──
+    function hideLoadingOverlay() {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay && !overlay.classList.contains('fade-out')) {
+            overlay.classList.add('fade-out');
+            // Remove from DOM after fade completes (0.4s transition)
+            setTimeout(() => { if (overlay.parentNode) overlay.style.display = 'none'; }, 500);
+        }
+    }
+
+    // ── MAIN LOAD ──
+    function blufDataToTrackerData(s) {
+        if (!s) return null;
+        return {
+            theatre_level:            s.level,
+            theatre_escalation_level: s.level,
+            theatre_label:            s.tracker_label || s.label,
+            theatre_color:            s.color,
+            rhetoric_score:           s.score,
+            article_count:            s.article_count,
+            vector_levels:            s.vector_levels || {},
+            scanned_at:               s.timestamp,
+            _from_bluf:               true,
+        };
+    }
+
+    function trackerFromBluf(id, summary) {
+        const s = summary || {};
+        const pretty = String(id).replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase());
+        return {
+            id:         id,
+            name:       (s.display || pretty) + ' Rhetoric Tracker',
+            flag:       s.flag || '\uD83D\uDCE1',
+            actors:     '',
+            vectors:    Object.keys(s.vector_levels || {}),
+            summaryUrl: WHA_BACKEND + '/api/rhetoric/' + id + '/summary',
+            url:        'https://www.asifahanalytics.com/rhetoric-' +
+                        String(id).replace(/_/g, '-') + '.html',
+            _discovered: true,
+        };
+    }
+
+    // appendChild MOVES an existing node, so this reorders without re-rendering.
+    function sortTrackerBanners(list) {
+        var nodes = Array.prototype.slice.call(list.children);
+        nodes.sort(function (a, b) {
+            var an = (a.getAttribute('data-sort') || a.id || '').toLowerCase();
+            var bn = (b.getAttribute('data-sort') || b.id || '').toLowerCase();
+            return an < bn ? -1 : (an > bn ? 1 : 0);
+        });
+        nodes.forEach(function (n) { list.appendChild(n); });
+    }
+
+    async function loadAll() {
+        const list = document.getElementById('trackersList');
+        list.innerHTML = '';
+
+        // Pass 1 -- paint skeletons from metadata (fast first paint)
+        const active = TRACKERS.slice();
+        const rendered = new Set();
+        active.forEach(tracker => {
+            const el = renderTrackerBanner(tracker, null);
+            el.id = `banner-${tracker.id}`;
+            el.setAttribute('data-sort', tracker.id);
+            list.appendChild(el);
+            rendered.add(tracker.id);
+        });
+
+        // Fetch BLUF endpoint AND all tracker summaries in parallel
+        const blufPromise = (async () => {
+            try {
+                const resp = await fetch(WHA_BACKEND + '/api/rhetoric/wha/bluf', { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                return await resp.json();
+            } catch(e) {
+                console.warn('[WHA BLUF] fetch error:', e);
+                return null;
+            }
+        })();
+
+        // Three-Altitude Synthesis: also fetch GPI top_signals for region='wha'
+        // (cross-region escalation surfacing — appears with 🌍 GPI badge)
+        const ME_BACKEND_FOR_GPI = 'https://asifah-backend.onrender.com';
+        const gpiPromise = (async () => {
+            try {
+                const resp = await fetch(ME_BACKEND_FOR_GPI + '/api/gpi', { cache: 'no-store' });
+                if (!resp.ok) return [];
+                const data = await resp.json();
+                if (!data.success) return [];
+                return (data.top_signals || []).filter(s => {
+                    const r = (s.region || s.theatre || '').toString().toLowerCase();
+                    return r === 'wha' || r === 'western hemisphere' || r === 'western_hemisphere' || r === 'americas';
+                });
+            } catch(e) {
+                console.warn('[WHA GPI augment] fetch error:', e);
+                return [];
+            }
+        })();
+
+        // Pass 2 -- the BLUF is the SOURCE OF TRUTH for which trackers exist.
+        // Anything it reports that metadata missed is added here, rendered
+        // straight from BLUF data, so a newly shipped country appears with no
+        // frontend edit and no /summary endpoint of its own.
+        const _tsumData = await blufPromise;
+        const tsum = (_tsumData && _tsumData.theatre_summary) || {};
+        Object.keys(tsum).sort().forEach(id => {
+            if (rendered.has(id)) return;
+            const t = trackerFromBluf(id, tsum[id]);
+            const el = renderTrackerBanner(t, blufDataToTrackerData(tsum[id]));
+            el.id = `banner-${t.id}`;
+            el.setAttribute('data-sort', t.id);
+            list.appendChild(el);
+            rendered.add(id);
+            active.push(t);
+        });
+        sortTrackerBanners(list);
+
+        const settled = await Promise.allSettled(
+            active.map(async tracker => {
+                try {
+                    const resp = await fetch(tracker.summaryUrl, { cache: 'no-store' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const data = await resp.json();
+                    return { tracker, data };
+                } catch(e) {
+                    console.warn(`[${tracker.id}] fetch error:`, e);
+                    return { tracker, data: null };
+                }
+            })
+        );
+
+        const resolved = settled.map(r =>
+            r.status === 'fulfilled' ? r.value : { tracker: null, data: null }
+        );
+
+        // Update each banner with live data. No /summary endpoint -> fall back
+        // to BLUF data rather than blanking the banner.
+        resolved.forEach(({ tracker, data }) => {
+            if (!tracker) return;
+            const fallback = blufDataToTrackerData(tsum[tracker.id]);
+            const newEl = renderTrackerBanner(tracker, data || fallback);
+            newEl.id = `banner-${tracker.id}`;
+            newEl.setAttribute('data-sort', tracker.id);
+            const old = document.getElementById(`banner-${tracker.id}`);
+            if (old) old.replaceWith(newEl);
+        });
+        sortTrackerBanners(list);   // alphabetical across BOTH passes
+
+        // Wait for BLUF + GPI augmentation, then update synthesis blocks
+        const blufData = _tsumData;   // already awaited above
+        renderConvergencePanel(blufData && blufData.convergence_panel);
+        const gpiSignals = await gpiPromise;
+        window._gpiSignalsForRegion = gpiSignals;  // read by updateBluf
+        updatePosture(blufData, resolved);
+        updateBluf(blufData, resolved);
+
+        // Hide loading overlay — all initial data has populated
+        hideLoadingOverlay();
+    }
+
+    // ── INIT ──
+    loadTheme();
+    // Mark current lang button active on load
+    const activeLangBtn = document.querySelector(`.lang-btn[onclick*="'${currentLang}'"]`);
+    if (activeLangBtn) {
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+        activeLangBtn.classList.add('active');
+    }
+    applyTranslations();
+    loadAll();
+    // Refresh posture/BLUF every 30 minutes
+    setInterval(loadAll, 30 * 60 * 1000);
+</script>
+<script>
+
+// ══════════════════════════════════════════════════════════════
+// CONVERGENCE PANEL (spoke & wheel) — Jul 24 2026
+//
+// Renders whatever the backend discovered. It does NOT know which countries,
+// hubs, or spokes exist, and must never be taught: new trackers appear here
+// automatically because the shared reader discovers them by Redis SCAN.
+//
+// Display model: LIT spokes render as tiles. DARK spokes render as tiles.
+// NOT-REPORTING spokes collapse behind a <details> summary — the coverage gap
+// stays visible without letting absence dominate a panel about presence.
+// ══════════════════════════════════════════════════════════════
+var CVG_LEVELS = {
+    0: { label: 'Monitoring',      color: '#6b7280' },
+    1: { label: 'Rhetoric',        color: '#3b82f6' },
+    2: { label: 'Warning',         color: '#f59e0b' },
+    3: { label: 'Confrontation',   color: '#f97316' },
+    4: { label: 'Coercion',        color: '#ef4444' },
+    5: { label: 'Active Conflict', color: '#dc2626' },
+};
+    // ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────
+    // The ladder lives in asifah-standard-shell.js (window.AsifahLadder).
+    // This page used to declare its own table, which is how L4 came to read
+    // one word here and a different one in the backend that fed it.
+    //
+    // The object below is a FALLBACK, used only if the shell fails to load,
+    // and it is OVERWRITTEN from the shell at DOMContentLoaded -- deferred
+    // scripts run before that event, so window.AsifahLadder always exists by
+    // the time any chip renders. Do not edit these words here; edit the
+    // shell and they follow.
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!window.AsifahLadder) return;
+        window.AsifahLadder.levels.forEach(function (r) {
+            CVG_LEVELS[r.level] = { label: r.label, color: r.color };
+        });
+    });
+
+
+function cvgEsc(s) {
+    var d = document.createElement('div');
+    d.textContent = (s === null || s === undefined) ? '' : String(s);
+    return d.innerHTML;
+}
+
+function cvgLvl(n) {
+    var i = Math.max(0, Math.min(5, parseInt(n, 10) || 0));
+    return CVG_LEVELS[i];
+}
+
+function cvgSpokeTile(s) {
+    var lv = cvgLvl(s.level);
+    var lit = s.state === 'lit';
+    var cls = (s.node_class && s.node_class !== 'unclassified')
+        ? '<div class="cvg-spoke-class">' + cvgEsc(String(s.node_class).replace(/_/g, ' ')) + '</div>' : '';
+    var sig = s.top_signal
+        ? '<div class="cvg-spoke-sig">' + cvgEsc(String(s.top_signal).slice(0, 72)) + '</div>' : '';
+    // A hub naming its own lit theatres is stronger evidence than a spoke
+    // inferring it — surface that provenance.
+    var declared = s.hub_declared
+        ? '<div class="cvg-spoke-class" style="color:#f59e0b;">hub-declared</div>' : '';
+    return '<div class="cvg-spoke' + (lit ? ' lit' : '') + '">' +
+        '<div class="cvg-spoke-icon">' + (lit ? '\u25C9' : '\u25CB') + '</div>' +
+        '<div class="cvg-spoke-name">' + cvgEsc(s.display || s.country) + '</div>' +
+        '<div class="cvg-spoke-lvl" style="color:' + (lit ? lv.color : 'var(--text-muted)') + ';">L' +
+            (parseInt(s.level, 10) || 0) + '</div>' + cls + declared + sig +
+        '</div>';
+}
+
+function cvgWheelBlock(w) {
+    if (!w) return '';
+    if (w.readable === false) {
+        return '<div class="cvg-wheel"><div class="cvg-wheel-label">' +
+            cvgEsc(w.icon || '') + ' ' + cvgEsc(w.title || '') +
+            ' <span style="color:#f59e0b;">unreadable</span></div>' +
+            '<div class="cvg-note">' + cvgEsc(w.note || '') + '</div></div>';
+    }
+    var spokes  = w.spokes || [];
+    var visible = spokes.filter(function (s) { return s.state !== 'not_reporting'; });
+    var silent  = spokes.filter(function (s) { return s.state === 'not_reporting'; });
+
+    var head = '<div class="cvg-wheel-label">' + cvgEsc(w.icon || '') + ' ' + cvgEsc(w.title || '') +
+        ' <span style="color:' + (w.converged ? '#dc2626' : 'var(--text-muted)') + ';">' +
+        (w.lit_count || 0) + ' lit · ' + (w.dark_count || 0) + ' quiet · ' +
+        (w.unreported_count || 0) + ' silent</span></div>';
+
+    var grid = visible.length
+        ? '<div class="cvg-grid">' + visible.map(cvgSpokeTile).join('') + '</div>'
+        : '';
+
+    var collapsed = '';
+    if (silent.length) {
+        collapsed = '<details class="cvg-silent"><summary>\u25B8 ' + silent.length +
+            ' spoke' + (silent.length > 1 ? 's' : '') + ' not reporting \u2014 ' +
+            'not emitting yet, or stale beyond the freshness gate</summary>' +
+            '<div class="cvg-silent-list">' + silent.map(function (s) {
+                var why = s.reason === 'stale'
+                    ? ' \u00b7 stale' + (s.age_hours ? ' ' + Math.round(s.age_hours) + 'h' : '')
+                    : '';
+                return '<span class="cvg-silent-chip">' + cvgEsc(s.display || s.country) + why + '</span>';
+            }).join('') + '</div></details>';
+    }
+    return '<div class="cvg-wheel">' + head + grid + collapsed + '</div>';
+}
+
+function renderConvergencePanel(panel) {
+    var card = document.getElementById('cvgCard');
+    if (!card) return;
+    if (!panel) { card.style.display = 'none'; return; }   // reader absent — say nothing
+
+    var wheels = panel.resident_wheels || [];
+    var eman   = panel.emanating || [];
+    var silent = panel.emanating_silent || [];
+    // Show the card whenever there is ANY known relationship to report --
+    // including one that has gone quiet. A panel that vanishes when nothing is
+    // firing cannot tell the reader "quiet" apart from "broken".
+    if (!wheels.length && !eman.length && !silent.length) {
+        card.style.display = 'none'; return;
+    }
+
+    document.getElementById('cvgSub').textContent = panel.subtitle || '';
+    document.getElementById('cvgWheels').innerHTML = wheels.map(cvgWheelBlock).join('');
+
+    // Emanating: local countries feeding FOREIGN hubs. This is the half that
+    // rides to the GPI, so it is rendered as an outbound flow, not a tile.
+    var emEl = document.getElementById('cvgEmanating');
+    if (eman.length || silent.length) {
+        emEl.innerHTML = '<div class="cvg-emanating">' +
+            '<div class="cvg-wheel-label">\u2197 EMANATING \u2014 local spokes feeding hubs elsewhere</div>' +
+            eman.map(function (e) {
+                var lv = cvgLvl(e.level);
+                return '<div class="cvg-eman-row">' +
+                    '<b>' + cvgEsc(e.display || e.country) + '</b>' +
+                    '<span class="cvg-eman-arrow">\u2192</span>' +
+                    '<span>' + cvgEsc(e.hub_icon || '') + ' ' + cvgEsc(e.hub_display || e.hub) + '</span>' +
+                    '<span style="color:' + lv.color + ';font-weight:800;">L' +
+                        (parseInt(e.level, 10) || 0) + '</span>' +
+                    (e.top_signal ? '<span style="color:var(--text-muted);font-size:0.7rem;">' +
+                        cvgEsc(String(e.top_signal).slice(0, 84)) + '</span>' : '') +
+                    '</div>';
+            }).join('') +
+            // Silent outbound spokes collapse the same way rim spokes do.
+            (silent.length
+              ? '<details class="cvg-silent"><summary>\u25B8 ' + silent.length +
+                ' outbound spoke' + (silent.length > 1 ? 's' : '') + ' not reporting' +
+                ' \u2014 not emitting yet, or stale beyond the freshness gate</summary>' +
+                '<div class="cvg-silent-list">' + silent.map(function (s) {
+                    var why = s.reason === 'stale'
+                        ? ' \u00b7 stale' + (s.age_hours ? ' ' + Math.round(s.age_hours) + 'h' : '')
+                        : '';
+                    return '<span class="cvg-silent-chip">' + cvgEsc(s.display || s.country) +
+                           ' \u2192 ' + cvgEsc(s.hub_display || s.hub) + why + '</span>';
+                }).join('') + '</div></details>'
+              : '') +
+            '</div>';
+    } else { emEl.innerHTML = ''; }
+
+    var anyConv = !!panel.any_converged;
+    card.classList.toggle('converged', anyConv);
+    var pill = document.getElementById('cvgPill');
+    var totalLit = wheels.reduce(function (a, w) { return a + (w.lit_count || 0); }, 0);
+    if (anyConv) { pill.textContent = 'CONVERGED'; pill.style.background = '#dc2626'; }
+    else if (totalLit) { pill.textContent = totalLit + ' SPOKE' + (totalLit > 1 ? 'S' : '') + ' LIT';
+                         pill.style.background = '#f59e0b'; }
+    else { pill.textContent = 'DORMANT'; pill.style.background = '#6b7280'; }
+
+    var notes = wheels.map(function (w) { return w.headline || w.dormant_note || ''; })
+                      .filter(Boolean);
+    if (!wheels.length && panel.dormant_note) notes.push(panel.dormant_note);
+    document.getElementById('cvgNote').textContent = notes.join(' ');
+    document.getElementById('cvgDisclaimer').textContent = panel.disclaimer || '';
+    card.style.display = 'block';
+}
+
+// ── Canonical mobile drawer JS (Jun 2026 retrofit) ──
+function toggleMobileDrawer() {
+    const s = document.getElementById('navSidebar');
+    const b = document.getElementById('mobileDrawerBackdrop');
+    if (!s || !b) return;
+    if (s.classList.contains('open')) { closeMobileDrawer(); return; }
+    s.classList.add('open'); b.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeMobileDrawer() {
+    const s = document.getElementById('navSidebar');
+    const b = document.getElementById('mobileDrawerBackdrop');
+    if (s) s.classList.remove('open');
+    if (b) b.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMobileDrawer(); });
+</script>
+</body>
+</html>

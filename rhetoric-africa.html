@@ -1,0 +1,1092 @@
+<!-- Asifah Analytics — Africa Rhetoric Monitor v1.0.0 — July 2026 -->
+<!-- Regional hub for africa_regional_bluf.py (/api/rhetoric/africa/bluf) -->
+<!-- Africa divergences from the Europe exemplar: (1) COVERAGE HONESTY card -->
+<!-- for single-tracker mode, (2) WHEEL JUNCTION panel, (3) claiming-actor    -->
+<!-- v1.1.0 Jul 24 2026 — Sudan tracker live; signal-polarity tags added.      -->
+<!-- SILENCE signal class. English-only per Africa rule.                      -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<title>Africa Rhetoric Monitor — Asifah Analytics</title>
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Asifah-Analytics-C-A-V-E/asifah-analytics/refs/heads/main/Asifah_Analytics_1_25_26_V1_LOGO.png"/>
+<style>
+    /* ── ARCTIC THEME (canonical platform-wide) ── */
+    :root {
+        --bg-color:       #e8f0f8;
+        --card-bg:        #ffffff;
+        --card-border:    #b0c8e0;
+        --text-primary:   #0a1628;
+        --text-secondary: #1e3a5f;
+        --text-muted:     #4a6080;
+        --accent:         #0ea5e9;
+        --cyber-cyan:     #0ea5e9;
+        --card-glow:      none;
+        --card-hover-glow: 0 8px 20px rgba(0,0,0,0.12);
+        --watermark-opacity: 0.07;
+        --watermark-filter:  none;
+    }
+    [data-theme="dark"] {
+        --bg-color:       #060d1a;
+        --card-bg:        #0d1b2e;
+        --card-border:    #1e3a5f;
+        --text-primary:   #e2f0fb;
+        --text-secondary: #93c5fd;
+        --text-muted:     #4a7090;
+        --accent:         #38bdf8;
+        --cyber-cyan:     #38bdf8;
+        --card-glow:      0 0 6px rgba(30,58,95,0.5), 0 0 1px rgba(56,189,248,0.15);
+        --card-hover-glow: 0 0 22px rgba(56,189,248,0.2), 0 8px 25px rgba(0,0,0,0.5);
+        --watermark-opacity: 0.18;
+        --watermark-filter:  saturate(3) brightness(0.8) hue-rotate(185deg);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Times New Roman', Times, serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        min-height: 100vh;
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    body::before {
+    content: '';
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    /* Canonical watermark spec (matches resources/asifah-standard-shell.css).
+       Was 50vmin / contain / hardcoded 0.30 opacity -- half size, and
+       `contain` renders the logo's WHITE SQUARE BACKING, which glares in dark
+       mode. background-size:135% zooms past the frame and border-radius:50%
+       clips the corners away, leaving only the artwork's own navy field. */
+    width: 110vmin; height: 110vmin;
+    min-width: 760px; min-height: 760px;
+    max-width: 1400px; max-height: 1400px;
+    background-image: url('https://raw.githubusercontent.com/Asifah-Analytics-C-A-V-E/asifah-analytics/refs/heads/main/Asifah_Analytics_1_25_26_V1_LOGO.png');
+    background-size: 135%;
+    background-repeat: no-repeat;
+    background-position: center;
+    border-radius: 50%;
+    /* These two variables were DEFINED at the top of this stylesheet and never
+       referenced -- which is why dark mode never received its filter. */
+    opacity: var(--watermark-opacity, 0.07);
+    filter: var(--watermark-filter, none);
+    z-index: 0; pointer-events: none; user-select: none;
+    transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+@media (max-width: 768px) {
+    body::before { min-width: 520px; min-height: 520px; }
+}
+
+/* Jul 23 2026 watermark spec -- DARK MODE: zooming past 100% and clipping to
+   a circle crops away the logo's white square backing, so the artwork's own
+   dark navy field reads as black while the cyan stays bright. */
+.container { max-width: 1280px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+
+    /* ── HEADER ── */
+    header {
+        background: linear-gradient(135deg, #060d1a, #0a1628);
+        border: 1px solid #1e3a5f; border-radius: 12px;
+        padding: 20px 25px; margin-bottom: 20px;
+        display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 40px rgba(56,189,248,0.08);
+    }
+    [data-theme="light"] header { background: linear-gradient(135deg, #dbeafe, #eff6ff); border-color: #93c5fd; }
+    .header-logo { width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(56,189,248,0.4); flex-shrink: 0; }
+    .header-center { flex: 1; text-align: center; }
+    .header-flag { font-size: 0.75rem; font-weight: 700; letter-spacing: 3px; color: #38bdf8; text-transform: uppercase; }
+    .header-title { font-size: clamp(1.3rem, 3vw, 1.9rem); font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #e2f0fb; margin: 4px 0; }
+    [data-theme="light"] .header-title { color: #0a1628; }
+    .header-subtitle { font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px; }
+    .last-updated { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; font-family: 'Courier New', monospace; }
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    .theme-row { display: flex; align-items: center; gap: 8px; }
+    .theme-label { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; font-family: 'Courier New', monospace; }
+    .theme-toggle { position: relative; width: 38px; height: 20px; }
+    .theme-toggle input { opacity: 0; width: 0; height: 0; }
+    .theme-slider { position: absolute; cursor: pointer; inset: 0; background: #4a6080; border-radius: 20px; transition: 0.3s; }
+    .theme-slider::before { position: absolute; content: ''; height: 14px; width: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+    .theme-toggle input:checked + .theme-slider { background: #38bdf8; }
+    .theme-toggle input:checked + .theme-slider::before { transform: translateX(18px); }
+    .scan-btn { padding: 7px 16px; border-radius: 6px; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.4); color: #38bdf8; font-weight: 700; font-size: 0.7rem; cursor: pointer; font-family: 'Courier New', monospace; letter-spacing: 1px; }
+    .scan-btn:hover { background: rgba(56,189,248,0.2); }
+    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── SIDEBAR ── */
+    .page-with-sidebar { display: flex; flex-direction: row; align-items: flex-start; gap: 20px; }
+    .nav-sidebar { width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 20px; height: fit-content; }
+    .nav-sidebar-label { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: rgba(56,189,248,0.5); font-family: 'Courier New', monospace; margin-bottom: 4px; }
+    .nav-btn {
+        display: flex; flex-direction: column; gap: 3px;
+        padding: 9px 11px; border-radius: 7px; background: rgba(13,27,46,0.6);
+        border: 1px solid rgba(56,189,248,0.18); color: #e2f0fb;
+        font-family: 'Times New Roman', serif; font-weight: 700; font-size: 11px;
+        text-decoration: none; transition: all 0.2s;
+    }
+    [data-theme="light"] .nav-btn { color: var(--text-secondary); }
+    .nav-btn .nav-btn-label { font-size: 12px; line-height: 1.3; }
+    .nav-btn .nav-btn-status { font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px; opacity: 0.7; color: #38bdf8; }
+    .nav-btn.active-nav { background: linear-gradient(135deg, rgba(56,189,248,0.15) 0%, rgba(14,165,233,0.10) 100%); border-color: rgba(56,189,248,0.5); color: #fff; }
+    .nav-btn.current-page { background: linear-gradient(135deg, rgba(34,197,94,0.18) 0%, rgba(22,163,74,0.12) 100%); border-color: rgba(34,197,94,0.6); color: #fff; box-shadow: 0 0 18px rgba(34,197,94,0.2); }
+    .nav-btn.current-page .nav-btn-status { color: #4ade80; }
+    .nav-btn.rhetoric-btn { border-color: rgba(34,197,94,0.35); background: linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(22,163,74,0.05) 100%); }
+    .nav-btn.rhetoric-btn .nav-btn-status { color: #4ade80; }
+    .nav-btn.tracker-btn { border-color: rgba(245,158,11,0.5); background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(217,119,6,0.05) 100%); }
+    .nav-btn.tracker-btn .nav-btn-status { color: #f59e0b; }
+    .nav-divider { height: 1px; background: rgba(56,189,248,0.15); margin: 4px 0; }
+    .main-content { flex: 1; min-width: 0; }
+    .mobile-hamburger { display: none; }
+    .mobile-drawer-backdrop { display: none; }
+    @media (max-width: 1199px) {
+        .page-with-sidebar { display: block; }
+        .mobile-hamburger {
+            display: flex; position: fixed; top: 16px; left: 16px;
+            width: 44px; height: 44px; background: var(--card-bg);
+            border: 1px solid var(--card-border); border-radius: 8px;
+            cursor: pointer; z-index: 1001; align-items: center; justify-content: center;
+            font-size: 22px; color: var(--text-primary); font-family: monospace;
+        }
+        .nav-sidebar {
+            display: flex; position: fixed; top: 0; left: 0;
+            width: min(82vw, 280px); height: 100dvh; background: var(--card-bg);
+            border-right: 1px solid var(--card-border);
+            padding: 70px 12px 20px 12px; overflow-y: auto;
+            z-index: 1000; transform: translateX(-105%);
+            transition: transform 0.25s ease-in-out;
+        }
+        .nav-sidebar.open { transform: translateX(0); }
+        .mobile-drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 999; }
+        .mobile-drawer-backdrop.open { display: block; }
+    }
+
+    /* ── POSTURE BANNER ── */
+    .posture-banner {
+        background: var(--card-bg); border: 2px solid var(--card-border);
+        border-radius: 12px; padding: 16px 24px; margin-bottom: 20px;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 12px; box-shadow: var(--card-glow);
+    }
+    [data-theme="dark"] .posture-banner { border-color: var(--cyber-cyan); box-shadow: 0 0 14px rgba(56,189,248,0.12); }
+    .posture-left { display: flex; flex-direction: column; gap: 4px; }
+    .posture-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--cyber-cyan); font-weight: bold; }
+    .posture-value { font-size: 20px; font-weight: 900; }
+    .posture-right { display: flex; gap: 24px; flex-wrap: wrap; }
+    .posture-stat { text-align: center; }
+    .posture-stat-num { font-size: 22px; font-weight: bold; }
+    .posture-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── COVERAGE HONESTY CARD (Africa-specific) ── */
+    /* Africa currently rolls up ONE tracker. This card states that plainly so a
+       reader never mistakes a country read for a continental synthesis. */
+    .coverage-card {
+        background: linear-gradient(180deg, rgba(245,158,11,0.07), rgba(217,119,6,0.02));
+        border: 1px solid rgba(245,158,11,0.35); border-left: 4px solid #f59e0b;
+        border-radius: 10px; padding: 14px 20px; margin-bottom: 18px;
+    }
+    .coverage-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; flex-wrap: wrap; }
+    .coverage-label { font-size: 0.6rem; letter-spacing: 2.5px; text-transform: uppercase; color: #fbbf24; font-family: 'Courier New', monospace; font-weight: 700; }
+    .coverage-pill { font-size: 0.58rem; font-weight: 700; letter-spacing: 1px; padding: 2px 8px; border-radius: 4px; background: #78350f; color: #fde68a; font-family: 'Courier New', monospace; text-transform: uppercase; }
+    .coverage-text { font-size: 0.8rem; line-height: 1.6; color: var(--text-primary); font-family: 'Times New Roman', Times, serif; }
+
+    /* ── SECTION TITLE ── */
+    /* ── CONVERGENCE PANEL (spoke & wheel) — Jul 24 2026 ─────────────
+       Cloned from the Africa wheel-junction card. Fully data-driven: this
+       stylesheet knows nothing about which countries or hubs exist. */
+    .cvg-card { background: var(--card-bg); border: 1px solid var(--card-border);
+        border-left: 4px solid #f59e0b; border-radius: 12px; padding: 18px 22px;
+        margin-bottom: 22px; }
+    .cvg-card.converged { border-left-color: #dc2626;
+        box-shadow: 0 0 22px rgba(220,38,38,0.13); }
+    .cvg-head { display:flex; align-items:flex-start; justify-content:space-between;
+        gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+    .cvg-title { font-family:'Courier New',monospace; font-size:0.72rem; letter-spacing:2.5px;
+        text-transform:uppercase; color:#f59e0b; }
+    .cvg-sub { font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:12px; }
+    .cvg-pill { font-size:0.6rem; font-weight:800; letter-spacing:1.4px; padding:4px 11px;
+        border-radius:20px; color:#fff; white-space:nowrap; text-transform:uppercase; }
+    .cvg-wheel { margin-bottom:16px; }
+    .cvg-wheel-label { font-family:'Courier New',monospace; font-size:0.62rem; letter-spacing:2px;
+        text-transform:uppercase; color:var(--text-muted); margin:10px 0 7px; display:flex;
+        align-items:center; gap:8px; flex-wrap:wrap; }
+    .cvg-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:9px; }
+    .cvg-spoke { background:rgba(56,189,248,0.04); border:1px solid var(--card-border);
+        border-radius:9px; padding:11px 9px; text-align:center; }
+    .cvg-spoke.lit { background:rgba(220,38,38,0.09); border-color:rgba(220,38,38,0.42); }
+    .cvg-spoke-icon { font-size:1.15rem; line-height:1.2; }
+    .cvg-spoke-name { font-family:'Courier New',monospace; font-size:0.56rem; letter-spacing:1.3px;
+        text-transform:uppercase; color:var(--text-muted); margin:5px 0 2px; }
+    .cvg-spoke-lvl { font-size:1.05rem; font-weight:800; }
+    .cvg-spoke-class { font-size:0.5rem; color:var(--text-muted); letter-spacing:0.6px;
+        text-transform:uppercase; margin-top:3px; opacity:0.75; }
+    .cvg-spoke-sig { font-size:0.56rem; color:var(--text-secondary); margin-top:5px;
+        line-height:1.35; }
+    /* Silent spokes collapse behind a summary — the gap stays visible without
+       letting absence dominate a panel about presence. */
+    .cvg-silent { margin-top:9px; }
+    .cvg-silent > summary { cursor:pointer; list-style:none; font-family:'Courier New',monospace;
+        font-size:0.6rem; letter-spacing:1.3px; text-transform:uppercase; color:var(--text-muted);
+        padding:6px 9px; border:1px dashed var(--card-border); border-radius:7px; }
+    .cvg-silent > summary::-webkit-details-marker { display:none; }
+    .cvg-silent > summary:hover { color:var(--text-secondary); border-color:var(--text-muted); }
+    .cvg-silent[open] > summary { margin-bottom:7px; }
+    .cvg-silent-list { display:flex; flex-wrap:wrap; gap:6px; }
+    .cvg-silent-chip { font-size:0.56rem; font-family:'Courier New',monospace; letter-spacing:0.8px;
+        padding:3px 8px; border-radius:5px; border:1px dashed var(--card-border);
+        color:var(--text-muted); }
+    .cvg-emanating { margin-top:14px; padding-top:12px; border-top:1px solid var(--card-border); }
+    .cvg-eman-row { display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:7px;
+        background:rgba(29,78,216,0.06); border-left:3px solid #1d4ed8; margin-bottom:5px;
+        flex-wrap:wrap; }
+    .cvg-eman-arrow { color:var(--text-muted); font-size:0.75rem; }
+    .cvg-note { font-size:0.78rem; color:var(--text-secondary); font-style:italic;
+        line-height:1.55; margin-top:12px; }
+    .cvg-disclaimer { font-family:'Courier New',monospace; font-size:0.58rem; color:var(--text-muted);
+        letter-spacing:0.4px; margin-top:11px; padding-top:9px; border-top:1px solid var(--card-border); }
+
+    .section-title {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+        color: var(--cyber-cyan); font-weight: bold;
+        margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--card-border);
+    }
+
+    /* ── BLUF CARD ── */
+    .bluf-card {
+        background: var(--card-bg); border: 1px solid var(--card-border);
+        border-radius: 10px; padding: 18px 22px; margin-bottom: 18px;
+        box-shadow: var(--card-glow);
+    }
+    [data-theme="dark"] .bluf-card { border-color: rgba(56,189,248,0.25); }
+    .bluf-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .bluf-label { font-size: 0.6rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--cyber-cyan); font-family: 'Courier New', monospace; font-weight: 700; }
+    .bluf-posture-pill { font-size: 0.6rem; font-weight: 700; letter-spacing: 1.5px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; font-family: 'Courier New', monospace; color: #fff; }
+    .bluf-prose { font-size: 0.88rem; line-height: 1.7; font-family: 'Times New Roman', Times, serif; color: var(--text-primary); margin-bottom: 14px; }
+    .bluf-para { margin-bottom: 12px; line-height: 1.7; }
+    .bluf-para:last-child { margin-bottom: 0; }
+    .bluf-signals { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--card-border); }
+    .bluf-signals-scroll { max-height: 420px; overflow-y: auto; padding-right: 6px; }
+    .bluf-signals-scroll::-webkit-scrollbar { width: 8px; }
+    .bluf-signals-scroll::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
+    .sigrow { display: flex; align-items: flex-start; gap: 9px; padding: 9px 12px; border-radius: 7px; background: rgba(255,255,255,0.04); border-left: 4px solid var(--card-border); margin-bottom: 7px; }
+    [data-theme="light"] .sigrow { background: rgba(0,0,0,0.05); }
+    .sigrow-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .sigrow-body { flex: 1; min-width: 0; }
+    .sigrow-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 3px; }
+    .sigrow-chip { font-family: 'Courier New', monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 4px; color: #fff; flex-shrink: 0; }
+    .sigrow-loc { font-weight: 800; font-size: 0.78rem; font-family: 'Times New Roman', Times, serif; text-decoration: none; border-bottom: 1px dotted currentColor; }
+    .sigrow-loc.nolink { border-bottom: none; cursor: default; }
+    .sigrow-text { font-size: 0.78rem; line-height: 1.55; font-family: 'Times New Roman', Times, serif; color: var(--text-secondary); }
+    .bluf-footer { font-size: 0.6rem; color: var(--text-muted); font-family: 'Courier New', monospace; margin-top: 10px; font-style: italic; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+    .bluf-methodology { font-size: 0.65rem; color: var(--text-muted); font-family: 'Times New Roman', Times, serif; font-style: italic; line-height: 1.5; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--card-border); }
+    .bluf-methodology:empty { display: none; }
+
+    /* ── WHEEL JUNCTION PANEL (Africa-specific) ── */
+    .wheel-card {
+        background: linear-gradient(180deg, rgba(180,83,9,0.06), rgba(120,53,15,0.02));
+        border: 1px solid rgba(245,158,11,0.35); border-left: 4px solid #f59e0b;
+        border-radius: 12px; padding: 16px 22px; margin-bottom: 18px;
+    }
+    .wheel-card.converged { border-color: rgba(220,38,38,0.5); border-left-color: #dc2626; background: linear-gradient(180deg, rgba(220,38,38,0.08), rgba(120,20,20,0.03)); }
+    .wheel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .wheel-title { font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: #fbbf24; font-family: 'Courier New', monospace; font-weight: 700; }
+    .wheel-sub { font-size: 0.8rem; font-weight: 800; color: var(--text-primary); font-family: 'Times New Roman', Times, serif; }
+    .wheel-pill { font-size: 0.6rem; font-weight: 800; letter-spacing: 1px; padding: 3px 10px; border-radius: 14px; color: #fff; font-family: 'Courier New', monospace; text-transform: uppercase; margin-left: auto; }
+    .wheel-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+    @media (max-width: 700px) { .wheel-grid { grid-template-columns: repeat(2, 1fr); } }
+    .wheel-spoke { padding: 12px 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+    .wheel-spoke.lit { border-color: currentColor; box-shadow: 0 0 14px rgba(245,158,11,0.25); }
+    .wheel-spoke-icon { font-size: 1.4rem; }
+    .wheel-spoke-name { font-size: 0.56rem; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; font-family: 'Courier New', monospace; color: var(--text-muted); }
+    .wheel-spoke-level { font-size: 0.9rem; font-weight: 900; margin-top: 3px; font-family: 'Times New Roman', serif; }
+    .wheel-note { font-size: 0.78rem; color: var(--text-secondary); font-family: 'Times New Roman', Times, serif; line-height: 1.55; font-style: italic; }
+    .wheel-disclaimer { font-size: 0.6rem; color: var(--text-muted); font-style: italic; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(245,158,11,0.15); font-family: 'Courier New', monospace; }
+
+    /* ── SILENCE PANEL (Africa-specific — claiming-actor quiet) ── */
+    .silence-card {
+        background: linear-gradient(180deg, rgba(124,58,237,0.07), rgba(91,33,182,0.02));
+        border: 1px solid rgba(167,139,250,0.35); border-left: 4px solid #a78bfa;
+        border-radius: 10px; padding: 14px 20px; margin-bottom: 18px;
+    }
+    .silence-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; flex-wrap: wrap; }
+    .silence-label { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: #c4b5fd; font-family: 'Courier New', monospace; font-weight: 700; }
+    .silence-item { font-size: 0.78rem; color: var(--text-secondary); font-family: 'Times New Roman', Times, serif; line-height: 1.55; padding: 4px 0 4px 10px; border-left: 2px solid rgba(167,139,250,0.4); margin: 4px 0; }
+
+    /* ── SIGNAL POLARITY (Jul 24 2026) ──
+       De-escalation signals are SCORE REDUCERS. They survive to this altitude
+       only because of the BLUF's diplomatic guard; rendering them in escalation
+       red would undo that. Blue = off-ramp, red = pressure. */
+    .sigrow.sigrow-deesc { background: rgba(29,78,216,0.06); }
+    .sigrow-tag {
+        font-size: 0.54rem; font-weight: 800; letter-spacing: 1px;
+        padding: 1px 6px; border-radius: 3px; text-transform: uppercase;
+        white-space: nowrap; flex-shrink: 0;
+    }
+    .sigrow-tag.deesc     { background: #1d4ed8; color: #dbeafe; }
+    .sigrow-tag.converge  { background: #7c2d12; color: #fed7aa; }
+    .sigrow-tag.humani    { background: #0e7490; color: #cffafe; }
+
+    /* ── TRACKER BANNERS ── */
+    .trackers-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+    .tracker-banner {
+        background: var(--card-bg); border: 2px solid var(--card-border);
+        border-radius: 12px; padding: 16px 22px;
+        display: grid; grid-template-columns: 2fr 1fr auto;
+        align-items: center; gap: 20px; box-shadow: var(--card-glow);
+        transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .tracker-banner:hover { box-shadow: var(--card-hover-glow); }
+    [data-theme="dark"] .tracker-banner:hover { border-color: var(--cyber-cyan); }
+    @media (max-width: 800px) { .tracker-banner { grid-template-columns: 1fr; } }
+    .tracker-name { font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    [data-theme="dark"] .tracker-name { color: #7dd3fc; }
+    .tracker-actors { font-size: 11px; color: var(--text-muted); }
+    .tracker-middle { display: flex; flex-direction: column; gap: 6px; }
+    .tracker-vectors { display: flex; gap: 6px; flex-wrap: wrap; }
+    .vector-pill { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; background: rgba(56,189,248,0.08); color: var(--cyber-cyan); border: 1px solid rgba(56,189,248,0.2); }
+    .tracker-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .level-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; color: white; white-space: nowrap; letter-spacing: 0.5px; }
+    .open-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: 8px; background: rgba(56,189,248,0.1); color: var(--cyber-cyan); text-decoration: none; font-size: 11px; font-weight: bold; border: 1px solid rgba(56,189,248,0.3); transition: all 0.2s ease; white-space: nowrap; }
+    .open-btn:hover { background: rgba(56,189,248,0.2); }
+
+    /* ── COMING SOON ── */
+    .coming-soon-banner {
+        background: var(--card-bg); border: 2px solid var(--card-border);
+        border-radius: 12px; padding: 14px 22px;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; opacity: 0.5;
+    }
+    .coming-soon-name { font-size: 13px; font-weight: bold; }
+    .coming-soon-badge { font-size: 10px; padding: 3px 10px; border-radius: 4px; background: rgba(107,114,128,0.2); color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-family: 'Courier New', monospace; }
+    .loading-dot { animation: blink 1.4s infinite both; }
+    .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100% { opacity:0.2; } 40% { opacity:1; } }
+</style>
+    <!-- Asifah standard shell (Oct 3 2026). These pages previously carried a
+         HAND-COPIED watermark spec with a comment saying it "matches"
+         asifah-standard-shell.css, while never loading that stylesheet or its
+         script. That is why the five regional BLUFs drifted apart on sizing,
+         why the mobile drawer was missing, and why the escalation guide rail
+         could not appear. The shell is now loaded, as it already is on the
+         country stability pages. -->
+    <link rel="stylesheet" href="resources/asifah-standard-shell.css">
+    <script src="resources/asifah-standard-shell.js" defer></script>
+</head>
+<body>
+<div class="container">
+<button class="mobile-hamburger" id="mobileHamburger" onclick="toggleMobileDrawer()" aria-label="Open menu">☰</button>
+<div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" onclick="closeMobileDrawer()"></div>
+
+<!-- HEADER -->
+<header>
+    <img src="https://raw.githubusercontent.com/Asifah-Analytics-C-A-V-E/asifah-analytics/refs/heads/main/Asifah_Analytics_1_25_26_V1_LOGO.png" class="header-logo" alt="Asifah Analytics"/>
+    <div class="header-center">
+        <div class="header-flag">🌍 AFRICA</div>
+        <div class="header-title">AFRICA RHETORIC MONITOR</div>
+        <div class="header-subtitle">Regional synthesis — country trackers rolled to analyst altitude</div>
+        <div class="last-updated" id="lastUpdated">Connecting to trackers...</div>
+    </div>
+    <div class="header-right">
+        <button class="scan-btn" id="refreshBtn" onclick="refreshAll()">🔄 Refresh</button>
+        <div class="theme-row">
+            <span class="theme-label">THEME</span>
+            <label class="theme-toggle">
+                <input type="checkbox" id="themeToggle" onchange="toggleTheme()"/>
+                <span class="theme-slider"></span>
+            </label>
+        </div>
+    </div>
+</header>
+
+<div class="page-with-sidebar">
+
+<!-- NAV SIDEBAR -->
+<nav class="nav-sidebar" id="navSidebar">
+    <div class="nav-sidebar-label">Dashboards</div>
+    <a href="africa.html" class="nav-btn active-nav"><span class="nav-btn-label">🌍 Africa</span><span class="nav-btn-status">● Live</span></a>
+    <a href="asia.html" class="nav-btn active-nav"><span class="nav-btn-label">🌏 Asia &amp; Pacific</span><span class="nav-btn-status">● Live</span></a>
+    <a href="europe.html" class="nav-btn active-nav"><span class="nav-btn-label">🌍 Europe</span><span class="nav-btn-status">● Live</span></a>
+    <a href="middle-east.html" class="nav-btn active-nav"><span class="nav-btn-label">🕌 Middle East</span><span class="nav-btn-status">● Live</span></a>
+    <a href="wha.html" class="nav-btn active-nav"><span class="nav-btn-label">🌎 Western Hemisphere</span><span class="nav-btn-status">● Live</span></a>
+    <div class="nav-divider"></div>
+    <div class="nav-sidebar-label">Global Trackers</div>
+    <a href="commodities.html" class="nav-btn tracker-btn"><span class="nav-btn-label">🛢️ Commodities</span><span class="nav-btn-status">● Live</span></a>
+    <a href="gpi.html" class="nav-btn tracker-btn"><span class="nav-btn-label">🌐 Global Pressure Index</span><span class="nav-btn-status">● Live</span></a>
+    <a href="market-watch.html" class="nav-btn tracker-btn"><span class="nav-btn-label">📈 Market Watch</span><span class="nav-btn-status">● Live</span></a>
+    <a href="military.html" class="nav-btn tracker-btn"><span class="nav-btn-label">🎖️ Military Tracker</span><span class="nav-btn-status">● Live</span></a>
+    <div class="nav-divider"></div>
+    <div class="nav-sidebar-label">Regional Rhetoric</div>
+    <a href="rhetoric-africa.html" class="nav-btn rhetoric-btn current-page"><span class="nav-btn-label">🌍 Africa</span><span class="nav-btn-status">◉ You are here</span></a>
+    <a href="rhetoric-asia.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🌏 Asia</span><span class="nav-btn-status">● Live</span></a>
+    <a href="rhetoric-europe.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🌍 Europe</span><span class="nav-btn-status">● Live</span></a>
+    <a href="rhetoric-index.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🕌 Middle East</span><span class="nav-btn-status">● Live</span></a>
+    <a href="rhetoric-wha.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🌎 Western Hemisphere</span><span class="nav-btn-status">● Live</span></a>
+    <div class="nav-divider"></div>
+    <div class="nav-sidebar-label">MALI</div>
+    <a href="rhetoric-mali.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">ML Pressure Tracker</span><span class="nav-btn-status">● Live</span></a>
+    <a href="mali-stability.html" class="nav-btn"><span class="nav-btn-label">ML Stability Index</span><span class="nav-btn-status">● Live</span></a>
+    <div class="nav-sidebar-label">Somalia</div>
+    <a href="rhetoric-somalia.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇸🇴 Pressure Tracker</span><span class="nav-btn-status">● Live</span></a>
+    <a href="somalia-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">🇸🇴 Stability Index</span><span class="nav-btn-status">● Live</span></a>
+    <div class="nav-sidebar-label" style="margin-top:10px;">Sudan</div>
+    <a href="rhetoric-sudan.html" class="nav-btn rhetoric-btn"><span class="nav-btn-label">🇸🇩 Pressure Tracker</span><span class="nav-btn-status">● Live</span></a>
+    <a href="sudan-stability.html" class="nav-btn active-nav"><span class="nav-btn-label">🇸🇩 Stability Index</span><span class="nav-btn-status">● Live</span></a>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+
+<!-- REGIONAL POSTURE BANNER -->
+<div class="posture-banner">
+    <div class="posture-left">
+        <div class="posture-label">🌍 Africa Regional Posture</div>
+        <div class="posture-value" id="postureValue" style="color:var(--text-muted);">
+            <span class="loading-dot">●</span>
+            <span class="loading-dot">●</span>
+            <span class="loading-dot">●</span>
+        </div>
+    </div>
+    <div class="posture-right" id="postureStats"></div>
+</div>
+
+<!-- COVERAGE HONESTY CARD (Africa-specific) -->
+<!-- Renders whenever the BLUF reports single-tracker mode or missing trackers. -->
+<div class="coverage-card" id="coverageCard" style="display:none;">
+    <div class="coverage-head">
+        <span class="coverage-label">⚠️ Coverage</span>
+        <span class="coverage-pill" id="coveragePill">1 of 1 tracker</span>
+    </div>
+    <div class="coverage-text" id="coverageText"></div>
+</div>
+
+<!-- AFRICA BLUF — fed by africa_regional_bluf.py (/api/rhetoric/africa/bluf) -->
+<div class="bluf-card" id="blufCard">
+    <div class="bluf-header">
+        <span class="bluf-label">BLUF</span>
+        <span class="bluf-posture-pill" id="blufPosturePill" style="background:#6b7280;">Loading</span>
+    </div>
+    <div class="bluf-prose" id="blufProse">Loading Africa regional assessment...</div>
+    <div class="bluf-signals" id="blufSignals"></div>
+    <div class="bluf-methodology" id="blufMethodology"></div>
+    <div class="bluf-footer">
+        <span id="blufTimestamp"></span>
+        <span>Asifah Analytics · Africa Regional Synthesis · Open-source signals only</span>
+    </div>
+</div>
+
+<!-- ── CONVERGENCE PANEL (spoke & wheel) — rendered entirely from
+     data.convergence_panel. No country, hub, or spoke is named in this
+     markup; adding a tracker requires no edit here. ── -->
+<div class="cvg-card" id="cvgCard" style="display:none;">
+    <div class="cvg-head">
+        <div>
+            <div class="cvg-title" id="cvgTitle">⚙️ SPOKE &amp; WHEEL — CONVERGENCE READ</div>
+            <div class="cvg-sub" id="cvgSub"></div>
+        </div>
+        <span class="cvg-pill" id="cvgPill" style="background:#6b7280;">DORMANT</span>
+    </div>
+    <div id="cvgWheels"></div>
+    <div id="cvgEmanating"></div>
+    <div class="cvg-note" id="cvgNote"></div>
+    <div class="cvg-disclaimer" id="cvgDisclaimer"></div>
+</div>
+
+<!-- SILENCE PANEL (Africa-specific — claiming-actor quiet) -->
+<div class="silence-card" id="silenceCard" style="display:none;">
+    <div class="silence-head">
+        <span style="font-size:1rem;">🔇</span>
+        <span class="silence-label">Claiming-Actor Silence — silence is signal</span>
+    </div>
+    <div id="silenceItems"></div>
+    <div style="font-size:0.62rem;color:var(--text-muted);font-style:italic;margin-top:8px;font-family:'Courier New',monospace;">
+        For actors that normally claim operations, quiet reads as tempo change rather than absence of activity.
+    </div>
+</div>
+
+<!-- ACTIVE TRACKERS -->
+<div class="section-title">📡 Active Rhetoric Trackers — Africa</div>
+<div class="trackers-list" id="trackersList"></div>
+
+<!-- IN DEVELOPMENT -->
+<div class="section-title" style="margin-top:24px;">🔜 In Development</div>
+<div class="trackers-list">
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇲🇱 Mali · 🇧🇫 Burkina Faso · 🇳🇪 Niger — Sahel Cluster</div>
+        <span class="coming-soon-badge">Next in queue</span>
+    </div>
+    <div class="coming-soon-banner">
+        <div class="coming-soon-name">🇨🇫 Central African Republic</div>
+        <span class="coming-soon-badge">Queued</span>
+    </div>
+</div>
+
+</div> <!-- /main-content -->
+</div> <!-- /page-with-sidebar -->
+
+<!-- FOOTER (canonical) -->
+<footer style="background:var(--card-bg, #0d1b2e);border:1px solid var(--card-border, #1e3a5f);border-radius:12px;padding:30px;margin-top:30px;margin-bottom:30px;font-size:13px;color:var(--text-secondary, #93c5fd);">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-bottom:20px;">
+        <div>
+            <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent, #38bdf8);margin-bottom:8px;">Data Sources</h4>
+            <p style="font-size:12px;line-height:1.5;">Country rhetoric trackers on the Africa backend (RSS, GDELT, Brave, Telegram OSINT, Reddit, Bluesky), rolled up by africa_regional_bluf.py. Each country's signals are independently sourced.</p>
+        </div>
+        <div>
+            <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent, #38bdf8);margin-bottom:8px;">Methodology</h4>
+            <p style="font-size:12px;line-height:1.5;">Regional posture rolls up country trackers: peak escalation level, breached red lines, multi-country breadth, and junction convergence. Claiming-actor silence is read as tempo change, not quiet. Coverage is stated explicitly — countries without a tracker are absent from the read, not assessed as quiet. Updated every 14 hours.</p>
+        </div>
+        <div>
+            <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--accent, #38bdf8);margin-bottom:8px;">Contact</h4>
+            <p style="font-size:12px;line-height:1.5;">Asifah Analytics — <a href="https://asifahanalytics.com" style="color:var(--accent, #38bdf8);">asifahanalytics.com</a></p>
+        </div>
+    </div>
+    <div style="margin-top:20px;padding:14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-size:12px;line-height:1.5;">
+        <strong style="color:#f59e0b;">⚠️ DISCLAIMER</strong> &mdash; This page provides analytical estimates based on open-source intelligence aggregation. It does not constitute intelligence assessments, military advice, or policy recommendations. Convergence indicators are NOT probabilities of action. Not for operational use.
+    </div>
+    <div style="margin:22px auto 10px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://buymeacoffee.com/asifahanalytics" target="_blank" rel="noopener" style="padding:10px 18px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1f1f1f;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px;display:inline-flex;align-items:center;gap:6px;">☕ Buy Me a Coffee</a>
+        <a href="mailto:asifahanalytics@gmail.com" style="padding:10px 18px;background:linear-gradient(135deg,#1e3a5f,#38bdf8);color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;font-size:13px;display:inline-flex;align-items:center;gap:6px;">✉️ Contact Asifah</a>
+    </div>
+    <div style="text-align:center;margin-top:14px;font-size:11px;color:var(--text-muted, #4a7090);">
+        FOR RESEARCH PURPOSES ONLY · NOT OFFICIAL U.S. GOVERNMENT POSITION · © 2025-2026 Asifah Analytics
+    </div>
+    <div style="text-align:center;margin-top:12px;padding-top:15px;border-top:1px solid var(--card-border, #1e3a5f);font-size:12px;">
+        <a href="mission.html" style="color:var(--accent, #38bdf8);text-decoration:none;">Mission Statement</a>
+        <span style="color:var(--text-muted, #4a7090);margin:0 12px;">·</span>
+        <a href="privacy.html" style="color:var(--accent, #38bdf8);text-decoration:none;">Privacy Policy</a>
+        <span style="color:var(--text-muted, #4a7090);margin:0 12px;">·</span>
+        <a href="https://asifahanalytics.com" style="color:var(--accent, #38bdf8);text-decoration:none;">Home</a>
+    </div>
+    <div style="text-align:center;margin-top:15px;font-size:11px;color:var(--text-muted, #4a7090);">
+        © 2025-2026 RCGG. All Rights Reserved. Africa Rhetoric Monitor v1.0.0 — Proprietary and Confidential.
+    </div>
+</footer>
+
+</div><!-- end container -->
+<script>
+
+// ══════════════════════════════════════════════════════════════
+// CONVERGENCE PANEL (spoke & wheel) — Jul 24 2026
+//
+// Renders whatever the backend discovered. It does NOT know which countries,
+// hubs, or spokes exist, and must never be taught: new trackers appear here
+// automatically because the shared reader discovers them by Redis SCAN.
+//
+// Display model: LIT spokes render as tiles. DARK spokes render as tiles.
+// NOT-REPORTING spokes collapse behind a <details> summary — the coverage gap
+// stays visible without letting absence dominate a panel about presence.
+// ══════════════════════════════════════════════════════════════
+var CVG_LEVELS = {
+    0: { label: 'Monitoring',      color: '#6b7280' },
+    1: { label: 'Rhetoric',        color: '#3b82f6' },
+    2: { label: 'Warning',         color: '#f59e0b' },
+    3: { label: 'Confrontation',   color: '#f97316' },
+    4: { label: 'Coercion',        color: '#ef4444' },
+    5: { label: 'Active Conflict', color: '#dc2626' },
+    // L6 is Africa-only on this page: lvl() clamps to 6 because the junction
+    // read borrowed the GPI's seventh rung. The shell ladder stops at 5, so
+    // the sync loop below leaves this entry alone -- which is exactly what
+    // should happen. Without it, a red-line breach rendered as "Monitoring".
+    6: { label: 'Red-Line Breach', color: '#dc2626' },
+};
+    // ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────
+    // The ladder lives in asifah-standard-shell.js (window.AsifahLadder).
+    // This page used to declare its own table, which is how L4 came to read
+    // one word here and a different one in the backend that fed it.
+    //
+    // The object below is a FALLBACK, used only if the shell fails to load,
+    // and it is OVERWRITTEN from the shell at DOMContentLoaded -- deferred
+    // scripts run before that event, so window.AsifahLadder always exists by
+    // the time any chip renders. Do not edit these words here; edit the
+    // shell and they follow.
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!window.AsifahLadder) return;
+        window.AsifahLadder.levels.forEach(function (r) {
+            CVG_LEVELS[r.level] = { label: r.label, color: r.color };
+        });
+    });
+
+
+function cvgEsc(s) {
+    var d = document.createElement('div');
+    d.textContent = (s === null || s === undefined) ? '' : String(s);
+    return d.innerHTML;
+}
+
+function cvgLvl(n) {
+    var i = Math.max(0, Math.min(5, parseInt(n, 10) || 0));
+    return CVG_LEVELS[i];
+}
+
+function cvgSpokeTile(s) {
+    var lv = cvgLvl(s.level);
+    var lit = s.state === 'lit';
+    var cls = (s.node_class && s.node_class !== 'unclassified')
+        ? '<div class="cvg-spoke-class">' + cvgEsc(String(s.node_class).replace(/_/g, ' ')) + '</div>' : '';
+    var sig = s.top_signal
+        ? '<div class="cvg-spoke-sig">' + cvgEsc(String(s.top_signal).slice(0, 72)) + '</div>' : '';
+    // A hub naming its own lit theatres is stronger evidence than a spoke
+    // inferring it — surface that provenance.
+    var declared = s.hub_declared
+        ? '<div class="cvg-spoke-class" style="color:#f59e0b;">hub-declared</div>' : '';
+    return '<div class="cvg-spoke' + (lit ? ' lit' : '') + '">' +
+        '<div class="cvg-spoke-icon">' + (lit ? '\u25C9' : '\u25CB') + '</div>' +
+        '<div class="cvg-spoke-name">' + cvgEsc(s.display || s.country) + '</div>' +
+        '<div class="cvg-spoke-lvl" style="color:' + (lit ? lv.color : 'var(--text-muted)') + ';">L' +
+            (parseInt(s.level, 10) || 0) + '</div>' + cls + declared + sig +
+        '</div>';
+}
+
+function cvgWheelBlock(w) {
+    if (!w) return '';
+    if (w.readable === false) {
+        return '<div class="cvg-wheel"><div class="cvg-wheel-label">' +
+            cvgEsc(w.icon || '') + ' ' + cvgEsc(w.title || '') +
+            ' <span style="color:#f59e0b;">unreadable</span></div>' +
+            '<div class="cvg-note">' + cvgEsc(w.note || '') + '</div></div>';
+    }
+    var spokes  = w.spokes || [];
+    var visible = spokes.filter(function (s) { return s.state !== 'not_reporting'; });
+    var silent  = spokes.filter(function (s) { return s.state === 'not_reporting'; });
+
+    var head = '<div class="cvg-wheel-label">' + cvgEsc(w.icon || '') + ' ' + cvgEsc(w.title || '') +
+        ' <span style="color:' + (w.converged ? '#dc2626' : 'var(--text-muted)') + ';">' +
+        (w.lit_count || 0) + ' lit · ' + (w.dark_count || 0) + ' quiet · ' +
+        (w.unreported_count || 0) + ' silent</span></div>';
+
+    var grid = visible.length
+        ? '<div class="cvg-grid">' + visible.map(cvgSpokeTile).join('') + '</div>'
+        : '';
+
+    var collapsed = '';
+    if (silent.length) {
+        collapsed = '<details class="cvg-silent"><summary>\u25B8 ' + silent.length +
+            ' spoke' + (silent.length > 1 ? 's' : '') + ' not reporting \u2014 ' +
+            'not emitting yet, or stale beyond the freshness gate</summary>' +
+            '<div class="cvg-silent-list">' + silent.map(function (s) {
+                var why = s.reason === 'stale'
+                    ? ' \u00b7 stale' + (s.age_hours ? ' ' + Math.round(s.age_hours) + 'h' : '')
+                    : '';
+                return '<span class="cvg-silent-chip">' + cvgEsc(s.display || s.country) + why + '</span>';
+            }).join('') + '</div></details>';
+    }
+    return '<div class="cvg-wheel">' + head + grid + collapsed + '</div>';
+}
+
+function renderConvergencePanel(panel) {
+    var card = document.getElementById('cvgCard');
+    if (!card) return;
+    if (!panel) { card.style.display = 'none'; return; }   // reader absent — say nothing
+
+    var wheels = panel.resident_wheels || [];
+    var eman   = panel.emanating || [];
+    var silent = panel.emanating_silent || [];
+    // Show the card whenever there is ANY known relationship to report --
+    // including one that has gone quiet. A panel that vanishes when nothing is
+    // firing cannot tell the reader "quiet" apart from "broken".
+    if (!wheels.length && !eman.length && !silent.length) {
+        card.style.display = 'none'; return;
+    }
+
+    document.getElementById('cvgSub').textContent = panel.subtitle || '';
+    document.getElementById('cvgWheels').innerHTML = wheels.map(cvgWheelBlock).join('');
+
+    // Emanating: local countries feeding FOREIGN hubs. This is the half that
+    // rides to the GPI, so it is rendered as an outbound flow, not a tile.
+    var emEl = document.getElementById('cvgEmanating');
+    if (eman.length || silent.length) {
+        emEl.innerHTML = '<div class="cvg-emanating">' +
+            '<div class="cvg-wheel-label">\u2197 EMANATING \u2014 local spokes feeding hubs elsewhere</div>' +
+            eman.map(function (e) {
+                var lv = cvgLvl(e.level);
+                return '<div class="cvg-eman-row">' +
+                    '<b>' + cvgEsc(e.display || e.country) + '</b>' +
+                    '<span class="cvg-eman-arrow">\u2192</span>' +
+                    '<span>' + cvgEsc(e.hub_icon || '') + ' ' + cvgEsc(e.hub_display || e.hub) + '</span>' +
+                    '<span style="color:' + lv.color + ';font-weight:800;">L' +
+                        (parseInt(e.level, 10) || 0) + '</span>' +
+                    (e.top_signal ? '<span style="color:var(--text-muted);font-size:0.7rem;">' +
+                        cvgEsc(String(e.top_signal).slice(0, 84)) + '</span>' : '') +
+                    '</div>';
+            }).join('') +
+            // Silent outbound spokes collapse the same way rim spokes do.
+            (silent.length
+              ? '<details class="cvg-silent"><summary>\u25B8 ' + silent.length +
+                ' outbound spoke' + (silent.length > 1 ? 's' : '') + ' not reporting' +
+                ' \u2014 not emitting yet, or stale beyond the freshness gate</summary>' +
+                '<div class="cvg-silent-list">' + silent.map(function (s) {
+                    var why = s.reason === 'stale'
+                        ? ' \u00b7 stale' + (s.age_hours ? ' ' + Math.round(s.age_hours) + 'h' : '')
+                        : '';
+                    return '<span class="cvg-silent-chip">' + cvgEsc(s.display || s.country) +
+                           ' \u2192 ' + cvgEsc(s.hub_display || s.hub) + why + '</span>';
+                }).join('') + '</div></details>'
+              : '') +
+            '</div>';
+    } else { emEl.innerHTML = ''; }
+
+    var anyConv = !!panel.any_converged;
+    card.classList.toggle('converged', anyConv);
+    var pill = document.getElementById('cvgPill');
+    var totalLit = wheels.reduce(function (a, w) { return a + (w.lit_count || 0); }, 0);
+    if (anyConv) { pill.textContent = 'CONVERGED'; pill.style.background = '#dc2626'; }
+    else if (totalLit) { pill.textContent = totalLit + ' SPOKE' + (totalLit > 1 ? 'S' : '') + ' LIT';
+                         pill.style.background = '#f59e0b'; }
+    else { pill.textContent = 'DORMANT'; pill.style.background = '#6b7280'; }
+
+    var notes = wheels.map(function (w) { return w.headline || w.dormant_note || ''; })
+                      .filter(Boolean);
+    if (!wheels.length && panel.dormant_note) notes.push(panel.dormant_note);
+    document.getElementById('cvgNote').textContent = notes.join(' ');
+    document.getElementById('cvgDisclaimer').textContent = panel.disclaimer || '';
+    card.style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONFIG — Africa BLUF lives on the Africa backend
+// ══════════════════════════════════════════════════════════════
+const AFRICA_BACKEND = 'https://asifah-africa-backend.onrender.com';
+const BLUF_URL = AFRICA_BACKEND + '/api/rhetoric/africa/bluf';
+
+const LEVELS = {
+    0: { label: 'Monitoring',      color: '#6b7280' },
+    1: { label: 'Rhetoric',        color: '#3b82f6' },
+    2: { label: 'Warning',         color: '#f59e0b' },
+    3: { label: 'Confrontation',   color: '#f97316' },
+    4: { label: 'Coercion',        color: '#ef4444' },
+    5: { label: 'Active Conflict', color: '#dc2626' },
+    // L6 is Africa-only on this page: lvl() clamps to 6 because the junction
+    // read borrowed the GPI's seventh rung. The shell ladder stops at 5, so
+    // the sync loop below leaves this entry alone -- which is exactly what
+    // should happen. Without it, a red-line breach rendered as "Monitoring".
+    6: { label: 'Red-Line Breach', color: '#dc2626' },
+};
+    // ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────
+    // The ladder lives in asifah-standard-shell.js (window.AsifahLadder).
+    // This page used to declare its own table, which is how L4 came to read
+    // one word here and a different one in the backend that fed it.
+    //
+    // The object below is a FALLBACK, used only if the shell fails to load,
+    // and it is OVERWRITTEN from the shell at DOMContentLoaded -- deferred
+    // scripts run before that event, so window.AsifahLadder always exists by
+    // the time any chip renders. Do not edit these words here; edit the
+    // shell and they follow.
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!window.AsifahLadder) return;
+        window.AsifahLadder.levels.forEach(function (r) {
+            LEVELS[r.level] = { label: r.label, color: r.color };
+        });
+    });
+
+
+// Country tracker page links (grows with the build queue)
+const TRACKER_PAGES = {
+    somalia:      'rhetoric-somalia.html',
+    sudan:        'rhetoric-sudan.html',
+    mali:         'rhetoric-mali.html',
+    burkina_faso: 'rhetoric-burkina-faso.html',
+    niger:        'rhetoric-niger.html',
+    car:          'rhetoric-car.html',
+};
+
+// Canonical junction spokes (Somalia junction model)
+
+function lvl(n) { return LEVELS[Math.min(Math.max(parseInt(n) || 0, 0), 6)] || LEVELS[0]; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+// ── THEME ──
+function loadTheme() {
+    const saved = localStorage.getItem('asifah-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    const t = document.getElementById('themeToggle');
+    if (t) t.checked = (saved === 'light');
+}
+function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('asifah-theme', next);
+}
+
+// ── MOBILE DRAWER ──
+function toggleMobileDrawer() {
+    const a = document.getElementById('navSidebar');
+    const b = document.getElementById('mobileDrawerBackdrop');
+    if (!a || !b) return;
+    if (a.classList.contains('open')) { closeMobileDrawer(); return; }
+    a.classList.add('open'); b.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeMobileDrawer() {
+    const a = document.getElementById('navSidebar');
+    const b = document.getElementById('mobileDrawerBackdrop');
+    if (a) a.classList.remove('open');
+    if (b) b.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMobileDrawer(); });
+
+// ══════════════════════════════════════════════════════════════
+// COVERAGE HONESTY CARD (Africa-specific)
+// A one-tracker region is a country read at regional altitude. Say so.
+// ══════════════════════════════════════════════════════════════
+function renderCoverage(data) {
+    const card = document.getElementById('coverageCard');
+    const pill = document.getElementById('coveragePill');
+    const text = document.getElementById('coverageText');
+    if (!card) return;
+
+    const live  = data.trackers_live  || 0;
+    const total = data.trackers_total || 0;
+    const missing = (data.trackers_missing || []).length;
+    const stale   = (data.trackers_stale || []).length;
+
+    // Show whenever coverage is partial OR single-tracker — i.e. whenever the
+    // reader could otherwise over-read the regional label.
+    const show = data.single_tracker_mode || missing > 0 || stale > 0;
+    if (!show) { card.style.display = 'none'; return; }
+
+    card.style.display = 'block';
+    if (pill) pill.textContent = live + ' of ' + total + ' tracker' + (total === 1 ? '' : 's');
+    if (text) text.textContent = data.coverage_note ||
+        'Regional coverage is partial this cycle; countries without a tracker are absent from this read, not assessed as quiet.';
+}
+
+// ══════════════════════════════════════════════════════════════
+// WHEEL JUNCTION PANEL (Africa-specific)
+
+
+// ══════════════════════════════════════════════════════════════
+// SILENCE PANEL (Africa-specific)
+// ══════════════════════════════════════════════════════════════
+function renderSilence(data) {
+    const card = document.getElementById('silenceCard');
+    const items = document.getElementById('silenceItems');
+    if (!card || !items) return;
+
+    // The regional BLUF reports a count; the detail rides on the signal pool.
+    const silenceSignals = (data.signals || data.top_signals || []).filter(function (s) {
+        return s && s.category === 'claiming_actor_silence';
+    });
+    const count = data.silence_anomaly_count || silenceSignals.length;
+    if (!count) { card.style.display = 'none'; return; }
+
+    card.style.display = 'block';
+    if (silenceSignals.length) {
+        items.innerHTML = silenceSignals.map(function (s) {
+            return '<div class="silence-item">' + esc(s.long_text || s.short_text || '') + '</div>';
+        }).join('');
+    } else {
+        items.innerHTML = '<div class="silence-item">' + count +
+            ' claiming-actor silence anomal' + (count === 1 ? 'y' : 'ies') +
+            ' flagged this cycle — see the country tracker for actor-level detail.</div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// POSTURE BANNER
+// ══════════════════════════════════════════════════════════════
+function renderPosture(data) {
+    const val = document.getElementById('postureValue');
+    const stats = document.getElementById('postureStats');
+    const peak = data.max_level || data.peak_level || 0;
+    const lv = lvl(peak);
+
+    if (val) {
+        val.textContent = (data.posture_label || 'BASELINE');
+        val.style.color = data.posture_color || lv.color;
+    }
+    if (stats) {
+        stats.innerHTML =
+            '<div class="posture-stat"><div class="posture-stat-num" style="color:' + lv.color + ';">L' + peak + '</div>' +
+            '<div class="posture-stat-label">Peak Level</div></div>' +
+            '<div class="posture-stat"><div class="posture-stat-num" style="color:var(--cyber-cyan);">' + (data.trackers_live || 0) + '</div>' +
+            '<div class="posture-stat-label">Trackers Live</div></div>' +
+            '<div class="posture-stat"><div class="posture-stat-num" style="color:#dc2626;">' + (data.red_lines_breached || 0) + '</div>' +
+            '<div class="posture-stat-label">Red Lines Breached</div></div>' +
+            '<div class="posture-stat"><div class="posture-stat-num" style="color:var(--text-secondary);">' + (data.avg_score || 0) + '</div>' +
+            '<div class="posture-stat-label">Avg Score</div></div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BLUF PROSE + SIGNALS
+// ══════════════════════════════════════════════════════════════
+function renderBluf(data) {
+    const pill = document.getElementById('blufPosturePill');
+    if (pill) {
+        pill.textContent = (data.posture_label || 'BASELINE').toUpperCase();
+        pill.style.background = data.posture_color || '#6b7280';
+    }
+
+    // Prose — split on sentence seams for readability
+    const proseEl = document.getElementById('blufProse');
+    if (proseEl) {
+        const raw = String(data.bluf || '');
+        // Split on sentence seams WITHOUT lookbehind: lookbehind is ES2018 and
+        // unsupported in Safari <16.4, where it throws a parse-time SyntaxError
+        // that silently kills every script on the page. Marker-replace instead.
+        const paras = raw.replace(/\.\s+(?=[A-Z])/g, '.\u0001').split('\u0001').filter(Boolean);
+        proseEl.innerHTML = paras.map(function (p) {
+            return '<div class="bluf-para">' + esc(p) + '</div>';
+        }).join('') || esc(raw);
+    }
+
+    // Signals
+    const sigEl = document.getElementById('blufSignals');
+    if (sigEl) {
+        sigEl.innerHTML = '';
+        sigEl.classList.add('bluf-signals-scroll');
+        const sigs = data.top_signals || data.signals || [];
+        if (!sigs.length) {
+            sigEl.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);font-style:italic;padding:8px;">No signals above threshold this cycle.</div>';
+        } else {
+            sigs.forEach(function (s) {
+                const level = parseInt(s.level) || 0;
+                const lv = lvl(level);
+                const theatre = s.theatre || '';
+                const page = TRACKER_PAGES[theatre];
+                const locName = theatre ? theatre.replace(/_/g, ' ').toUpperCase() : 'AFRICA';
+                const locHtml = page
+                    ? '<a class="sigrow-loc" href="' + page + '" style="color:' + lv.color + ';">' + esc(locName) + '</a>'
+                    : '<span class="sigrow-loc nolink" style="color:' + lv.color + ';">' + esc(locName) + '</span>';
+                // ── Polarity read. A diplomatic signal is a score REDUCER; it
+                //    reached this altitude only via the BLUF's diplomatic guard,
+                //    so it must not render as a threat. ──
+                const cat = String(s.category || '').toLowerCase();
+                const isDeesc = String(s.pressure_type || '').toLowerCase() === 'diplomatic'
+                    || ['diplomatic_offramp', 'diplomatic_active', 'mediation_active',
+                        'off_ramp_active', 'ceasefire', 'diplomatic'].indexOf(cat) !== -1;
+                const isConverge = ['compound_convergence', 'russia_contradiction',
+                                    'wheel_convergence'].indexOf(cat) !== -1;
+                const isHumani = String(s.pressure_type || '').toLowerCase() === 'humanitarian';
+
+                let tag = '';
+                if (isDeesc)          tag = '<span class="sigrow-tag deesc">↓ de-escalation</span>';
+                else if (isConverge)  tag = '<span class="sigrow-tag converge">🌀 convergence</span>';
+                else if (isHumani)    tag = '<span class="sigrow-tag humani">humanitarian</span>';
+
+                const railColor = isDeesc ? '#1d4ed8' : (s.color || lv.color);
+                const chipColor = isDeesc ? '#1d4ed8' : (s.color || lv.color);
+
+                const div = document.createElement('div');
+                div.className = 'sigrow' + (isDeesc ? ' sigrow-deesc' : '');
+                div.style.borderLeftColor = railColor;
+                div.innerHTML =
+                    '<span class="sigrow-icon">' + (s.icon || '⚡') + '</span>' +
+                    '<div class="sigrow-body">' +
+                        '<div class="sigrow-head">' +
+                            '<span class="sigrow-chip" style="background:' + chipColor + ';">L' + level + ' ' + esc(lv.label) + '</span>' +
+                            locHtml + tag +
+                        '</div>' +
+                        '<div class="sigrow-text">' + esc(s.long_text || s.short_text || '') + '</div>' +
+                    '</div>';
+                sigEl.appendChild(div);
+            });
+        }
+    }
+
+    // Methodology + timestamp
+    const mEl = document.getElementById('blufMethodology');
+    if (mEl && data.methodology_note) mEl.textContent = data.methodology_note;
+
+    if (data.generated_at) {
+        const dt = new Date(data.generated_at);
+        const stamp = 'Generated: ' + dt.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true
+        }) + (data.from_cache ? ' (cached)' : '');
+        const tEl = document.getElementById('blufTimestamp');
+        if (tEl) tEl.textContent = stamp;
+        const lu = document.getElementById('lastUpdated');
+        if (lu) lu.textContent = stamp;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TRACKER BANNERS — one row per live country tracker
+// ══════════════════════════════════════════════════════════════
+function renderTrackers(data) {
+    const list = document.getElementById('trackersList');
+    if (!list) return;
+    const summary = data.theatre_summary || {};
+    const keys = Object.keys(summary);
+
+    if (!keys.length) {
+        list.innerHTML = '<div class="coming-soon-banner" style="opacity:1;">' +
+            '<div class="coming-soon-name">No country trackers reporting this cycle</div>' +
+            '<span class="coming-soon-badge">Absent, not quiet</span></div>';
+        return;
+    }
+
+    list.innerHTML = keys.sort().map(function (k) {
+        const t = summary[k];
+        const level = t.level || 0;
+        const lv = lvl(level);
+        const page = TRACKER_PAGES[k] || '#';
+        const vectors = t.vector_levels || {};
+        const hot = Object.keys(vectors)
+            .filter(function (v) { return (parseInt(vectors[v]) || 0) >= 1; })
+            .sort(function (a, b) { return (vectors[b] || 0) - (vectors[a] || 0); })
+            .slice(0, 5);
+        const pills = hot.length
+            ? hot.map(function (v) {
+                return '<span class="vector-pill">' + esc(v.replace(/_/g, ' ')) + ' L' + (vectors[v] || 0) + '</span>';
+              }).join('')
+            : '<span class="vector-pill" style="opacity:0.6;">baseline</span>';
+        const staleTag = (t.freshness === 'stale')
+            ? '<span class="vector-pill" style="background:rgba(245,158,11,0.12);color:#fbbf24;border-color:rgba(245,158,11,0.35);">stale — last known good</span>'
+            : '';
+        return '<div class="tracker-banner">' +
+            '<div><div class="tracker-name">' + (t.flag || '') + ' ' + esc(t.display || k.toUpperCase()) + '</div>' +
+            '<div class="tracker-actors">' + (t.article_count || 0) + ' articles this scan · composite ' + (t.score || 0) + '/100</div></div>' +
+            '<div class="tracker-middle"><div class="tracker-vectors">' + pills + staleTag + '</div></div>' +
+            '<div class="tracker-right">' +
+            '<span class="level-badge" style="background:' + lv.color + ';">L' + level + ' — ' + esc(t.label || lv.label) + '</span>' +
+            '<a class="open-btn" href="' + page + '">Open Tracker →</a>' +
+            '</div></div>';
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// FETCH + BOOT
+// ══════════════════════════════════════════════════════════════
+async function loadBluf(force) {
+    try {
+        const url = force ? BLUF_URL + '?force=true' : BLUF_URL;
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        if (!data.success) {
+            const p = document.getElementById('blufProse');
+            if (p) p.textContent = data.bluf || 'Africa BLUF temporarily unavailable.';
+            renderCoverage(data);
+            return;
+        }
+        renderPosture(data);
+        renderCoverage(data);
+        renderBluf(data);
+        renderConvergencePanel(data.convergence_panel);
+        renderSilence(data);
+        renderTrackers(data);
+    } catch (e) {
+        console.error('Africa BLUF load error:', e);
+        const p = document.getElementById('blufProse');
+        if (p) p.textContent = 'Africa BLUF temporarily unavailable — the backend may be waking from cold start. Refresh in a moment.';
+        const lu = document.getElementById('lastUpdated');
+        if (lu) lu.textContent = 'Connection error — retry shortly';
+    }
+}
+
+async function refreshAll() {
+    const btn = document.getElementById('refreshBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Refreshing...'; }
+    await loadBluf(true);
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refresh'; }
+}
+
+loadTheme();
+loadBluf(false);
+</script>
+</body>
+</html>
