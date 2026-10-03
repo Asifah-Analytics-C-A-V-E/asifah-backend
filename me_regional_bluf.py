@@ -2132,6 +2132,14 @@ _ME_REGIONAL_AXIS_SETS = {
     'nuclear_signaling': ['kinetic'], 'kinetic_threshold': ['kinetic'],
     'commodity': ['economic'], 'economic_stress': ['economic'],
     'oil': ['economic'], 'sanctions': ['economic', 'diplomatic'],
+    # v2.x (Oct 3 2026) -- Palestinian financial access. WITHOUT this entry the
+    # category falls through _me_axes_for_signal's keyword hints, which had no
+    # finance vocabulary either, and lands on the 'kinetic' default -- filing a
+    # banking and payroll crisis as a military one and feeding the wrong GPI
+    # axis. An unmapped category does not fail loudly; it just goes to the
+    # wrong place, which is why this list has to be edited whenever a tracker
+    # starts emitting a new one.
+    'financial_access_stress': ['economic'],
     'diplomatic_track_active': ['diplomatic'], 'diplomatic_active': ['diplomatic'],
     'green_line_active': ['diplomatic'], 'mediation': ['diplomatic'],
     'ceasefire': ['diplomatic'], 'humanitarian': ['humanitarian'],
@@ -2139,7 +2147,12 @@ _ME_REGIONAL_AXIS_SETS = {
     'migration': ['humanitarian'], 'health_emergency': ['humanitarian'],
 }
 _ME_AXIS_KEYWORD_HINTS = [
-    ('economic', ['economic', 'oil', 'commodity', 'wheat', 'sanction', 'currency', 'gold', 'trade']),
+    # v2.x (Oct 3 2026) -- finance vocabulary added as the safety net beneath
+    # the explicit map above, so a NEW unmapped finance category lands on the
+    # economic axis rather than defaulting to kinetic.
+    ('economic', ['economic', 'oil', 'commodity', 'wheat', 'sanction', 'currency', 'gold', 'trade',
+                  'financial', 'finance', 'banking', 'bank ', 'payroll', 'salaries', 'salary',
+                  'clearance revenue', 'remittance', 'fiscal']),
     ('humanitarian', ['humanitarian', 'displace', 'refugee', 'migration', 'famine', 'idp', 'health']),
     ('diplomatic', ['diplomatic', 'ceasefire', 'mediation', 'negotiat', 'off-ramp', 'envoy', 'brokering']),
 ]

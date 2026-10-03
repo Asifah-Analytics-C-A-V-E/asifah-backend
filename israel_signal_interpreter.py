@@ -543,8 +543,31 @@ def _extract_gaza_wb_signals(scan_data):
                      'lions den', 'smuggl', 'weapons cache', 'cell', 'foiled', 'irgc')
     WB_TINDER = ('settler', 'jewish terror', 'authority collapse', 'clearance revenue',
                  'palestinian banks', 'annexation', 'outpost')
+    # ── v1.1.0 REGRESSION REPAIR (Oct 3 2026) ───────────────────────────
+    # rhetoric_tracker_israel v1.1.0 moved 'clearance revenue', 'palestinian
+    # banks' and 'palestinian authority collapse' OUT of the west_bank_civil
+    # keyword net and into the new 'palestinian_financial_access' actor, to
+    # stop one article counting as a statement for two actors.
+    #
+    # That silently broke THIS function: the fiscal half of WB_TINDER reads
+    # west_bank_civil's top_articles, and those articles no longer land there.
+    # The compound West Bank read -- activation AND tinder -- would have
+    # quietly lost a leg and started under-reporting, with nothing to show for
+    # it but a number that got smaller.
+    #
+    # The fiscal leg now reads from the actor that owns it. The terms are left
+    # in WB_TINDER above as well: an article naming BOTH settler violence and
+    # clearance revenue still lands in west_bank_civil on the settler term, and
+    # should still count. Belt and braces, deliberately.
+    fa_actor = actors.get('palestinian_financial_access', {})
+    fa_txt = _titles(fa_actor)
+    WB_FISCAL_TINDER = ('clearance revenue', 'palestinian banks', 'authority collapse',
+                        'salaries', 'payroll', 'indemnity waiver',
+                        'כספי המסים', 'משכורות הרשות',
+                        'أموال المقاصة', 'رواتب الموظفين', 'رواتب الأجهزة الأمنية')
     wb_has_act = any(k in wb_txt for k in WB_ACTIVATION)
-    wb_has_tin = any(k in wb_txt for k in WB_TINDER)
+    wb_has_tin = (any(k in wb_txt for k in WB_TINDER)
+                  or any(k in fa_txt for k in WB_FISCAL_TINDER))
 
     if wb_has_act and wb_has_tin:
         sit.append(
@@ -579,6 +602,107 @@ def _extract_gaza_wb_signals(scan_data):
         'situation_text': situation_text,
         'indicator_text': indicator_text,
         'watch_text':     watch_text,
+    }
+
+
+def _extract_financial_access_signals(scan_data):
+    """
+    Palestinian financial access — the COMPOUND read. (v1.1.0, Oct 3 2026)
+
+    Two halves have to meet here and nowhere else:
+      STATE     (israel_stability.py)  — is the waiver in force, are clearance
+                                         revenues moving, are salaries paid.
+      RHETORIC  (rhetoric_tracker_israel.py) — how it is being described, and
+                                         whether the talk has turned operational.
+
+    Either half alone is weak. State stress with no mobilization language is an
+    economic fact. Mobilization language with no state stress is an argument.
+    The COMPOUND -- stress AND operational language together -- is the finding,
+    and it is the same shape as the Gaza/West Bank dual read below.
+
+    Estimative voice only: consistent with / has historically preceded /
+    co-occurring with. Never 'will', never a probability, never a date.
+    """
+    fa = scan_data.get('financial_access_rhetoric') or {}
+    lanes = fa.get('lanes') or {}
+    if not lanes:
+        return {'has_signal': False}
+
+    state = str(fa.get('highest_state') or 'quiet')
+    hot = [L for L in lanes.values()
+           if L.get('state') in ('mobilization_language', 'violence_linked')]
+    corpus = fa.get('corpus') or {}
+    share = corpus.get('commentary_share', 0) or 0
+
+    sit, indicator, watch = [], '', ''
+
+    # ── The security-force payroll lane gets named separately on purpose. ──
+    # It is where fiscal stress converts into a policing vacuum, and the
+    # conversion is invisible to headcount: a force nominally at strength whose
+    # members are working second jobs is a force delivering a fraction of its
+    # function. That gap shows up as capability absence, not as a smaller roster.
+    c1 = lanes.get('C1_security_force_payroll') or {}
+    c1_state = c1.get('state')
+
+    if state == 'violence_linked':
+        names = ', '.join(L.get('label', '?') for L in lanes.values()
+                          if L.get('state') == 'violence_linked')
+        sit.append(
+            'On Palestinian financial access, economic grievance is being publicly '
+            'linked to armed action or a policing vacuum (%s) -- the pattern that '
+            'has historically preceded a widening security gap, reported here as '
+            'co-occurrence rather than as an outcome.' % names)
+    elif state == 'mobilization_language':
+        names = ', '.join(L.get('label', '?') for L in hot)
+        sit.append(
+            'On Palestinian financial access, language has turned operational in %s '
+            '-- strikes, withdrawals, demonstrations or refusal to cooperate are '
+            'being reported alongside the financial mechanism. Consistent with '
+            'grievance moving from argument toward action.' % names)
+    elif state == 'narrative_only':
+        frames = [L.get('dominant_frame') for L in lanes.values() if L.get('dominant_frame')]
+        if 'strangulation' in frames:
+            sit.append(
+                'On Palestinian financial access, the strangulation frame is leading '
+                'the public argument -- contested characterisation, no operational '
+                'language this cycle.')
+        else:
+            sit.append(
+                'Palestinian financial access is being argued about without '
+                'operational language this cycle.')
+
+    if c1_state in ('mobilization_language', 'violence_linked'):
+        indicator = (
+            'SECURITY-FORCE PAYROLL is the lane carrying the signal. Pay failure in '
+            'the security services has historically preceded reduced presence and '
+            'selective enforcement -- a policing vacuum that no headcount reports, '
+            'because the force stays on the roster while its function thins.')
+
+    # Honesty about the corpus. A lane lit up by op-eds is a different finding
+    # from a lane lit up by reporting, and the reader is told which.
+    if hot and share >= 0.5:
+        sit.append(
+            'Caveat: %d%% of the financial-access corpus this cycle is commentary '
+            'rather than reporting. Only firsthand items moved the lane states '
+            'above, but the volume is being driven by writing ABOUT the risk.'
+            % round(share * 100))
+
+    if state in ('mobilization_language', 'violence_linked'):
+        watch = ('Palestinian security-force pay announcements; PA finance ministry '
+                 'payroll ratio; Israeli bank indemnity waiver renewal or lapse')
+    elif state == 'narrative_only':
+        watch = ('Movement from characterisation to announced action -- strike '
+                 'calls, security-coordination suspension, union statements')
+
+    situation_text = ' '.join(sit)
+    return {
+        'has_signal':     bool(situation_text),
+        'situation_text': situation_text,
+        'indicator_text': indicator,
+        'watch_text':     watch,
+        'state':          state,
+        'lanes_hot':      [k for k, L in lanes.items()
+                           if L.get('state') in ('mobilization_language', 'violence_linked')],
     }
 
 
@@ -750,6 +874,19 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         if commodity_signals.get('watch_text'):
             watch_items.insert(0, commodity_signals['watch_text'])
 
+    # -- Palestinian financial access compound read (v1.1.0, Oct 2026) --
+    # Placed BEFORE the Gaza/WB read so that when both fire, the financial
+    # mechanism is named before the territorial consequence -- the reader meets
+    # the cause before the symptom.
+    fin_access = _extract_financial_access_signals(scan_data)
+    if fin_access.get('has_signal'):
+        if fin_access.get('situation_text'):
+            situation_parts.append(fin_access['situation_text'])
+        if fin_access.get('indicator_text'):
+            indicators.append(fin_access['indicator_text'])
+        if fin_access.get('watch_text'):
+            watch_items.insert(0, fin_access['watch_text'])
+
     # -- Gaza + West Bank ceasefire-era read (June 2026; estimative voice) --
     gaza_wb = _extract_gaza_wb_signals(scan_data)
     if gaza_wb.get('has_signal'):
@@ -819,7 +956,7 @@ def interpret_signals(scan_data):
                 'highest_severity': max((r['severity'] for r in red_lines), default=0),
             },
             'historical_matches':  historical,
-            'interpreter_version': '1.0.0',
+            'interpreter_version': '1.1.0',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
 
@@ -1231,6 +1368,50 @@ def build_top_signals(scan_data):
             'long_text':  (f'{ISRAEL_FLAG} ISRAEL unusual silence from '
                            f'{actor_name}. '
                            f'{"Pre-strike comms blackout indicator." if is_critical else "May indicate message coordination."}'),
+        })
+
+    # ── 12b. Palestinian financial access (v1.1.0) ──────────────────
+    # ONE canonical signal, never one per lane. The regional BLUF ranks by
+    # priority and quotas by theatre; five lane signals from Israel would
+    # crowd out other theatres and tell the reader five times what it should
+    # say once. pressure_type is set explicitly to 'economic' so the BLUF
+    # routes it to the economic axis even on a BLUF build that has not been
+    # taught this category -- a signal with no axis mapping falls through to
+    # 'kinetic', which would file a banking crisis as a military one.
+    _fa_r = scan_data.get('financial_access_rhetoric') or {}
+    _fa_state = str(_fa_r.get('highest_state') or 'quiet')
+    if _fa_state in ('mobilization_language', 'violence_linked'):
+        _fa_lanes = _fa_r.get('lanes') or {}
+        _fa_hot = [L.get('label', '?') for L in _fa_lanes.values()
+                   if L.get('state') in ('mobilization_language', 'violence_linked')]
+        _fa_c1 = (_fa_lanes.get('C1_security_force_payroll') or {}).get('state')
+        _fa_violent = _fa_state == 'violence_linked'
+        _fa_corpus = _fa_r.get('corpus') or {}
+        signals.append({
+            'priority':      11 if _fa_violent else 9,
+            'category':      'financial_access_stress',
+            'pressure_type': 'economic',
+            'theatre':       'israel',
+            'level':         4 if _fa_violent else 3,
+            'icon':          '🏦',
+            'color':         '#dc2626' if _fa_violent else '#f59e0b',
+            'short_text':    (f'{ISRAEL_FLAG} PALESTINIAN FINANCE: '
+                              + ('grievance linked to armed action'
+                                 if _fa_violent else 'language turned operational')
+                              + f' ({len(_fa_hot)} lane(s))'),
+            'long_text':     (
+                'Palestinian financial access — '
+                + ('economic grievance is being publicly linked to armed action or a '
+                   'policing vacuum in ' if _fa_violent else
+                   'strikes, withdrawals or refusal to cooperate are being reported '
+                   'alongside the financial mechanism in ')
+                + (', '.join(_fa_hot[:3]) or 'one lane')
+                + ('. Security-force pay is the carrying lane — pay failure has '
+                   'historically preceded reduced presence and selective enforcement.'
+                   if _fa_c1 in ('mobilization_language', 'violence_linked') else '.')
+                + f' Corpus {_fa_corpus.get("firsthand", 0)} firsthand /'
+                  f' {_fa_corpus.get("commentary", 0)} commentary.'
+            )[:400],
         })
 
     # ── 13. Diplomatic active (cross-theater off-ramps) ─────────────
