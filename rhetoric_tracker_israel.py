@@ -128,6 +128,13 @@ RHETORIC_CACHE_KEY        = 'rhetoric:israel:latest'
 RHETORIC_CACHE_KEY_LEGACY = 'israel_rhetoric_cache'
 HISTORY_KEY               = 'rhetoric:israel:history'
 BASELINE_KEY              = 'rhetoric_baseline:israel'
+# v1.1.0 -- bump this string whenever an actor's KEYWORD NET changes enough to
+# move its statement count. The stored baseline is an EWMA; after a net change
+# the old average describes an actor that no longer exists, and
+# _detect_silence_anomalies() would report our own edit as the actor going
+# quiet. Listed actors have their averages cleared once per token.
+BASELINE_RESET_TOKEN  = '2026-10-03-finaccess-split'
+BASELINE_RESET_ACTORS = ['west_bank_civil']
 CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'
 ALERTS_CACHE_KEY          = 'rhetoric:israel:alerts_24h'
 
@@ -266,13 +273,58 @@ ACTORS = {
             'iran smuggling west bank', 'weapons smuggling jordan', 'irgc west bank',
             'hamas west bank cell', 'weapons cache west bank', 'foiled attack west bank',
             'settler violence', 'settler attack', 'jewish terrorism',
-            'palestinian authority collapse', 'clearance revenue', 'palestinian banks',
+            # v1.1.0 (Oct 3 2026) -- 'palestinian authority collapse',
+            # 'clearance revenue' and 'palestinian banks' MOVED OUT of this
+            # actor and into 'palestinian_financial_access'. Keeping them in
+            # both would have counted one article as a statement for two
+            # actors, inflating both baselines and corrupting _compute_delta()
+            # and _detect_silence_anomalies() for both. A sensor double-
+            # counting itself is worse than a sensor with a narrower net.
+            # This actor's statement_count drops as a result -- see
+            # BASELINE_RESET_TOKEN, which clears the stale average so the
+            # silence detector does not read OUR refactor as the West Bank
+            # going quiet.
             'west bank annexation', 'settler outpost', 'e1 settlement',
             'jenin raid', 'tulkarm raid', 'nablus raid', 'idf west bank',
             'הגדה המערבית', 'אלימות מתנחלים', 'גנין',
             'الضفة الغربية', 'كتيبة جنين', 'عنف المستوطنين',
         ],
         'baseline_statements_per_week': 8,
+    },
+
+    # ── v1.1.0 (Oct 3 2026) PALESTINIAN FINANCIAL ACCESS ──
+    # Four separable mechanisms, one actor. The lane detail -- A/B/C/C1/D with
+    # narrative, mobilization and violence-linkage sub-lanes in EN/HE/AR -- is
+    # produced by _detect_financial_access_rhetoric(). This entry exists so the
+    # subject participates in the standard statement_count / baseline / silence
+    # machinery like every other actor, with its own net rather than borrowing
+    # the West Bank's.
+    #
+    # NOTE on baseline_statements_per_week: _update_actor_baselines() builds
+    # averages from observation and ignores this number. It is documentation of
+    # what we expect, not an input. If observed counts sit far from it for a
+    # month, the expectation was wrong and should be edited -- not the code.
+    'palestinian_financial_access': {
+        'name': 'Palestinian Financial Access',
+        'flag': '🇵🇸', 'icon': '🏦',
+        'color': '#14b8a6',
+        'role': 'Financial access node (banking, clearance, payroll, reconstruction)',
+        'description': 'Correspondent banking, clearance revenue, PA payroll (security-force pay separated) and Gaza reconstruction finance, tracked as separable mechanisms. Banking failure is plumbing; clearance withholding is a political act; they fail differently and are not collapsed.',
+        'keywords': [
+            'correspondent banking', 'indemnity waiver', 'bank indemnity',
+            'shekel clearing', 'palestinian banks', 'palestine monetary authority',
+            'clearance revenue', 'clearance funds', 'paris protocol',
+            'tax revenues withheld', 'withholding revenues',
+            'palestinian authority collapse', 'pa fiscal crisis',
+            'pa salaries', 'palestinian authority salaries', 'salary arrears',
+            'security forces salaries', 'palestinian security forces salaries',
+            'gaza reconstruction', 'board of peace', 'reconstruction funding',
+            'כתב שיפוי', 'כספי המסים', 'בנקים פלסטיניים', 'משכורות הרשות',
+            'משכורות כוחות הביטחון', 'שיקום עזה',
+            'أموال المقاصة', 'البنوك الفلسطينية', 'رواتب الموظفين',
+            'رواتب الأجهزة الأمنية', 'إعمار غزة', 'مجلس السلام',
+        ],
+        'baseline_statements_per_week': 6,
     },
     'syria_threat': {
         'name': 'Syria (Cross-Border)',
@@ -1888,6 +1940,14 @@ def _compute_delta():
 def _update_actor_baselines(actor_results):
     try:
         existing = _redis_get(BASELINE_KEY) or {}
+        # v1.1.0 -- one-time baseline clear after a keyword-net change.
+        if existing and existing.get('_reset_token') != BASELINE_RESET_TOKEN:
+            for _a in BASELINE_RESET_ACTORS:
+                if existing.pop(_a, None) is not None:
+                    print(f"[Israel Rhetoric] Baseline reset for '{_a}' "
+                          f"(token {BASELINE_RESET_TOKEN}) -- its keyword net "
+                          f"changed, so the stored average described a "
+                          f"different actor.")
         updated = {}
         alpha = 0.2
         for actor_id, ar in actor_results.items():
@@ -1902,6 +1962,7 @@ def _update_actor_baselines(actor_results):
                     'avg_level': round(alpha * cl + (1-alpha) * prev.get('avg_level', cl), 3),
                     'scans': min(prev.get('scans', 1) + 1, 999),
                 }
+        updated['_reset_token'] = BASELINE_RESET_TOKEN
         _redis_set(BASELINE_KEY, updated, ttl=30*24*3600)
         return updated
     except Exception as e:
@@ -2512,6 +2573,368 @@ def _decay_level(level, weight):
     return int(round((level or 0) * weight))
 
 
+# ============================================================================
+# PALESTINIAN FINANCIAL ACCESS — RHETORIC LANES  (v1.1.0, Oct 3 2026)
+# ----------------------------------------------------------------------------
+# The STATE of Palestinian financial access lives in israel_stability.py and is
+# deliberately unscored. THIS is the other half: how the mechanisms are being
+# TALKED ABOUT, and whether the talk is turning operational.
+#
+# Same lane vocabulary as the stability block on purpose. One lane taxonomy
+# across both layers means a reader can line them up; two vocabularies for one
+# subject is how a platform ends up arguing with itself.
+#
+# WHAT IS SCORED HERE, AND WHAT IS NOT.
+#   Scored:     which sub-lane the language has reached, per lane.
+#   NOT scored: any 0-100 index, any rollup across lanes, any probability.
+# The sub-lanes are ORDERED but they are a description of where language has
+# got to, not a forecast of where it goes next:
+#
+#   quiet -> narrative_only -> mobilization_language -> violence_linked
+#
+# Reaching 'violence_linked' means economic grievance is being publicly tied to
+# resistance or violence IN THE REPORTING. It does not mean violence follows.
+# It means a pattern is present that has historically preceded mobilization,
+# and naming patterns is the job. Predicting outcomes is not.
+#
+# ── THE COMMENTARY TRAP ──
+# 'Economic intifada', 'PA collapse' and 'fiscal strangulation' appear
+# constantly in think-tank and op-ed writing that is ABOUT the risk rather than
+# evidence of it. Without a guard the mobilization lane reads analysis as
+# mobilization, and the sensor ends up measuring the commentariat.
+#
+# The guard does NOT discard commentary. Discarding it would hide corpus
+# composition and quietly shrink the denominator. Instead every hit is filed as
+# FIRSTHAND or COMMENTARY, both counts are published, and only firsthand moves
+# the lane state. The reader can see the split and judge it.
+#
+# (The scoping note said to clone military_tracker's roundup_guard. That file
+# is ~500KB and every read of it truncates on me, so rather than claim to have
+# cloned something I could not actually see, this guard is written fresh and
+# documented here. If the military_tracker original turns out to be better,
+# this should be replaced by it rather than both drifting.)
+# ============================================================================
+
+FIN_RHETORIC_LANES = {
+    'A_correspondent_banking': {
+        'label': 'Correspondent banking',
+        'kw': [
+            'correspondent banking', 'indemnity waiver', 'bank indemnity',
+            'shekel clearing', 'clearing services', 'palestinian banks',
+            'palestine monetary authority', 'de-risking',
+            'כתב שיפוי', 'שירותי סליקה', 'בנקים פלסטיניים', 'סליקת שקלים',
+            'المراسلة المصرفية', 'البنوك الفلسطينية', 'سلطة النقد الفلسطينية',
+            'المقاصة المصرفية',
+        ],
+    },
+    'B_clearance_revenue': {
+        'label': 'Clearance revenue',
+        'kw': [
+            'clearance revenue', 'clearance funds', 'tax revenues withheld',
+            'withholding revenues', 'customs revenue', 'paris protocol',
+            'palestinian authority revenue', 'revenue transfer',
+            'כספי המסים', 'כספי הסליקה', 'הקפאת כספי המסים', 'קיזוז כספי',
+            'أموال المقاصة', 'عائدات الضرائب', 'حجز أموال المقاصة',
+            'اقتطاع أموال المقاصة', 'بروتوكول باريس',
+        ],
+    },
+    'C_pa_payroll': {
+        'label': 'PA payroll & services',
+        'kw': [
+            'pa salaries', 'palestinian authority salaries', 'partial salaries',
+            'civil servants salaries', 'public sector salaries', 'salary arrears',
+            'unpaid salaries', 'palestinian authority collapse', 'pa fiscal crisis',
+            'משכורות הרשות', 'שכר עובדי הרשות', 'תשלום משכורות חלקי',
+            'رواتب الموظفين', 'رواتب السلطة', 'أزمة الرواتب', 'صرف الرواتب',
+        ],
+    },
+    'C1_security_force_payroll': {
+        'label': 'Security-force payroll',
+        'kw': [
+            'security forces salaries', 'security forces pay',
+            'palestinian security forces salaries', 'police salaries',
+            'security services payroll', 'security coordination',
+            'משכורות כוחות הביטחון', 'שכר כוחות הביטחון הפלסטיניים',
+            'رواتب الأجهزة الأمنية', 'رواتب الأمن الفلسطيني', 'رواتب الشرطة',
+        ],
+    },
+    'D_reconstruction_finance': {
+        'label': 'Gaza reconstruction finance',
+        'kw': [
+            'gaza reconstruction', 'board of peace', 'reconstruction funding',
+            'reconstruction disbursement', 'donor conference gaza',
+            'reconstruction conditionality',
+            'שיקום עזה', 'מועצת השלום', 'מימון שיקום',
+            'إعمار غزة', 'إعادة الإعمار', 'مجلس السلام', 'تمويل الإعمار',
+            'مؤتمر المانحين',
+        ],
+    },
+}
+
+# Sub-lane 1 — NARRATIVE. How the mechanism is being characterised. Three
+# competing frames; which one dominates is itself the signal.
+FIN_NARRATIVE_FRAMES = {
+    'strangulation': [
+        'strangulation', 'collective punishment', 'economic warfare', 'siege',
+        'starve the authority', 'financial siege', 'choking',
+        'חנק כלכלי', 'ענישה קולקטיבית',
+        'الخنق الاقتصادي', 'العقاب الجماعي', 'الحصار المالي', 'التجويع',
+    ],
+    'counterterrorism': [
+        'terror financing', 'terrorist financing', 'pay-for-slay',
+        'martyr payments', 'prisoner payments', 'money laundering risk',
+        'sanctions compliance', 'illicit finance',
+        'מימון טרור', 'תשלומים למחבלים',
+        'تمويل الإرهاب', 'غسل الأموال',
+    ],
+    'financial_stability': [
+        'financial stability', 'banking stability', 'systemic risk',
+        'liquidity', 'orderly transfer', 'technical arrangement',
+        'correspondent relationship risk',
+        'יציבות פיננסית', 'יציבות בנקאית',
+        'الاستقرار المالي', 'السيولة',
+    ],
+}
+
+# Sub-lane 2 — MOBILIZATION. Is the talk turning operational? These are
+# ACTIONS being announced, called for, or reported -- not adjectives.
+FIN_MOBILIZATION_KW = [
+    'general strike', 'economic intifada', 'mass protest', 'demonstrations',
+    'sit-in', 'refuse to cooperate', 'halt security coordination',
+    'suspend security coordination', 'civil servants strike',
+    'teachers strike', 'municipal shutdown', 'resignation of the government',
+    'storm the', 'march on', 'union announced',
+    'שביתה כללית', 'הפסקת התיאום הביטחוני', 'הפגנות המוניות',
+    'إضراب عام', 'انتفاضة اقتصادية', 'وقف التنسيق الأمني',
+    'مظاهرات حاشدة', 'اعتصام', 'إضراب الموظفين',
+]
+
+# Sub-lane 3 — VIOLENCE LINKAGE. Economic grievance publicly tied to armed
+# action. The highest-consequence read, and the easiest to get wrong, so the
+# phrases are deliberately narrow: they must link the two, not merely mention
+# both.
+FIN_VIOLENCE_LINK_KW = [
+    'recruitment driven by', 'joined the gunmen', 'unpaid officers joined',
+    'economic desperation fuels', 'poverty fuels recruitment',
+    'salaries or the gun', 'fighters recruited from unpaid',
+    'armed groups recruiting', 'policing vacuum', 'security vacuum',
+    'ואקום ביטחוני', 'גיוס על רקע כלכלי',
+    'الفراغ الأمني', 'التجنيد بدافع الفقر', 'البطالة تدفع للانضمام',
+]
+
+# Cross-lane — the actors who DECIDE. Their posture usually moves first.
+FIN_STAKEHOLDER_KW = [
+    'us treasury', 'treasury department', 'ofac', 'imf', 'article iv',
+    'world bank', 'ahlc', 'ad hoc liaison committee',
+    'האוצר האמריקאי', 'קרן המטבע הבינלאומית', 'הבנק העולמי',
+    'وزارة الخزانة الأمريكية', 'صندوق النقد الدولي', 'البنك الدولي',
+]
+
+# The guard. Markers that an item is ABOUT the risk rather than reporting it.
+FIN_COMMENTARY_MARKERS = [
+    'op-ed', 'opinion |', '| opinion', 'commentary', 'analysis:', 'explainer',
+    'what to know', 'what you need to know', 'weekly roundup', 'roundup:',
+    'digest:', 'podcast', 'book review', 'long read', 'essay',
+    'think tank', 'policy brief', 'working paper', 'issue brief',
+    'argues that', 'writes that', 'the case for', 'the case against',
+    'why israel', 'why the pa', 'how the pa', 'what happens if',
+    'דעה', 'פרשנות', 'מאמר דעה', 'ניתוח',
+    'مقال رأي', 'تحليل', 'وجهة نظر', 'قراءة في',
+]
+
+
+def _fin_is_commentary(text, source=''):
+    """True when the item reads as writing ABOUT the risk, not reporting of it.
+
+    Never used to DISCARD anything -- only to file it in a separate bucket, so
+    corpus composition stays visible and the denominator stays honest.
+    """
+    blob = (text or '') + ' ' + (source or '')
+    low = blob.lower()
+    return any(m in low for m in FIN_COMMENTARY_MARKERS)
+
+
+def _fin_hits(text, kws):
+    return [k for k in kws if k in text or k in text.lower()]
+
+
+def _detect_financial_access_rhetoric(articles):
+    """Lane-separated rhetoric read on Palestinian financial access.
+
+    Per lane: which narrative frames are present, whether language has turned
+    operational, and whether economic grievance is being linked to violence --
+    with firsthand and commentary counted separately throughout.
+
+    ORDERED STATES, NOT A FORECAST:
+        quiet -> narrative_only -> mobilization_language -> violence_linked
+    A lane at 'violence_linked' is a lane where a pattern that has historically
+    preceded mobilization is present in the reporting. Nothing here asserts
+    what happens next.
+    """
+    arts = articles or []
+    lanes = {}
+    corpus_firsthand = 0
+    corpus_commentary = 0
+
+    for key, lane in FIN_RHETORIC_LANES.items():
+        matched_fh, matched_cm = [], []
+        frames = {f: 0 for f in FIN_NARRATIVE_FRAMES}
+        mob_fh = mob_cm = 0
+        vio_fh = vio_cm = 0
+        examples = []
+
+        for a in arts:
+            raw = (a.get('title') or '') + ' ' + (a.get('description') or '')
+            low = raw.lower()
+            if not _fin_hits(raw, lane['kw']) and not any(k in low for k in lane['kw']):
+                continue
+            commentary = _fin_is_commentary(raw, a.get('source', ''))
+            (matched_cm if commentary else matched_fh).append(a)
+
+            for fname, fkw in FIN_NARRATIVE_FRAMES.items():
+                if any(k in low or k in raw for k in fkw):
+                    frames[fname] += 1
+
+            is_mob = any(k in low or k in raw for k in FIN_MOBILIZATION_KW)
+            is_vio = any(k in low or k in raw for k in FIN_VIOLENCE_LINK_KW)
+            if is_mob:
+                if commentary:
+                    mob_cm += 1
+                else:
+                    mob_fh += 1
+            if is_vio:
+                if commentary:
+                    vio_cm += 1
+                else:
+                    vio_fh += 1
+
+            if (is_mob or is_vio) and not commentary and len(examples) < 4:
+                examples.append({
+                    'title': (a.get('title') or '')[:120],
+                    'url': a.get('url', ''),
+                    'source': a.get('source', ''),
+                    'sub_lane': 'violence_linkage' if is_vio else 'mobilization',
+                })
+
+        corpus_firsthand += len(matched_fh)
+        corpus_commentary += len(matched_cm)
+
+        # STATE. Only firsthand moves it. Commentary is reported, never promoted.
+        if vio_fh:
+            state = 'violence_linked'
+        elif mob_fh:
+            state = 'mobilization_language'
+        elif matched_fh or any(frames.values()):
+            state = 'narrative_only'
+        else:
+            state = 'quiet'
+
+        dominant = None
+        if any(frames.values()):
+            dominant = max(frames.items(), key=lambda kv: kv[1])[0]
+
+        if state == 'quiet':
+            reading = ('No firsthand reporting on this mechanism in the window'
+                       + (' (%d commentary item(s) seen and held separately)'
+                          % len(matched_cm) if matched_cm else '')
+                       + '. Absence of observation, not observation of absence.')
+        elif state == 'narrative_only':
+            reading = ('Discussed but not operational: %d firsthand item(s), '
+                       'dominant frame %s. Consistent with the mechanism being '
+                       'contested in public argument.'
+                       % (len(matched_fh), dominant or 'none'))
+        elif state == 'mobilization_language':
+            reading = ('Language has turned operational: %d firsthand item(s) '
+                       'reference strikes, withdrawals, demonstrations or '
+                       'refusal to cooperate. This is co-occurring with the '
+                       'financial mechanism, and has historically preceded '
+                       'broader mobilization. It is not a forecast that '
+                       'mobilization follows.' % mob_fh)
+        else:
+            reading = ('Economic grievance is being publicly linked to armed '
+                       'action or a policing vacuum in %d firsthand item(s). '
+                       'This is the pattern this lane exists to name. It '
+                       'describes the reporting, not an outcome.' % vio_fh)
+
+        lanes[key] = {
+            'label': lane['label'],
+            'state': state,
+            'firsthand_count': len(matched_fh),
+            'commentary_count': len(matched_cm),
+            'narrative_frames': frames,
+            'dominant_frame': dominant,
+            'mobilization': {'firsthand': mob_fh, 'commentary': mob_cm},
+            'violence_linkage': {'firsthand': vio_fh, 'commentary': vio_cm},
+            'examples': examples,
+            'reading': reading,
+        }
+
+    sh_fh = sh_cm = 0
+    sh_examples = []
+    for a in arts:
+        raw = (a.get('title') or '') + ' ' + (a.get('description') or '')
+        low = raw.lower()
+        if not any(k in low or k in raw for k in FIN_STAKEHOLDER_KW):
+            continue
+        if not any(any(k in low or k in raw for k in L['kw'])
+                   for L in FIN_RHETORIC_LANES.values()):
+            continue   # stakeholder named, but not about financial access
+        if _fin_is_commentary(raw, a.get('source', '')):
+            sh_cm += 1
+        else:
+            sh_fh += 1
+            if len(sh_examples) < 3:
+                sh_examples.append({'title': (a.get('title') or '')[:120],
+                                    'url': a.get('url', ''),
+                                    'source': a.get('source', '')})
+
+    order = ['quiet', 'narrative_only', 'mobilization_language', 'violence_linked']
+    highest = 'quiet'
+    for L in lanes.values():
+        if order.index(L['state']) > order.index(highest):
+            highest = L['state']
+    lanes_at_highest = [k for k, L in lanes.items() if L['state'] == highest]
+
+    total = corpus_firsthand + corpus_commentary
+    commentary_share = round(corpus_commentary / total, 2) if total else 0.0
+
+    headline = {
+        'quiet': 'No firsthand financial-access rhetoric in the window.',
+        'narrative_only': 'Financial access is being argued about, not acted on.',
+        'mobilization_language': 'Financial-access language has turned operational in %d lane(s).' % len(lanes_at_highest),
+        'violence_linked': 'Economic grievance is being linked to armed action in %d lane(s).' % len(lanes_at_highest),
+    }[highest]
+
+    return {
+        'block_version': '1.1.0',
+        'scored': False,
+        'highest_state': highest,
+        'lanes_at_highest': lanes_at_highest,
+        'headline': headline,
+        'lanes': lanes,
+        'stakeholder_voice': {
+            'firsthand': sh_fh, 'commentary': sh_cm, 'examples': sh_examples,
+            'note': ('US Treasury, IMF, World Bank and AHLC decide rather than '
+                     'react, so their posture often moves before the '
+                     'consequence is visible on the ground.'),
+        },
+        'corpus': {
+            'firsthand': corpus_firsthand,
+            'commentary': corpus_commentary,
+            'commentary_share': commentary_share,
+            'guard_note': ('Commentary is counted and shown, never discarded and '
+                           'never promoted. Only firsthand reporting moves a '
+                           'lane state. A high commentary share means the '
+                           'corpus is mostly writing ABOUT the risk -- which is '
+                           'a fact about the press, not about Ramallah.'),
+        },
+        'state_ladder': order,
+        'doctrine_note': ('Ordered states describe where language has got to. '
+                          'They are not a forecast of where it goes next. This '
+                          'block produces no index and no probability.'),
+    }
+
+
 def classify_articles(articles):
     actor_results = {
         actor_id: {
@@ -2972,6 +3395,24 @@ def run_israel_rhetoric_scan(days=3):
               f"(blocking={_g.get('blocking_gate')}, freeze={_g.get('freeze_reading')})")
     except Exception as _e:
         print(f"[Israel Rhetoric] Gaza gate read failed: {str(_e)[:120]}")
+
+    # Palestinian financial access rhetoric (v1.1.0) -- lanes A-D + C1, with
+    # narrative / mobilization / violence-linkage sub-lanes and a commentary
+    # guard. Unscored: ordered states, no index.
+    try:
+        result['financial_access_rhetoric'] = _detect_financial_access_rhetoric(articles)
+        _fa = result['financial_access_rhetoric']
+        print(f"[Israel Rhetoric] Financial access: {_fa['highest_state']} "
+              f"in {len(_fa['lanes_at_highest'])} lane(s) | corpus "
+              f"{_fa['corpus']['firsthand']} firsthand / "
+              f"{_fa['corpus']['commentary']} commentary "
+              f"(share {_fa['corpus']['commentary_share']})")
+    except Exception as _e:
+        print(f"[Israel Rhetoric] Financial access rhetoric failed: {str(_e)[:120]}")
+        result['financial_access_rhetoric'] = {
+            'scored': False, 'highest_state': 'could_not_assess',
+            'headline': 'Block failed to build -- this is NOT a reading of quiet.',
+            'error': str(_e)[:160], 'lanes': {}}
 
     # Signal interpretation — So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
