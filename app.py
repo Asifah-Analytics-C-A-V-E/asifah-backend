@@ -408,6 +408,22 @@ except Exception as e:
     CONVERGENCE_DETECTOR_AVAILABLE = False
     print(f"[ME Backend] Convergence detector not available: {e}")
 
+# Corridor dependence (v1.0.0, Oct 4 2026) -- EDGE to NODE.
+# Europe's corridor_registry answers "is the route passable"; the convergence
+# detector asks, per country, "what is happening HERE". Nothing joined them,
+# because a corridor is an EDGE and the detector is NODE-shaped. This module
+# multiplies corridor state by each country's dependence share.
+# Pure analyst overlay: READS corridor:<id>:latest, writes nothing.
+# Dependence is a MULTIPLIER, never a signal -- a constant structural fact
+# must not emit every scan forever. See claude/CORRIDOR_SENSOR_SCOPING.md.
+try:
+    from corridor_dependence import register_corridor_dependence_endpoints
+    CORRIDOR_DEPENDENCE_AVAILABLE = True
+    print("[ME Backend] Corridor dependence module loaded")
+except Exception as e:
+    CORRIDOR_DEPENDENCE_AVAILABLE = False
+    print(f"[ME Backend] Corridor dependence not available: {e}")
+
 # Tempo Baseline Engine (v1.0 -- Jul 12, 2026)
 # Generic actor/tape baseline engine. Lives HERE (primary backend) because the
 # algorithm is shared; the DATA is local and arrives via the shared Upstash Redis
@@ -1444,6 +1460,12 @@ if CONVERGENCE_ENDPOINTS_AVAILABLE:
 if CONVERGENCE_DETECTOR_AVAILABLE:
     register_convergence_detector_endpoints(app)
     print("[ME Backend] Convergence detector registered: /api/cax/probe")
+
+# Corridor dependence -- /api/corridor-dependence/*
+if CORRIDOR_DEPENDENCE_AVAILABLE:
+    register_corridor_dependence_endpoints(app)
+    print("[ME Backend] ✅ Corridor dependence registered: "
+          "/api/corridor-dependence, /<country_id>")
 
 # Tempo Baseline Engine -- /api/tempo/*
 if TEMPO_AVAILABLE:
