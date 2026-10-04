@@ -424,6 +424,7 @@ except Exception as e:
 # Local imports last
 from rss_monitor import (
     fetch_all_rss,
+    fetch_israeli_rss,
     enhance_article_with_leadership,
     apply_leadership_multiplier,
     fetch_airline_disruptions,
@@ -4002,69 +4003,26 @@ def fetch_ravid_articles(target='general'):
 
 
 def fetch_israel_news_rss():
-    """Fetch articles from Israeli news RSS feeds"""
-    articles = []
-    
-    feeds = {
-        'Times of Israel': 'https://www.timesofisrael.com/feed/',
-        'Jerusalem Post': 'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
-        'i24NEWS': 'https://www.i24news.tv/en/rss',
-    }
-    
-    for source_name, feed_url in feeds.items():
-        _t0 = time.time()
-        _before = len(articles)
-        try:
-            response = requests.get(feed_url, timeout=15, headers={
-                'User-Agent': ASIFAH_USER_AGENT
-            })
-            
-            if response.status_code != 200:
-                # v3.4.0 -- this used to be a bare continue: a feed could 403
-                # on every scan forever and never appear anywhere.
-                _rss_record(feed_url, source_name,
-                            http_status=response.status_code, t0=_t0)
-                continue
-            
-            try:
-                root = ET.fromstring(response.content)
-            except ET.ParseError:
-                _rss_record(feed_url, source_name, http_status=200,
-                            error='XML parse error (HTTP 200 but not RSS)', t0=_t0)
-                continue
-            
-            items = root.findall('.//item')
-            
-            for item in items[:15]:
-                title_elem = item.find('title')
-                link_elem = item.find('link')
-                pubDate_elem = item.find('pubDate')
-                description_elem = item.find('description')
-                
-                if title_elem is not None and link_elem is not None:
-                    pub_date = pubDate_elem.text if pubDate_elem is not None else datetime.now(timezone.utc).isoformat()
-                    description = description_elem.text[:500] if description_elem is not None and description_elem.text else ''
-                    
-                    articles.append({
-                        'title': title_elem.text or '',
-                        'description': description,
-                        'url': link_elem.text or '',
-                        'publishedAt': pub_date,
-                        'source': {'name': source_name},
-                        'content': description,
-                        'language': 'en'
-                    })
-            
-            print(f"[{source_name}] ✓ Fetched {len([a for a in articles if a['source']['name'] == source_name])} articles")
-            _rss_record(feed_url, source_name, items=len(articles) - _before,
-                        http_status=200, t0=_t0)
-            
-        except Exception as e:
-            print(f"[{source_name}] Error: {str(e)[:100]}")
-            _rss_record(feed_url, source_name, error=e, t0=_t0)
-            continue
-    
-    return articles
+    """Israeli publisher feeds. Thin delegate -- rss_monitor owns the list.
+
+    v3.6.0 (Oct 4 2026). This used to carry its OWN dict of three Israeli
+    feeds while rss_monitor.ISRAELI_RSS_FEEDS carried five for the same
+    publishers at different URLs. Which set a scan actually used depended on
+    which target triggered it: _refresh_target('iran') reached rss_monitor's
+    via fetch_all_rss(), _refresh_target('israel') reached this copy. Two
+    definitions of "the Israeli press", silently disagreeing.
+
+    rss_monitor is imported BY this file, so that is where the list belongs.
+    The article dict it returns is key-for-key identical to what this function
+    built -- title, description, url, publishedAt, source.name, content,
+    language -- so every caller is unaffected.
+
+    DELIBERATE BEHAVIOUR CHANGE, stated rather than buried: callers of this
+    function now also receive Ynet and Haaretz, which rss_monitor always had
+    and this copy never did. More coverage on the Israel path, and feed_health
+    reports all six under their own names.
+    """
+    return fetch_israeli_rss()
     
 # ========================================
 # JORDAN-SPECIFIC THREAT CALCULATIONS
