@@ -2348,6 +2348,42 @@ COUNTRY_COMMODITY_EXPOSURE = {
             'graphite':     {'role': 'consumer',          'weight': 1.0,
                          'note': "Anode-manufacturing heavyweight (POSCO Future M) with deep exposure to Chinese spherical-graphite permits -- Seoul's battery chain is the canary for Beijing's graphite-control enforcement. Watch: POSCO Future M sourcing announcements, Korea-China permit friction, IRA-compliant sourcing shifts."},
 },
+    # ─────────────────────────────────────────────────────────────────────
+    # SYRIA (added Oct 4 2026)
+    #
+    # Syria was absent from this registry entirely, which meant the country
+    # carried in corridor_dependence as a Black Sea wheat consumer had NO
+    # commodity axis at all -- its logistics reading could fire with nothing
+    # beside it to corroborate.
+    #
+    # THE ANALYTICAL POINT, and the reason this entry reads differently from
+    # Lebanon's: Syria is the only country in the Levant that USED to feed
+    # itself. Pre-2011 it was broadly wheat self-sufficient and in good years a
+    # net exporter; the Jazira (Hasakah, Raqqa, Deir ez-Zor) was the breadbasket
+    # of the region. That capacity did not vanish -- it went out of Damascus's
+    # reach. The wheat belt and the oil fields are the SAME northeast, and the
+    # January 2026 SDF integration agreement is therefore a COMMODITY event as
+    # much as a security one: if it holds, Damascus regains administrative
+    # access to domestic wheat and domestic crude for the first time since the
+    # early war years. Syria is the one case on this platform where the import
+    # dependency could structurally REVERSE.
+    #
+    # UNVERIFIED (2026-10-04): Syria's Black Sea dependence SHARE is a draft
+    # figure in corridor_dependence (0.20) awaiting analyst verification. No
+    # share is asserted here -- the notes below are qualitative by design, so a
+    # draft number does not acquire a second, independent-looking home. One
+    # writer owns that number and it is not this file.
+    # ─────────────────────────────────────────────────────────────────────
+    'syria': {
+        'wheat':        {'role': 'consumer',          'weight': 1.5,
+                         'note': "Pre-2011 Syria was broadly wheat SELF-SUFFICIENT and in good years a net exporter -- the Jazira (Hasakah, Raqqa, Deir ez-Zor) supplied much of the Levant. War, displacement, destroyed irrigation and the loss of the northeastern wheat belt to forces outside Damascus's control collapsed that position, and Syria became a major importer, overwhelmingly on Russian state-to-state terms under Assad that were political as much as commercial. TWO LIVE STRUCTURAL VARIABLES since the December 2024 power shift: (1) whether the Russian supply relationship survives the transition at all, and (2) the January 2026 SDF integration agreement -- if it holds, Damascus regains administrative access to the domestic wheat belt for the first time since the early war years. Bread subsidy is politically load-bearing, as in Egypt. Compounding factor: ~7M IDPs and an active humanitarian caseload mean an import disruption lands on a population with no absorptive margin. Black Sea dependence share is DRAFT in corridor_dependence pending verification -- treat the direction as established and the magnitude as not. Watch: Russian wheat shipment reporting to Latakia/Tartus, SDF-Damascus grain-administration handover, GASC-equivalent tender behaviour, harvest reporting out of Hasakah."},
+        'oil':          {'role': 'consumer',          'weight': 1.2,
+                         'note': "Modest pre-war producer (~385k bpd in 2010) reduced to a fraction of that. The geography is the whole story: the producing fields (Deir ez-Zor, Hasakah) sit in the SAME northeast as the wheat belt, so Damascus spent the war importing crude -- largely Iranian, on terms that were a sanctions-evasion arrangement rather than a market -- while sitting on domestic reserves it could not reach. Refining (Baniyas, Homs) is degraded. Post-Assad the Iranian supply line is in question and the SDF integration agreement is the same structural variable as for wheat. Watch: Iranian tanker arrivals at Baniyas, SDF-Damascus field-administration terms, Baniyas/Homs refinery throughput reporting."},
+        'natural_gas':  {'role': 'consumer',          'weight': 0.8,
+                         'note': "Domestic fields exist (Palmyra/central basin, Hayan, Jihar) but output and the transmission grid are both war-degraded, and generation capacity is the binding constraint rather than molecules. Power availability is measured in hours per day, which puts gas in the same street-level-consequence category as fuel in Lebanon. Watch: generation-hours reporting, field rehabilitation announcements, Arab Gas Pipeline restoration talk (Egypt-Jordan-Syria), grid-repair financing."},
+        'corn':         {'role': 'consumer',          'weight': 0.7,
+                         'note': "Animal-feed import dependency mirroring the Lebanon and Egypt pattern; Black Sea corridor primary source. Secondary to wheat in both volume and political salience, but it compounds the same household food-cost channel."},
+    },
     'taiwan': {
         'silicon':      {'role': 'consumer', 'weight': 1.5, 'rank': 1,
                          'note': "Demand center of gravity: TSMC's fabs consume the wafers, HPQ crucibles, and polysilicon-derived silicon at the leading edge -- the strategic prize of the entire chain. Cross-strait disruption transmits directly to global chip + silicon-feedstock supply."},
@@ -4988,6 +5024,15 @@ def _country_strategic_appendix(target, profile):
             "approximately 20% of global oil transit passes. Its wheat dependency creates "
             "domestic stability risk (1979 Revolution echo); its gold trade is the primary "
             "sanctions evasion vehicle."
+        ),
+        'syria': (
+            "Syria is the platform's only potential import-dependency REVERSAL. It was "
+            "broadly wheat self-sufficient before 2011; the capacity did not disappear, it "
+            "went out of Damascus's reach. The wheat belt and the oil fields are the same "
+            "northeast, so the January 2026 SDF integration agreement is a commodity event "
+            "as much as a security one. Read Syria's commodity exposure as a question — "
+            "does the country get its breadbasket back — rather than as a fixed dependency. "
+            "Dependence magnitude is DRAFT pending verification; the direction is not."
         ),
         'lebanon': (
             "Lebanon's commodity vulnerability is structural — zero domestic refining capacity, "
