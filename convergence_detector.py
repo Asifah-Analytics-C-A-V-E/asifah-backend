@@ -1,7 +1,7 @@
 """
 =======================================================================
   ASIFAH ANALYTICS -- CONVERGENCE DETECTOR (multi-axis, live)
-  v0.4.0 (Jun 6 2026) -- STEP 4: HISTORY + SO-WHAT PROSE
+  v0.7.0 (Oct 4 2026) -- STEP 7: LOGISTICS AXIS (corridor dependence)
 =======================================================================
 
 WHAT THIS IS
@@ -20,6 +20,14 @@ WHAT THIS IS
                            countries WITHOUT rhetoric trackers -- the axis
                            that lets Africa (e.g. an Ebola outbreak) read as
                            convergence even with no rhetoric page.
+    Axis 5 -- LOGISTICS  : corridor_dependence         (reads corridor:<id>:latest)
+                           Route integrity x dependence share. THE EDGE/NODE
+                           AXIS: a corridor is an EDGE (Black Sea closure
+                           happens between countries, not in one), and this
+                           detector is NODE-shaped. corridor_dependence does
+                           the translation; this axis consumes the result.
+                           Lebanon reads here not because it is in the Black
+                           Sea but because 85%% of its wheat crosses it.
 
 NORMALIZATION (common 0-3 intensity ladder)
     kinetic / commodity band : normal=0 elevated=1 high=2 surge=3
@@ -80,6 +88,17 @@ RHETORIC_BLUF_KEYS  = {
     # 'africa': 'rhetoric:africa:regional_bluf',   # FUTURE -- BLUF not built yet
 }
 HUMANITARIAN_CACHE_KEY = 'humanitarian_convergence:bluf:latest'
+
+# Axis 5 source. Optional import: no module, no axis, no behaviour change --
+# the same posture every other optional module on this platform uses.
+try:
+    from corridor_dependence import read_all as _dep_read_all
+    _LOGISTICS_AVAILABLE = True
+except ImportError:
+    _dep_read_all = None
+    _LOGISTICS_AVAILABLE = False
+    print('[ConvergenceDetector] corridor_dependence not installed -- '
+          'logistics axis will not weigh in')
 
 # History config
 HIST_KEY_PREFIX       = 'cax:hist:'
@@ -142,14 +161,41 @@ def _redis_pipeline(commands):
 BAND_INTENSITY = {'normal': 0, 'elevated': 1, 'high': 2, 'surge': 3}
 RHETORIC_LEVEL_INTENSITY = {0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 3}
 HUMANITARIAN_LEVEL_INTENSITY = {3: 1, 4: 2, 5: 3}   # any humanitarian signal => active
-TIER_BY_COUNT = {0: 'quiet', 1: 'single', 2: 'dual', 3: 'triple', 4: 'quad'}
-TIER_RANK = {'quad': 4, 'triple': 3, 'dual': 2, 'single': 1, 'quiet': 0}
-TIER_WORD = {'quad': 'quadruple', 'triple': 'triple', 'dual': 'dual', 'single': 'single-axis'}
+# v0.7.0 -- a FIFTH tier, not a wider clamp. The old code did
+# TIER_BY_COUNT[min(count, 4)], which with five axes would have reported a
+# five-axis country as 'quad' -- quietly discarding the strongest reading the
+# platform can produce. Same bug class as the Africa L6 rung that clamped a
+# red-line breach down to 'Monitoring'.
+TIER_BY_COUNT = {0: 'quiet', 1: 'single', 2: 'dual', 3: 'triple', 4: 'quad',
+                 5: 'quint'}
+TIER_RANK = {'quint': 5, 'quad': 4, 'triple': 3, 'dual': 2, 'single': 1, 'quiet': 0}
+TIER_WORD = {'quint': 'quintuple', 'quad': 'quadruple', 'triple': 'triple',
+             'dual': 'dual', 'single': 'single-axis'}
+
+# THE ORDER AXES ARE NAMED IN. One list, so adding axis 6 means touching this
+# and nothing else -- the old code spelled the four out in five places.
+AXES = ('kinetic', 'commodity', 'rhetoric', 'humanitarian', 'logistics')
 
 # A commodity headline shared across this many countries is a GLOBAL commodity
 # condition (one macro story stamped onto every exposed country), not per-country
 # corroboration. v0.5.0 detects + EXPOSES these; tier-demotion is a later flip.
 GLOBAL_COMMODITY_MIN = 6
+
+# WHICH AXES MAY BE DEMOTED AS 'SHARED GLOBAL' -- commodity ONLY. (v0.7.0)
+#
+# The demotion rule says: a headline shared across >= GLOBAL_COMMODITY_MIN
+# countries is one macro story stamped on every exposed country, not per-country
+# corroboration. That is correct for a market-wide price move.
+#
+# It is WRONG for logistics, and the error would be invisible. A Black Sea
+# closure is shared across every importer BY DEFINITION -- that is not noise,
+# it is the entire signal. Demoting it would delete exactly the convergence the
+# corridor sensor was built to find.
+#
+# The guard below is scoped by name rather than applied to every axis, and this
+# comment exists so nobody later "fixes" the inconsistency. For commodity,
+# shared means diffuse. For logistics, shared means real.
+SHARED_GLOBAL_DEMOTABLE_AXES = {'commodity'}
 _NAME_TOKENS = {
     'usa': ['united states', 'u.s.', 'us-', '-us', 'us '],
     'uae': ['uae', 'emirates'], 'drc': ['dr congo', 'congo', 'drc'],
@@ -163,6 +209,7 @@ AXIS_PHRASE = {
     'commodity':    'commodity-supply pressure in news flow',
     'rhetoric':     'escalatory official rhetoric',
     'humanitarian': 'humanitarian distress reporting (displacement, disease, food)',
+    'logistics':    'supply-route integrity on the corridors this country depends on',
 }
 
 # Humanitarian detector emits sub-national ids; roll the high-value ones up to
@@ -303,6 +350,52 @@ def _read_humanitarian():
     return out, True
 
 
+def _read_logistics():
+    """Axis 5. Corridor state x dependence share, via corridor_dependence.
+
+    CONVENTION, matching the other readers: a country PRESENT with intensity 0
+    means "covered but quiet"; a country ABSENT means "no coverage". An unsensed
+    corridor chain therefore yields ABSENCE, never a 0 -- because 0 reads as
+    calm and we do not know that the route is calm, only that we cannot see it.
+    That distinction is the whole reason the corridor module exists.
+    """
+    if not _LOGISTICS_AVAILABLE:
+        return {}, False
+    try:
+        payload = _dep_read_all()
+    except Exception as e:
+        print(f"[ConvergenceDetector] logistics read error: {e}")
+        return {}, False
+
+    out = {}
+    for rec in (payload.get('countries') or []):
+        if not rec.get('sensed') or rec.get('intensity') is None:
+            continue                      # unread chain => absent, not zero
+        # the hop actually doing the binding, for the driver line
+        binding = None
+        for com in (rec.get('commodities') or []):
+            for hop in (com.get('hops') or []):
+                if hop.get('intensity') is None:
+                    continue
+                if binding is None or hop['intensity'] > binding['intensity']:
+                    binding = {**hop, 'commodity': com.get('commodity')}
+        label = binding['corridor_state'] if binding else 'sensed'
+        driver = None
+        if binding:
+            driver = {'label': (f"{binding.get('commodity', 'supply')} via "
+                                f"{binding['corridor']} ({binding['corridor_state']}, "
+                                f"{binding['share']:.0%} dependent)"),
+                      'corridor': binding['corridor'],
+                      'corridor_state': binding['corridor_state'],
+                      'share': binding['share']}
+        out[rec['country']] = {
+            'intensity': rec['intensity'], 'label': label,
+            'score': None, 'driver': driver,
+            'unverified': bool(rec.get('unverified_entries')),
+        }
+    return out, True
+
+
 # ----------------------------------------------------------------------
 # History: read the rolling series for a set of countries (one pipeline call)
 # ----------------------------------------------------------------------
@@ -403,7 +496,7 @@ def _maybe_snapshot(records, now_epoch, now_iso):
             'ts': now_iso, 'tier': r['tier'], 'active_count': r['active_count'],
             'summed_intensity': r['summed_intensity'],
             'axes': {a: (r['axes'][a]['intensity'] if r['axes'].get(a) else 0)
-                     for a in ('kinetic', 'commodity', 'rhetoric', 'humanitarian')},
+                     for a in AXES},
         }
         key = f"{HIST_KEY_PREFIX}{r['country']}"
         cmds.append(["LPUSH", key, json.dumps(snap)])
@@ -448,7 +541,7 @@ def _so_what(record, hist):
     lead = f"{disp}: {TIER_WORD.get(tier, tier)} convergence -- {n} independent signal stream{'s' if n != 1 else ''} active at once."
 
     # 2) what is co-active (plain language)
-    phrases = [AXIS_PHRASE[a] for a in ('kinetic', 'commodity', 'rhetoric', 'humanitarian') if a in active]
+    phrases = [AXIS_PHRASE[a] for a in AXES if a in active]
     if len(phrases) == 1:
         whatline = f" Active stream: {phrases[0]}."
     else:
@@ -459,14 +552,24 @@ def _so_what(record, hist):
         whatline += " (No rhetoric tracker for this country yet, so that axis can't weigh in.)"
 
     # 3) drivers from the active axes
+    _SHORT = {'kinetic': 'conflict', 'commodity': 'commodity',
+              'rhetoric': 'rhetoric', 'humanitarian': 'humanitarian',
+              'logistics': 'supply route'}
     drv_bits = []
     for a in active:
         t = _driver_text(cid_axes.get(a))
         if t:
-            short = 'conflict' if a == 'kinetic' else ('commodity' if a == 'commodity'
-                    else ('rhetoric' if a == 'rhetoric' else 'humanitarian'))
-            drv_bits.append(f"'{t}' ({short})")
+            drv_bits.append(f"'{t}' ({_SHORT.get(a, a)})")
     driverline = f" Leading drivers: {'; '.join(drv_bits[:2])}." if drv_bits else ""
+
+    # The logistics axis can be carrying UNVERIFIED dependence shares (Claude
+    # research awaiting Rachel's correction). Say so in the prose rather than
+    # letting a draft number read like a measured one.
+    log = cid_axes.get('logistics')
+    draftline = ""
+    if log and log.get('unverified') and 'logistics' in active:
+        draftline = (' (Supply-route exposure for this country uses DRAFT '
+                     'dependence shares pending analyst verification.)')
 
     # honesty: a shared_global commodity is elevated here but reflects a broad market-wide
     # move -- it is excluded from the tier above and surfaced separately as a global condition.
@@ -497,7 +600,7 @@ def _so_what(record, hist):
         histline = (" " + disp + " has " + "; ".join(parts) + ".") if parts else ""
 
     tail = " This is a convergence reading -- independent streams agreeing -- not a forecast of action."
-    return (lead + whatline + driverline + sharedline + histline + tail).strip()
+    return (lead + whatline + driverline + draftline + sharedline + histline + tail).strip()
 
 
 # ----------------------------------------------------------------------
@@ -568,10 +671,12 @@ def build_convergence():
     commodity, com_ok  = _read_commodity()
     rhetoric,  rhe_avail = _read_rhetoric()
     humanitarian, hum_ok = _read_humanitarian()
+    logistics, log_ok  = _read_logistics()
 
     global_conditions = _tag_commodity_clusters(commodity)
 
-    all_ids = set(kinetic) | set(commodity) | set(rhetoric) | set(humanitarian)
+    all_ids = (set(kinetic) | set(commodity) | set(rhetoric)
+               | set(humanitarian) | set(logistics))
     records = []
     for cid in all_ids:
         axes = {
@@ -579,20 +684,24 @@ def build_convergence():
             'commodity':    commodity.get(cid),
             'rhetoric':     rhetoric.get(cid),
             'humanitarian': humanitarian.get(cid),
+            'logistics':    logistics.get(cid),
         }
         # v0.6.0: a shared_global commodity axis (one headline across many exposed
         # countries) is relocated to the global-conditions layer -- it no longer
         # inflates this country's per-country convergence tier.
+        # v0.7.0: the demotion is gated on SHARED_GLOBAL_DEMOTABLE_AXES so it can
+        # never reach logistics. See that constant for why.
         active = [name for name, a in axes.items()
                   if a and a.get('intensity', 0) >= 1
-                  and not (name == 'commodity' and a.get('shared_global'))]
+                  and not (name in SHARED_GLOBAL_DEMOTABLE_AXES
+                           and a.get('shared_global'))]
         count = len(active)
         if count == 0:
             continue
         records.append({
             'country':          cid,
             'display':          _id_to_display(cid),
-            'tier':             TIER_BY_COUNT[min(count, 4)],
+            'tier':             TIER_BY_COUNT[min(count, len(AXES))],
             'active_count':     count,
             'active_axes':      active,
             'summed_intensity': sum(axes[a]['intensity'] for a in active),
@@ -609,13 +718,14 @@ def build_convergence():
         r['history'] = hist
         r['so_what'] = _so_what(r, hist)
 
-    tier_counts = {'quad': 0, 'triple': 0, 'dual': 0, 'single': 0}
+    tier_counts = {'quint': 0, 'quad': 0, 'triple': 0, 'dual': 0, 'single': 0}
     for r in records:
         tier_counts[r['tier']] += 1
 
     # Payload-level summary prose
     top = records[0]['display'] if records else None
-    summary = (f"{tier_counts['quad']} quad / {tier_counts['triple']} triple / "
+    summary = (f"{tier_counts['quint']} quint / {tier_counts['quad']} quad / "
+               f"{tier_counts['triple']} triple / "
                f"{tier_counts['dual']} dual / {tier_counts['single']} single-axis countries active"
                + (f"; strongest: {top}." if top else "."))
 
@@ -624,7 +734,8 @@ def build_convergence():
         'tier_counts':   tier_counts,
         'summary':       summary,
         'availability':  {'kinetic': kin_ok, 'commodity': com_ok,
-                          'rhetoric': rhe_avail, 'humanitarian': hum_ok},
+                          'rhetoric': rhe_avail, 'humanitarian': hum_ok,
+                          'logistics': log_ok},
         'global_conditions': global_conditions,
         'now_epoch':     now_epoch,
         'now_iso':       now_iso,
@@ -648,8 +759,8 @@ def register_convergence_detector_endpoints(app):
                 wrote = False
             return jsonify({
                 'success':         True,
-                'version':         '0.6.0',
-                'step':            '6 (global-commodity demotion live -- shared headlines relocated)',
+                'version':         '0.7.0',
+                'step':            '7 (logistics axis live -- corridor dependence joined; shared_global scoped to commodity)',
                 'generated_at':    result['now_iso'],
                 'tier_counts':     result['tier_counts'],
                 'summary':         result['summary'],
@@ -670,7 +781,7 @@ def register_convergence_detector_endpoints(app):
         cid = country.strip().lower()
         series = _read_history([cid]).get(cid, [])
         return jsonify({
-            'success': True, 'version': '0.6.0', 'country': cid,
+            'success': True, 'version': '0.7.0', 'country': cid,
             'display': _id_to_display(cid), 'readings': len(series),
             'series': series,
         })
@@ -682,14 +793,21 @@ def register_convergence_detector_endpoints(app):
         com = _redis_get(COMMODITY_CACHE_KEY)
         rhe = {r: bool(_redis_get(k)) for r, k in RHETORIC_BLUF_KEYS.items()}
         hum = _redis_get(HUMANITARIAN_CACHE_KEY)
+        log, log_ok = _read_logistics()
         return jsonify({
-            'success': True, 'version': '0.6.0',
+            'success': True, 'version': '0.7.0',
             'redis_configured': bool(_REDIS_URL and _REDIS_TOKEN),
             'kinetic_warm':      bool(kin),
             'commodity_warm':    bool(com),
             'rhetoric_warm':     rhe,
             'humanitarian_warm': bool(hum),
+            'logistics_module':  _LOGISTICS_AVAILABLE,
+            'logistics_warm':    log_ok,
+            'logistics_countries_sensed': len(log),
+            'logistics_note': ('0 sensed is EXPECTED until a corridor leading '
+                               'instrument reports. Absence here is missing '
+                               'data, not calm.'),
             'probed_at': datetime.now(timezone.utc).isoformat(),
         })
 
-    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/history/<c>, /api/cax/probe  (v0.6.0)")
+    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/history/<c>, /api/cax/probe  (v0.7.0)")
