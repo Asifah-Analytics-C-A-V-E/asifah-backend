@@ -153,6 +153,25 @@ except ImportError as e:
     _fetch_brave = None
     _BRAVE_AVAILABLE = False
 
+# ── Feed health (Oct 4 2026) ─────────────────────────────────────────
+# The twelve RSS feeds below reported NOTHING to feed_health. ME app.py and
+# rss_monitor.py have reported theirs since Sep 27; this module was missed.
+# That is the worst possible gap for a platform built on absence-honesty:
+# all twelve could be dead right now and the health page would read green,
+# because a tracker that finds no articles and a tracker whose sources are
+# all gone produce the identical output -- a quiet Oman.
+#
+# Recorded under backend 'me' so these land in the same report as the rest
+# of the ME backend rather than inventing a second namespace for one module.
+try:
+    from feed_health import record_fetch as _feed_record
+    _FEED_HEALTH = True
+    print('[Oman Rhetoric] feed_health loaded -- 12 RSS feeds now reporting')
+except ImportError as e:
+    _feed_record = None
+    _FEED_HEALTH = False
+    print(f'[Oman Rhetoric] feed_health unavailable ({e}) -- feed deaths will be SILENT')
+
 
 # ============================================
 # CONFIG
@@ -161,6 +180,13 @@ UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPS
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
 NEWSAPI_KEY         = os.environ.get('NEWSAPI_KEY')
 GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
+
+# v1.2.0 (Oct 4 2026) -- derived UA, per the Oct 3 platform-wide pass.
+# Was 'Mozilla/5.0 Asifah Analytics OSINT' -- honest in intent but carrying
+# no version, in a spelling used nowhere else on the platform.
+OMAN_TRACKER_VERSION = '1.2.0'
+OMAN_USER_AGENT = (f'AsifahAnalytics-ME-Oman/{OMAN_TRACKER_VERSION} '
+                   f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
 RHETORIC_CACHE_KEY  = 'rhetoric:oman:latest'
 HISTORY_KEY         = 'rhetoric:oman:history'
@@ -588,13 +614,28 @@ def _redis_set(key, value, ttl=None):
 # RSS FETCH
 # ============================================
 def _fetch_rss(url, source_name, weight=0.85, lang='en'):
-    """Fetch and parse an RSS feed. Returns list of article dicts."""
+    """Fetch and parse an RSS feed. Returns list of article dicts.
+
+    Every exit path reports to feed_health (Oct 4 2026). There are four, and
+    before today three of them returned quietly:
+      - non-2xx          -> returned [] with no trace at all
+      - unparseable XML  -> fell to the except, printed, no trace
+      - network error    -> fell to the except, printed, no trace
+      - success          -> no record either, so even a healthy feed was
+                            invisible to the report
+    A feed that 404s for a month now says so by name.
+    """
     articles = []
+    _t0 = time.time()
+    _ms = lambda: (time.time() - _t0) * 1000
     try:
         r = requests.get(url, timeout=(5, 10), headers={
-            'User-Agent': 'Mozilla/5.0 Asifah Analytics OSINT'
+            'User-Agent': OMAN_USER_AGENT
         })
         if not r.ok:
+            if _feed_record:
+                _feed_record('me', url, items=0, http_status=r.status_code,
+                             label=source_name, duration_ms=_ms())
             return []
         root = ET.fromstring(r.content)
         items = root.findall('.//item') or root.findall('.//{http://www.w3.org/2005/Atom}entry')
@@ -620,8 +661,19 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
                     'language':    lang,
                     'source_weight_override': weight,
                 })
+        if _feed_record:
+            # items=0 on a 200 is a FACT, not a failure -- feed_health
+            # classifies 'reached but quiet' separately from 'refused'.
+            _feed_record('me', url, items=len(articles),
+                         http_status=r.status_code,
+                         label=source_name, duration_ms=_ms())
     except Exception as e:
         print(f"[Oman RSS] {source_name} error: {str(e)[:100]}")
+        if _feed_record:
+            # Covers both a dead host and XML this parser cannot read.
+            # Either way the feed yielded nothing and the reason is kept.
+            _feed_record('me', url, items=0, error=e,
+                         label=source_name, duration_ms=_ms())
     return articles
 
 
@@ -1040,7 +1092,8 @@ def run_oman_rhetoric_scan(force=False):
             'success':              True,
             'theatre':              'Oman',
             'theatre_color':        '#0ea5e9',
-            'version':              '1.1 - September 2026 (shared gateways)',
+            'version':              OMAN_TRACKER_VERSION,
+            'feed_health_wired':     _FEED_HEALTH,
 
             # Composite scoring
             'threat_level':         composite['threat_level'],
