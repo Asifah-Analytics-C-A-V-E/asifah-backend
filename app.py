@@ -1375,8 +1375,16 @@ if FOOD_PULSE_AVAILABLE:
 
 # Global Pressure Index -- register after all regional BLUFs/rhetoric so it can read them
 if GPI_AVAILABLE:
-    register_gpi_routes(app)
-    print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+    try:
+        register_gpi_routes(app)
+        print("[ME Backend] ✅ GPI routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug")
+    except Exception as e:
+        # Matches the posture of the snapshot/delta registrations below. A
+        # registration failure should cost you the GPI routes, not the backend.
+        GPI_AVAILABLE = False
+        import traceback as _gpi_reg_tb
+        print(f"[ME Backend] ⚠️ GPI route registration FAILED: {type(e).__name__}: {e}")
+        _gpi_reg_tb.print_exc()
 
 # GPI tagging audit -- diagnostic only, reads build_gpi() in-process.
 # Must register AFTER the GPI itself for the same reason the snapshot does.
@@ -1511,10 +1519,31 @@ def debug_list_routes():
             'path':     str(rule),
         })
     routes.sort(key=lambda r: r['path'])
+    _paths = {r['path'] for r in routes}
+
+    # v3.6.0 (Oct 4 2026) -- gpi_present used to be a SUBSTRING test:
+    #     any('/api/gpi' in r['path'] for r in routes)
+    # '/api/gpi/delta' contains '/api/gpi', and the delta, snapshot, history and
+    # audit routes all come from DIFFERENT modules that import fine on their own.
+    # So on Oct 4, with global_pressure_index.py failing to parse and /api/gpi
+    # returning 404 on every request, this endpoint reported gpi_present: true.
+    # The one diagnostic built to catch a missing route (the Taiwan-bug lesson)
+    # reported healthy for the entire outage.
+    # Exact paths now, each named individually, so a PARTIAL load is visible too.
+    _gpi_core = {
+        '/api/gpi':       '/api/gpi' in _paths,
+        '/api/gpi/level': '/api/gpi/level' in _paths,
+        '/api/gpi/debug': '/api/gpi/debug' in _paths,
+    }
     return jsonify({
         'total_routes': len(routes),
-        'gpi_present':  any('/api/gpi' in r['path'] for r in routes),
+        'gpi_present':  all(_gpi_core.values()),
+        'gpi_core':     _gpi_core,
+        # Did the MODULE import at boot? Separates "import failed" from
+        # "imported but registration threw" without reading the log.
+        'gpi_module_imported': GPI_AVAILABLE,
         'bluf_present': any('/bluf' in r['path'] for r in routes),
+        'bluf_endpoints': sorted(p for p in _paths if '/bluf' in p),
         'routes':       routes,
     })
 
