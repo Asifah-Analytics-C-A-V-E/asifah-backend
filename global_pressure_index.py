@@ -169,6 +169,23 @@ GLOBAL_LEVEL_COLORS = {
 # per-country rollup that can gather every signal touching Iran regardless of
 # where it was filed.
 
+# v3.8.0 -- ONE country-id canon for the whole platform.
+try:
+    from country_ids import canonical as _canon, display as _canon_display
+    _CANON_AVAILABLE = True
+except ImportError:
+    _CANON_AVAILABLE = False
+    def _canon(x):
+        return (str(x).strip().lower().replace('-', '_').replace(' ', '_')
+                if x else '')
+    _canon_display = None
+    print('[GPI] *** country_ids NOT installed -- country tags will NOT be '
+          'canonicalized. GPI will keep disagreeing with the convergence '
+          'detector about us/usa and drc/dr congo. Deploy country_ids.py. ***')
+
+# SUPERSEDED v3.8.0 by country_ids.ALIASES. Kept because the two sets below
+# are still read to build _CANON_COUNTRY_SET, and because it records what this
+# file used to believe.
 COUNTRY_TOUCH_ALIASES = {
     'united states': 'us', 'usa': 'us', 'u.s.': 'us', 'america': 'us',
     'north korea': 'dprk', 'south korea': 'south_korea',
@@ -243,8 +260,15 @@ _COUNTRY_TOUCH_RE = re.compile(
 
 
 def _norm_country(name):
-    n = str(name or '').strip().lower().replace('-', ' ')
-    return COUNTRY_TOUCH_ALIASES.get(n, n.replace(' ', '_'))
+    """Any inbound country spelling -> the platform's canonical id."""
+    return _canon(name)
+
+
+_CANON_COUNTRY_SET = {_canon(t) for t in COUNTRY_TOUCH_TERMS}
+_CANON_COUNTRY_SET |= {_canon(v) for v in COUNTRY_TOUCH_ALIASES.values()}
+_CANON_COUNTRY_SET |= {_canon(c) for vals in GEO_FEATURE_COUNTRIES.values()
+                       for c in vals}
+_CANON_COUNTRY_SET.discard('')
 
 
 def _signal_countries(signal):
@@ -275,18 +299,18 @@ def _signal_countries(signal):
                     ('short_text', 'long_text', 'headline', 'detail',
                      'watch', 'so_what'))
     for r in (signal.get('regions') or []):
-        rn = _norm_country(r)
+         rn = _norm_country(r)
         # Region buckets are not countries; only fold in real ones.
-        if rn in COUNTRY_TOUCH_TERMS or rn in COUNTRY_TOUCH_ALIASES.values():
+        if rn in _CANON_COUNTRY_SET:
             out.add(rn)
     for m in _COUNTRY_TOUCH_RE.finditer(text):
         out.add(_norm_country(m.group(1)))
     # Chokepoints and contested geographies imply countries the prose may never
     # name. A Hormuz signal is an Iran signal whether or not it says "Iran".
-    for m in _GEO_FEATURE_RE.finditer(text):
+   for m in _GEO_FEATURE_RE.finditer(text):
         for c in GEO_FEATURE_COUNTRIES.get(m.group(1).lower(), []):
-            out.add(c)
-    return sorted(out)
+            out.add(_canon(c))
+    return sorted(x for x in out if x)
 
 
 def _attach_country_tags(signals):
@@ -2903,12 +2927,12 @@ _COUNTRY_NAME_ALIASES = {
 
 
 def _normalize_country_name(name):
-    n = (name or '').strip().lower()
-    return _COUNTRY_NAME_ALIASES.get(n, n)
+    """Any inbound country NAME -> the platform's canonical id."""
+    return _canon(name)
 
 
 def _names_match(a, b):
-    """Exact country-name matching after normalization + alias mapping.
+    """Exact country matching after canonicalization.
     Deliberately NOT containment-based: 'Sudan' must never match
     'South Sudan', nor 'Niger' match 'Nigeria'."""
     a = _normalize_country_name(a)
