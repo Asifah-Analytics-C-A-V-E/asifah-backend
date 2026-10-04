@@ -1,7 +1,7 @@
 """
 =======================================================================
   ASIFAH ANALYTICS -- CONVERGENCE DETECTOR (multi-axis, live)
-  v0.7.0 (Oct 4 2026) -- STEP 7: LOGISTICS AXIS (corridor dependence)
+  v0.8.0 (Oct 4 2026) -- STEP 8: COUNTRY-ID CANON (country_ids.py)
 =======================================================================
 
 WHAT THIS IS
@@ -99,6 +99,23 @@ except ImportError:
     _LOGISTICS_AVAILABLE = False
     print('[ConvergenceDetector] corridor_dependence not installed -- '
           'logistics axis will not weigh in')
+
+# v0.8.0 -- ONE country-id canon for the whole platform. Soft import, but a
+# LOUD one: if this module is missing, canonicalization silently does nothing
+# and the duplicate-country bug comes straight back. _CANON_AVAILABLE is
+# exposed on /scan and /probe so the absence is visible, never assumed.
+try:
+    from country_ids import canonical as _canon, display as _disp
+    _CANON_AVAILABLE = True
+except ImportError:
+    _CANON_AVAILABLE = False
+    def _canon(x):
+        return (str(x).strip().lower().replace(' ', '_').replace('-', '_')
+                if x else '')
+    _disp = None
+    print('[ConvergenceDetector] *** country_ids NOT installed -- country ids '
+          'will NOT be canonicalized. sudan/sdn and iran/irn will be counted '
+          'as separate countries. Deploy country_ids.py. ***')
 
 # History config
 HIST_KEY_PREFIX       = 'cax:hist:'
@@ -234,35 +251,45 @@ SUBREGION_TO_COUNTRY = {
 # Country-id canonicalization. Commodity + rhetoric + humanitarian use
 # lowercase ids; kinetic uses GDELT display names. Canonicalize to id.
 # ----------------------------------------------------------------------
-ID_TO_DISPLAY = {
-    'usa':          'United States',
-    'uae':          'United Arab Emirates',
-    'drc':          'DR Congo',
-    'south_korea':  'South Korea',
-    'south_africa': 'South Africa',
-    'saudi_arabia': 'Saudi Arabia',
-    'eu':           'EU',
-    'car':          'Central African Republic',
-    'drc':          'DR Congo',
-}
-_NAME_TO_ID = {
-    'United States':         'usa',
-    'United Arab Emirates':  'uae',
-    'DR Congo':              'drc',
-    'Gaza Strip':            'gaza',
-}
+# v0.8.0 -- the local ID_TO_DISPLAY / _NAME_TO_ID maps are GONE. They were one
+# of three normalizers on this platform (the other two both live inside
+# global_pressure_index.py and disagreed with each other about DR Congo), and
+# three maps is how 'iran' and 'irn' became two countries. country_ids.py is
+# now the single writer; these two functions are thin delegates kept only so
+# existing call sites do not have to change.
+#
+# Measured on the Oct 4 2026 scan: 135 "countries" -> 108 real ones, with Iran
+# and Pakistan both moving from DUAL to TRIPLE once their humanitarian signal
+# stopped being filed under a separate three-letter country.
 
 
 def _kinetic_name_to_id(name):
-    """GDELT display name -> canonical lowercase id."""
-    if name in _NAME_TO_ID:
-        return _NAME_TO_ID[name]
-    return name.lower().replace(' ', '_').replace('-', '_')
+    """Any inbound spelling -> the platform's canonical country id."""
+    return _canon(name)
 
 
 def _id_to_display(cid):
     """Canonical id -> human display name."""
-    return ID_TO_DISPLAY.get(cid) or cid.replace('_', ' ').title()
+    if _disp is not None:
+        return _disp(cid)
+    return str(cid).replace('_', ' ').title()
+
+
+def _merge_reading(out, cid, reading):
+    """Write a reading into an axis dict, keeping the STRONGER of any two that
+    canonicalize to the same country.
+
+    Canonicalization can bring two source ids ('sdn' and 'sudan') onto the same
+    key inside ONE axis. A plain assignment would let whichever arrived last
+    win, which is the same silent-overwrite class that was already losing
+    Turkey's ME rhetoric reading to Europe's. Max, not last.
+    """
+    if not cid:
+        return out
+    prev = out.get(cid)
+    if prev is None or (reading.get('intensity') or 0) > (prev.get('intensity') or 0):
+        out[cid] = reading
+    return out
 
 
 # ----------------------------------------------------------------------
@@ -284,10 +311,10 @@ def _read_kinetic():
         if drv:
             driver = {'label': drv.get('label'), 'articles': drv.get('articles'),
                       'source': drv.get('source')}
-        out[_kinetic_name_to_id(name)] = {
+        _merge_reading(out, _canon(name), {
             'intensity': BAND_INTENSITY.get(band, 0), 'label': band,
             'score': c.get('conflict_score'), 'driver': driver,
-        }
+        })
     return out, True
 
 
@@ -299,10 +326,10 @@ def _read_commodity():
     for cid, c in (com.get('country_summaries', {}) or {}).items():
         level = c.get('alert_level', 'normal')
         sigs = c.get('top_signals', []) or []
-        out[cid] = {
+        _merge_reading(out, _canon(cid), {
             'intensity': BAND_INTENSITY.get(level, 0), 'label': level,
             'score': c.get('total_score'), 'driver': sigs[0] if sigs else None,
-        }
+        })
     return out, True
 
 
@@ -314,14 +341,37 @@ def _read_rhetoric():
         availability[region] = bool(bluf)
         if not bluf:
             continue
-        for cid, t in (bluf.get('theatre_summary', {}) or {}).items():
+        for raw_cid, t in (bluf.get('theatre_summary', {}) or {}).items():
+            cid = _canon(raw_cid)
+            if not cid:
+                continue
             level = t.get('level', 0) or 0
-            out[cid] = {
+            reading = {
                 'intensity': RHETORIC_LEVEL_INTENSITY.get(level, 0),
                 'label': t.get('label', ''), 'level': level,
                 'score': t.get('score'), 'region': region,
                 'driver': {'label': t.get('label'), 'level': level},
             }
+            prev = out.get(cid)
+            if prev is None:
+                out[cid] = reading
+            else:
+                # v0.8.0 -- TWO regional BLUFs reading the SAME country.
+                # v0.7.0 did a plain assignment, so the last region in
+                # RHETORIC_BLUF_KEYS insertion order silently won. Turkey is
+                # read by BOTH the ME and Europe BLUFs, and Europe sorts
+                # later, so an ME L4 was being overwritten by a Europe L2 --
+                # the strongest reading discarded by an ordering accident.
+                # Keep the stronger, and record that the two disagree.
+                keep, drop = ((reading, prev)
+                              if reading['intensity'] >= prev['intensity']
+                              else (prev, reading))
+                merged = dict(keep)
+                seen = set(prev.get('also_read_by') or [])
+                seen |= set(reading.get('also_read_by') or [])
+                seen.add(drop.get('region'))
+                merged['also_read_by'] = sorted(x for x in seen if x)
+                out[cid] = merged
     return out, availability
 
 
@@ -336,7 +386,12 @@ def _read_humanitarian():
         raw = s.get('country')
         if not raw:
             continue
-        cid = SUBREGION_TO_COUNTRY.get(raw, raw)
+        # Sub-national rollup FIRST ('aleppo' -> 'syria'), then canonicalize
+        # ('sdn' -> 'sudan'). This door is the one that was emitting ISO3
+        # codes for part of its roster and slugs for the rest.
+        cid = _canon(SUBREGION_TO_COUNTRY.get(raw, raw))
+        if not cid:
+            continue
         level = s.get('level', 0) or 0
         intensity = HUMANITARIAN_LEVEL_INTENSITY.get(level, 0)
         prev = out.get(cid)
@@ -388,11 +443,11 @@ def _read_logistics():
                       'corridor': binding['corridor'],
                       'corridor_state': binding['corridor_state'],
                       'share': binding['share']}
-        out[rec['country']] = {
+        _merge_reading(out, _canon(rec['country']), {
             'intensity': rec['intensity'], 'label': label,
             'score': None, 'driver': driver,
             'unverified': bool(rec.get('unverified_entries')),
-        }
+        })
     return out, True
 
 
@@ -765,6 +820,7 @@ def register_convergence_detector_endpoints(app):
                 'tier_counts':     result['tier_counts'],
                 'summary':         result['summary'],
                 'availability':    result['availability'],
+                'canonicalization': _CANON_AVAILABLE,
                 'global_conditions': result['global_conditions'],
                 'snapshot_written': wrote,
                 'count':           len(result['records']),
@@ -778,7 +834,7 @@ def register_convergence_detector_endpoints(app):
     @app.route('/api/cax/history/<country>', methods=['GET'])
     def cax_history(country):
         """Raw rolling history series for one country (newest-first)."""
-        cid = country.strip().lower()
+        cid = _canon(country)
         series = _read_history([cid]).get(cid, [])
         return jsonify({
             'success': True, 'version': '0.7.0', 'country': cid,
