@@ -54,7 +54,7 @@ except ImportError:
 # 2026, while the file itself documents v3.3.0 (April), v3.4.0 (May) and
 # v3.5.0 (September). The flight-cancellations endpoint reported '3.2.0' to
 # callers in four places. Seven months of releases, invisible from outside.
-RSS_MONITOR_VERSION = '3.6.0'
+RSS_MONITOR_VERSION = '3.7.0'
 RSS_USER_AGENT = (f'AsifahAnalytics-ME-RSS/{RSS_MONITOR_VERSION} '
                   f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -78,11 +78,30 @@ LEADERSHIP_RSS_FEEDS = {
     'iran_wire_fa': 'https://iranwire.com/fa/feed/',
 }
 
+# v3.7.0 (Oct 4 2026) -- SINGLE SOURCE OF TRUTH for Israeli feeds.
+# app.py carried its own fetch_israel_news_rss() with a THIRD set of URLs for
+# the same publishers. Which set a scan actually used depended on which target
+# triggered it: _refresh_target('iran') reached these via fetch_all_rss(),
+# _refresh_target('israel') reached app.py's copy. Two definitions, two
+# behaviours, one publisher.
+#
+# Consolidated here, keeping the BETTER url in each case:
+#   times_of_israel  Google News site: query  ->  the paper's own feed
+#   i24news          Google News site: query  ->  the paper's own feed
+# A Google 'site:' query returns only what Google has indexed, as a subset and
+# with lag. The native feed is first-party and complete. Deduplicating toward
+# the proxy would have been a quiet downgrade dressed as housekeeping.
+#
+# jpost_frontpage is NOT a duplicate of jpost. app.py pointed at
+# /rssfeedsfrontpage.aspx and this file at /rssfeedsheadlines.aspx -- two
+# genuinely different JPost feeds. Both kept; this is a coverage gain, not a
+# dedupe.
 ISRAELI_RSS_FEEDS = {
     'ynet': 'https://www.ynetnews.com/Integration/StoryRss3254.xml',
-    'times_of_israel': 'https://news.google.com/rss/search?q=site:timesofisrael.com&hl=en&gl=US&ceid=US:en',
+    'times_of_israel': 'https://www.timesofisrael.com/feed/',
     'jpost': 'https://www.jpost.com/rss/rssfeedsheadlines.aspx',
-    'i24news': 'https://news.google.com/rss/search?q=site:i24news.tv&hl=en&gl=US&ceid=US:en',
+    'jpost_frontpage': 'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
+    'i24news': 'https://www.i24news.tv/en/rss',
     'haaretz': 'https://www.haaretz.com/srv/haaretz-latest-news',
 }
 
@@ -553,6 +572,7 @@ def fetch_all_rss(feed_dict=None):
                     'ynet': 'Ynet',
                     'times_of_israel': 'Times of Israel',
                     'jpost': 'Jerusalem Post',
+                    'jpost_frontpage': 'Jerusalem Post',
                     'i24news': 'i24NEWS',
                     'haaretz': 'Haaretz',
                     'memri': 'MEMRI',
