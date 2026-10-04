@@ -118,6 +118,46 @@ RHETORIC_LEGACY_HISTORY_KEY = 'rhetoric:lebanon:history:intraday'  # old key, ke
 BASELINE_KEY          = 'rhetoric_baseline:lebanon'
 CROSSTHEATER_KEY      = 'rhetoric:crosstheater:fingerprints'  # shared with Yemen/Iraq/Syria
 
+# ════════════════════════════════════════════════════════════════════
+# SUPPLY EXPOSURE (Oct 4 2026) -- the corridor read, in-process
+# ════════════════════════════════════════════════════════════════════
+# corridor_dependence lives on THIS backend, so this is a direct import, not
+# an HTTP call. Soft, like every optional module on the platform: no module,
+# no slice, no behaviour change.
+#
+# WHY THIS TRACKER AND NOT A NEW ONE: a corridor is an EDGE -- a Black Sea
+# closure happens BETWEEN countries, not in one -- while every consumer on
+# this backend is NODE-shaped. corridor_dependence already does that
+# translation (corridor state x dependence share -> a per-country reading).
+# This slice is just the node end of the wire, emitted where the ME theaters
+# already look: the shared cross-theater dict.
+#
+# WHAT IT IS NOT: this NEVER touches theatre_escalation_level, rhetoric_score,
+# or any actor level. Lebanon's actors are political and military
+# (hezbollah_political, lebanese_government, unifil...) -- there is no economic
+# actor for a wheat fact to amplify, and routing one through
+# lebanese_government would be laundering a supply observation into a rhetoric
+# score. It rides ALONGSIDE the ladder as its own vector, the same posture
+# Kazakhstan's commodity complex takes behind its convergence gate.
+try:
+    from corridor_dependence import read_all as _corridor_read_all
+    CORRIDOR_AVAILABLE = True
+except ImportError:
+    _corridor_read_all = None
+    CORRIDOR_AVAILABLE = False
+    print('[Lebanon Rhetoric] corridor_dependence not installed -- '
+          'supply exposure will read absence-honest')
+
+# Structural context, not a live reading. Stated separately from the sensed
+# state so a reader can never mistake background for observation.
+SUPPLY_STRUCTURAL_NOTE = (
+    'Lebanon imports roughly 85% of its wheat through the Black Sea corridor, '
+    'and the Beirut port grain silos destroyed in August 2020 were the national '
+    'strategic reserve -- the buffer that would have absorbed a disruption no '
+    'longer exists. This is standing structural context, NOT a reading of '
+    'current corridor conditions.'
+)
+
 SCAN_INTERVAL_HOURS   = 12
 SCAN_INTERVAL_SECONDS = SCAN_INTERVAL_HOURS * 3600
 
@@ -1022,6 +1062,121 @@ def _detect_silence_anomalies(actor_results, baselines):
 # CROSS-THEATER COORDINATION
 # ========================================
 
+def _read_supply_exposure():
+    """
+    Lebanon's corridor exposure, read IN-PROCESS from corridor_dependence.
+
+    Returns a dict that is ABSENCE-HONEST by construction:
+
+      sensed=False  -> the corridor chain did not report. intensity is None,
+                       state is 'unknown'. This is MISSING DATA, never calm.
+                       A 0 here would read as "routes are fine", and we do not
+                       know that -- we know only that we cannot see them.
+      sensed=True   -> corridor_dependence actually resolved a route state.
+                       intensity 0 means a genuinely OPEN corridor; 1-3 means
+                       strained / impaired / blocked against Lebanon's
+                       dependence share.
+
+    The distinction between those two zeros is the entire reason the corridor
+    module exists, and it is the same distinction that makes an FAA 403 read
+    as unknown airspace rather than clear airspace.
+    """
+    base = {
+        'present':        False,
+        'sensed':         False,
+        'intensity':      None,
+        'state':          'unknown',
+        'binding_hop':    None,
+        'corridors':      [],
+        'unverified':     False,
+        'has_unread_hop': False,
+        'structural':     SUPPLY_STRUCTURAL_NOTE,
+        'read_at':        datetime.now(timezone.utc).isoformat(),
+    }
+
+    if not CORRIDOR_AVAILABLE:
+        base['note'] = ('corridor_dependence is not installed on this backend -- '
+                        'supply exposure is UNREAD, not clear.')
+        return base
+
+    try:
+        payload = _corridor_read_all() or {}
+    except Exception as e:
+        base['note'] = (f'corridor_dependence read failed ({type(e).__name__}) -- '
+                        f'supply exposure is UNREAD, not clear.')
+        print(f'[Lebanon Rhetoric] Supply exposure read error: {str(e)[:120]}')
+        return base
+
+    rec = None
+    for r in (payload.get('countries') or []):
+        if r.get('country') == 'lebanon':
+            rec = r
+            break
+    if rec is None:
+        base['note'] = ('Lebanon is not listed in corridor_dependence -- supply '
+                        'exposure is UNREAD, not clear.')
+        return base
+
+    base['present']        = True
+    base['unverified']     = bool(rec.get('unverified_entries'))
+    base['has_unread_hop'] = bool(rec.get('has_unread_hop'))
+
+    # Every hop we can see, and the one actually binding (highest intensity).
+    binding, corridors = None, []
+    for com in (rec.get('commodities') or []):
+        for hop in (com.get('hops') or []):
+            corridors.append({
+                'commodity':      com.get('commodity'),
+                'corridor':       hop.get('corridor'),
+                'corridor_state': hop.get('corridor_state'),
+                'share':          hop.get('share'),
+                'intensity':      hop.get('intensity'),
+            })
+            if hop.get('intensity') is None:
+                continue
+            if binding is None or hop['intensity'] > binding.get('intensity', -1):
+                binding = {**hop, 'commodity': com.get('commodity')}
+    base['corridors'] = corridors
+
+    sensed = bool(rec.get('sensed')) and rec.get('intensity') is not None
+    if not sensed:
+        base['note'] = ('Corridor chain did not report for Lebanon this cycle. '
+                        'This is MISSING DATA -- the routes are unread, not open. '
+                        'Expected until a corridor leading instrument fires.')
+        print('[Lebanon Rhetoric] Supply exposure: UNSENSED '
+              '(unread corridor chain -- not calm)')
+        return base
+
+    base['sensed']      = True
+    base['intensity']   = rec.get('intensity')
+    base['state']       = (binding or {}).get('corridor_state', 'sensed')
+    base['binding_hop'] = binding
+
+    if binding:
+        share = binding.get('share')
+        share_txt = f"{share:.0%}" if isinstance(share, (int, float)) else 'unknown share'
+        base['note'] = (
+            f"{binding.get('commodity', 'supply')} via {binding.get('corridor')} "
+            f"reads {binding.get('corridor_state')}; Lebanon depends on it for "
+            f"{share_txt} of that commodity. Intensity L{base['intensity']} on the "
+            f"0-3 ladder. Supply observation only -- carries no weight in the "
+            f"escalation ladder or any actor score."
+        )
+    else:
+        base['note'] = (f"Corridor chain sensed at intensity L{base['intensity']} "
+                        f"but no single binding hop resolved.")
+
+    if base['unverified']:
+        base['note'] += (' DRAFT dependence share -- pending analyst verification.')
+    if base['has_unread_hop']:
+        base['note'] += (' One hop in this chain has no writer and is UNREAD; the '
+                         'reading below it is partial.')
+
+    print(f"[Lebanon Rhetoric] Supply exposure: SENSED L{base['intensity']} "
+          f"({base['state']})")
+    return base
+
+
 def _write_crosstheater_signal(result):
     """
     Write Lebanon's fingerprint to the shared cross-theater Redis key.
@@ -1070,6 +1225,13 @@ def _write_crosstheater_signal(result):
             'ceasefire_level': result.get('ceasefire_level', 0),
             'diplomatic_modifier': result.get('diplomatic_modifier', 0),
             'diplomatic_label': result.get('diplomatic_label_detailed', 'Quiet'),
+            # ── SUPPLY EXPOSURE (Oct 4 2026) ──
+            # Emitted once here, consumed by anyone walking this dict (Israel
+            # reads fingerprints['lebanon'] already). Carries its own sensed
+            # flag, so a consumer can never read an unread corridor as an open
+            # one. Deliberately NOT folded into 'level' -- that field is the
+            # escalation ladder and a wheat route is not an escalation.
+            'supply_exposure': result.get('supply_exposure'),
         }
 
         _redis_set(CROSSTHEATER_KEY, existing, ttl=8 * 3600)
@@ -2883,6 +3045,10 @@ def run_rhetoric_scan(days=3):
 
     # ── Delta ──
     result['delta'] = _compute_delta()
+
+    # ── Supply exposure (Oct 4 2026) ──
+    # Computed BEFORE the cross-theater write so the fingerprint carries it.
+    result['supply_exposure'] = _read_supply_exposure()
 
     # ── Cross-theater coordination ──
     _write_crosstheater_signal(result)

@@ -1797,6 +1797,15 @@ def _compute_inbound_threat_from_fingerprints():
         'turkey_israel_friction': 'normal',   # normal/simmering/elevated/high
         'turkey_lebanon_vector':  'dormant',  # dormant/rhetoric/soft_power/economic/security/kinetic_risk
         'turkey_nato_divergence': 'anchored',
+        # ── Lebanon supply exposure (Oct 4 2026) ──
+        # Read, never scored. Lebanon emits a corridor reading into its own
+        # cross-theater entry (corridor state x dependence share, computed by
+        # corridor_dependence on the ME backend). Israel surfaces it because a
+        # Lebanese wheat-supply shock is context for Lebanese instability --
+        # but it is NOT an inbound THREAT, so it stays out of
+        # threat_convergence_index entirely. Default None, not 0: an unread
+        # corridor is missing data, and 0 would read as "routes open".
+        'lebanon_supply_exposure': None,
     }
     try:
         fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
@@ -1823,6 +1832,13 @@ def _compute_inbound_threat_from_fingerprints():
                     result['fingerprints_age'][theater] = round(age_h, 1)
                     if theater == 'iran' and fp.get('is_command_node'):
                         result['iran_is_command_node'] = True
+                    # ── Lebanon supply exposure (Oct 4 2026) ──
+                    # Pass through verbatim, including its own `sensed` flag.
+                    # Israel must not re-derive or default it: the whole point
+                    # of the flag is that the consumer can tell an open route
+                    # from an unread one.
+                    if theater == 'lebanon':
+                        result['lebanon_supply_exposure'] = fp.get('supply_exposure')
                     # ── v1.1: Capture diplomatic track from this theater ──
                     if fp.get('diplomatic_active'):
                         result['theaters_in_diplomacy'].append({

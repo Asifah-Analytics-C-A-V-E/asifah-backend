@@ -677,6 +677,18 @@ def _us_predicate_mexico_border(upstream, acc):
 ME_BACKEND_URL  = os.environ.get('ME_BACKEND_URL',  'https://asifah-backend.onrender.com')
 WHA_BACKEND_URL = os.environ.get('WHA_BACKEND_URL', 'https://asifah-wha-backend.onrender.com')
 
+# v1.2.0 (Oct 4 2026) -- THIS MODULE RUNS ON THE ME BACKEND. Every call below to
+# ME_BACKEND_URL was therefore this process making an HTTPS request to its OWN
+# public URL: a DNS lookup, a TLS handshake and a round trip out to Render's
+# edge and back, to reach a route already registered on the same Flask app.
+# It also cannot work during boot, before the port is bound -- which is exactly
+# when the Europe backend's equivalent self-call was failing on Oct 4:
+#   [Poland Rhetoric] Financial read failed (non-fatal):
+#   HTTPSConnectionPool(host='asifa-europe-backend.onrender.com', ...)
+# Loopback first; the public URL stays as a fallback so nothing regresses if
+# PORT is unset or the route moves to another service.
+_LOCAL_BASE = f"http://127.0.0.1:{os.environ.get('PORT', '10000')}"
+
 
 def _read_commodity_pressure(country):
     """
@@ -693,28 +705,27 @@ def _read_commodity_pressure(country):
     if not country:
         return {}
 
-    # PRIMARY: ME backend
-    try:
-        url = f"{ME_BACKEND_URL}/api/commodity-pressure/{country}"
-        resp = requests.get(url, timeout=8)
-        if resp.ok:
-            data = resp.json()
-            if isinstance(data, dict) and data.get('success'):
-                return data
-    except Exception:
-        pass  # fall through to WHA proxy
+    # Order matters: loopback is the same route with no network in between.
+    # ME public is kept so a deployment where this module does NOT sit on the
+    # ME backend still works. WHA proxy stays last as the warm-cache fallback.
+    candidates = [
+        (f"{_LOCAL_BASE}/api/commodity-pressure/{country}",   'loopback'),
+        (f"{ME_BACKEND_URL}/api/commodity-pressure/{country}", 'me-public'),
+        (f"{WHA_BACKEND_URL}/api/wha/commodity/{country}",     'wha-proxy'),
+    ]
+    for url, label in candidates:
+        try:
+            resp = requests.get(url, timeout=8)
+            if resp.ok:
+                data = resp.json()
+                if isinstance(data, dict) and data.get('success'):
+                    return data
+        except Exception:
+            continue   # try the next path; absence is handled by the caller
 
-    # FALLBACK: WHA proxy (12hr cached)
-    try:
-        url = f"{WHA_BACKEND_URL}/api/wha/commodity/{country}"
-        resp = requests.get(url, timeout=8)
-        if resp.ok:
-            data = resp.json()
-            if isinstance(data, dict) and data.get('success'):
-                return data
-    except Exception:
-        pass
-
+    print(f"[Butterfly Reader] commodity-pressure/{country}: no path answered "
+          f"(loopback, ME public, WHA proxy all failed) -- predicates that read "
+          f"commodity will see absence, NOT calm")
     return {}
 
 
