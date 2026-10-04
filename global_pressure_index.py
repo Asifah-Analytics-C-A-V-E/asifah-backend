@@ -299,7 +299,7 @@ def _signal_countries(signal):
                     ('short_text', 'long_text', 'headline', 'detail',
                      'watch', 'so_what'))
     for r in (signal.get('regions') or []):
-         rn = _norm_country(r)
+        rn = _norm_country(r)
         # Region buckets are not countries; only fold in real ones.
         if rn in _CANON_COUNTRY_SET:
             out.add(rn)
@@ -307,7 +307,7 @@ def _signal_countries(signal):
         out.add(_norm_country(m.group(1)))
     # Chokepoints and contested geographies imply countries the prose may never
     # name. A Hormuz signal is an Iran signal whether or not it says "Iran".
-   for m in _GEO_FEATURE_RE.finditer(text):
+    for m in _GEO_FEATURE_RE.finditer(text):
         for c in GEO_FEATURE_COUNTRIES.get(m.group(1).lower(), []):
             out.add(_canon(c))
     return sorted(x for x in out if x)
