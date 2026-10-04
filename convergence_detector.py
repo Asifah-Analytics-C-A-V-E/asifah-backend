@@ -27,7 +27,7 @@ WHAT THIS IS
                            detector is NODE-shaped. corridor_dependence does
                            the translation; this axis consumes the result.
                            Lebanon reads here not because it is in the Black
-                           Sea but because 85%% of its wheat crosses it.
+                           Sea but because 85% of its wheat crosses it.
 
 NORMALIZATION (common 0-3 intensity ladder)
     kinetic / commodity band : normal=0 elevated=1 high=2 surge=3
