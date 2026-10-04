@@ -2,7 +2,9 @@
 RSS Monitor for Asifah Analytics
 Comprehensive RSS feed monitoring for Middle East intelligence
 
-v3.2.0 — February 2026
+v3.6.0 — October 4, 2026
+(was stamped v3.2.0/February here while the body documented v3.3.0, v3.4.0
+ and v3.5.0 -- the version now lives in RSS_MONITOR_VERSION below)
 
 Monitors:
 1. Leadership Rhetoric (MEMRI, Al-Manar, Iran Wire)
@@ -40,6 +42,21 @@ except ImportError:
     _feed_report = None
     _FEED_HEALTH = False
     print("[RSS] feed_health not installed -- feed deaths will stay silent")
+
+
+# ── v3.6.0 (Oct 4 2026) ONE version, ONE User-Agent ──────────────────
+# Found by the standing rule adopted Oct 3: every .py we open gets a UA and
+# version check. The Oct 3 sweep audited the five app.py files and MISSED
+# this one, which is imported BY ME app.py -- so three spoofed Chrome strings
+# survived in a module the audit had effectively walked past.
+#
+# Version drift here was the worse half. The docstring says v3.2.0 / February
+# 2026, while the file itself documents v3.3.0 (April), v3.4.0 (May) and
+# v3.5.0 (September). The flight-cancellations endpoint reported '3.2.0' to
+# callers in four places. Seven months of releases, invisible from outside.
+RSS_MONITOR_VERSION = '3.6.0'
+RSS_USER_AGENT = (f'AsifahAnalytics-ME-RSS/{RSS_MONITOR_VERSION} '
+                  f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
 
 def get_feed_health_report():
@@ -463,7 +480,7 @@ def fetch_all_rss(feed_dict=None):
             print(f"[RSS] Fetching {feed_name}...")
 
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+                'User-Agent': RSS_USER_AGENT,
                 'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
                 'Accept-Language': 'en-US,en;q=0.9,ar;q=0.7,he;q=0.5,fa;q=0.3',
                 'Cache-Control': 'no-cache',
@@ -809,7 +826,7 @@ def _run_flight_disruption_scan():
                 url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en&gl=US&ceid=US:en"
 
                 response = requests.get(url, timeout=10, headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': RSS_USER_AGENT
                 })
 
                 if response.status_code != 200:
@@ -887,7 +904,7 @@ def _run_flight_disruption_scan():
         try:
             url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en&gl=US&ceid=US:en"
             response = requests.get(url, timeout=10, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': RSS_USER_AGENT
             })
             if response.status_code != 200:
                 continue
@@ -993,7 +1010,7 @@ def _trigger_flight_background_scan():
                 'count': len(disruptions),
                 'last_updated': datetime.now(timezone.utc).isoformat(),
                 'cached_at': datetime.now(timezone.utc).isoformat(),
-                'version': '3.2.0'
+                'version': RSS_MONITOR_VERSION
             }
 
             _save_flight_cache(cache_data)
@@ -1032,7 +1049,7 @@ def _flight_periodic_scan_thread():
                 'count': len(disruptions),
                 'last_updated': datetime.now(timezone.utc).isoformat(),
                 'cached_at': datetime.now(timezone.utc).isoformat(),
-                'version': '3.2.0'
+                'version': RSS_MONITOR_VERSION
             }
 
             _save_flight_cache(cache_data)
@@ -1102,7 +1119,7 @@ def get_flight_cache_for_endpoint():
             'last_updated': cache.get('last_updated', ''),
             'cached': True,
             'stale': not fresh,
-            'version': '3.2.0'
+            'version': RSS_MONITOR_VERSION
         }
 
     # No cache — trigger scan, return skeleton
@@ -1115,7 +1132,7 @@ def get_flight_cache_for_endpoint():
         'cached': False,
         'scan_in_progress': True,
         'message': 'Initial scan in progress. Disruption data will appear shortly.',
-        'version': '3.2.0'
+        'version': RSS_MONITOR_VERSION
     }
 
 
