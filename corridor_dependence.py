@@ -13,10 +13,10 @@ THE PROBLEM THIS SOLVES
       corridor state (EDGE)  x  dependence share (THIS FILE)  =  node reading
 
   Lebanon gets a Black Sea reading not because Lebanon is in the Black Sea,
-  but because 80-90%% of Lebanon's wheat arrives through it.
+  but because 80-90% of Lebanon's wheat arrives through it.
 
 THE RULE THAT KEEPS THIS HONEST -- DEPENDENCE IS A MULTIPLIER, NOT A SIGNAL
-  "Lebanon is 85%% Black Sea dependent with one month of reserves" is true and
+  "Lebanon is 85% Black Sea dependent with one month of reserves" is true and
   alarming and CONSTANT. Emitting it as a convergence would fire every scan
   forever and never change -- which is exactly the monotonous-GPI problem the
   Sep 20 registry audit diagnosed, in a new costume.
@@ -84,7 +84,7 @@ CORRIDOR_DEPENDENCE = {
             'verified': True,
             'source': "Rachel's COUNTRY_COMMODITY_EXPOSURE note (commodity_tracker)",
             'as_of': '2026-07',
-            'note': ('~60-67%% from Ukraine alone, ~80-90%% combined Black Sea '
+            'note': ('~60-67% from Ukraine alone, ~80-90% combined Black Sea '
                      '(UA+RU). National reserves ~1 month -- silos never rebuilt '
                      'after the 2020 Beirut port explosion. The reserve depth is '
                      'what turns a corridor event into a hunger event here.'),
@@ -97,8 +97,8 @@ CORRIDOR_DEPENDENCE = {
             'verified': True,
             'source': "Rachel's COUNTRY_COMMODITY_EXPOSURE note (commodity_tracker)",
             'as_of': '2026-07',
-            'note': ("World's #1 wheat importer. Russia ~66%% + Ukraine ~17%% = "
-                     "~83%% Black Sea; EU/France ~14%% is the substitution margin. "
+            'note': ("World's #1 wheat importer. Russia ~66% + Ukraine ~17% = "
+                     "~83% Black Sea; EU/France ~14% is the substitution margin. "
                      "The baladi bread subsidy covers ~70M people and is the "
                      "political transmission channel."),
             'failure_mode': 'fiscal -- subsidy is load-bearing; budget fails before shelves do',
@@ -114,7 +114,7 @@ CORRIDOR_DEPENDENCE = {
             'note': ('REVERSAL, and the headline misleads. Syria declared wheat '
                      'self-sufficiency in 2026 for the first time since 2010: '
                      '2.7Mt harvest against a 2.55Mt bread-wheat benchmark. But '
-                     'the harvest is ~54%% soft / ~46%% durum while Arabic bread '
+                     'the harvest is ~54% soft / ~46% durum while Arabic bread '
                      'needs roughly 80/20 -- leaving a ~570kt SOFT wheat '
                      'shortfall alongside a durum surplus. Aggregate sufficiency '
                      'masks compositional dependence. Residual import need is '
