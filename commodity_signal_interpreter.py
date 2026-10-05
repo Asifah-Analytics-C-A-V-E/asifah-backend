@@ -56,7 +56,8 @@ DESIGN PRINCIPLES (lifted from military interpreter):
 from __future__ import annotations
 from datetime import datetime, timezone
 
-INTERPRETER_VERSION = '1.1.1'   # v1.1.1 Jun 23 2026 - scrub: dynamic commodity count + sorted elevated fallback (anti-pinning)
+INTERPRETER_VERSION = '1.2.0'   # v1.2.0 Oct  5 2026 - consumes trigger_confirmed/fresh: standing watch vs topline, no more firing-on-an-unread-trigger
+# v1.1.1 Jun 23 2026 - scrub: dynamic commodity count + sorted elevated fallback (anti-pinning)
 
 # ══════════════════════════════════════════════════════════════
 # REGION CANON (alphabetical, full diplomatic names per Coco)
@@ -413,10 +414,26 @@ def build_executive_summary(scan_result, convergence=None):
     parts = []
 
     # ── Lead with convergence narrative if any are firing ─────────
-    if convergences:
+    # v1.2.0 (Oct 5 2026): split on trigger confirmation BEFORE writing
+    # prose. The tracker has emitted `trigger_confirmed` since v1.3.0 and
+    # this builder ignored it (tracker v1.3.1 is the other half of this
+    # fix), so a convergence whose trigger-region BLUF
+    # was merely unreadable read as "coupled-pressure firing" -- the same
+    # sentence a confirmed one gets. Absence of a reading is now reported
+    # as absence of a reading, not as a reading of zero.
+    #
+    # `fresh` is the tracker's combined verdict: trigger confirmed AND an
+    # emitter exists. Missing key defaults True, so a payload built by an
+    # older tracker behaves exactly as it does today.
+    confirmed = [c for c in convergences
+                 if isinstance(c, dict) and c.get('fresh', True)]
+    watch     = [c for c in convergences
+                 if isinstance(c, dict) and not c.get('fresh', True)]
+
+    if confirmed:
         # Sort by priority (higher = more severe)
         ranked = sorted(
-            convergences,
+            confirmed,
             key=lambda c: c.get('priority', 0),
             reverse=True
         )
@@ -435,6 +452,20 @@ def build_executive_summary(scan_result, convergence=None):
                 parts.append(
                     f"Additional convergences active: {', '.join(other_ids)}."
                 )
+
+    if watch:
+        _unread = sum(1 for c in watch
+                      if c.get('trigger_state') in ('unknown', 'unwired'))
+        _w_ids = [c.get('id', '').replace('_', '+').upper() for c in watch[:3]]
+        _w_ids = [w for w in _w_ids if w]
+        _lead = '' if confirmed else 'No convergence trigger confirmed this cycle. '
+        _unread_note = f" ({_unread} unread, not quiet)" if _unread else ''
+        _id_note = (': ' + ', '.join(_w_ids)) if _w_ids else ''
+        parts.append(
+            f"{_lead}{len(watch)} convergence(s) on STANDING WATCH -- "
+            f"commodity pressure present, coupled trigger not confirmed"
+            f"{_unread_note}{_id_note}."
+        )
 
     # ── Surface top commodity pressure (surge / high) ─────────────
     if commodity_summaries:
@@ -597,11 +628,32 @@ def build_butterfly_prose(scan_result):
             if region_names else ''
         )
 
+        # v1.2.0: a convergence whose coupled trigger is unconfirmed is NOT
+        # "currently firing". Say what was actually measured, and say why the
+        # reading is thin. Missing keys default to the old behaviour.
+        is_fresh   = conv.get('fresh', True)
+        trig_state = conv.get('trigger_state') or ''
+
         signal_phrase = ''
-        if signals:
+        if signals and is_fresh:
             signal_phrase = (
                 f" Currently firing on {signals} commodity signal"
                 f"{'s' if signals != 1 else ''}."
+            )
+        elif signals:
+            _plural = 's' if signals != 1 else ''
+            if trig_state == 'unwired':
+                _why = ('no sensor emits this convergence\u2019s trigger '
+                        'category yet')
+            elif trig_state == 'unknown':
+                _why = ('the trigger region\u2019s BLUF could not be read '
+                        'this cycle \u2014 unread, not quiet')
+            else:
+                _why = 'the coupled trigger was not confirmed'
+            signal_phrase = (
+                f" Standing watch: {signals} commodity signal{_plural} "
+                f"present, but {_why}. Structural exposure, not fresh "
+                f"escalation."
             )
 
         prose_parts = []
@@ -621,7 +673,10 @@ def build_butterfly_prose(scan_result):
             'level':    alert_level,
             'regions':  regions,
             'priority': conv.get('priority', 0),
-            'active':   True,
+            'active':         is_fresh,
+            'standing_watch': not is_fresh,
+            'trigger_state':  trig_state or None,
+            'trigger_confirmed': bool(conv.get('trigger_confirmed', True)),
             'prose':    ' '.join([p for p in prose_parts if p]),
             'commodity':comm,
             'country':  country,

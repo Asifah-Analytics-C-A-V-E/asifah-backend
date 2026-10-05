@@ -100,6 +100,7 @@ try:
         CONVERGENCE_REGISTRY,
         alert_meets_threshold,
         format_headline,
+        convergence_priority,
     )
     CONVERGENCE_REGISTRY_AVAILABLE = True
     print(f"[Commodity Tracker] ✅ Convergence registry available "
@@ -4807,7 +4808,7 @@ def _run_full_scan(days=7):
         },
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.2.0',
+        'version':                '1.3.1',
     }
 
     # ── v1.2.0 (May 24 2026) — Active convergence detection ─────
@@ -4863,14 +4864,52 @@ def _run_full_scan(days=7):
                 # surface but flag, so prose can hedge instead of overclaiming.
                 trigger_confirmed = (not trig_cat) or (trig_status == 'present')
 
+                # ── v1.3.1 (Oct 5 2026) — THE GUARD THAT DID NOT GUARD ──
+                # trigger_confirmed has been computed here since v1.3.0,
+                # emitted on the payload, and read by NOTHING. grep across
+                # the backend returned exactly two hits, both in this file.
+                # So a convergence whose trigger-region BLUF was merely
+                # UNREADABLE (Redis cold) rendered through the interpreter as
+                # "coupled-pressure firing" — the identical sentence a
+                # confirmed convergence gets. An unread zero dressed as a
+                # real one. A diagnostic that lies is worse than none.
+                #
+                # Second bug, same four lines: format_headline() was called
+                # WITHOUT its `fresh` argument, which defaults True. All 12
+                # commodity-driven registry entries define a
+                # watch_headline_template, and not one of them was reachable
+                # from this walk. The GPI path has passed `fresh` since June;
+                # this path never did.
+                #
+                # What changes:
+                #   trigger_wired — an entry may DECLARE that no sensor emits
+                #     its trigger category yet. Absent key = True, so every
+                #     existing entry behaves exactly as before.
+                #   fresh — confirmed AND wired. Anything less is a STANDING
+                #     WATCH: watch_headline_template + watch_priority, the
+                #     same demotion the GPI already applies.
+                trigger_wired = entry.get('trigger_wired', True)
+                fresh = bool(trigger_confirmed and trigger_wired)
+
+                if not trigger_wired:
+                    trigger_state = 'unwired'
+                elif not trig_cat:
+                    trigger_state = 'none_declared'
+                else:
+                    trigger_state = trig_status
+
                 # Build a flattened entry the interpreter expects
-                headline = format_headline(entry, actual_level) \
+                headline = format_headline(entry, actual_level, fresh) \
                     if entry.get('headline_template') else ''
+                try:
+                    _priority = convergence_priority(entry, fresh)
+                except Exception:
+                    _priority = entry.get('priority', 0)
                 active_convergences.append({
                     'id':          entry.get('id'),
                     'commodity':   anchor_commodity,
                     'country':     entry.get('country'),
-                    'priority':    entry.get('priority', 0),
+                    'priority':    _priority,
                     'icon':        entry.get('icon', '\u26a1'),
                     'color':       entry.get('color', '#f59e0b'),
                     'headline':    headline,
@@ -4880,10 +4919,16 @@ def _run_full_scan(days=7):
                     'signals':     summary.get('signal_count', 0),
                     'trigger_category':  trig_cat,
                     'trigger_confirmed': trigger_confirmed,
+                    'trigger_wired':     trigger_wired,
+                    'trigger_state':     trigger_state,
+                    'fresh':             fresh,
                 })
+            _n_topline = sum(1 for c in active_convergences if c.get('fresh'))
+            _n_watch   = len(active_convergences) - _n_topline
             print(f"[Commodity Tracker] ✅ {len(active_convergences)} active "
-                  f"convergence(s) detected from {len(CONVERGENCE_REGISTRY)} "
-                  f"registry entries")
+                  f"convergence(s) from {len(CONVERGENCE_REGISTRY)} registry "
+                  f"entries — {_n_topline} topline (trigger confirmed), "
+                  f"{_n_watch} standing watch (trigger unconfirmed/unwired)")
         except Exception as conv_err:
             print(f"[Commodity Tracker] Convergence walk error "
                   f"(non-critical): {str(conv_err)[:200]}")
