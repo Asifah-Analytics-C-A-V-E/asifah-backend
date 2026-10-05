@@ -1,7 +1,7 @@
 """
 =======================================================================
   ASIFAH ANALYTICS -- CONVERGENCE DETECTOR (multi-axis, live)
-  v0.8.0 (Oct 4 2026) -- STEP 8: COUNTRY-ID CANON (country_ids.py)
+  v0.8.1 (Oct 5 2026) -- STEP 8: COUNTRY-ID CANON -- VERIFIED LIVE
 =======================================================================
 
 WHAT THIS IS
@@ -116,6 +116,13 @@ except ImportError:
     print('[ConvergenceDetector] *** country_ids NOT installed -- country ids '
           'will NOT be canonicalized. sudan/sdn and iran/irn will be counted '
           'as separate countries. Deploy country_ids.py. ***')
+
+# ONE place the version is written. v0.8.0 shipped with the file header at
+# 0.8.0 while all four payload fields still reported 0.7.0 -- /api/cax/scan was
+# telling the operator it was running code it was not. Same class as the
+# /debug/routes substring test that reported gpi_present: true throughout the
+# Oct 4 outage: a diagnostic that lies is worse than no diagnostic.
+DETECTOR_VERSION = '0.8.1'
 
 # History config
 HIST_KEY_PREFIX       = 'cax:hist:'
@@ -261,6 +268,15 @@ SUBREGION_TO_COUNTRY = {
 # Measured on the Oct 4 2026 scan: 135 "countries" -> 108 real ones, with Iran
 # and Pakistan both moving from DUAL to TRIPLE once their humanitarian signal
 # stopped being filed under a separate three-letter country.
+#
+# VERIFIED LIVE Oct 5 2026, canonicalization: true --
+#   * the ONLY three-letter ids left in /api/cax/scan are drc, uae, usa, car:
+#     the four that are legitimately short. No afg / sdn / yem / irn survivors.
+#   * iran, pakistan AND afghanistan all read TRIPLE
+#     (kinetic + rhetoric + humanitarian). Each had been split between a slug
+#     and an ISO3 code, so each was losing its humanitarian axis to a phantom
+#     second country.
+#   * triple tier 3 -> 8, across the fix plus a day of live movement.
 
 
 def _kinetic_name_to_id(name):
@@ -814,8 +830,8 @@ def register_convergence_detector_endpoints(app):
                 wrote = False
             return jsonify({
                 'success':         True,
-                'version':         '0.7.0',
-                'step':            '7 (logistics axis live -- corridor dependence joined; shared_global scoped to commodity)',
+                'version':         DETECTOR_VERSION,
+                'step':            '8 (country-id canon live -- country_ids.py is the single writer; duplicate countries merged, rhetoric cross-region max applied)',
                 'generated_at':    result['now_iso'],
                 'tier_counts':     result['tier_counts'],
                 'summary':         result['summary'],
@@ -837,7 +853,7 @@ def register_convergence_detector_endpoints(app):
         cid = _canon(country)
         series = _read_history([cid]).get(cid, [])
         return jsonify({
-            'success': True, 'version': '0.7.0', 'country': cid,
+            'success': True, 'version': DETECTOR_VERSION, 'country': cid,
             'display': _id_to_display(cid), 'readings': len(series),
             'series': series,
         })
@@ -851,7 +867,7 @@ def register_convergence_detector_endpoints(app):
         hum = _redis_get(HUMANITARIAN_CACHE_KEY)
         log, log_ok = _read_logistics()
         return jsonify({
-            'success': True, 'version': '0.7.0',
+            'success': True, 'version': DETECTOR_VERSION,
             'redis_configured': bool(_REDIS_URL and _REDIS_TOKEN),
             'kinetic_warm':      bool(kin),
             'commodity_warm':    bool(com),
@@ -866,4 +882,6 @@ def register_convergence_detector_endpoints(app):
             'probed_at': datetime.now(timezone.utc).isoformat(),
         })
 
-    print("[ConvergenceDetector] Registered: /api/cax/scan, /api/cax/history/<c>, /api/cax/probe  (v0.7.0)")
+    print(f"[ConvergenceDetector DEPLOY MARKER v{DETECTOR_VERSION}] Registered: "
+      f"/api/cax/scan, /api/cax/history/<c>, /api/cax/probe  "
+      f"(country_ids={_CANON_AVAILABLE}, logistics={_LOGISTICS_AVAILABLE})")
