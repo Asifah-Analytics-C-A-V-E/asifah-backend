@@ -134,16 +134,32 @@ CONVERGENCE_REGISTRY = [
         'commodity':               'wheat',
         'country':                 'gaza',
         'cluster':                 'levant_wheat',
-        'trigger_signal_category': 'humanitarian_gaza',   # [VERIFY exists in ME BLUF]
+        # v1.2.0 (Oct 5 2026) -- SCOPE WIDENED to the Palestinian territories,
+        # Gaza-dominant. WFP, OCHA and IPC report Palestinian food insecurity
+        # across BOTH Gaza and the West Bank, and the humanitarian convergence
+        # detector files that reporting under 'pse' (ISO3, State of Palestine).
+        # Matching on 'gaza' alone meant none of it ever reached this entry.
+        #
+        # The two territories fail by DIFFERENT mechanisms and the prose below
+        # keeps them distinct: Gaza is a SUPPLY/THROUGHPUT constraint (aid-
+        # delivered, crossing-bound); the West Bank is an ACCESS and
+        # PURCHASING-POWER constraint (movement restrictions, labour-market
+        # access, PA fiscal position -- see the palestinian_financial_access
+        # cluster). Gaza remains the primary id and the dominant lane.
+        'match_countries':         ['palestine', 'west_bank', 'pse'],
+        'trigger_signal_category':  'humanitarian_gaza',
+        'trigger_signal_categories': ['humanitarian_gaza',
+                                      'humanitarian_palestine',
+                                      'humanitarian_west_bank'],
         'trigger_region':          'me',
         'commodity_threshold':     'elevated',
         'regions':                 ['me', 'europe'],
         'priority':                15,
         'icon':                    '\U0001f33e',
         'color':                   '#dc2626',
-        'headline_template':       'Wheat-Gaza convergence -- aid-dependent population, single crossing, global wheat {alert}',
+        'headline_template':       'Wheat-Palestinian territories convergence -- Gaza aid-dependent and crossing-bound, West Bank access-constrained, global wheat {alert}',
         'watch_priority':          7,
-        'watch_headline_template': 'Wheat-Gaza structural exposure -- standing watch (global wheat {alert}, no fresh escalation this cycle)',
+        'watch_headline_template': 'Wheat-Palestinian territories structural exposure -- standing watch (global wheat {alert}, no fresh escalation this cycle)',
         'detail': (
             'Gaza has no sovereign wheat imports and no state buffer: supply is '
             'aid-delivered, which makes the binding constraint CROSSING THROUGHPUT '
@@ -154,7 +170,17 @@ CONVERGENCE_REGISTRY = [
             'in the cluster where WEATHER AT A SINGLE COORDINATE is a food-security '
             'variable. Watch: crossing open/closed status, daily truck throughput '
             'against requirement, precipitation forecast over the crossing, IPC '
-            'classification, pipeline stocks held outside the perimeter.'
+            'classification, pipeline stocks held outside the perimeter. '
+            'WEST BANK (second lane, different mechanism): food insecurity there is '
+            'driven less by supply reaching the territory than by ACCESS and '
+            'PURCHASING POWER -- movement and permit restrictions, loss of labour-'
+            'market access, and Palestinian Authority fiscal position where withheld '
+            'clearance revenue reaches household income through unpaid salaries (see '
+            'the palestinian_financial_access cluster). A Black Sea price move '
+            'therefore transmits to Gaza through DELIVERY and to the West Bank '
+            'through AFFORDABILITY. Sources to watch across both: WFP market and '
+            'food-security monitoring, OCHA oPt situation reporting, IPC analyses, '
+            'and PCBS price series.'
         ),
         'data_completeness': (
             'PARTIAL -- structural facts established; live figures not yet sourced. '
@@ -1359,9 +1385,24 @@ def find_convergences_for_country(country):
     Layer 2 helper: list ALL convergences registered for a country.
     A country may have multiple convergence entries (e.g. wheat AND oil).
 
+    v1.2.0 (Oct 5 2026) -- an entry may also declare `match_countries`, a list
+    of additional ids it answers to. This exists because a convergence's
+    ANALYTIC scope and a reporting feed's COUNTRY ID are not the same thing:
+    the humanitarian convergence detector files Palestinian reporting under
+    'pse' (ISO3 for the State of Palestine, which covers Gaza AND the West
+    Bank), while wheat_gaza is scoped to Gaza. Strict equality meant a live
+    Palestinian food-security signal could never reach its own registry entry.
+
+    `country` remains the entry's PRIMARY id -- display, cluster naming and
+    the dominant lane. match_countries only widens what can trigger it.
+
     Returns a list of registry dicts (possibly empty).
     """
-    return [e for e in CONVERGENCE_REGISTRY if e['country'] == country]
+    if not country:
+        return []
+    return [e for e in CONVERGENCE_REGISTRY
+            if e['country'] == country
+            or country in (e.get('match_countries') or [])]
 
 
 def find_convergence_by_trigger(category, region):

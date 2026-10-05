@@ -1261,7 +1261,21 @@ def _report_convergence_audit(audit):
     except ImportError:
         return
 
-    seen = {cid: (lvl, act or []) for cid, lvl, act in (audit or [])}
+    # Index by ENTRY ID, not by country name. An entry can be reached through
+    # match_countries under a different id than its own ('pse' -> wheat_gaza),
+    # and an audit keyed on entry['country'] would then report a node dark while
+    # it was actually firing -- a diagnostic that lies, which is the one thing
+    # this function exists not to do.
+    activated_ids = set()
+    reporting_for = {}            # entry_id -> (country id that reported, level)
+    for cid, lvl, act in (audit or []):
+        activated_ids.update(act or [])
+        try:
+            for e in find_convergences_for_country(cid):
+                reporting_for.setdefault(e['id'], (cid, lvl))
+        except Exception:
+            pass
+
     try:
         clusters = all_clusters()
     except Exception:
@@ -1273,18 +1287,24 @@ def _report_convergence_audit(audit):
             country = entry['country']
             if country in _HUM_DEDICATED:
                 rows.append('%s=dedicated-emitter' % country)
-            elif country not in seen:
-                rows.append('%s=NO-HUMANITARIAN-SIGNAL' % country)
-            elif entry['id'] in seen[country][1]:
-                rows.append('%s=ACTIVE(L%s)' % (country, seen[country][0]))
+            elif entry['id'] in activated_ids:
+                via, lvl = reporting_for.get(entry['id'], ('?', '?'))
+                # Name the id that actually triggered it when it differs, so a
+                # match_countries hop is visible rather than mysterious.
+                tag = ('ACTIVE(L%s)' % lvl if via == country
+                       else 'ACTIVE(L%s via %s)' % (lvl, via))
+                rows.append('%s=%s' % (country, tag))
+            elif entry['id'] in reporting_for:
+                via, lvl = reporting_for[entry['id']]
+                rows.append('%s=THRESHOLD-NOT-MET(L%s via %s)' % (country, lvl, via))
             else:
-                rows.append('%s=THRESHOLD-NOT-MET(L%s)' % (country, seen[country][0]))
+                rows.append('%s=NO-HUMANITARIAN-SIGNAL' % country)
         print('[ME BLUF] convergence audit [%s]: %s' % (cluster_id, ', '.join(rows)))
 
     # Countries that reported humanitarian distress but matched NO registry entry
     # at all. This is the id-mismatch lane, and it is the one that hides silently.
     orphans = []
-    for cid in seen:
+    for cid in {c for c, _l, _a in (audit or [])}:
         try:
             if not find_convergences_for_country(cid):
                 orphans.append(cid)
