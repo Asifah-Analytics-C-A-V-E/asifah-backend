@@ -16,7 +16,7 @@ Eurasia, Asia & the Pacific, Africa and the Western Hemisphere.
 > that keeps it up.
 
 > 🚨 **Not for operational use.** Analytical and research purposes only. See
-> [`LICENSE`](./LICENSE).
+> [`License`](./License).
 
 **Scale:** 92 modules, 198 registered routes. The largest service on the platform.
 
