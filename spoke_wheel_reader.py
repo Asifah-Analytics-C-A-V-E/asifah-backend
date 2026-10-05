@@ -1,7 +1,7 @@
 """
 spoke_wheel_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.0.6 -- July 25, 2026
+v1.4.0 -- Oct 5, 2026  (v1.0.6 Jul 25 2026)
 
 One reader for the whole spoke-and-wheel architecture. Give it a hub and it
 returns that hub's rim; give it a country list and it returns what those
@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.3.0'
+__version__ = '1.4.0'
 
 # ============================================================
 # CONFIG
@@ -754,6 +754,103 @@ def _resolve_spoke(hub, country, collective=None):
     return None, 'absent'
 
 
+def _spoke_trajectory(fp, hub):
+    """Pull THIS hub's directional read out of a spoke's fingerprint.
+
+    ── WHY THIS EXISTS (v1.4.0, Oct 5 2026) ──────────────────────────────
+    The trackers have emitted a directional read since July 2026 and this
+    module dropped it. The spoke record carried thirteen fields and none of
+    them was trajectory, so gpi_snapshot._extract_wheels -- which looks for
+    exactly this field, and whose docstring calls it "THE MEMORY THAT MAKES
+    TRAJECTORY MEAN ANYTHING" -- found nothing on every spoke, every day.
+    gpi_delta.compute_wheel_trajectory then defaulted the gap to 'holding'
+    and reported "30/30 readings holding" for pairs that had never once been
+    read. The newsletter payload said Russia was holding across the Sahel in
+    the same week Mali's own tracker read CONTRACTING six scans running.
+
+    One missing field, in the middle of a chain that was otherwise complete.
+
+    ── THE SHAPES ────────────────────────────────────────────────────────
+    Trackers grew their trajectory emission independently, so there are four,
+    checked here most-explicit first:
+
+      1. fp['trajectories'][hub]        Sudan -- hub-keyed, the clearest
+      2. fp['<hub>_spoke' | '<hub>_plug']  Mali russia_spoke, Sudan russia_plug
+                                        and uae_spoke: direction as a string
+                                        beside its own confidence
+      3. fp['trajectory']               Mali -- the full reader payload. ONLY
+                                        used when its own 'hub' field matches
+                                        the wheel being read (see below).
+      4. fp['trajectory'] as a string   defensive; older/simpler emitters
+
+    ── THE CROSS-HUB GUARD ───────────────────────────────────────────────
+    Shape 3 is a bare trajectory with no hub in the key. Mali's is a RUSSIA
+    read. Without the hub check, the Turkey wheel reading Mali would collect
+    Russia's direction and file it as Turkey's -- a wheel asserting a
+    direction it never measured. When the payload names no hub at all we
+    accept it, because a tracker that emits a single unlabelled trajectory
+    has only one hub to be talking about.
+
+    Returns {'direction','level','confidence'} or None. NEVER 'holding' --
+    absent means no sensor, and the caller must be able to tell those apart.
+    """
+    if not isinstance(fp, dict) or not fp:
+        return None
+    hub = str(hub or '').lower()
+
+    def _pack(direction, level, confidence):
+        direction = str(direction or '').strip().lower()
+        if direction not in ('contracting', 'expanding', 'holding'):
+            return None
+        try:
+            level = int(level or 0)
+        except (TypeError, ValueError):
+            level = 0
+        return {'direction': direction,
+                'level': 0 if direction == 'holding' else level,
+                'confidence': str(confidence or 'no_evidence').strip().lower()}
+
+    # 1. hub-keyed multi-hub dict
+    multi = fp.get('trajectories')
+    if isinstance(multi, dict):
+        entry = multi.get(hub)
+        if isinstance(entry, dict) and entry.get('direction'):
+            got = _pack(entry.get('direction'), entry.get('level'),
+                        entry.get('confidence'))
+            if got:
+                return got
+
+    # 2. the per-hub block a tracker writes beside its level
+    for suffix in ('_spoke', '_plug', '_axis'):
+        block = fp.get(hub + suffix)
+        if isinstance(block, dict) and block.get('trajectory'):
+            tj = block.get('trajectory')
+            if isinstance(tj, dict):
+                got = _pack(tj.get('direction'), tj.get('level'),
+                            tj.get('confidence') or block.get('confidence'))
+            else:
+                got = _pack(tj, block.get('trajectory_level'),
+                            block.get('confidence'))
+            if got:
+                return got
+
+    # 3 / 4. the bare trajectory, hub-guarded
+    bare = fp.get('trajectory')
+    if isinstance(bare, dict) and bare.get('direction'):
+        own = str(bare.get('hub') or '').strip().lower()
+        if not own or own == hub:
+            got = _pack(bare.get('direction'), bare.get('level'),
+                        bare.get('confidence'))
+            if got:
+                return got
+    elif isinstance(bare, str) and bare.strip():
+        got = _pack(bare, fp.get('trajectory_level'), fp.get('confidence'))
+        if got:
+            return got
+
+    return None
+
+
 def _spoke_state(fp, source, freshness_hours, lit_threshold):
     """Classify a resolved spoke as lit / dark / not_reporting.
 
@@ -904,7 +1001,14 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
                 'source': source,
                 'node_class': fp.get('node_class') or _node_class(hub, country),
                 'relationship': fp.get('relationship', ''),
+                # NOTE: 'direction' below is the RELATIONSHIP direction
+                # (inbound/outbound), not the movement read. They are easy to
+                # confuse and they are not the same field.
                 'direction': fp.get('direction', ''),
+                # v1.4.0 -- the movement read. None means this spoke carries no
+                # trajectory sensor; the snapshot and delta MUST see that as
+                # absent rather than as 'holding'.
+                'trajectory': _spoke_trajectory(fp, hub),
                 'hub_declared': bool(fp.get('hub_declared')),
                 'top_signal': str(fp.get('top_signal', ''))[:180],
             })
@@ -1011,6 +1115,7 @@ def read_emanating(countries, exclude_hubs=(), freshness_hours=DEFAULT_FRESHNESS
                     'level': st['level'], 'state': st['state'],
                     'source': source,
                     'node_class': fp.get('node_class') or _node_class(hub, country),
+                    'trajectory': _spoke_trajectory(fp, hub),   # v1.4.0
                     'top_signal': str(fp.get('top_signal', ''))[:180],
                 })
         out.sort(key=lambda x: (-x['level'], x['hub'], x['country']))

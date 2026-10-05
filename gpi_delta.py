@@ -1,6 +1,7 @@
 """
 Asifah Analytics -- GPI Delta Engine  (Newsletter Slice 2)
-v1.0.0 -- July 23 2026  |  ME backend (reads gpi_snapshot.py's archive)
+v1.1.0 -- Oct 5 2026  |  ME backend (reads gpi_snapshot.py's archive)
+  (v1.0.0 Jul 23 2026; v1.1.0 stops counting unmeasured cycles as 'holding')
 
 WHAT THIS IS
 ═══════════════════════════════════════════════════════════════════════
@@ -43,7 +44,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 import json
 from datetime import datetime, timezone, timedelta
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 try:
     from gpi_snapshot import read_history, HISTORY_CAP
@@ -455,6 +456,25 @@ def compute_wheel_trajectory(history, window_days=30):
     counted as 'holding'. A coverage gap is not evidence of stability, and a
     trend computed over gaps would be fiction -- the same distinction the
     convergence panel draws between DARK and NOT REPORTING.
+
+    ── v1.1.0, Oct 5 2026: THE SECOND KIND OF GAP ────────────────────────
+    The rule above guarded a reporting gap -- a spoke the panel could not
+    read. It did not guard a SENSOR gap -- a spoke with no trajectory reader
+    at all. Those arrived here with no 't' key, and the line that read them
+    said `_s(rec.get('t')) or 'holding'`, so a spoke nobody had ever measured
+    was tallied as a holding reading.
+
+    Until today spoke_wheel_reader dropped trajectory from every spoke, so
+    that default applied universally: this function reported
+    'russia:mali -> holding, 30/30 readings' for a pair with zero readings,
+    in the same window Mali's own tracker read CONTRACTING six scans running.
+    A denominator counting measurements that were never taken is worse than
+    no reading, because it is quotable.
+
+    Unmeasured cycles are now excluded alongside not-reporting ones and
+    counted in `unsensed_readings`, so a thin pair says so instead of
+    claiming stability. A pair with nothing but unsensed cycles does not
+    appear in `pairs` at all; it is listed in `unsensed_pairs`.
     """
     hist = [_d(h) for h in _l(history)][:max(1, int(window_days))]
     if not hist:
@@ -466,17 +486,35 @@ def compute_wheel_trajectory(history, window_days=30):
     tallies = {}
     for snap in hist:
         for key, rec in _wheel_pairs(snap).items():
+            slot = tallies.setdefault(key, {'dirs': [], 'levels': [], 'confs': [],
+                                            'unsensed': 0})
             if _s(rec.get('s')) == 'not_reporting':
-                continue          # gap, not a reading
-            t = _s(rec.get('t')) or 'holding'
-            slot = tallies.setdefault(key, {'dirs': [], 'levels': [], 'confs': []})
+                continue          # reporting gap, not a reading
+            t = _s(rec.get('t'))
+            if t not in ('contracting', 'expanding', 'holding'):
+                # SENSOR gap: this spoke carries no trajectory reader, or the
+                # snapshot predates spoke_wheel_reader v1.4.0. Counted, never
+                # tallied as 'holding'.
+                slot['unsensed'] += 1
+                continue
             slot['dirs'].append(t)
             slot['levels'].append(_i(rec.get('l')))
             if rec.get('c'):
                 slot['confs'].append(_s(rec.get('c')))
 
     pairs = {}
+    unsensed_pairs = {}
     for (hub, country), slot in tallies.items():
+        if not slot['dirs']:
+            # Nothing measured in the whole window. Say that plainly instead of
+            # publishing a direction derived from an empty set.
+            unsensed_pairs[f'{hub}:{country}'] = {
+                'hub': hub, 'country': country,
+                'unsensed_readings': slot['unsensed'],
+                'note': ('No trajectory sensor on this spoke in the archived '
+                         'window -- unmeasured, not stable.'),
+            }
+            continue
         dirs = slot['dirs']
         n = len(dirs)
         counts = {}
@@ -501,6 +539,10 @@ def compute_wheel_trajectory(history, window_days=30):
             'hub': hub, 'country': country,
             'direction': direction, 'basis': why,
             'readings': n,
+            # v1.1.0 -- cycles in this window where the spoke carried no
+            # trajectory sensor. A high count beside a low `readings` means the
+            # direction rests on a thin slice of the window, not on a quiet one.
+            'unsensed_readings': slot.get('unsensed', 0),
             'level_now': slot['levels'][0] if slot['levels'] else 0,
             'level_then': slot['levels'][-1] if slot['levels'] else 0,
             'level_change': (slot['levels'][0] - slot['levels'][-1]) if slot['levels'] else 0,
@@ -533,11 +575,18 @@ def compute_wheel_trajectory(history, window_days=30):
                         f'trajectory cannot honestly be claimed from it.'),
         'pairs': pairs,
         'hubs': hubs,
+        # v1.1.0 -- spokes with no trajectory sensor anywhere in the window.
+        # Surfaced rather than omitted: the reader should be able to see which
+        # parts of a wheel are unmeasured, not infer calm from a short list.
+        'unsensed_pairs': unsensed_pairs,
+        'unsensed_pair_count': len(unsensed_pairs),
         'doctrine_note': ('Direction is observed persistence across readings, not a '
-                          'projection. Not-reporting cycles are excluded from the '
-                          'denominator -- a coverage gap is not evidence of stability. '
-                          'Naming a cross-region pattern is a GPI-altitude judgement '
-                          'and is deliberately not made here.'),
+                          'projection. Two kinds of gap are excluded from the '
+                          'denominator rather than counted as holding: a spoke the '
+                          'panel could not read, and a spoke with no trajectory sensor '
+                          'at all. Neither is evidence of stability. Naming a '
+                          'cross-region pattern is a GPI-altitude judgement and is '
+                          'deliberately not made here.'),
     }
 
 
