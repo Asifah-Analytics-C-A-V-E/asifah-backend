@@ -1188,6 +1188,26 @@ def _apply_convergence_enrichments(country, signal_dict, long_text_parts):
 # invents a country, and it never emits a signal for a country the detector did
 # not actually report.
 
+# v2.4.0 (Oct 5 2026) -- ONE country-id canon for the whole platform.
+# The humanitarian convergence cache emits ISO3 codes for part of its roster
+# ('sdn', 'pse', 'irn') and readable slugs for the rest. CONVERGENCE_REGISTRY
+# matches on readable slugs ('sudan', 'gaza', 'egypt'). Untranslated, a country
+# can carry a live humanitarian signal and still never match its own registry
+# entry -- which is one of the reasons the Levant wheat cluster has only ever
+# fired on Lebanon. Soft import: absent, we fall back to a local normaliser and
+# say so, rather than silently reverting to the bug.
+try:
+    from country_ids import canonical as _canon_country
+    _CANON_AVAILABLE = True
+except ImportError:
+    _CANON_AVAILABLE = False
+    def _canon_country(x):
+        return (str(x).strip().lower().replace(' ', '_').replace('-', '_')
+                if x else '')
+    print('[ME BLUF] *** country_ids NOT installed -- humanitarian country ids '
+          'will NOT be canonicalized, so ISO3-shaped ids (sdn, pse) cannot match '
+          'their registry entries. Deploy country_ids.py. ***')
+
 # Level floor. The humanitarian detector's own scale starts at 3, so anything
 # below that is not a signal it emits -- this is a guard, not a filter.
 _HUM_MIN_LEVEL = 3
@@ -1216,6 +1236,63 @@ def _humanitarian_subregion_map():
         return SUBREGION_TO_COUNTRY or {}
     except Exception:
         return {}
+
+
+def _report_convergence_audit(audit):
+    """Say, every cycle, WHY each registry convergence did or did not fire.
+
+    Oct 5 2026. The generic emitter has existed since Sep 20 and the registry has
+    carried four Levant wheat nodes since then, but only Lebanon ever fired and
+    nothing anywhere said why. A node can be dark for three different reasons and
+    they need three different fixes:
+
+        NO-HUMANITARIAN-SIGNAL      the humanitarian detector has no data for
+                                    that country this cycle (coverage gap)
+        SIGNAL-BUT-NO-REGISTRY-HIT  the country IS reporting, but its id did not
+                                    match any registry entry (id mismatch)
+        THRESHOLD-NOT-MET           both sides matched; the commodity simply was
+                                    not at or above the entry's threshold
+
+    Those looked identical from the outside -- silence. Now they do not.
+    Absence-honest: this prints even when nothing fired.
+    """
+    try:
+        from convergence_registry import all_clusters, find_cluster, find_convergences_for_country
+    except ImportError:
+        return
+
+    seen = {cid: (lvl, act or []) for cid, lvl, act in (audit or [])}
+    try:
+        clusters = all_clusters()
+    except Exception:
+        return
+
+    for cluster_id in clusters:
+        rows = []
+        for entry in find_cluster(cluster_id):
+            country = entry['country']
+            if country in _HUM_DEDICATED:
+                rows.append('%s=dedicated-emitter' % country)
+            elif country not in seen:
+                rows.append('%s=NO-HUMANITARIAN-SIGNAL' % country)
+            elif entry['id'] in seen[country][1]:
+                rows.append('%s=ACTIVE(L%s)' % (country, seen[country][0]))
+            else:
+                rows.append('%s=THRESHOLD-NOT-MET(L%s)' % (country, seen[country][0]))
+        print('[ME BLUF] convergence audit [%s]: %s' % (cluster_id, ', '.join(rows)))
+
+    # Countries that reported humanitarian distress but matched NO registry entry
+    # at all. This is the id-mismatch lane, and it is the one that hides silently.
+    orphans = []
+    for cid in seen:
+        try:
+            if not find_convergences_for_country(cid):
+                orphans.append(cid)
+        except Exception:
+            pass
+    if orphans:
+        print('[ME BLUF] humanitarian countries with NO registry convergence: %s'
+              % ', '.join(sorted(orphans)))
 
 
 def _build_humanitarian_country_signals():
@@ -1250,7 +1327,12 @@ def _build_humanitarian_country_signals():
         raw = s.get('country')
         if not raw:
             continue
-        cid = submap.get(raw, raw)
+        # Sub-national rollup FIRST ('aleppo' -> 'syria'), then canonicalize
+        # ('sdn' -> 'sudan'), so the category this emits is the id the registry
+        # is actually waiting for.
+        cid = _canon_country(submap.get(raw, raw))
+        if not cid:
+            continue
         if cid in _HUM_DEDICATED:
             continue
         try:
@@ -1272,6 +1354,7 @@ def _build_humanitarian_country_signals():
         rec['drivers'].append(s)
 
     signals = []
+    _conv_audit = []
     for cid, rec in by_country.items():
         top = rec.get('top') or {}
         level = rec['level']
@@ -1316,10 +1399,16 @@ def _build_humanitarian_country_signals():
 
         # THE POINT OF ALL THIS: registry-driven convergence enrichment, exactly
         # as Lebanon gets it. wheat_gaza / wheat_egypt / wheat_syria fire here.
-        _apply_convergence_enrichments(cid, signal, parts)
+        _activated = _apply_convergence_enrichments(cid, signal, parts) or []
+        if _activated:
+            signal['convergences_active'] = list(_activated)
+        _conv_audit.append((cid, level, list(_activated)))
 
         signal['long_text'] = ' '.join(parts)
         signals.append(signal)
+
+    # Why each registry node did or did not fire. See _report_convergence_audit.
+    _report_convergence_audit(_conv_audit)
 
     signals.sort(key=lambda s: s['priority'], reverse=True)
     if signals:
