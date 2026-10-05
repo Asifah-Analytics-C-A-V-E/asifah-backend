@@ -2722,8 +2722,17 @@ def _detect_convergences_from_registry(blufs):
             # In fallback regions, look for ANY signal carrying the {id}_active flag.
             active_flag = f'{entry["id"]}_active'
             if region == primary_region:
+                # v3.9.0 -- an entry may declare trigger_signal_categories (a
+                # list) when its analytic scope is reached under more than one
+                # country id. wheat_gaza is scoped to Gaza, but Palestinian
+                # food-security reporting arrives as humanitarian_palestine, so
+                # a single exact category meant Layer 2 built the enriched
+                # signal and Layer 1 never found it. Falls back to the singular
+                # field, so every other entry is untouched.
+                _cats = (entry.get('trigger_signal_categories')
+                         or [entry['trigger_signal_category']])
                 candidate = next(
-                    (s for s in signals if s.get('category') == entry['trigger_signal_category']
+                    (s for s in signals if s.get('category') in _cats
                      and s.get(active_flag)),
                     None
                 )
