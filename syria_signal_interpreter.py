@@ -323,10 +323,22 @@ def _score_red_lines(scan_data):
         'constitution', 'elections', 'minority protection',
         'reconciliation', 'governance', 'institution', 'legitimacy'
     ])
-    isis_major = isis_vec >= 3 or _scan(['isis'], [
+    # v1.1.0 (Oct 5 2026) -- BREACHED now requires evidence of the EVENT this
+    # red line describes, not a volume reading.
+    #
+    # The old test was `isis_vec >= 3 or _scan(...)`. An L3 ISIS vector is ONE
+    # article containing a phrase like 'isis claims' or 'isis threat' -- the
+    # tracker takes a MAX, not a count. That alone was declaring "ISIS Major
+    # Resurgence / Territory Seizure" BREACHED, which Category 1 of
+    # build_top_signals then published at level = severity*2 = 6, the platform's
+    # top rung. A keyword hit was setting the global kinetic axis to L6.
+    #
+    # 'caliphate' is also dropped: it matches historical and analytical prose,
+    # which is not evidence of a seizure.
+    isis_major = _scan(['isis'], [
         'isis seizes', 'islamic state captures', 'isis controls',
-        'mass casualty', 'isis attack city', 'caliphate'
-    ])
+        'isis attack city', 'isis overruns', 'isis captures town',
+    ]) or _scan(['isis'], ['mass casualty attack', 'mass casualty bombing'])
 
     # Foreign-fighter / ex-AQ integration: APPROACHING on signal presence,
     # BREACHED when formalization-into-state-security language is detected.
@@ -354,11 +366,28 @@ def _score_red_lines(scan_data):
         })
 
     # ── ISIS major resurgence ──
+    # `observed` is what WAS SEEN; `label` stays the watch definition. Category 1
+    # of build_top_signals prefers `observed` when present, so a red line that
+    # has not actually breached never publishes the breach language.
     if isis_major or isis_vec >= 2:
+        _isis_breached = bool(isis_major)
         triggered.append({
             **next(r for r in RED_LINES if r['id'] == 'isis_major_resurgence'),
-            'status':  'BREACHED' if isis_major else 'APPROACHING',
-            'trigger': f'ISIS vector L{isis_vec} -- resurgence signals in governance vacuum areas',
+            'status':   'BREACHED' if _isis_breached else 'APPROACHING',
+            'observed': (
+                'ISIS territory seizure / mass-casualty attack reported'
+                if _isis_breached else
+                f'ISIS insurgent activity L{isis_vec} in ungoverned pockets'
+            ),
+            'trigger': (
+                f'Explicit seizure or mass-casualty language detected; ISIS vector L{isis_vec}.'
+                if _isis_breached else
+                f'ISIS vector L{isis_vec} -- insurgent-activity reporting concentrated in the '
+                f'Badiya desert, the Deir ez-Zor countryside and other areas outside effective '
+                f'HTS or SDF control. Consistent with a persistent low-level insurgency '
+                f'(cells, ambushes, IEDs) rather than territorial control. ISIS has held no '
+                f'significant territory in Syria since 2019.'
+            ),
         })
 
     # ── Turkish offensive ──
@@ -914,9 +943,11 @@ def build_top_signals(result):
                 'level':      max(theatre_level, severity * 2),
                 'icon':       rl.get('icon', '🚨'),
                 'color':      '#dc2626',
-                'short_text': f'{SYRIA_FLAG} SYRIA: {rl.get("label", "Red line breached")[:60]}',
-                'long_text':  (f'SYRIA red line breached -- {rl.get("label", "")}: '
-                               f'{rl.get("trigger", "")[:140]}'),
+                'short_text': (f'{SYRIA_FLAG} SYRIA: '
+                               f'{(rl.get("observed") or rl.get("label", "Red line breached"))[:70]}'),
+                'long_text':  (f'SYRIA red line breached -- '
+                               f'{rl.get("observed") or rl.get("label", "")}: '
+                               f'{rl.get("trigger", "")[:200]}'),
             })
 
     # ============================================
@@ -964,10 +995,16 @@ def build_top_signals(result):
             'level':      isis_lvl,
             'icon':       '⚫',
             'color':      '#1f2937',
-            'short_text': f'{SYRIA_FLAG} SYRIA: Islamic State (ISIS) reconstitution L{isis_lvl}',
-            'long_text':  (f'SYRIA: Islamic State (ISIS) reconstitution signals at L{isis_lvl} '
-                           f'across Idlib desert, Sinjar, and former territory. Hayat Tahrir '
-                           f'al-Sham (HTS) governance vacuum being exploited.'),
+            'short_text': (f'{SYRIA_FLAG} SYRIA: ISIS insurgent activity L{isis_lvl} '
+                           f'(ungoverned pockets)'),
+            'long_text':  (f'SYRIA: Islamic State insurgent-activity reporting at L{isis_lvl}, '
+                           f'concentrated in the Badiya desert, the Deir ez-Zor countryside and '
+                           f'other terrain outside effective HTS or SDF control. Pattern is '
+                           f'persistent low-level insurgency -- cells, ambushes and IEDs in '
+                           f'ungoverned areas -- not territorial control; ISIS has held no '
+                           f'significant territory in Syria since 2019. Watch zones per CENTCOM '
+                           f'and ISW: Badiya desert routes, Deir ez-Zor, and the detention '
+                           f'facilities the SDF guards in the northeast.'),
         })
 
     # ============================================
