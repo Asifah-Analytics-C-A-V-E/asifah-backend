@@ -260,7 +260,7 @@ Three altitudes: sensors below, analyst in the middle, global index above.
 ## Licence
 
 **© 2025–2026 RCGG. All rights reserved.** Proprietary — see
-[`LICENSE`](./LICENSE).
+[`License`](./License).
 
 Copying, modifying, redistributing, sublicensing, hosting unauthorised instances
 of this API, or commercially exploiting this software in whole or in part
