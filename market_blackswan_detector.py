@@ -90,7 +90,9 @@ import requests
 from datetime import datetime, timezone
 from market_prose import market_disclaimer, analog_tail
 
-VERSION = '1.3.0'   # Jul 26 2026: +5 non-US episodes, so_what layer, global_majors
+VERSION = '1.4.0'   # Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
+                    # (Europe/MENA/Africa/LatAm), region tags, proportional F10
+                    # (v1.3.0 Jul 26 2026: +5 non-US episodes, so_what, global_majors)
 CACHE_KEY = 'blackswan:market:latest'
 BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
@@ -219,7 +221,14 @@ TICKERS = {
     'spx': '^GSPC', 'ixic': '^IXIC', 'vix': '^VIX',
     'tnx': '^TNX', 'irx': '^IRX',
     'rsp': 'RSP', 'spy': 'SPY', 'smh': 'SMH', 'xlf': 'XLF',
+    # Global majors -- developed core (tracked since launch)
     'n225': '^N225', 'dax': '^GDAXI', 'ftse': '^FTSE', 'sensex': '^BSESN',
+    # v1.4.0 (Oct 5 2026): the board was all-developed-market, so a reader
+    # could not see emerging-market divergence at all -- and divergence is
+    # usually where it starts. Each of these four is a market the platform
+    # already tracks a country for: China and Korea are rhetoric theatres,
+    # Brazil anchors the Western Hemisphere, Israel carries a financial pulse.
+    'hsi': '^HSI', 'kospi': '^KS11', 'bovespa': '^BVSP', 'ta35': '^TA35.TA',
 }
 
 
@@ -380,6 +389,13 @@ def _max_drawdown(series, m, window_months):
 # Each feature returns True (active), False (quiet), or None
 # (data unavailable at that date -- excluded, never guessed).
 # ------------------------------------------------------------
+# ── F10 global_sync configuration (v1.4.0) ──
+# Widening GLOBAL_SYNC_BASIS changes historical feature values. Do it only with
+# a before/after backtest in front of you, never as a side effect of a UI change.
+GLOBAL_SYNC_BASIS = ('n225', 'dax', 'ftse', 'sensex')
+GLOBAL_SYNC_FRACTION = 0.75      # 3 of 4 -- identical to the pre-v1.4.0 rule
+GLOBAL_SYNC_MIN_AVAILABLE = 3    # fewer series than this -> feature reads None
+
 FEATURE_WEIGHTS = {
     'valuation_stretch': 1.0, 'parabolic_momentum': 1.0,
     'concentration': 1.0, 'breadth_divergence': 1.0,
@@ -622,17 +638,34 @@ def compute_features(data, m):
         f['thematic_fever'] = None
 
     # F10 global_sync
-    majors = ['n225', 'dax', 'ftse', 'sensex']
+    #
+    # BASIS IS DELIBERATELY THE DEVELOPED CORE, NOT THE WHOLE BOARD (v1.4.0).
+    # Four new majors joined the board this version. They are NOT in this
+    # feature, because widening it would silently rewrite the detector's own
+    # history: HSI, KOSPI, BVSP and TA35 series begin in the late 1980s-1990s,
+    # so every backtested month after they appear would be scored against a
+    # different denominator than the months before. A calibrated detector must
+    # not change its historical readings as a side effect of a board addition.
+    # Widen GLOBAL_SYNC_BASIS deliberately, with a backtest comparison in hand.
+    #
+    # The threshold is now a FRACTION rather than a hard count. For a 4-major
+    # basis this is arithmetically identical to the old `>= 3` rule (3/4 = 75%,
+    # 3/3 = 100%), so the backtest is unchanged -- but it stays correct if the
+    # basis is ever widened, where a flat `>= 3` would quietly become a much
+    # weaker claim.
     near = []
-    for name in majors:
+    for name in GLOBAL_SYNC_BASIS:
         s = data.get(name)
         if s and s.get(m):
             nh = _near_high(s, m, 24, 5.0)
             if nh is not None:
                 near.append(1 if nh else 0)
-    if len(near) >= 3:
-        f['global_sync'] = sum(near) >= 3
-        detail['global_sync'] = {'majors_near_24m_high': sum(near), 'of': len(near)}
+    if len(near) >= GLOBAL_SYNC_MIN_AVAILABLE:
+        hit = sum(near)
+        f['global_sync'] = (hit / float(len(near))) >= GLOBAL_SYNC_FRACTION
+        detail['global_sync'] = {'majors_near_24m_high': hit, 'of': len(near),
+                                 'fraction_required': GLOBAL_SYNC_FRACTION,
+                                 'basis': list(GLOBAL_SYNC_BASIS)}
     else:
         f['global_sync'] = None
 
@@ -681,30 +714,30 @@ def compute_composite(features, multipliers):
 # lead times are COMPUTED from data at seed time, never asserted.
 # ------------------------------------------------------------
 EPISODES = [
-    {'id': 'black_monday_1987', 'source_url': 'https://www.investopedia.com/terms/b/blackmonday.asp', 'label': 'Black Monday', 'anchor': '1987-08',
+    {'id': 'black_monday_1987', 'region': 'wha', 'source_url': 'https://www.investopedia.com/terms/b/blackmonday.asp', 'label': 'Black Monday', 'anchor': '1987-08',
      'event_month': '1987-10', 'type': 'crash', 'drawdown': '-34% SPX in weeks',
      'note': 'pre-VIX/pre-FRED-spread era; partial features only'},
-    {'id': 'ltcm_1998', 'source_url': 'https://www.investopedia.com/terms/l/longtermcapital.asp', 'label': 'LTCM / Russia default', 'anchor': '1998-06',
+    {'id': 'ltcm_1998', 'region': 'wha', 'source_url': 'https://www.investopedia.com/terms/l/longtermcapital.asp', 'label': 'LTCM / Russia default', 'anchor': '1998-06',
      'event_month': '1998-08', 'type': 'stress_event', 'drawdown': '-19% SPX'},
-    {'id': 'dotcom_2000', 'source_url': 'https://www.investopedia.com/terms/d/dotcom-bubble.asp', 'label': 'Dot-com top', 'anchor': '1999-12',
+    {'id': 'dotcom_2000', 'region': 'wha', 'source_url': 'https://www.investopedia.com/terms/d/dotcom-bubble.asp', 'label': 'Dot-com top', 'anchor': '1999-12',
      'event_month': '2000-03', 'type': 'bubble_burst', 'drawdown': '-49% SPX / -78% IXIC'},
-    {'id': 'nine_eleven_2001', 'source_url': 'https://en.wikipedia.org/wiki/Economic_effects_of_the_September_11_attacks', 'label': '9/11 attacks', 'anchor': '2001-08',
+    {'id': 'nine_eleven_2001', 'region': 'wha', 'source_url': 'https://en.wikipedia.org/wiki/Economic_effects_of_the_September_11_attacks', 'label': '9/11 attacks', 'anchor': '2001-08',
      'event_month': '2001-09', 'type': 'exogenous_shock',
      'drawdown': '-12% SPX in 5 sessions',
      'note': 'NULL CASE: exogenous shocks carry no reliable market pre-signal; '
              'the GPI kinetic axis is the lightning watch'},
-    {'id': 'gfc_2008', 'source_url': 'https://www.investopedia.com/terms/g/great-recession.asp', 'label': 'Global Financial Crisis top', 'anchor': '2007-10',
+    {'id': 'gfc_2008', 'region': 'wha', 'source_url': 'https://www.investopedia.com/terms/g/great-recession.asp', 'label': 'Global Financial Crisis top', 'anchor': '2007-10',
      'event_month': '2007-10', 'type': 'bubble_burst', 'drawdown': '-57% SPX'},
-    {'id': 'downgrade_2011', 'source_url': 'https://en.wikipedia.org/wiki/August_2011_stock_markets_fall', 'label': 'US debt downgrade', 'anchor': '2011-06',
+    {'id': 'downgrade_2011', 'region': 'wha', 'source_url': 'https://en.wikipedia.org/wiki/August_2011_stock_markets_fall', 'label': 'US debt downgrade', 'anchor': '2011-06',
      'event_month': '2011-08', 'type': 'correction', 'drawdown': '-19% SPX'},
-    {'id': 'china_2015', 'source_url': 'https://en.wikipedia.org/wiki/2015%E2%80%932016_Chinese_stock_market_turbulence', 'label': 'China deval / yuan shock', 'anchor': '2015-07',
+    {'id': 'china_2015', 'region': 'apac', 'source_url': 'https://en.wikipedia.org/wiki/2015%E2%80%932016_Chinese_stock_market_turbulence', 'label': 'China deval / yuan shock', 'anchor': '2015-07',
      'event_month': '2015-08', 'type': 'correction', 'drawdown': '-12% SPX'},
-    {'id': 'volmageddon_2018', 'source_url': 'https://www.investopedia.com/terms/v/volmageddon.asp', 'label': 'Q4 2018 / vol unwind', 'anchor': '2018-09',
+    {'id': 'volmageddon_2018', 'region': 'wha', 'source_url': 'https://www.investopedia.com/terms/v/volmageddon.asp', 'label': 'Q4 2018 / vol unwind', 'anchor': '2018-09',
      'event_month': '2018-10', 'type': 'correction', 'drawdown': '-20% SPX'},
-    {'id': 'covid_2020', 'source_url': 'https://en.wikipedia.org/wiki/2020_stock_market_crash', 'label': 'COVID crash', 'anchor': '2020-01',
+    {'id': 'covid_2020', 'region': 'apac', 'source_url': 'https://en.wikipedia.org/wiki/2020_stock_market_crash', 'label': 'COVID crash', 'anchor': '2020-01',
      'event_month': '2020-02', 'type': 'exogenous_shock', 'drawdown': '-34% SPX in 23 sessions',
      'note': 'NULL CASE (exogenous)'},
-    {'id': 'everything_2021', 'source_url': 'https://www.investopedia.com/everything-bubble-5217463', 'label': 'Everything-bubble top', 'anchor': '2021-11',
+    {'id': 'everything_2021', 'region': 'wha', 'source_url': 'https://www.investopedia.com/everything-bubble-5217463', 'label': 'Everything-bubble top', 'anchor': '2021-11',
      'event_month': '2022-01', 'type': 'bubble_burst', 'drawdown': '-25% SPX / -33% IXIC'},
 
     # ════════════════════════════════════════════════════════════════════
@@ -721,7 +754,7 @@ EPISODES = [
     # 1987 already carries. `data_spine: 'partial'` marks them so the prose can
     # say so. Matching on partial features is weaker evidence, and pretending
     # otherwise would be the dishonest option.
-    {'id': 'plaza_1985', 'source_url': 'https://www.investopedia.com/terms/p/plaza-accord.asp', 'label': 'Plaza Accord -> Japanese asset bubble',
+    {'id': 'plaza_1985', 'region': 'apac', 'source_url': 'https://www.investopedia.com/terms/p/plaza-accord.asp', 'label': 'Plaza Accord -> Japanese asset bubble',
      'anchor': '1985-09', 'event_month': '1989-12', 'type': 'policy_induced_bubble',
      'drawdown': '-63% Nikkei by Aug 1992 (38,915 -> 14,309)',
      'data_spine': 'partial',
@@ -739,7 +772,7 @@ EPISODES = [
               'watching only equity valuation would have seen a boom, not a '
               'mechanism.')},
 
-    {'id': 'nikkei_1989', 'source_url': 'https://www.investopedia.com/terms/l/lost-decade.asp', 'label': 'Nikkei peak / Lost Decades',
+    {'id': 'nikkei_1989', 'region': 'apac', 'source_url': 'https://www.investopedia.com/terms/l/lost-decade.asp', 'label': 'Nikkei peak / Lost Decades',
      'anchor': '1989-06', 'event_month': '1989-12', 'type': 'bubble_burst',
      'drawdown': '-63% in 32 months; 34 years to regain the 1989 high',
      'data_spine': 'partial',
@@ -751,7 +784,7 @@ EPISODES = [
               'detector to represent a burst whose consequence is stagnation '
               'rather than a V-shaped drawdown.')},
 
-    {'id': 'asia_crisis_1997', 'source_url': 'https://www.investopedia.com/terms/a/asian-financial-crisis.asp', 'label': 'Asian financial crisis',
+    {'id': 'asia_crisis_1997', 'region': 'apac', 'source_url': 'https://www.investopedia.com/terms/a/asian-financial-crisis.asp', 'label': 'Asian financial crisis',
      'anchor': '1996-12', 'event_month': '1997-07', 'type': 'contagion',
      'drawdown': 'baht -50% in 6 months; regional equity/currency collapse',
      'data_spine': 'partial',
@@ -768,7 +801,7 @@ EPISODES = [
               'applies to hubs. This is the only cross-country episode in the '
               'library.')},
 
-    {'id': 'carry_unwind_2024', 'source_url': 'https://www.investopedia.com/terms/c/currencycarrytrade.asp', 'label': 'Yen carry-trade unwind',
+    {'id': 'carry_unwind_2024', 'region': 'apac', 'source_url': 'https://www.investopedia.com/terms/c/currencycarrytrade.asp', 'label': 'Yen carry-trade unwind',
      'anchor': '2024-06', 'event_month': '2024-08', 'type': 'stress_event',
      'drawdown': '-12% Nikkei in one session (Aug 5 2024); global equity spillover',
      'data_spine': 'partial',
@@ -782,7 +815,7 @@ EPISODES = [
               'japan-stability.html: STRONG yen + falling equities is this '
               'signature, and it is IMPORTED rather than domestic.')},
 
-    {'id': 'tohoku_2011', 'source_url': 'https://en.wikipedia.org/wiki/2011_T%C5%8Dhoku_earthquake_and_tsunami', 'label': 'Tohoku earthquake / Fukushima',
+    {'id': 'tohoku_2011', 'region': 'apac', 'source_url': 'https://en.wikipedia.org/wiki/2011_T%C5%8Dhoku_earthquake_and_tsunami', 'label': 'Tohoku earthquake / Fukushima',
      'anchor': '2011-01', 'event_month': '2011-03', 'type': 'exogenous_shock',
      'drawdown': '-16% Nikkei in 2 sessions',
      'data_spine': 'partial',
@@ -792,6 +825,125 @@ EPISODES = [
               'moves an index, this module has nothing to say and the GPI '
               'kinetic and humanitarian axes are the read. Absence of a market '
               'warning is not absence of risk.')},
+    # ══════════════════════════════════════════════════════════════════
+    # v1.4.0 (Oct 5 2026) -- GEOGRAPHIC FILL
+    # The library was 10 US episodes, 4 Japan and 1 Asia-wide: it tracked the
+    # DAX and the FTSE with no European episode to compare them against, and
+    # had nothing at all from the Middle East, Africa or Latin America. These
+    # eight close that gap. Same honesty rule as the Jul 26 additions -- the
+    # feature spine is US-built (SPX, VIX, FRED spreads, CAPE), so non-US
+    # episodes are scored on PARTIAL features and say so. 1973 predates the
+    # spine entirely and is marked 'none': it is in the library as a documented
+    # MECHANISM, not as a backtestable read.
+    # ══════════════════════════════════════════════════════════════════
+    {'id': 'oil_shock_1973', 'region': 'me',
+     'source_url': 'https://www.investopedia.com/terms/1/1973-availability-crisis.asp',
+     'label': 'OPEC oil embargo', 'anchor': '1973-09', 'event_month': '1973-10',
+     'type': 'exogenous_shock', 'drawdown': '-48% SPX to Oct 1974',
+     'data_spine': 'none',
+     'mechanism': ('commodity supply shock -> input-cost inflation -> policy '
+                   'tightening into a slowing economy -> multiple compression'),
+     'note': ('The canonical commodity-to-equity transmission, and the reason '
+              'the commodity layer sits beside this detector rather than under '
+              'it. NOT BACKTESTABLE: the feature spine does not reach 1973. It '
+              'is here as a documented mechanism -- when the commodity layer '
+              'shows a supply shock and the rates picture is tightening, this '
+              'is the shape that pairing has taken before.')},
+    {'id': 'erm_1992', 'region': 'europe',
+     'source_url': 'https://www.investopedia.com/terms/b/black-wednesday.asp',
+     'label': 'ERM crisis / Black Wednesday', 'anchor': '1992-06', 'event_month': '1992-09',
+     'type': 'stress_event', 'drawdown': 'GBP -15% vs DEM in weeks; FTSE recovered within months',
+     'data_spine': 'partial',
+     'mechanism': ('fixed exchange-rate commitment -> divergent domestic '
+                   'conditions -> reserves spent defending the peg -> '
+                   'speculative attack -> peg abandoned'),
+     'note': ('The template for every currency-peg break since. Note the shape: '
+              'the EQUITY drawdown was small and brief while the CURRENCY event '
+              'was enormous. An equity-only detector would have called this '
+              'quiet, which is precisely why the platform reads FX and rates '
+              'alongside the tape rather than after it.')},
+    {'id': 'mexico_1994', 'region': 'wha',
+     'source_url': 'https://www.investopedia.com/terms/t/tequilaeffect.asp',
+     'label': 'Mexican peso / Tequila crisis', 'anchor': '1994-09', 'event_month': '1994-12',
+     'type': 'contagion', 'drawdown': 'MXN -50%; EM equity contagion into 1995',
+     'data_spine': 'partial',
+     'mechanism': ('short-term foreign-currency debt -> reserve drain -> '
+                   'devaluation -> contagion to unrelated emerging markets'),
+     'note': ('The first modern demonstration that a single mid-size emerging '
+              'market can reprice every other one regardless of fundamentals. '
+              'Mexico carries a financial pulse on this platform; the mechanism '
+              'is a live read, not only a historical one.')},
+    {'id': 'asia_ruble_1998', 'region': 'europe',
+     'source_url': 'https://www.investopedia.com/terms/r/russian-financial-crisis.asp',
+     'label': 'Russian default / ruble devaluation', 'anchor': '1998-05', 'event_month': '1998-08',
+     'type': 'contagion', 'drawdown': 'RTS -90% over 1998; triggered the LTCM failure',
+     'data_spine': 'partial',
+     'mechanism': ('commodity revenue collapse -> fiscal strain -> sovereign '
+                   'default and devaluation -> leveraged-fund failure abroad'),
+     'note': ('The companion to LTCM, filed separately because the ORIGIN was a '
+              'commodity exporter and the TRANSMISSION was leverage in New York. '
+              'Oil fell under $11/bbl before the default. Russia is a resident '
+              'hub on this platform and still a commodity exporter: the first '
+              'half of this mechanism is permanently live.')},
+    {'id': 'eurozone_2011', 'region': 'europe',
+     'source_url': 'https://www.investopedia.com/terms/e/european-sovereign-debt-crisis.asp',
+     'label': 'Eurozone sovereign debt crisis', 'anchor': '2011-04', 'event_month': '2011-11',
+     'type': 'contagion', 'drawdown': '-27% Euro Stoxx; Greek 10y above 30%',
+     'data_spine': 'partial',
+     'mechanism': ('sovereign solvency doubt -> domestic banks holding that '
+                   'sovereign debt reprice -> credit contraction -> deeper '
+                   'fiscal strain (the doom loop) -> contagion across a shared '
+                   'currency with no shared fiscal backstop'),
+     'note': ('Resolved by a verbal commitment -- "whatever it takes", Jul 2012 '
+              '-- before a single bond was bought. Worth holding beside any '
+              'read that treats central-bank credibility as a constant rather '
+              'than as the variable it is. Greece carries both a rhetoric '
+              'tracker and a financial pulse here.')},
+    {'id': 'nenegate_2015', 'region': 'africa',
+     'source_url': 'https://en.wikipedia.org/wiki/Nenegate',
+     'label': 'South Africa "Nenegate"', 'anchor': '2015-11', 'event_month': '2015-12',
+     'type': 'stress_event', 'drawdown': 'ZAR -10% in 3 sessions; bank equities -20%',
+     'data_spine': 'partial',
+     'mechanism': ('institutional-credibility shock -> immediate currency and '
+                   'sovereign-bond repricing -> partial reversal when '
+                   'credibility is restored'),
+     'note': ('The library\'s only Africa-origin episode, and it earns its place '
+              'on mechanism rather than magnitude: a single personnel decision '
+              'repriced a G20 currency within hours, and reversing the decision '
+              'reversed most of the move within days. This is the cleanest '
+              'available example of markets pricing INSTITUTIONS rather than '
+              'fundamentals -- the same question the conflict-repricing '
+              'detector asks of a theatre.')},
+    {'id': 'turkey_2018', 'region': 'europe',
+     'source_url': 'https://en.wikipedia.org/wiki/2018%E2%80%932022_Turkish_currency_and_debt_crisis',
+     'label': 'Turkish lira crisis', 'anchor': '2018-05', 'event_month': '2018-08',
+     'type': 'contagion', 'drawdown': 'TRY -40% in 2018; brief EM and European bank contagion',
+     'data_spine': 'partial',
+     'mechanism': ('foreign-currency corporate debt -> policy refusing to raise '
+                   'rates into the shock -> currency decline -> foreign lender '
+                   'exposure repriced abroad'),
+     'note': ('Filed under Europe to match the platform taxonomy, where Turkey '
+              'is a resident hub on the Europe backend. The distinguishing '
+              'feature is a policy reaction that AMPLIFIED rather than absorbed '
+              'the shock -- so the readable variable was political, not '
+              'economic, and the rhetoric layer saw it before the tape did.')},
+    {'id': 'uk_gilt_2022', 'region': 'europe',
+     'source_url': 'https://www.investopedia.com/what-is-ldi-6826143',
+     'label': 'UK gilt / LDI crisis', 'anchor': '2022-08', 'event_month': '2022-09',
+     'type': 'stress_event', 'drawdown': '30y gilt yield +130bp in 4 sessions; GBP to a record low',
+     'data_spine': 'partial',
+     'mechanism': ('fiscal announcement -> sovereign yields gap higher -> '
+                   'collateral calls on leveraged pension liability-driven '
+                   'investment -> forced gilt selling -> yields higher still '
+                   '(the doom loop) -> emergency central-bank buying'),
+     'note': ('The fastest episode in the library -- days, not months -- and the '
+              'only one where a central bank bought bonds while actively '
+              'tightening, because the alternative was pension-fund insolvency. '
+              'The leverage was legal, regulated, and invisible on every '
+              'public market screen until it detonated. The standing lesson: '
+              'this detector reads PRICES, and hidden leverage has no price '
+              'until it is unwinding. Absence of a market warning is not '
+              'absence of risk.')},
 ]
 
 CONTROL_MONTHS = ['1995-06', '2004-06', '2013-06', '2016-06']
@@ -831,6 +983,7 @@ def similarity_matches(current_active, library, top_n=3):
     for ep in library:
         j = _jaccard(current_active, ep.get('active_features', []))
         scored.append({'id': ep['id'], 'label': ep['label'],
+                       'region': ep.get('region', 'wha'),   # v1.4.0
                        'type': ep['type'], 'event_month': ep['event_month'],
                        'drawdown': ep['drawdown'],
                        'similarity_pct': round(j * 100, 0),
@@ -911,6 +1064,7 @@ def run_backtest(data, start='1992-01'):
             # reporting one. It now appears WITH the reason it has no lead time.
             episode_reads.append({
                 'id': ep['id'], 'label': ep['label'], 'type': ep['type'],
+                'region': ep.get('region', 'wha'),   # v1.4.0 -- drives the page's region tabs
                 'source_url': ep.get('source_url'),
                 'event_month': ev,
                 'lead_months_at_elevated_plus': None,
@@ -937,6 +1091,7 @@ def run_backtest(data, start='1992-01'):
         at_event = by_month.get(ev) or prior[-1]
         episode_reads.append({
             'id': ep['id'], 'label': ep['label'], 'type': ep['type'],
+            'region': ep.get('region', 'wha'),   # v1.4.0 -- drives the page's region tabs
             'source_url': ep.get('source_url'),
             'outside_data_spine': False,
             'event_month': ev,
@@ -1235,6 +1390,24 @@ _MAJOR_META = {
     'ftse':   {'name': 'FTSE 100',    'ticker': '^FTSE',   'region': 'europe',
                'note': 'London. Heavily commodity and overseas-earnings weighted, '
                        'so it often tracks global rather than UK conditions.'},
+    # ── v1.4.0 (Oct 5 2026) ──
+    'hsi':    {'name': 'Hang Seng',    'ticker': '^HSI',    'region': 'apac',
+               'note': 'Hong Kong. The most liquid venue for mainland Chinese risk '
+                       'and the usual first stop when capital wants out of it -- '
+                       'read alongside the China rhetoric tracker, not instead of it.'},
+    'kospi':  {'name': 'KOSPI',        'ticker': '^KS11',   'region': 'apac',
+               'note': 'Seoul. Semiconductor and export heavy, and the only major '
+                       'priced inside a live conflict theatre -- the conflict '
+                       'repricing read for Korea asks whether this tape still '
+                       'flinches when Pyongyang shouts.'},
+    'bovespa': {'name': 'Bovespa',     'ticker': '^BVSP',   'region': 'wha',
+               'note': 'Sao Paulo. Commodity-levered and the Western Hemisphere\'s '
+                       'emerging-market benchmark; moves on China demand and the '
+                       'dollar as much as on domestic politics.'},
+    'ta35':   {'name': 'TA-35',        'ticker': '^TA35.TA', 'region': 'me',
+               'note': 'Tel Aviv. The only equity market inside the Middle East '
+                       'theatre with continuous pricing through its own conflict '
+                       'episodes -- a direct read on how local capital prices them.'},
 }
 
 
