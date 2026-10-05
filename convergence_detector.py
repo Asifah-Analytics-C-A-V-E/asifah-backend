@@ -85,7 +85,13 @@ RHETORIC_BLUF_KEYS  = {
     'wha':    'rhetoric:wha:regional_bluf',
     'europe': 'rhetoric:europe:regional_bluf',
     'asia':   'rhetoric:asia:regional_bluf',
-    # 'africa': 'rhetoric:africa:regional_bluf',   # FUTURE -- BLUF not built yet
+    # Oct 5 2026: uncommented. Africa's BLUF has been live for months (GPI reads
+    # it, regions_live 9/9, "Regional Posture: Africa L4") while this detector
+    # still had it marked FUTURE -- so no African country could register a
+    # rhetoric axis and the Sahel trackers never reached the convergence layer.
+    # If /api/cax/probe comes back rhetoric_warm.africa = false after deploy,
+    # the Africa BLUF is not writing THIS Redis key and that is the next fix.
+    'africa': 'rhetoric:africa:regional_bluf',
 }
 HUMANITARIAN_CACHE_KEY = 'humanitarian_convergence:bluf:latest'
 
