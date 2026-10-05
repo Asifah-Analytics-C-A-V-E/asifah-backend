@@ -1,7 +1,18 @@
 """
 me_regional_bluf.py
 Asifah Analytics -- ME Backend Module
-v2.1.0  (Apr 26 2026)
+v2.4.0  (Oct 5 2026)
+
+VERSION HISTORY AT A GLANCE
+  v2.4.0 Oct 5 2026 -- country_ids canon applied to humanitarian country ids;
+                       _report_convergence_audit() says WHY each registry node
+                       is lit or dark; signals carry convergences_active.
+  v2.3.0 Jun 2026    -- full signal pool kept separate from capped top_signals.
+  v2.2.0 Jul 23 2026 -- serve-fast / refresh-behind.
+  v2.1.0 Apr 26 2026 -- baseline.
+
+The docstring said v2.1.0 and the deploy marker said v2.2.0 while v2.4.0 was
+running. Both are now derived from ONE constant below -- see BLUF_VERSION.
 
 ME Regional BLUF (Bottom Line Up Front) Engine.
 
@@ -45,11 +56,20 @@ except ImportError:
 import os
 
 # ════════════════════════════════════════════════════════════════════
-# DEPLOY MARKER v2.1.0 — fires ONCE when this module is imported.
+# DEPLOY MARKER — fires ONCE when this module is imported.
 # If you see this in Render logs, the new code is loaded into the worker.
 # If you DON'T see this, Render is running an older cached version.
+#
+# v2.4.0 (Oct 5 2026): the marker used to be a HARDCODED 'v2.2.0' string that
+# nobody updated, so on Oct 5 it reported v2.2.0 from a worker running v2.4.0
+# and we spent a round deducing deployment state from a GPI headline instead.
+# It now reads ONE constant and states what actually imported, so the log
+# answers "which version, with what" in a single line.
+#
+# The marker itself fires at the BOTTOM of this file, because _CANON_AVAILABLE
+# does not exist yet up here -- printing it at import-time would NameError.
 # ════════════════════════════════════════════════════════════════════
-print('[ME BLUF DEPLOY MARKER v2.2.0] Module loaded — Lebanon humanitarian + convergence registry active')
+BLUF_VERSION = '2.4.0'
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -2746,3 +2766,12 @@ if __name__ == '__main__':
         print(f'  {s["icon"]} {s["text"][:100]}')
     print()
     print(f'POSTURE: {mock_result["posture_label"]} | MAX L{mock_result["max_level"]} | AVG {mock_result["avg_score"]}')
+
+
+# ════════════════════════════════════════════════════════════════════
+# DEPLOY MARKER (see the note beside BLUF_VERSION at the top of this file).
+# Fires last so it can report what actually imported, not what we hoped did.
+# ════════════════════════════════════════════════════════════════════
+print(f'[ME BLUF DEPLOY MARKER v{BLUF_VERSION}] Module loaded — Lebanon '
+      f'humanitarian + generic country humanitarian emitters + convergence '
+      f'registry active (country_ids={_CANON_AVAILABLE})')
