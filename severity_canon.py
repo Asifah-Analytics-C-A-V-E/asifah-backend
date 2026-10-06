@@ -72,15 +72,45 @@ CANON_AS_OF = '2026-10-06'
 # "How to read this" box on the pages explains. Its rungs mean different things
 # on different axes, which is why each axis gets its own wording below.
 
+# CORRECTED Oct 6 2026, same day it was written. The first version of this
+# table invented its own words -- QUIET / SIGNAL / BUILDING / HARDENING / ACUTE /
+# RUPTURE -- while asifah-standard-shell.js has shipped Monitoring / Rhetoric /
+# Warning / Confrontation / Coercion / Active Conflict to every page since Oct 3.
+#
+# That made this module a FIFTH competing ladder, inside the file written to stop
+# exactly that. The shell's words win and always should have: they are on screen,
+# the reader has seen them, and they were chosen deliberately -- the shell carries
+# a design note explaining why L0 is "Monitoring" (the scan is running and found
+# nothing) rather than "Baseline" (we assessed it as normal). That distinction is
+# the difference between a page reading dead and reading alive, and it is not a
+# distinction to casually overwrite from a backend module nobody looks at.
+#
+# THE RULE THIS ESTABLISHES: the canon RECORDS the platform's vocabulary. It does
+# not get to invent any. Where a word already exists on screen, the screen wins.
+#
+# L6 is carried here and is NOT in the shell's table. The axis strings go to L6
+# ('red line breached'), and _safe_level can return 6, so a page can render an L6
+# chip the guide cannot explain. Flagged in PENDING_RULINGS rather than silently
+# papered over.
 PLATFORM_LEVELS = {
-    0: {'key': 'quiet',    'display': 'L0 QUIET'},
-    1: {'key': 'signal',   'display': 'L1 SIGNAL'},
-    2: {'key': 'building', 'display': 'L2 BUILDING'},
-    3: {'key': 'hardening','display': 'L3 HARDENING'},
-    4: {'key': 'acute',    'display': 'L4 ACUTE'},
-    5: {'key': 'rupture',  'display': 'L5 RUPTURE'},
-    6: {'key': 'breached', 'display': 'L6 RED LINE BREACHED'},
+    0: {'key': 'monitoring',      'display': 'Monitoring',      'color': '#6b7280',
+        'gloss': 'Nothing above normal. The scan is running.'},
+    1: {'key': 'rhetoric',        'display': 'Rhetoric',        'color': '#3b82f6',
+        'gloss': 'Talk, with no named target.'},
+    2: {'key': 'warning',         'display': 'Warning',         'color': '#f59e0b',
+        'gloss': 'Talk directed at a named target.'},
+    3: {'key': 'confrontation',   'display': 'Confrontation',   'color': '#f97316',
+        'gloss': 'Direct and mutual \u2014 both sides engaged.'},
+    4: {'key': 'coercion',        'display': 'Coercion',        'color': '#ef4444',
+        'gloss': 'Pressure applied to extract a concession.'},
+    5: {'key': 'active_conflict', 'display': 'Active Conflict', 'color': '#dc2626',
+        'gloss': 'Open hostilities underway.'},
+    6: {'key': 'red_line',        'display': 'Red Line Breached', 'color': '#991b1b',
+        'gloss': 'A stated red line has been crossed.'},
 }
+
+# The authority for the words above. A drift test asserts the two still agree.
+PLATFORM_LEVELS_SOURCE = 'asifah-standard-shell.js ASIFAH_LADDER (Oct 3 2026)'
 
 # What a level MEANS depends on the axis it sits on. These are the strings the
 # page guide renders, and they are the authority for that guide -- the box stops
@@ -498,7 +528,7 @@ def meets(ladder, rung, minimum):
 
 
 def platform_display(level, axis=None):
-    """'L4 ACUTE' or, with an axis, 'L4 armed incident'."""
+    """'L4 Coercion' or, with an axis, 'L4 armed incident'."""
     try:
         lv = int(level)
     except (TypeError, ValueError):
@@ -507,7 +537,8 @@ def platform_display(level, axis=None):
         txt = AXIS_MEANINGS[axis]['rungs'].get(lv)
         if txt:
             return 'L%d %s' % (lv, txt)
-    return PLATFORM_LEVELS.get(lv, {}).get('display', 'L%d' % lv)
+    d = PLATFORM_LEVELS.get(lv, {}).get('display')
+    return ('L%d %s' % (lv, d)) if d else 'L%d' % lv
 
 
 def ladders():
