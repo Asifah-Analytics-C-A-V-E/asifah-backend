@@ -1486,6 +1486,12 @@ if CORRIDOR_DEPENDENCE_AVAILABLE:
     print("[ME Backend] ✅ Corridor dependence registered: "
           "/api/corridor-dependence, /<country_id>")
 
+# Severity canon -- /api/severity-canon/*
+if SEVERITY_CANON_AVAILABLE:
+    register_severity_canon_endpoints(app)
+    print("[ME Backend] ✅ Severity canon registered: "
+          "/api/severity-canon, /<ladder_id>")
+
 # Tempo Baseline Engine -- /api/tempo/*
 if TEMPO_AVAILABLE:
     register_tempo_endpoints(app)
