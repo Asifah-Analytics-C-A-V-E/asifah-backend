@@ -241,9 +241,22 @@ LADDERS = {
             'approaching':{'rank': 1, 'display': 'APPROACHING','to_platform': 1, 'means': 'nearing a threshold, not past it'},
             'tilting':    {'rank': 1, 'display': 'TILTING',    'to_platform': 1, 'means': 'leaning, not committed'},
             'drifting':   {'rank': 1, 'display': 'DRIFTING',   'to_platform': 1, 'means': 'moving without decision'},
+            'monitoring': {'rank': 1, 'display': 'MONITORING', 'to_platform': 1, 'means': 'under observation, nothing yet to call'},
             'alignment':  {'rank': 0, 'display': 'ALIGNMENT',  'to_platform': 0, 'means': 'positions converged, no friction'},
             'low':        {'rank': 0, 'display': 'LOW',        'to_platform': 0, 'means': 'minimal'},
             'simmering':  {'rank': 2, 'display': 'SIMMERING',  'to_platform': 2, 'means': 'sustained low heat'},
+            # Rachel's Oct 6 ruling on the _LEVEL_LABEL_MAP orphans: alert,
+            # rising and tensions all sit with 'heightened' -- i.e. the rank-2
+            # family. Worth recording that NOTHING in the backend emits
+            # 'heightened' or 'tensions' as a level value, and 'rising' appears
+            # exactly once (its own definition in _LEVEL_LABEL_MAP). They are
+            # defensive vocabulary for words no module produces. Carried anyway:
+            # a word the canon knows and nobody sends costs nothing, while a word
+            # a module sends and the canon does not know becomes a zero.
+            'heightened': {'rank': 2, 'display': 'HEIGHTENED', 'to_platform': 2, 'means': 'raised above the normal footing'},
+            'alert':      {'rank': 2, 'display': 'ALERT',      'to_platform': 2, 'means': 'an explicit alert has been issued'},
+            'rising':     {'rank': 2, 'display': 'RISING',     'to_platform': 2, 'means': 'moving upward, direction clear'},
+            'tensions':   {'rank': 2, 'display': 'TENSIONS',   'to_platform': 2, 'means': 'friction named by the reporting'},
             'contested':  {'rank': 2, 'display': 'CONTESTED',  'to_platform': 2, 'means': 'actively disputed'},
             'elevated':   {'rank': 2, 'display': 'ELEVATED',   'to_platform': 2, 'means': 'above baseline posture'},
             'strained':   {'rank': 2, 'display': 'STRAINED',   'to_platform': 2, 'means': 'under load'},
@@ -256,9 +269,16 @@ LADDERS = {
             'severe':     {'rank': 4, 'display': 'SEVERE',     'to_platform': 4, 'means': 'serious'},
             'critical':   {'rank': 4, 'display': 'CRITICAL',   'to_platform': 4, 'means': 'at the edge'},
             'breached':   {'rank': 4, 'display': 'BREACHED',   'to_platform': 4, 'means': 'a stated line crossed'},
+            'incident':   {'rank': 4, 'display': 'INCIDENT',   'to_platform': 4, 'means': 'a discrete armed or kinetic event'},
             'rupture':    {'rank': 4, 'display': 'RUPTURE',    'to_platform': 4, 'means': 'relationship broken'},
             'surge':      {'rank': 5, 'display': 'SURGE',      'to_platform': 5, 'means': 'peak'},
             'conflict':   {'rank': 5, 'display': 'CONFLICT',   'to_platform': 5, 'means': 'fighting'},
+            # PROPOSED, not ruled on. 'crisis' reads as a rank-5 word and
+            # 'incident' as rank-4 -- an armed incident is L4 on the kinetic
+            # axis, which is where the platform ladder already puts it. Both are
+            # flagged in PENDING_RULINGS so they are visibly provisional rather
+            # than quietly settled.
+            'crisis':     {'rank': 5, 'display': 'CRISIS',     'to_platform': 5, 'means': 'open crisis'},
             'war':        {'rank': 5, 'display': 'WAR',        'to_platform': 5, 'means': 'war footing'},
         },
         # DELIBERATE DIVERGENCE from the live _BAND_TO_LEVEL, which maps
@@ -270,6 +290,110 @@ LADDERS = {
         'absence': ('unknown', 'unread', 'inactive', 'off', 'none'),
     },
 }
+
+# ════════════════════════════════════════════════════════════════════
+# FAMILIES -- one headline word per rung, synonyms underneath
+# ════════════════════════════════════════════════════════════════════
+# Rachel's sidebar design, Oct 6: show the level once in full size, and the
+# other words that mean the same level in small print beneath it.
+#
+#       HEIGHTENED
+#       elevated · warning · alert · rising · tensions · contested · simmering
+#
+# Implemented as families rather than aliases ON PURPOSE. Collapsing those words
+# into one entry would throw away their individual `means` text, and CONTESTED
+# and SIMMERING are not synonyms -- they are different findings that land on the
+# same rung. The family is a presentation grouping; the rungs stay distinct.
+
+FAMILY_NAMES = {
+    'commodity_alert': {
+        0: ('NORMAL',     'routine coverage'),
+        1: ('MONITORED',  'above routine, below the elevated threshold'),
+        2: ('ELEVATED',   'sustained above-baseline reporting'),
+        3: ('HIGH',       'heavy and severe reporting concentration'),
+        4: ('SURGE',      'the loudest band this instrument has'),
+    },
+    'rhetoric_band': {
+        0: ('QUIET',      'measured, nothing moving'),
+        1: ('MONITORING', 'worth following, nothing to call yet'),
+        2: ('HEIGHTENED', 'above baseline, direction not yet decided'),
+        3: ('HARDENED',   'positions set, engagement under way'),
+        4: ('ACUTE',      'sharp, current, a line at or past its edge'),
+        # NOT 'RUPTURE': _BAND_TO_LEVEL puts the word 'rupture' at rank 4, so
+        # naming the rank-5 family RUPTURE would print the same word as both a
+        # headline and a member of the rung below it.
+        5: ('CONFLICT',   'open conflict'),
+    },
+    'corridor_state': {
+        0: ('OPEN',       'passable, measured and quiet'),
+        1: ('STRAINED',   'passable at cost or delay'),
+        2: ('IMPAIRED',   'partially closed, substitution forced'),
+        3: ('BLOCKED',    'not passable'),
+    },
+    'cascade_tier': {
+        0: ('BASELINE',   'no chain active'),
+        1: ('MONITORING', 'partial signals on one chain'),
+        2: ('WATCH',      'chain forming'),
+        4: ('ACTIVE',     'chain operational'),
+        5: ('COMPOUND',   'two or more chains at once'),
+    },
+    'gdacs_alert': {
+        0: ('GREEN',      'routine event, negligible modelled impact'),
+        2: ('ORANGE',     'significant modelled impact'),
+        3: ('RED',        'severe modelled impact'),
+    },
+}
+
+
+def families(ladder):
+    """The sidebar structure: one headline per rung, member words beneath.
+
+    Returns [] for an unknown ladder. A rank with no FAMILY_NAMES entry still
+    appears, headlined by its own loudest rung -- a missing label degrades the
+    presentation, it never drops the rung from the guide.
+    """
+    lad = LADDERS.get(ladder)
+    if not lad:
+        return []
+    by_rank = {}
+    for rung, meta in lad['rungs'].items():
+        by_rank.setdefault(meta['rank'], []).append((rung, meta))
+    out = []
+    for rk in sorted(by_rank):
+        members = sorted(by_rank[rk], key=lambda kv: kv[0])
+        name, blurb = FAMILY_NAMES.get(ladder, {}).get(
+            rk, (members[0][1]['display'], members[0][1]['means']))
+        out.append({
+            'rank': rk,
+            'name': name,
+            'blurb': blurb,
+            'platform_level': members[0][1]['to_platform'],
+            # The headline word is not repeated underneath itself.
+            'also_called': [m[1]['display'] for m in members
+                            if m[1]['display'] != name],
+            'words': [{'rung': m[0], 'display': m[1]['display'], 'means': m[1]['means']}
+                      for m in members],
+        })
+    return out
+
+
+# Rungs carried on a provisional reading rather than a ruling. Surfaced in the
+# payload so a provisional decision cannot quietly become a settled one.
+PENDING_RULINGS = {
+    'rhetoric_band': {
+        'crisis':   'placed at rank 5 by Claude; not ruled on',
+        'incident': 'placed at rank 4 by Claude (L4 armed incident); not ruled on',
+        'low':      ('kept at rank 0, NOT promoted to MONITORING. Rachel grouped '
+                     'low with none as "monitoring (or below heightened)"; rank 0 '
+                     'is below heightened and matches both live tables, and a '
+                     'measured-low is a real reading that rank 1 would overstate.'),
+        'none':     ('treated as an ABSENCE, not a rung. "None" cannot be told '
+                     'apart from "nothing was read", and the whole module exists '
+                     'to stop an unread thing rendering as a quiet one. If it '
+                     'genuinely means a measured zero, move it to rank 0.'),
+    },
+}
+
 
 # Words that appear in more than one ladder with DIFFERENT answers. Listed so a
 # caller that cannot name its ladder knows it has a real decision to make rather
@@ -386,7 +510,10 @@ def canon_payload():
                                         for lv, txt in sorted(v['rungs'].items())]}
                           for k, v in AXIS_MEANINGS.items()},
         'ladders': [describe(l) for l in ladders()],
+        # The sidebar renders from this: headline word large, synonyms small.
+        'families': {l: families(l) for l in ladders()},
         'ambiguous_rungs': AMBIGUOUS_RUNGS,
+        'pending_rulings': PENDING_RULINGS,
         'doctrine': (
             'A rung this module does not recognise returns None, never 0. A '
             'missing key must be loud. Levels are convergence readings of what '
