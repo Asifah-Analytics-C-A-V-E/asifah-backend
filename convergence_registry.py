@@ -61,6 +61,34 @@ OPTIONAL FIELDS:
 
 CONVERGENCE_REGISTRY = [
     {
+        'id': 'uranium_route_dependency',
+        'commodity': 'uranium',
+        'country': 'kazakhstan',
+        'trigger_signal_categories': ['commodity_convergence', 'russia_levers',
+                                      'border_health_closure'],
+        'trigger_signal_category': 'commodity_convergence',
+        'trigger_region': 'europe',
+        'commodity_threshold': 'elevated',
+        'regions': ['europe', 'asia', 'global_market'],
+        'priority': 16,
+        'icon': '\u2622\ufe0f',
+        'color': '#22c55e',
+        'headline_template': 'Uranium route dependency -- {alert} pressure while the transit state is active',
+        'watch_priority': 8,
+        'watch_headline_template': 'Uranium route dependency on WATCH -- {alert} pressure, steady rather than rising',
+        'detail': "STRUCTURAL READOUT: uranium pressure elevated while the state that OWNS THE ROUTE is simultaneously active. Kazakhstan produces roughly forty percent of the world's uranium and it transits Russia to reach market; Kazakh crude leaves the same way, via the Caspian Pipeline Consortium to Novorossiysk. WHAT IT MEANS: the commodity power is real and the commodity ROUTES belong to the neighbour being hedged against. WHY IT IS GATED: Kazakhstan is the world's largest uranium producer every single day of the year, so uranium pressure on its own is a standing condition and not news -- a sensor that always reads SURGE says nothing. This entry fires only when that standing exposure co-occurs with a live pressure vector on the route-holder: Russia-lever tempo, a commodity convergence the tracker has already gated open, or a movement restriction at the Russian frontier. That is the difference between a chokepoint existing and a chokepoint being tested. Watch: Kazatomprom (KAP.IL), CPC terminal status, rail transit notices, and whether Rosatom's enrichment and conversion role is mentioned alongside the transit question.",
+        'facts': {
+            'measurement': 'uranium pressure co-occurring with a live pressure vector on the transit state',
+            'production_share': 'Kazakhstan ~40% of world uranium supply (Kazatomprom), #1 producer',
+            'route': 'uranium transits Russia; Kazakh crude exits via CPC to Novorossiysk (~80% of exports)',
+            'priced_instrument': 'Kazatomprom GDR, KAP.IL on the LSE International Order Book',
+            'not_implied': 'This is not a forecast of supply interruption. Standing exposure plus an active route-holder is a CONDITION, not an event.',
+        },
+        'enrichment_text_template': '☢️ URANIUM ROUTE DEPENDENCY: pressure at {alert} on {signals} signal(s) while the transit state is active. ~40% of world supply, shipped through the neighbour being hedged against.',
+        'notes': 'WIRED, with one dependency: europe_regional_bluf ANCHOR_TARGETS must map uranium -> kazakhstan (added v3.5.2) or the commodity gate reports commodity_unreadable. Multi-category trigger: the interpreter emits commodity_convergence only when its OWN gate opens, so this entry inherits that discipline and adds route-holder context on top.',
+    },
+
+    {
         'id': 'ca_containment_kazakhstan',
         'commodity': None,
         'country': 'kazakhstan',
