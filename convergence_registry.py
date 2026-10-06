@@ -1572,6 +1572,40 @@ CLUSTER_LABELS = {
 }
 
 
+# ════════════════════════════════════════════════════════════════════
+# DEPLOYMENT IDENTITY  (v1.2.0 -- Oct 6 2026)
+# ════════════════════════════════════════════════════════════════════
+# This file is about to exist on more than one backend. It has never carried a
+# version marker, so two copies that disagree were indistinguishable from two
+# copies that agree -- and a backend running a stale registry would have looked
+# exactly like one running the current registry with nothing firing.
+#
+# REGISTRY_VERSION is hand-set. The fingerprint is COMPUTED from the entry ids,
+# so it cannot be forgotten on an edit the way a hand-bumped version can: add,
+# remove or rename an entry and it changes by itself. Layer 2 logs both, so a
+# fork shows up in the Render log on the first scan after it happens rather
+# than being discovered months later by someone grepping two clones.
+REGISTRY_VERSION = '1.2.0'
+REGISTRY_AS_OF = '2026-10-06'
+
+
+def registry_fingerprint():
+    """Short hash of the entry id set. Changes when the roster changes."""
+    import hashlib
+    ids = '|'.join(sorted(e.get('id', '?') for e in CONVERGENCE_REGISTRY))
+    return hashlib.sha256(ids.encode('utf-8')).hexdigest()[:12]
+
+
+def registry_identity():
+    """Everything needed to tell two deployed copies apart."""
+    return {
+        'version': REGISTRY_VERSION,
+        'as_of': REGISTRY_AS_OF,
+        'entries': len(CONVERGENCE_REGISTRY),
+        'fingerprint': registry_fingerprint(),
+    }
+
+
 def cluster_meta(cluster_id):
     """Normalise a CLUSTER_LABELS entry to a dict, whichever shape it was written in.
 
