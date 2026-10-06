@@ -1725,9 +1725,81 @@ def _safe_level(value, default=0):
             return int(v)
         except ValueError:
             pass
-        # Then try label map
+        # ── v3.11.0 (Oct 6 2026) -- THE CANON TAKES OVER THE STRING PATH ──
+        # _LEVEL_LABEL_MAP was one flat table coercing ANY word to a tier, so it
+        # read a rhetoric band word with commodity-ladder generosity: a vector a
+        # tracker merely called 'elevated' landed at L3, the same rung as a
+        # measured commodity concentration. That is how L5 stopped meaning much.
+        #
+        # severity_canon routes the word through a declared instrument instead.
+        # Rachel's Oct 6 ruling: the rhetoric reading wins on the overlapping
+        # words, which moves eleven of eighteen labels DOWN, deliberately, so
+        # that L5 and the rare L6 keep their weight.
+        #
+        # An unrecognised word no longer becomes `default` silently -- it is
+        # counted and reported once per cycle by _canon_miss_report(). A missing
+        # key is how 'high' read as 0 until Jun 18 2026.
+        lvl = _canon_level(v)
+        if lvl is not None:
+            return lvl
+        _CANON_MISSES[v] = _CANON_MISSES.get(v, 0) + 1
         return _LEVEL_LABEL_MAP.get(v, default)
     return default
+
+
+# Words no ladder recognised this cycle, with how often each arrived. Reported
+# rather than swallowed: the whole point of the canon is that a word nobody
+# declared should be loud, not quiet.
+_CANON_MISSES = {}
+# Words that resolved, but where more than one instrument knows them and they
+# disagree -- i.e. the platform guessed. Counting these is how we find out
+# whether the guess is rare or routine.
+_CANON_GUESSES = {}
+
+
+def _canon_level(word, ladder=None):
+    """Platform level for a status word via severity_canon. None when unknown.
+
+    `ladder` should be passed by any caller that KNOWS which instrument produced
+    the word -- a commodity reading is not a rhetoric band and must not be
+    resolved by preference order. Callers that genuinely cannot know leave it
+    None and the guess is recorded.
+    """
+    try:
+        import severity_canon as _canon
+    except ImportError:
+        return None          # canon not deployed here yet -- old path stands
+    try:
+        if ladder:
+            return _canon.to_platform(ladder, word)
+        lvl, used, ambiguous = _canon.resolve(word)
+        if ambiguous:
+            _CANON_GUESSES[word] = _CANON_GUESSES.get(word, 0) + 1
+        return lvl
+    except Exception:
+        return None
+
+
+def _canon_miss_report():
+    """One line per cycle. Absence-honest: prints even when clean, so silence
+    in the log means 'checked and found none', not 'never ran'."""
+    if _CANON_MISSES:
+        print('[GPI] severity canon: %d word(s) no ladder recognises -- %s'
+              % (len(_CANON_MISSES),
+                 ', '.join('%s x%d' % (w, n)
+                           for w, n in sorted(_CANON_MISSES.items(),
+                                              key=lambda kv: -kv[1])[:8])))
+    else:
+        print('[GPI] severity canon: every status word resolved to a declared ladder')
+    if _CANON_GUESSES:
+        print('[GPI] severity canon: %d word(s) known to more than one instrument, '
+              'resolved by preference order -- %s'
+              % (len(_CANON_GUESSES),
+                 ', '.join('%s x%d' % (w, n)
+                           for w, n in sorted(_CANON_GUESSES.items(),
+                                              key=lambda kv: -kv[1])[:8])))
+    _CANON_MISSES.clear()
+    _CANON_GUESSES.clear()
 
 
 def _level_of(bluf):
@@ -2868,6 +2940,7 @@ def _detect_convergences_from_registry(blufs):
             }
             cluster_cards.append(card)
 
+        _canon_miss_report()
         if cluster_cards:
             matches.extend(cluster_cards)
             print('[GPI] cluster rollup: %d cluster card(s) -- %s'

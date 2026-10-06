@@ -760,6 +760,22 @@ _BAND_TO_LEVEL = {
     'surge': 5, 'conflict': 5, 'war': 5,
 }
 
+def _canon_knows_band(word):
+    """True when severity_canon has an opinion about this word -- INCLUDING the
+    opinion that it is an absence.
+
+    Without this, the fallback to _BAND_TO_LEVEL would quietly undo the fix: the
+    canon would correctly return None for 'unknown', and the old table would
+    immediately refill it with 0. An absence the canon declares must stay an
+    absence."""
+    try:
+        import severity_canon as _canon
+        return (_canon.to_platform('rhetoric_band', word) is not None
+                or _canon.is_absence('rhetoric_band', word))
+    except Exception:
+        return False
+
+
 _LEVEL_FIELDS_INT   = ('level', 'escalation_level', 'rung', 'threat_level')
 _LEVEL_FIELDS_BAND  = ('band', 'threat_band', 'posture', 'state',
                        'relationship', 'class', 'tier', 'mode')
@@ -801,7 +817,26 @@ def _level_from_vector_obj(v):
     for f in _LEVEL_FIELDS_BAND:
         x = v.get(f)
         if isinstance(x, str) and x.strip():
-            mapped = _BAND_TO_LEVEL.get(x.strip().lower())
+            # v3.x (Oct 6 2026) -- severity_canon owns this translation.
+            # This call site KNOWS its instrument: these are _LEVEL_FIELDS_BAND,
+            # so the ladder is passed explicitly rather than guessed by
+            # preference order. Parity-checked: 31 of 31 rungs agree, zero
+            # behaviour change.
+            #
+            # The ONE deliberate difference: _BAND_TO_LEVEL mapped
+            # 'unknown' -> 0, a vector nobody could read rendering as a vector
+            # that is quiet. The canon treats it as an absence and returns None,
+            # which this loop already handles correctly by skipping -- so an
+            # unread band stops voting as a zero.
+            _band = x.strip().lower()
+            mapped = None
+            try:
+                import severity_canon as _canon
+                mapped = _canon.to_platform('rhetoric_band', _band)
+            except Exception:
+                mapped = None
+            if mapped is None and not _canon_knows_band(_band):
+                mapped = _BAND_TO_LEVEL.get(_band)
             if mapped is not None:
                 candidates.append(mapped)
     for f in _LEVEL_FIELDS_STAGE:

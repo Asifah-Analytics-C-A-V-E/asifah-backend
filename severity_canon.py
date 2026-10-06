@@ -174,6 +174,35 @@ LADDERS = {
         'absence': ('unknown',),
     },
 
+    # ── Chokepoint status ─────────────────────────────────────────────
+    # A THIRD corridor vocabulary, distinct from corridor_state. ALERT_RANK
+    # carries 'contested': 3 and 'disrupted': 4 as "chokepoint vocab", and the
+    # military tracker stamps chokepoints with alert_level 'contested' /
+    # 'disrupted'. Neither word appears in _LEVEL_LABEL_MAP, so a chokepoint
+    # word reaching _safe_level hits the default.
+    #
+    # NOT VERIFIED AS LIVE: the instances found in military_signal_interpreter
+    # were inside its __main__ self-test block. Whether military_tracker.py
+    # emits these into a signal `level` that reaches the GPI has not been
+    # checked -- military_tracker.py was not read. Declared here because the
+    # ladder is correct either way; the question is only how much it matters.
+    'chokepoint_status': {
+        'label': 'Chokepoint status',
+        'measures': ('Whether a named maritime chokepoint is transiting '
+                     'normally. A narrower instrument than corridor_state: it '
+                     'reads one strait, not a whole supply route.'),
+        'source': 'ALERT_RANK chokepoint vocab + military tracker alert_level',
+        'rungs': {
+            'open':      {'rank': 0, 'display': 'OPEN',      'to_platform': 0,
+                          'means': 'transiting normally'},
+            'contested': {'rank': 3, 'display': 'CONTESTED', 'to_platform': 4,
+                          'means': 'transit under active threat or interference'},
+            'disrupted': {'rank': 4, 'display': 'DISRUPTED', 'to_platform': 5,
+                          'means': 'transit materially interrupted'},
+        },
+        'absence': ('unknown',),
+    },
+
     # ── Cascade chain tier ────────────────────────────────────────────
     # From cascade_detector. Its levels ARE platform levels already; recorded
     # here so the ladder is declared rather than implied.
@@ -336,6 +365,11 @@ FAMILY_NAMES = {
         2: ('WATCH',      'chain forming'),
         4: ('ACTIVE',     'chain operational'),
         5: ('COMPOUND',   'two or more chains at once'),
+    },
+    'chokepoint_status': {
+        0: ('OPEN',       'transiting normally'),
+        3: ('CONTESTED',  'transit under active threat'),
+        4: ('DISRUPTED',  'transit materially interrupted'),
     },
     'gdacs_alert': {
         0: ('GREEN',      'routine event, negligible modelled impact'),
@@ -559,6 +593,68 @@ def parity_report(existing_table, ladder, table_name='(unnamed)'):
                  'the table\'s default today. In _LEVEL_LABEL_MAP that default '
                  'was 0, which is how HIGH read as silence until Jun 18 2026.'),
     }
+
+
+def resolve(rung, prefer=None):
+    """Resolve a bare word with NO declared ladder -- the unavoidable case.
+
+    _safe_level in the GPI receives a string and cannot know which instrument
+    produced it. That is the ambiguity this module exists to name, and it cannot
+    be wished away at a call site that genuinely does not know.
+
+    So: walk the ladders in preference order, return the first hit, and SAY so.
+    Returns (platform_level, ladder_used, was_ambiguous). platform_level is None
+    when no ladder recognises the word -- never 0.
+
+    `was_ambiguous` is True when more than one ladder knows the word and they
+    disagree. A caller that logs those is a caller that can see how often the
+    platform is guessing, which is the point.
+    """
+    order = tuple(prefer or LADDER_PREFERENCE)
+    hits = [l for l in order if to_platform(l, rung) is not None]
+    if not hits:
+        return (None, None, False)
+    levels = {to_platform(l, rung) for l in hits}
+    return (to_platform(hits[0], rung), hits[0], len(levels) > 1)
+
+
+# Rhetoric first: most signals reaching the GPI are rhetoric-tracker signals
+# carrying band words, and for the words that overlap (elevated, high, active)
+# the rhetoric reading is the LOWER one -- which is the direction Rachel ruled
+# for on Oct 6, so that L5 and L6 keep meaning something.
+#
+# The cost is real and worth stating: a COMMODITY signal arriving as a bare
+# 'elevated' now reads L2 rather than L3. Any call site that knows it is holding
+# a commodity reading should pass ladder='commodity_alert' explicitly rather than
+# rely on this order.
+LADDER_PREFERENCE = ('rhetoric_band', 'commodity_alert', 'chokepoint_status',
+                     'cascade_tier', 'corridor_state', 'gdacs_alert')
+
+
+def register_severity_canon_endpoints(app):
+    """Serve the canon so the page guide renders FROM it.
+
+    Flask is imported inside the function, matching corridor_dependence.py, so
+    this module stays importable with no web framework present and deploys
+    byte-identical to every backend.
+    """
+    from flask import jsonify
+
+    @app.route('/api/severity-canon', methods=['GET', 'OPTIONS'])
+    def severity_canon_all():
+        return jsonify(canon_payload()), 200
+
+    @app.route('/api/severity-canon/<ladder_id>', methods=['GET'])
+    def severity_canon_one(ladder_id):
+        d = describe((ladder_id or '').strip().lower())
+        if not d:
+            return jsonify({'success': False,
+                            'error': "no ladder '%s'" % ladder_id,
+                            'known': ladders()}), 404
+        d['families'] = families(ladder_id)
+        return jsonify(d), 200
+
+    print('[Severity Canon] endpoints registered (/api/severity-canon) v%s' % __version__)
 
 
 # ════════════════════════════════════════════════════════════════════

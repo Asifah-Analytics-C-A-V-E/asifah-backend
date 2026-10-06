@@ -5535,7 +5535,19 @@ def build_commodity_economic_bluf(bundle=None):
         if not hard:
             continue                                   # gate 2: relevance (drop contamination)
 
-        level = _COMMODITY_BLUF_LEVEL.get(alert, 0)
+        # v1.3.2 (Oct 6 2026) -- severity_canon owns this translation now.
+        # Parity-checked before migrating: 4 of 4 rungs agree, zero behaviour
+        # change. What the canon ADDS is the 'monitor' rung, which this table
+        # never had and which therefore hit the `, 0` default -- a MONITORED
+        # commodity reading as NORMAL. Soft import: no canon, old table stands.
+        level = None
+        try:
+            import severity_canon as _canon
+            level = _canon.to_platform('commodity_alert', alert)
+        except Exception:
+            level = None
+        if level is None:
+            level = _COMMODITY_BLUF_LEVEL.get(alert, 0)
         color = _COMMODITY_BLUF_COLOR.get(level, '#6b7280')
         name  = summ.get('name', cid)
         icon  = summ.get('icon', '\U0001F4C8')
