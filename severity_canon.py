@@ -61,7 +61,7 @@ if it did -- so no arithmetic flips without someone having read the list first.
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 CANON_AS_OF = '2026-10-06'
 
 
@@ -506,16 +506,7 @@ def families(ladder):
 # payload so a provisional decision cannot quietly become a settled one.
 PENDING_RULINGS = {
     'greece_vector_band': {
-        'rupture': ('RAISED 6 Oct 2026, DECIDES: Rachel. Greece rung 5 is defined as '
-                    '"Maximal -- kinetic, detente collapse, ambassadorial recall". A '
-                    'kinetic exchange and a recalled ambassador are different events '
-                    'with different consequences and one rung cannot report both. '
-                    'SHOULD IT BE SPLIT -- diplomatic rupture at platform 4, kinetic at '
-                    'platform 5 -- and what observable separates them? INTERIM: rungs 4 '
-                    'and 5 both map to platform 4, so this ladder cannot emit platform '
-                    '5. COST OF WAITING: a genuine Greece-Turkey kinetic incident '
-                    'under-reads as Coercion rather than Active Conflict. That is the '
-                    'safer of the two errors but it is still an error.'),
+        'rupture': 'RULED 6 Oct 2026 by Rachel: a detente collapse does not automatically mean war or kinetic activity -- just that things are heating up -- and that is L4 at most. Her words: “We should not assert Active Conflict without clear... active conflict.” SETTLED: rung 5 maps to platform 4 and this ladder cannot emit platform 5. The interim position shipped that morning was correct and is now doctrine; see L5_ASSERTION_RULE, which generalises it to the whole platform. STILL OPEN: whether rung 5 should be SPLIT so a genuine kinetic incident can reach platform 5, and what observable separates the two. military_corroboration.active is the candidate discriminator -- the tracker already reads military:turkey:posture and military:greece:posture. Until that is built, a real Greece-Turkey kinetic incident under-reads as Coercion, which is the safer error but still an error.',
         'crisis':  ('Greece rank 3 is "Crisis"; the same word is rank 5 on '
                     'rhetoric_band. Mapped here to platform 3 on Greece\'s own '
                     'definition ("formal protest, incident, talks strain"), NOT on the '
@@ -535,6 +526,82 @@ PENDING_RULINGS = {
                      'genuinely means a measured zero, move it to rank 0.'),
     },
 }
+
+
+# ==============================================================================
+# THE L5 ASSERTION RULE  (Rachel, 6 Oct 2026)
+# ==============================================================================
+#
+#   "We should not assert Active Conflict without clear... active conflict."
+#
+# Ruled on the Greece rupture rung and recorded HERE because it is a PLATFORM
+# rule, not a Greece one. Platform level 5 reads "Active Conflict -- open
+# hostilities underway". A ladder whose top rung means something else must not
+# claim it, however severe that rung is on its own ladder.
+#
+# THE TENSION THIS DOES NOT PRETEND TO RESOLVE
+# --------------------------------------------
+# to_platform does two jobs at once. It normalises SEVERITY -- surge IS the top
+# of the commodity ladder, so 5 is the honest severity -- and it hands a
+# consumer a number that some consumers LABEL with the kinetic word. Those two
+# jobs disagree for every non-kinetic ladder.
+#
+# A consumer with axis-aware labels is fine: global_pressure_index renders
+# economic 5 as "economic rupture" and humanitarian 5 as "mass-casualty
+# humanitarian disaster", not as war. A consumer with ONE kinetic label table is
+# not fine, and europe_regional_bluf.ESCALATION_LABELS is exactly that -- which
+# is how a Greek diplomatic row printed as "active war footing".
+#
+# So nothing below is re-levelled unilaterally. The rule is enforced where the
+# claim is MADE (a ladder's own rungs, as with greece_vector_band) and the
+# standing risk is made inspectable by platform_5_audit() rather than left to
+# whoever next happens to read the table.
+# ==============================================================================
+
+L5_ASSERTION_RULE = (
+    'Platform level 5 is ACTIVE CONFLICT -- open hostilities underway. A ladder '
+    'rung may only map to 5 when the thing it measures IS active conflict. '
+    'Maximum severity on a non-kinetic ladder is not active conflict, however '
+    'loud it is. Ruled by Rachel, 6 Oct 2026, on the Greece rupture rung.')
+
+# Rungs that genuinely describe hostilities. Everything else mapping to 5 is
+# asserting MAXIMUM SEVERITY on its own ladder, which is a different claim.
+_KINETIC_RUNGS = {
+    ('rhetoric_band', 'conflict'),
+    ('rhetoric_band', 'war'),
+}
+
+
+def platform_5_audit():
+    """Every rung asserting platform 5, split by whether it means hostilities.
+
+    Exists so the L5 assertion rule is re-asked by a FUNCTION rather than
+    remembered by a person. A new ladder whose top rung maps to 5 appears here
+    on the next run with no edit to this file.
+
+    `severity_only` is NOT a list of bugs. It is the list of rungs whose
+    rendering depends entirely on whether the consumer labels level 5 with the
+    kinetic word -- safe under axis-aware labels, unsafe under a single kinetic
+    table.
+    """
+    kinetic, severity_only = [], []
+    for lid, lad in sorted(LADDERS.items()):
+        for rung, meta in sorted(lad['rungs'].items()):
+            if meta.get('to_platform') != 5:
+                continue
+            row = {'ladder': lid, 'rung': rung,
+                   'means': meta.get('means', ''),
+                   'display': meta.get('display', rung.upper())}
+            (kinetic if (lid, rung) in _KINETIC_RUNGS else severity_only).append(row)
+    return {'rule': L5_ASSERTION_RULE,
+            'kinetic': kinetic,
+            'severity_only': severity_only,
+            'kinetic_count': len(kinetic),
+            'severity_only_count': len(severity_only),
+            'note': ('A rung in severity_only is safe wherever level 5 is labelled '
+                     'per-axis (global_pressure_index does this) and unsafe wherever '
+                     'one kinetic label table is applied to every tracker '
+                     '(europe_regional_bluf.ESCALATION_LABELS does this).')}
 
 
 # Words that appear in more than one ladder with DIFFERENT answers. Listed so a
