@@ -5,7 +5,7 @@ v1.8.0 -- September 21, 2026 (BACKGROUND WARMER -- the cold-cache fix, see below
 v1.7.0 -- (header never updated for this one; code said 1.7.0, header said 1.6.2)
 v1.6.2 -- June 22, 2026 (WB exposure/distress split: food-import is exposure; L5 needs distress)
 v1.6.1 -- June 22, 2026 (WB calibration: amplifier-only gate + named mechanisms)
-v1.6.0 -- June 22, 2026 (World Bank structural-stress signals)
+v1.9.0 -- June 22, 2026 (World Bank structural-stress signals)
 v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
 (prior: v1.4.0 May 23 2026; v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
 
@@ -295,6 +295,35 @@ SIGNAL_CATEGORIES = {
             # ── Spillover + zoonotic language ──
             'zoonotic spillover', 'bat virus', 'fruit bat virus',
             'wildlife outbreak', 'spillover event',
+            # ── v1.9.0 (Oct 6 2026) PLAGUE FAMILY ──
+            # Added the day a lab worker at the Irkutsk anti-plague institute
+            # died of suspected pneumonic plague and ~200 contacts went under
+            # observation. The gatherer's WHO/CIDRAP/ReliefWeb feeds carried the
+            # story; this detector had NO plague vocabulary at all, so it read
+            # every one of those articles and classified nothing.
+            'plague outbreak', 'plague case', 'plague cases', 'plague death',
+            'suspected plague', 'confirmed plague', 'plague infection',
+            'bubonic plague', 'pneumonic plague', 'septicemic plague',
+            'yersinia pestis', 'anti-plague institute', 'antiplague institute',
+            'plague focus', 'natural plague focus', 'marmot plague',
+            # ── v1.9.0 HIGH-CONSEQUENCE PATHOGENS ──
+            # Agents on the WHO priority / select-agent lists that this category
+            # named nowhere. Each is a stability event in its own right.
+            'anthrax outbreak', 'cutaneous anthrax', 'inhalational anthrax',
+            'smallpox case', 'variola', 'tularemia outbreak', 'glanders',
+            'melioidosis outbreak', 'botulism outbreak',
+            'avian influenza', 'avian influenza outbreak', 'h5n5', 'h7n9',
+            'hemorrhagic fever outbreak', 'viral hemorrhagic fever',
+            # ── v1.9.0 BIOSAFETY INCIDENT ──
+            # OBSERVABLES, not accusations. "Lab leak" is a conclusion and is
+            # deliberately NOT a keyword here. A broken sample tube, a
+            # containment breach and a laboratory-acquired infection are
+            # reportable facts under the IHR, and they are what gets printed.
+            'laboratory accident', 'lab accident', 'laboratory-acquired infection',
+            'lab-acquired infection', 'containment breach', 'biosafety breach',
+            'biosafety violation', 'biosecurity breach', 'bsl-4', 'bsl-3',
+            'biosafety level 4', 'biosafety level 3', 'pathogen escape',
+            'research facility outbreak', 'institute researcher died',
         ],
         'high_intensity_markers': [
             # Severity-amplifying language that justifies SEVERITY_HIGH
@@ -304,6 +333,97 @@ SIGNAL_CATEGORIES = {
             'ebola outbreak', 'marburg outbreak',
             'cases surge outbreak', 'mortality rate climbs',
             'health system collapse', 'hospitals overwhelmed',
+            # v1.9.0 -- pneumonic plague transmits person to person; a confirmed
+            # or suspected case is a high-intensity marker on its own, and a
+            # laboratory-acquired infection at a BSL facility is an escalation
+            # regardless of which organism it turns out to be.
+            'pneumonic plague', 'plague outbreak', 'suspected plague',
+            'laboratory-acquired infection', 'lab-acquired infection',
+            'containment breach', 'biosafety breach',
+            'smallpox case', 'inhalational anthrax',
+        ],
+    },
+
+    # ────────────────────────────────────────────────────────────
+    # v1.9.0 (Oct 6, 2026) -- CONTAINMENT BEHAVIOUR
+    # ────────────────────────────────────────────────────────────
+    # WHAT IS BEING DONE, measured separately from what is being said.
+    #
+    # Every other category in this file reads a CONDITION -- prices, displacement,
+    # an outbreak. This one reads a RESPONSE: contacts traced, wards quarantined,
+    # events cancelled, flights suspended, borders closed, herds culled.
+    #
+    # Why it is its own category and not more health_emergency keywords:
+    # containment behaviour is independently consequential. Two hundred people
+    # under medical observation and a cancelled public calendar are economic and
+    # humanitarian pressure whatever the pathogen turns out to be -- and they are
+    # OBSERVABLE, which announcements are not. Measuring them separately is what
+    # makes the claim-versus-behaviour read in assess_claim_behaviour_gap()
+    # possible at all.
+    #
+    # Deliberately NOT in ACUTE_CATEGORIES: a quarantine is a response, not a
+    # catastrophe, and it must not floor the regional level on its own. It IS in
+    # ACUTE_SIGNAL_CATEGORIES, because it describes an event rather than a
+    # standing condition.
+    #
+    # Keywords are specific phrases, never bare words. 'quarantine' alone matches
+    # a film review; 'placed under quarantine' does not.
+    # ────────────────────────────────────────────────────────────
+    'containment_behaviour': {
+        'label':       'Containment Behaviour',
+        'icon':        '\U0001f6a7',
+        'description': ('Observable containment actions -- contact tracing, quarantine, '
+                        'movement and travel restrictions, closures, culling. What is '
+                        'being DONE, measured separately from what is being announced'),
+        'keywords': [
+            # ── Contact tracing and medical observation ──
+            'placed under medical observation', 'under medical observation',
+            'contacts traced', 'contact tracing', 'contacts identified',
+            'contacts hospitalized', 'contacts hospitalised',
+            'contacts isolated', 'close contacts monitored',
+            # ── Quarantine and isolation ──
+            'placed under quarantine', 'under quarantine', 'quarantine imposed',
+            'quarantine declared', 'quarantine zone', 'cordon sanitaire',
+            'isolation ward', 'isolation unit', 'hospital sealed',
+            'ward sealed', 'facility quarantined', 'hospital quarantined',
+            # ── Movement, travel and trade restrictions ──
+            'movement restrictions imposed', 'travel restrictions imposed',
+            'travel ban imposed', 'flights suspended', 'flights cancelled',
+            'flights grounded', 'air travel suspended', 'airport closed',
+            'border closed', 'border closure', 'crossings closed',
+            'port closed', 'shipping suspended', 'export ban',
+            'import ban imposed', 'trade suspended', 'cargo held',
+            # ── Closures and gathering bans ──
+            'schools closed', 'school closures ordered', 'events cancelled',
+            'events canceled', 'public events cancelled', 'gatherings banned',
+            'mass gatherings banned', 'market closed', 'lockdown imposed',
+            # Real copy separates the noun from the verb -- "public events in
+            # Irkutsk were cancelled". _scan_article_text is a SUBSTRING scan
+            # shared by every category, so it cannot bridge that gap. These are
+            # the phrasings that do occur intact; the limitation is recorded in
+            # claude/CONVERGENCE_CHAIN_OPEN_ITEMS.md rather than papered over.
+            'events were cancelled', 'events were canceled',
+            'cancelled public events', 'canceled public events',
+            'event cancellations', 'gatherings cancelled',
+            'curfew imposed', 'region sealed off', 'district sealed',
+            # ── Animal and vector control ──
+            'mass cull', 'culling ordered', 'livestock culled', 'poultry culled',
+            'herd slaughtered', 'rodent control', 'deratization', 'deratting',
+            'vector control operation', 'hunting ban',
+            # ── Emergency administration ──
+            'state of emergency declared', 'emergency regime introduced',
+            'emergency committee convened', 'troops deployed to enforce',
+            'criminal investigation opened', 'safety violations investigation',
+        ],
+        'high_intensity_markers': [
+            # Actions a state does not take lightly. Each has economic reach
+            # beyond the health system, which is why they sit at HIGH.
+            'flights suspended', 'flights grounded', 'air travel suspended',
+            'border closed', 'border closure', 'port closed',
+            'shipping suspended', 'export ban', 'trade suspended',
+            'cordon sanitaire', 'lockdown imposed', 'curfew imposed',
+            'region sealed off', 'state of emergency declared',
+            'mass cull', 'troops deployed to enforce',
         ],
     },
 
@@ -396,6 +516,34 @@ SIGNAL_CATEGORIES = {
 # 'nigerian' or 'nigeria' due to regex \b on both sides).
 
 COUNTRY_PATTERNS = {
+    # ─── v1.9.0 (Oct 6 2026) RUSSIA + NORTHERN EURASIA ───
+    # This table held 142 countries and NOT RUSSIA. A humanitarian or health
+    # story datelined Moscow, Irkutsk or Vladivostok matched no country, and
+    # _extract_country_from_text returned None -- so detect_humanitarian_signals
+    # dropped the article before any category was ever scanned. Two independent
+    # blind spots (no plague vocabulary, no Russia) intersecting exactly where
+    # the Oct 2026 Irkutsk case landed.
+    #
+    # Sub-regions are listed because plague is ENDEMIC in specific natural foci
+    # -- the Siberian/Mongolian steppe among them -- so the oblast is the
+    # analytically meaningful unit, not the federation.
+    'russia':           ['russia', 'russian federation', 'russian'],
+    'irkutsk':          ['irkutsk', 'irkutsk region', 'irkutsk oblast', 'shelekhov'],
+    'buryatia':         ['buryatia', 'buryat', 'ulan-ude'],
+    'siberia':          ['siberia', 'siberian'],
+    'russian_far_east': ['russian far east', 'vladivostok', 'primorye', 'khabarovsk'],
+    'north_caucasus':   ['north caucasus', 'dagestan', 'chechnya', 'ingushetia'],
+    'mongolia':         ['mongolia', 'mongolian'],
+    'belarus':          ['belarus', 'belarusian'],
+    'georgia_country':  ['republic of georgia', 'tbilisi'],
+    'armenia':          ['armenia', 'armenian'],
+    'azerbaijan':       ['azerbaijan', 'azerbaijani', 'baku'],
+    'kyrgyzstan':       ['kyrgyzstan', 'kyrgyz'],
+    'tajikistan':       ['tajikistan', 'tajik'],
+    'turkmenistan':     ['turkmenistan', 'turkmen'],
+    'uzbekistan':       ['uzbekistan', 'uzbek'],
+    'kazakhstan':       ['kazakhstan', 'kazakh'],
+
     # ─── AFRICA: heavy concentration of humanitarian risk ───
     # Egypt
     'egypt':            ['egypt', 'egyptian'],
@@ -1090,7 +1238,12 @@ SIGNAL_CLASS_WEIGHT = {
 }
 
 # Categories whose signals describe an EVENT rather than a CONDITION.
-ACUTE_SIGNAL_CATEGORIES = {'natural_disaster', 'health_emergency', 'displacement_surge'}
+ACUTE_SIGNAL_CATEGORIES = {'natural_disaster', 'health_emergency', 'displacement_surge',
+                           # v1.9.0 -- a containment action is an event, not a
+                           # standing condition. NOT added to ACUTE_CATEGORIES:
+                           # a quarantine must not floor the regional level by
+                           # itself the way a catastrophe does.
+                           'containment_behaviour'}
 
 
 def _signal_class(sig):
@@ -1538,6 +1691,269 @@ def detect_worldbank_structural_signals(wb_payload):
     return signals
 
 
+# ======================================================================
+# v1.9.0 (Oct 6, 2026) -- CLAIM VERSUS BEHAVIOUR
+# ======================================================================
+# "We DO want to track both the announcements and the overt silences, what
+#  makes sense vs. what doesn't."  -- Rachel, Oct 6 2026
+#
+# THE SHAPE OF THE PROBLEM
+# ------------------------
+# Every category in this file reads ONE stream. A government saying "there is
+# no outbreak" and a government tracing two hundred contacts produce, to this
+# detector, either the same reading or no reading at all. Those are different
+# worlds and the platform could not tell them apart.
+#
+# This function reads TWO streams per country and reports the relationship
+# between them:
+#
+#   BEHAVIOUR  what is being done   -> containment_behaviour signal level
+#   CLAIM      what is being said   -> density of reassurance language below
+#
+# WHAT IT IS NOT
+# --------------
+# It is NOT a concealment detector, and the prose it produces never says or
+# implies one. Tracing 200 contacts of a suspected pneumonic case while telling
+# the public there is no cause for alarm is ALSO exactly what a competent,
+# well-run public health response looks like. Precaution plus calm messaging is
+# the textbook, not the cover-up.
+#
+# What the gap IS: a condition worth watching, reported with both of its halves
+# visible so the reader can weigh it. Ground truth over tin foil -- but a
+# divergence between what a state does and what it says is observable, and
+# refusing to measure it is not neutrality, it is a blind spot.
+#
+# THREE STATES, and the third is load-bearing:
+#   diverging  containment at/above the gate AND reassurance-dominant language
+#   aligned    both streams readable and consistent with each other
+#   unknown    one or both streams too thin to compare -- NEVER reported as
+#              'aligned', because "we did not see it" is not "it is fine"
+# ======================================================================
+
+# Reassurance / de-escalation language, as REGEX rather than literal phrases.
+#
+# WHY REGEX HERE AND NOWHERE ELSE IN THIS FILE
+# --------------------------------------------
+# _scan_article_text is a substring scan shared by every signal category, and it
+# is not going to be changed from here. But official denials insert words that a
+# substring cannot bridge: the head of Buryatia said "there are no plague
+# outbreaks in the republic", and a literal 'no outbreaks' misses it because the
+# disease name sits in the middle. The whole point of this function is reading
+# denial language precisely, so the one scanner that is entirely mine is the one
+# place a pattern is worth the cost.
+CLAIM_REASSURANCE_PATTERNS = [
+    r'\bno\s+(?:\w+\s+){0,3}outbreaks?\b',
+    r'\bno\s+(?:new|further|secondary|additional|confirmed)\s+cases\b',
+    r'\bno\s+(?:\w+\s+){0,2}cases\s+(?:have been\s+)?(?:confirmed|reported|found)\b',
+    r'\bno\s+signs?\s+of\s+(?:illness|infection|disease)\b',
+    r'\bno\s+evidence\s+(?:of|that|to suggest|linking|the)\b',
+    r'\bno\s+(?:risk|threat|danger)\s+to\s+(?:the\s+)?(?:public|population|residents)\b',
+    r'\bposes?\s+no\s+(?:risk|threat|danger)\b',
+    r'\bno\s+cause\s+for\s+(?:concern|alarm|panic)\b',
+    r'\bno\s+reason\s+(?:for|to)\s+(?:panic|worry|concern)\b',
+    r'\bsituation\s+(?:is\s+)?(?:under\s+control|stable|contained|normal)\b',
+    r'\b(?:fully|completely|entirely)\s+under\s+control\b',
+    r'\bno\s+human[\s-]to[\s-]human\s+transmission\b',
+    r'\bno\s+sustained\s+(?:transmission|spread)\b',
+    r'\bno\s+(?:reports?\s+of\s+)?secondary\s+cases\b',
+    r'\btests?\s+(?:results?\s+)?(?:are|were|came\s+back)\s+negative\b',
+    r'\bresults?\s+(?:are|were)\s+negative\b',
+    r'\broutine\s+seasonal\b',
+    r'\bseasonal\s+(?:fluctuation|variation|pattern)\b',
+    r'\bisolated\s+(?:incident|case|event)\b',
+    r'\bno\s+spread\s+beyond\b',
+    r'\bunfounded\s+(?:rumou?rs|reports|claims)\b',
+    r'\bno\s+(?:need|plans?)\s+for\s+(?:restrictions|quarantine|measures)\b',
+    r'\bno\s+restrictions\s+(?:are\s+)?(?:planned|needed|necessary|envisaged)\b',
+]
+
+# Language that CONCEDES uncertainty. Its presence is evidence that officials are
+# NOT reassurance-dominant, so it is counted against the gap. Without this, a
+# candid statement reading "we do not yet know the source and there is no
+# evidence of spread" would score as pure reassurance on one clause.
+CLAIM_CANDOUR_PATTERNS = [
+    r'\bcause\s+(?:remains|is)\s+(?:unknown|unconfirmed|unclear)\b',
+    r'\bunder\s+investigation\b',
+    r'\binvestigation\s+(?:is\s+)?(?:ongoing|continues|under\s*way)\b',
+    r'\b(?:not\s+)?yet\s+to\s+be\s+confirmed\b',
+    r'\bnot\s+yet\s+(?:confirmed|known|established|determined)\b',
+    r'\bawaiting\s+(?:results|confirmation|tests)\b',
+    r'\bcannot\s+(?:be\s+)?ruled?\s+out\b',
+    r'\bremains?\s+(?:unclear|unconfirmed|uncertain)\b',
+    r'\bdeclined\s+to\s+(?:confirm|comment|say|provide)\b',
+    r'\bhas\s+not\s+(?:commented|released|disclosed|published)\b',
+    r'\bdid\s+not\s+respond\b',
+    r'\bno\s+information\s+(?:has\s+been\s+)?(?:provided|released|made\s+public)\b',
+    r'\bwithheld\b',
+]
+
+# ── SUB-NATIONAL ROLLUP ──
+# The signal path is deliberately granular -- Irkutsk, Buryatia and Darfur are
+# the analytically meaningful units and they stay that way on the cards. But the
+# CLAIM-VS-BEHAVIOUR comparison needs both streams in the same bucket, and the
+# Oct 2026 Irkutsk case split three ways: the containment landed on 'irkutsk',
+# the denial on 'buryatia', the ECDC statement on 'russia'. Three rows, each
+# with half the story, each therefore 'unknown'. One state is doing the acting
+# and the talking, so the comparison is made at the state level.
+GAP_ROLLUP_PARENT = {
+    'irkutsk': 'russia', 'buryatia': 'russia', 'siberia': 'russia',
+    'russian_far_east': 'russia', 'north_caucasus': 'russia',
+    'darfur': 'sudan', 'el_fasher': 'sudan', 'khartoum': 'sudan',
+    'tigray': 'ethiopia', 'amhara': 'ethiopia', 'afar_region': 'ethiopia',
+    'north_kivu': 'drc', 'south_kivu': 'drc', 'ituri': 'drc',
+    'bekaa_valley': 'lebanon', 'aleppo': 'syria', 'idlib': 'syria',
+    'hodeidah': 'yemen', 'sanaa': 'yemen', 'aden': 'yemen', 'saada': 'yemen',
+    'gaza_north': 'gaza', 'khan_younis': 'gaza', 'rafah': 'gaza',
+}
+
+
+# Containment level at or above which the behaviour stream is loud enough to
+# compare against anything. Below this there is no behaviour to speak of, and
+# the honest answer is 'unknown' rather than 'aligned'.
+CLAIM_GAP_BEHAVIOUR_GATE = 4          # GPI level, i.e. severity >= 2
+CLAIM_GAP_MIN_ARTICLES   = 2          # fewer than this is an anecdote, not a stream
+
+
+def _gap_bucket(country):
+    """The unit the claim-vs-behaviour comparison is made in."""
+    return GAP_ROLLUP_PARENT.get(country, country)
+
+
+def _claim_scan(text):
+    """Reassurance and candour phrases present in one piece of text.
+
+    Returns (reassurance_found, candour_found) as the matched TEXT, so the
+    evidence shown to a reader is the words that were actually printed rather
+    than the pattern that caught them.
+    """
+    t = (text or '').lower()
+    reas = [m.group(0).strip() for pat in CLAIM_REASSURANCE_PATTERNS
+            for m in re.finditer(pat, t)]
+    cand = [m.group(0).strip() for pat in CLAIM_CANDOUR_PATTERNS
+            for m in re.finditer(pat, t)]
+    return (reas, cand)
+
+
+def assess_claim_behaviour_gap(articles, signals):
+    """Per country: does observable containment behaviour match official language?
+
+    Returns {country: {state, behaviour_level, reassurance_hits, candour_hits,
+                       articles_read, evidence, note}}.
+
+    Never raises, never guesses a motive, and never reports 'aligned' for a
+    country it could not actually read.
+    """
+    out = {}
+    try:
+        # ---- BEHAVIOUR stream: the containment signals already detected ----
+        behaviour = {}
+        for s in (signals or []):
+            if not isinstance(s, dict) or s.get('category') != 'containment_behaviour':
+                continue
+            c = _gap_bucket(s.get('country'))
+            if not c:
+                continue
+            lvl = int(s.get('level') or 0)
+            if lvl >= int(behaviour.get(c, {}).get('level', -1)):
+                behaviour[c] = {'level': lvl,
+                                'keywords': list(s.get('matched_keywords') or [])}
+
+        # ---- CLAIM stream: reassurance vs candour, per country ----
+        claim = {}
+        for art in (articles or []):
+            if not isinstance(art, dict):
+                continue
+            title = (art.get('title') or '').strip()
+            desc = (art.get('description') or art.get('snippet')
+                    or art.get('text') or '').strip()
+            text = ('%s %s' % (title, desc)).strip()
+            if not text:
+                continue
+            c = _gap_bucket(_extract_country_from_text(text))
+            if not c:
+                continue
+            rec = claim.setdefault(c, {'reassurance': [], 'candour': [], 'articles': 0,
+                                       'reassuring_articles': 0, 'candid_articles': 0})
+            rec['articles'] += 1
+            r, k = _claim_scan(text)
+            rec['reassurance'].extend(r)
+            rec['candour'].extend(k)
+            # COUNTED PER ARTICLE, not per phrase. Deduped phrase counts measure
+            # VOCABULARY VARIETY, which is noise: one candid statement syndicated
+            # across five wires collapses to the same handful of phrases while
+            # five differently-worded reassurances each count. The question is
+            # how much of the COVERAGE leans which way, so each article casts one
+            # vote and an article carrying both is counted as neither.
+            if len(r) > len(k):
+                rec['reassuring_articles'] += 1
+            elif len(k) > len(r):
+                rec['candid_articles'] += 1
+
+        # ---- The comparison ----
+        for c in set(behaviour) | set(claim):
+            b = behaviour.get(c) or {}
+            m = claim.get(c) or {'reassurance': [], 'candour': [], 'articles': 0,
+                                 'reassuring_articles': 0, 'candid_articles': 0}
+            blvl = int(b.get('level') or 0)
+            reas = sorted(set(m['reassurance']))
+            cand = sorted(set(m['candour']))
+            arts = m['articles']
+            r_arts = m.get('reassuring_articles', 0)
+            c_arts = m.get('candid_articles', 0)
+
+            row = {'behaviour_level': blvl if b else None,
+                   'reassurance_hits': len(reas), 'candour_hits': len(cand),
+                   'reassuring_articles': r_arts, 'candid_articles': c_arts,
+                   'articles_read': arts,
+                   'evidence': {'containment': (b.get('keywords') or [])[:5],
+                                'reassurance': reas[:5], 'candour': cand[:5]}}
+
+            if not b or arts < CLAIM_GAP_MIN_ARTICLES:
+                row['state'] = 'unknown'
+                row['note'] = (
+                    'Not assessable this cycle: %s. Unread is not the same as '
+                    'consistent, and this country is not being reported as '
+                    'either.' % ('no containment behaviour detected' if not b
+                                 else 'only %d article(s) read' % arts))
+            elif blvl >= CLAIM_GAP_BEHAVIOUR_GATE and r_arts > c_arts:
+                row['state'] = 'diverging'
+                row['note'] = (
+                    'Containment behaviour reads L%d while the coverage is '
+                    'reassurance-dominant: %d of %d article(s) lean reassuring, '
+                    '%d lean toward conceding uncertainty. THIS IS NOT EVIDENCE '
+                    'OF CONCEALMENT -- vigorous precaution alongside calm public '
+                    'messaging is also what a well-run response looks like. It '
+                    'is a gap between what is being done and what is being '
+                    'said, reported with both halves visible so the reader can '
+                    'weigh it.' % (blvl, r_arts, arts, c_arts))
+            else:
+                row['state'] = 'aligned'
+                row['note'] = (
+                    'Containment behaviour (L%s) and official language are not '
+                    'in evident tension this cycle.' % (blvl or 0))
+            out[c] = row
+    except Exception as e:
+        return {'_error': str(e)[:160]}
+    return out
+
+
+def summarise_claim_behaviour_gap(gap):
+    """One line per country in tension, for the log and the BLUF prose."""
+    if not isinstance(gap, dict) or gap.get('_error'):
+        return ''
+    div = sorted(c for c, r in gap.items()
+                 if isinstance(r, dict) and r.get('state') == 'diverging')
+    unk = [c for c, r in gap.items()
+           if isinstance(r, dict) and r.get('state') == 'unknown']
+    if not div:
+        return ('Claim-vs-behaviour: no country shows containment behaviour in '
+                'tension with official language this cycle'
+                + (' (%d not assessable).' % len(unk) if unk else '.'))
+    return ('Claim-vs-behaviour: %s showing containment behaviour above the '
+            'level official language describes. Watch condition, not a finding '
+            'about intent.' % ', '.join(c.replace('_', ' ').title() for c in div))
+
+
 def detect_and_build_bluf(articles, extra_signals=None):
     """
     Convenience wrapper: run detection + aggregation + build BLUF.
@@ -1553,7 +1969,25 @@ def detect_and_build_bluf(articles, extra_signals=None):
     if extra_signals:
         signals = signals + list(extra_signals)
     aggregation = aggregate_convergence(signals)
-    return build_humanitarian_bluf(signals, aggregation)
+    bluf = build_humanitarian_bluf(signals, aggregation)
+
+    # v1.9.0 -- the claim-vs-behaviour read rides the payload. It needs the raw
+    # ARTICLES, which aggregate_convergence never sees, so it is computed here
+    # rather than inside build_humanitarian_bluf.
+    try:
+        _gap = assess_claim_behaviour_gap(articles or [], signals)
+        bluf['claim_behaviour_gap'] = _gap
+        bluf['claim_behaviour_summary'] = summarise_claim_behaviour_gap(_gap)
+        print('[humanitarian] %s' % bluf['claim_behaviour_summary'])
+    except Exception as _ge:
+        # A reading that fails must not take the BLUF with it, and must not
+        # leave a silently-absent key that a reader would mistake for 'nothing
+        # in tension'.
+        bluf['claim_behaviour_gap'] = {'_error': str(_ge)[:160]}
+        bluf['claim_behaviour_summary'] = ('Claim-vs-behaviour read FAILED this '
+                                           'cycle -- unread, not clear.')
+        print('[humanitarian] claim-vs-behaviour read failed: %s' % str(_ge)[:160])
+    return bluf
 
 
 # ============================================================
@@ -1930,6 +2364,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.8.0'
+__version__ = '1.9.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
