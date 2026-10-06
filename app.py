@@ -424,6 +424,17 @@ except Exception as e:
     CORRIDOR_DEPENDENCE_AVAILABLE = False
     print(f"[ME Backend] Corridor dependence not available: {e}")
 
+# Severity canon (v1.0.0 -- Oct 6 2026). One writer for every ladder the
+# platform uses. Serves /api/severity-canon so the page guide RENDERS from the
+# arithmetic instead of being typed next to it.
+try:
+    from severity_canon import register_severity_canon_endpoints
+    SEVERITY_CANON_AVAILABLE = True
+    print("[ME Backend] Severity canon loaded")
+except Exception as e:
+    SEVERITY_CANON_AVAILABLE = False
+    print(f"[ME Backend] Severity canon not available: {e}")
+
 # Tempo Baseline Engine (v1.0 -- Jul 12, 2026)
 # Generic actor/tape baseline engine. Lives HERE (primary backend) because the
 # algorithm is shared; the DATA is local and arrives via the shared Upstash Redis
