@@ -3425,6 +3425,203 @@ def _repricing_narrative(redis_key, offramp_label, category, regions):
     }
 
 
+# ═══════════════════════════════════════════════════════════════
+# v3.12.0 (Oct 6 2026) -- FRAGILITY x ARRIVING EXOGENOUS SHOCK
+# ═══════════════════════════════════════════════════════════════
+# THE LOOP market_blackswan_detector ASKS FOR AND NOTHING CLOSED.
+#
+# That module is a FRAGILITY index, not a shock detector, and it is explicit
+# about the limit. 9/11 and COVID sit in its episode library as NULL CASES,
+# filed on purpose, and its own ruling on an exogenous match reads:
+#
+#     "Exogenous analogs are NULL CASES and are in the library on purpose.
+#      Earthquakes, attacks and pandemics carry no market pre-signal. If the
+#      closest match is exogenous, the honest read is that this module has
+#      little to say AND THE GPI KINETIC AND HUMANITARIAN AXES ARE THE WATCH.
+#      Absence of a market warning is not absence of risk."
+#
+# Nothing performed that watch. The GPI reads the fragility bundle and the
+# humanitarian BLUF, and has never put them in the same sentence.
+#
+# WHAT THIS DETECTOR DOES NOT DO
+# ------------------------------
+# It does not predict a drawdown, and it does not ask the fragility index to
+# forecast a pandemic -- that is precisely the corruption the Market Watch
+# module was built to refuse. Adding a health or geopolitical feature to a
+# ~100-year endogenous composite would make a clean instrument dirty and tell
+# you nothing it does not already say.
+#
+# The two layers stay independent and are READ TOGETHER:
+#   dry forest    how brittle the market is right now (endogenous, measured)
+#   lightning     a containment shock actually underway (observed, not forecast)
+#
+# Neither is a prediction. The conjunction is the finding, and the honest
+# headline is a question about absorption, not about direction.
+#
+# THREE-STATE ON THE MARKET SIDE. An unreadable fragility bundle is NOT a calm
+# market. When a shock is arriving and the forest cannot be measured, that is
+# its own card and it says so -- the unread-versus-zero rule this platform
+# keeps relearning.
+# ═══════════════════════════════════════════════════════════════
+
+# Containment behaviour at or above this GPI level counts as a shock that is
+# actually underway rather than a story about one.
+EXO_CONTAINMENT_MIN_LEVEL = 4
+EXO_HEALTH_MIN_LEVEL = 5          # a high-severity health emergency alone also qualifies
+
+# Export channels a containment action in that country would run through.
+# DECLARED, never inferred: a country absent from this table is reported as
+# "export exposure not instrumented", never as having none. Extend deliberately.
+EXO_EXPORT_CHANNELS = {
+    'russia':   'wheat, fertiliser, crude, gas, nickel, palladium',
+    'ukraine':  'wheat, corn, sunflower oil, Black Sea corridor',
+    'china':    'manufactured goods, rare earths, container shipping',
+    'india':    'rice, generic pharmaceuticals',
+    'brazil':   'soy, beef, iron ore',
+    'drc':      'cobalt, copper',
+    'chile':    'copper, lithium',
+    'indonesia':'nickel, palm oil, thermal coal',
+}
+
+
+def _narrative_fragility_exogenous_watch(blufs):
+    """A containment shock underway, read against measured market fragility.
+
+    Doctrine: sensors below, analyst above. The Market Watch detector measures
+    the forest; the humanitarian detector observes the lightning. This function
+    is the analyst that reads them in one sentence, and it is careful to say
+    what neither sensor can support.
+    """
+    hum = blufs.get('global_humanitarian')
+    if not hum:
+        return None
+
+    sigs = _signals_of(hum) or []
+
+    # ── THE SHOCK: containment ACTIONS, or a high-severity health emergency ──
+    containment, health = [], []
+    for sg in sigs:
+        if not isinstance(sg, dict):
+            continue
+        cat = sg.get('category')
+        try:
+            lvl = int(sg.get('level') or 0)
+        except (TypeError, ValueError):
+            continue
+        if cat == 'containment_behaviour' and lvl >= EXO_CONTAINMENT_MIN_LEVEL:
+            containment.append(sg)
+        elif cat == 'health_emergency' and lvl >= EXO_HEALTH_MIN_LEVEL:
+            health.append(sg)
+    if not (containment or health):
+        return None
+
+    shock = sorted(containment or health,
+                   key=lambda x: -int(x.get('level') or 0))[0]
+    country = shock.get('country') or 'an unnamed country'
+    c_label = str(country).replace('_', ' ').title()
+    actions = [k for k in (shock.get('matched_keywords') or [])][:4]
+    action_phrase = ('; '.join(actions)) if actions else 'containment measures'
+
+    # ── THE CLAIM GAP, when the humanitarian layer published one ──
+    gap_clause = ''
+    gap = hum.get('claim_behaviour_gap')
+    if isinstance(gap, dict) and not gap.get('_error'):
+        row = gap.get(country) or gap.get(str(country).split('_')[0]) or {}
+        if isinstance(row, dict) and row.get('state') == 'diverging':
+            gap_clause = (
+                ' The humanitarian layer also reads the official language in %s as '
+                'reassurance-dominant relative to the containment it is carrying out. '
+                'That is a watch condition and NOT evidence of concealment -- '
+                'vigorous precaution with calm public messaging is also what a '
+                'well-run response looks like -- but it means the public claim is '
+                'not a reliable guide to the size of the measures.' % c_label)
+
+    # ── THE EXPORT CHANNEL, declared or honestly absent ──
+    chan = EXO_EXPORT_CHANNELS.get(str(country).lower())
+    if chan:
+        export_clause = (
+            ' Transmission channel if the measures widen: %s runs %s. Restrictions on '
+            'movement, ports or air cargo reach prices through those channels before '
+            'they reach any health statistic.' % (c_label, chan))
+    else:
+        export_clause = (
+            ' Export exposure for %s is NOT instrumented in this detector. That is an '
+            'unmeasured channel, not an absent one.' % c_label)
+
+    # ── THE FOREST: three states, and unreadable is one of them ──
+    frag = _redis_get(MARKET_FRAGILITY_BUNDLE_KEY)
+    if not frag or not frag.get('band'):
+        return {
+            'priority': 12,
+            'category': 'exogenous_shock_unmeasured_market',
+            'regions':  ['global_humanitarian', 'global_market'],
+            'icon':     '\U0001f32b\ufe0f',
+            'color':    '#6b7280',
+            'pressure_type': 'economic',
+            'headline': ('Containment shock underway in %s while market fragility is '
+                         'UNREAD this cycle' % c_label),
+            'detail':   ('%s is carrying out observable containment -- %s. The Market '
+                         'Watch fragility bundle could not be read this cycle, so this '
+                         'platform cannot say how much absorptive capacity the market '
+                         'has. UNREAD IS NOT CALM: no fragility reading is being '
+                         'reported here, and none should be inferred.%s%s '
+                         'Convergence, not prediction.'
+                         % (c_label, action_phrase, gap_clause, export_clause)),
+            'alert_stamped': False,
+        }
+
+    band = frag.get('band')
+    composite = frag.get('composite')
+    feats = frag.get('active_features') or []
+    feat_phrase = ', '.join(f.replace('_', ' ') for f in feats[:4]) or 'no named features'
+    analog = frag.get('top_analog_detail') or {}
+    exo_analog = (analog.get('type') == 'exogenous_shock')
+
+    if band == 'normal':
+        detail_open = ('The Market Watch fragility detector reads NORMAL (composite %s): '
+                       'on its own measures the market is not in a brittle state, so a '
+                       'shock of this kind arrives into ordinary conditions. '
+                       % composite)
+        pr = 14
+    else:
+        detail_open = ('The Market Watch fragility detector reads %s (composite %s), '
+                       'driven by %s -- a measure of how much absorptive capacity the '
+                       'market has, not of what is about to happen to it. A shock '
+                       'arriving into that state is a different event from the same '
+                       'shock arriving into a calm one. ' % (band.upper(), composite, feat_phrase))
+        pr = {'critical': 10, 'high': 11, 'elevated': 13}.get(band, 13)
+
+    null_clause = (
+        ' The fragility module states its own limit here and this card repeats it '
+        'rather than working around it: exogenous events -- earthquakes, attacks, '
+        'pandemics -- carry NO market pre-signal, and its closest historical analog '
+        'is itself an exogenous null case. Absence of a market warning is not '
+        'absence of risk.' if exo_analog else
+        ' The fragility module carries no pre-signal for exogenous events of this '
+        'kind by design; its reading describes the forest, never the lightning.')
+
+    return {
+        'priority': pr,
+        'category': 'fragility_exogenous_watch',
+        'regions':  ['global_humanitarian', 'global_market'],
+        'icon':     '\U0001f9a0',    # microbe
+        'color':    '#ef4444' if band in ('high', 'critical') else '#f59e0b',
+        'pressure_type': 'economic',
+        'headline': ('Containment shock underway in %s against a %s market-fragility '
+                     'reading' % (c_label, str(band).upper())),
+        'detail':   (detail_open +
+                     'Simultaneously, %s is carrying out observable containment: %s. '
+                     'These are two independent layers -- one endogenous and measured '
+                     'over a century of market history, one observed in this week\'s '
+                     'reporting -- and neither forecasts the other.%s%s%s '
+                     'The question this card raises is about ABSORPTION, not '
+                     'direction: how much capacity is there if these measures widen. '
+                     'Convergence, not prediction.'
+                     % (c_label, action_phrase, null_clause, gap_clause, export_clause)),
+        'alert_stamped': True,
+    }
+
+
 def _narrative_conflict_repricing(blufs):
     """Israel / US-Iran off-ramp market-belief read (Slice 3, Jun 18 2026)."""
     return _repricing_narrative('repricing:israel:gpi', 'US-Iran off-ramp',
@@ -3922,6 +4119,7 @@ NARRATIVE_DETECTORS = [
     _narrative_multiaxis_convergence,                    # multi-axis + global-commodity (Jun 6 2026)
     _narrative_food_stress_convergence,                  # food x kinetic x humanitarian (Jun 10 2026)
     _narrative_market_fragility,                         # market fragility x Taiwan semis (Black Swan #2, Jun 13 2026)
+    _narrative_fragility_exogenous_watch,                # fragility x arriving containment shock (Oct 6 2026)
     _narrative_conflict_repricing,                       # off-ramp market-belief read (Slice 3, Jun 18 2026)
     _narrative_conflict_repricing_europe,                # Europe off-ramp market-belief read (Slice 4c, Jun 19 2026)
     _narrative_turkey_regional_convergence,              # Turkey cross-theater convergence (projection + periphery, Jun 28 2026)
