@@ -61,6 +61,99 @@ OPTIONAL FIELDS:
 
 CONVERGENCE_REGISTRY = [
     {
+        'id': 'ca_containment_kazakhstan',
+        'commodity': None,
+        'country': 'kazakhstan',
+        'cluster': 'central_asia_containment',
+        'trigger_signal_category': 'border_health_closure',
+        'trigger_region': 'europe',
+        'trigger_signal_min_level': 3,
+        'commodity_threshold': None,
+        'regions': ['europe', 'asia'],
+        'priority': 17,
+        'icon': '\U0001f6a7',
+        'color': '#f97316',
+        'headline_template': 'Kazakhstan tightening its Russian frontier on health grounds',
+        'detail': 'STRUCTURAL READOUT: Kazakhstan restricting movement at its Russian frontier on health grounds. The sharpest node in the cluster, because the measure cuts across its own export dependency: roughly four-fifths of Kazakh crude transits Russian territory via the Caspian Pipeline Consortium to Novorossiysk, and Kazakh uranium -- about forty percent of world supply -- transits Russia as well. WHAT IT MEANS: the multi-vector hedge is being tested from a direction Astana did not choose. A health closure at the Russian border is a lean away from one pole that cannot easily be framed as political, and it is applied to the same frontier the country\'s export revenue depends on. Watch: CPC terminal status, Kazatomprom (KAP.IL), USD/KZT, and whether the measure is described as sanitary or as transit policy.',
+        'facts': {
+            'measurement': 'state-level border, transit or movement restriction at the Russian frontier',
+            'why_it_matters': 'A neighbour that restricts movement with Russia pays a real economic price and has every incentive not to antagonise Moscow. Acting anyway is a judgement about information, made by a party with no motive to overstate.',
+            'not_evidence_of': 'outbreak severity. Precautionary closure on thin information is correct behaviour for a neighbouring state.',
+        },
+        'enrichment_text_template': '⚠️ CONTAINMENT AT THE RUSSIAN FRONTIER: Kazakhstan at {alert} on {signals} signal(s). Third-party state action -- corroboration from a party with costs to bear and no incentive to overstate.',
+        'notes': 'WIRED. rhetoric_tracker_kazakhstan emits border_health_closure as a red line (severity 4 -> level 4), which clears trigger_signal_min_level 3 through the Europe backend\'s Layer 2 regime gate. The only node of this cluster that can currently fire.',
+    },
+    {
+        'id': 'ca_containment_uzbekistan',
+        'commodity': None,
+        'country': 'uzbekistan',
+        'cluster': 'central_asia_containment',
+        'trigger_signal_category': 'border_health_closure',
+        'trigger_region': 'europe',
+        'trigger_signal_min_level': 3,
+        'commodity_threshold': None,
+        'regions': ['europe', 'asia'],
+        'priority': 15,
+        'icon': '\U0001f6a7',
+        'color': '#f97316',
+        'headline_template': 'Uzbekistan tightening its Russian frontier on health grounds',
+        'detail': 'STRUCTURAL READOUT: Uzbekistan restricting movement at its Russian frontier. The binding exposure is labour remittances rather than trade. NO SENSOR: declared so the cluster can name what it cannot see.',
+        'facts': {
+            'measurement': 'state-level border, transit or movement restriction at the Russian frontier',
+            'why_it_matters': 'A neighbour that restricts movement with Russia pays a real economic price and has every incentive not to antagonise Moscow. Acting anyway is a judgement about information, made by a party with no motive to overstate.',
+            'not_evidence_of': 'outbreak severity. Precautionary closure on thin information is correct behaviour for a neighbouring state.',
+        },
+        'enrichment_text_template': '⚠️ CONTAINMENT AT THE RUSSIAN FRONTIER: Uzbekistan at {alert} on {signals} signal(s). Third-party state action -- corroboration from a party with costs to bear and no incentive to overstate.',
+        'notes': 'PHASE 2 -- NO TRACKER. No rhetoric tracker exists for this country on any backend, so nothing emits this category and the node renders DARK in the cluster card by design. Declared deliberately so cluster_status names it in inactive_countries: this is the build-to-do list made visible, not a silent gap.',
+    },
+    {
+        'id': 'ca_containment_kyrgyzstan',
+        'commodity': None,
+        'country': 'kyrgyzstan',
+        'cluster': 'central_asia_containment',
+        'trigger_signal_category': 'border_health_closure',
+        'trigger_region': 'europe',
+        'trigger_signal_min_level': 3,
+        'commodity_threshold': None,
+        'regions': ['europe', 'asia'],
+        'priority': 15,
+        'icon': '\U0001f6a7',
+        'color': '#f97316',
+        'headline_template': 'Kyrgyzstan tightening its Russian frontier on health grounds',
+        'detail': 'STRUCTURAL READOUT: Kyrgyzstan restricting movement at its Russian frontier. Highest remittance exposure of the four relative to the size of its economy, so a movement restriction is a household-income event before it is a trade event. NO SENSOR.',
+        'facts': {
+            'measurement': 'state-level border, transit or movement restriction at the Russian frontier',
+            'why_it_matters': 'A neighbour that restricts movement with Russia pays a real economic price and has every incentive not to antagonise Moscow. Acting anyway is a judgement about information, made by a party with no motive to overstate.',
+            'not_evidence_of': 'outbreak severity. Precautionary closure on thin information is correct behaviour for a neighbouring state.',
+        },
+        'enrichment_text_template': '⚠️ CONTAINMENT AT THE RUSSIAN FRONTIER: Kyrgyzstan at {alert} on {signals} signal(s). Third-party state action -- corroboration from a party with costs to bear and no incentive to overstate.',
+        'notes': 'PHASE 2 -- NO TRACKER. No rhetoric tracker exists for this country on any backend, so nothing emits this category and the node renders DARK in the cluster card by design. Declared deliberately so cluster_status names it in inactive_countries: this is the build-to-do list made visible, not a silent gap.',
+    },
+    {
+        'id': 'ca_containment_mongolia',
+        'commodity': None,
+        'country': 'mongolia',
+        'cluster': 'central_asia_containment',
+        'trigger_signal_category': 'border_health_closure',
+        'trigger_region': 'europe',
+        'trigger_signal_min_level': 3,
+        'commodity_threshold': None,
+        'regions': ['europe', 'asia'],
+        'priority': 15,
+        'icon': '\U0001f6a7',
+        'color': '#f97316',
+        'headline_template': 'Mongolia tightening its Russian frontier on health grounds',
+        'detail': 'STRUCTURAL READOUT: Mongolia restricting movement at its Russian frontier. The only node where the health risk and the economic exposure share terrain -- the plague-endemic steppe runs across the Mongolian frontier into Buryatia and Irkutsk, and Mongolia depends on Russian fuel and transit. NO SENSOR.',
+        'facts': {
+            'measurement': 'state-level border, transit or movement restriction at the Russian frontier',
+            'why_it_matters': 'A neighbour that restricts movement with Russia pays a real economic price and has every incentive not to antagonise Moscow. Acting anyway is a judgement about information, made by a party with no motive to overstate.',
+            'not_evidence_of': 'outbreak severity. Precautionary closure on thin information is correct behaviour for a neighbouring state.',
+        },
+        'enrichment_text_template': '⚠️ CONTAINMENT AT THE RUSSIAN FRONTIER: Mongolia at {alert} on {signals} signal(s). Third-party state action -- corroboration from a party with costs to bear and no incentive to overstate.',
+        'notes': 'PHASE 2 -- NO TRACKER. No rhetoric tracker exists for this country on any backend, so nothing emits this category and the node renders DARK in the cluster card by design. Declared deliberately so cluster_status names it in inactive_countries: this is the build-to-do list made visible, not a silent gap.',
+    },
+
+    {
         'id':                      'wheat_lebanon',
         'commodity':               'wheat',
         'country':                 'lebanon',
@@ -1487,6 +1580,82 @@ def format_enrichment_text(entry, alert_level, signal_count):
 # cluster reads as half-filled instead of as a thin finding.
 
 CLUSTER_LABELS = {
+    # v1.3.0 (Oct 6 2026) -- CENTRAL ASIA CONTAINMENT
+    'central_asia_containment': {
+        'label': 'Central Asian containment of Russia',
+        'as_of': '2026-10-06',
+        'shared_mechanism': (
+            'Four states that share a land border with the Russian Federation '
+            'acting on the same source event in the same week. The mechanism is '
+            'not a supply corridor, it is PROXIMITY plus an open border regime: '
+            'Kazakhstan alone shares roughly 7,600 km with Russia, and labour, '
+            'rail and road movement across these frontiers is continuous in '
+            'normal conditions. A containment decision here is a decision to '
+            'interrupt that.'),
+        'why_together': (
+            'These states are not coordinating; they are each reacting to the '
+            'same upstream event. That is exactly why reading them one country '
+            'at a time understates it. One neighbour tightening a border is a '
+            'national precaution. Three or four doing it in the same week is a '
+            'regional judgement about information coming out of Moscow -- made '
+            'by governments that pay a real economic price for being wrong, and '
+            'that have every incentive NOT to antagonise Russia.'),
+        'compounding': (
+            'Simultaneity removes the alternatives. Central Asian trade and '
+            'labour movement reroutes around a single closed frontier; it cannot '
+            'reroute around all of them at once. Multiple closures convert a '
+            'health precaution into a transit and remittance shock, and the '
+            'remittance channel is the larger of the two for the smaller '
+            'economies.'),
+        'transmission': {
+            'ca_containment_kazakhstan': (
+                'ROUTE SELF-EXPOSURE -- the sharpest node. Roughly four-fifths '
+                'of Kazakh crude exports transit Russian territory via CPC to '
+                'Novorossiysk, and Kazakh uranium (~40% of world supply) '
+                'transits Russia as well. A containment measure at the Russian '
+                'frontier puts Kazakhstan\'s own export routes behind the door '
+                'it just closed.'),
+            'ca_containment_uzbekistan': (
+                'LABOUR REMITTANCES -- the binding constraint is household '
+                'income, not trade. NO TRACKER YET: this node cannot fire.'),
+            'ca_containment_kyrgyzstan': (
+                'LABOUR REMITTANCES, highest exposure of the four as a share of '
+                'the economy. NO TRACKER YET: this node cannot fire.'),
+            'ca_containment_mongolia': (
+                'FUEL AND TRANSIT DEPENDENCE plus the plague-endemic steppe it '
+                'shares with Buryatia and Irkutsk -- the only node where the '
+                'health risk and the economic exposure sit in the same terrain. '
+                'NO TRACKER YET: this node cannot fire.'),
+        },
+        'butterfly': [
+            {
+                'effect': 'Remittance interruption before trade interruption',
+                'how': ('Labour movement stops the day a border tightens; cargo '
+                        'has inventory and alternate routing. So household '
+                        'income in the smaller economies moves first, and the '
+                        'trade numbers move weeks later.'),
+                'observables': ['Halyk Bank / regional bank equity',
+                                'USD/KZT and regional FX',
+                                'migrant-return reporting at rail terminals'],
+            },
+            {
+                'effect': 'A closure that chokes the closer',
+                'how': ('Kazakhstan\'s crude and uranium both leave through '
+                        'Russia. Tightening the Russian frontier for health '
+                        'reasons and depending on Russian transit for export '
+                        'revenue are the same border.'),
+                'observables': ['Kazatomprom (KAP.IL)', 'CPC terminal status',
+                                'Brent with CPC route share'],
+            },
+        ],
+        'not_implied': (
+            'Border tightening is NOT evidence that the outbreak is larger than '
+            'reported. Precautionary closure on thin information is the normal, '
+            'correct behaviour of a neighbouring state and says more about the '
+            'cost asymmetry it faces than about the epidemiology. What the '
+            'cluster measures is BREADTH of state action, not disease severity.'),
+    },
+
     'levant_wheat': {
         'label': 'Levant wheat / food security',
         'as_of': '2026-10-06',
@@ -1585,7 +1754,7 @@ CLUSTER_LABELS = {
 # remove or rename an entry and it changes by itself. Layer 2 logs both, so a
 # fork shows up in the Render log on the first scan after it happens rather
 # than being discovered months later by someone grepping two clones.
-REGISTRY_VERSION = '1.2.0'
+REGISTRY_VERSION = '1.3.0'
 REGISTRY_AS_OF = '2026-10-06'
 
 
