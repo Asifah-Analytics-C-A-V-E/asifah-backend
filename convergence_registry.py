@@ -1459,10 +1459,133 @@ def format_enrichment_text(entry, alert_level, signal_count):
 #
 # Entries without a 'cluster' key simply do not participate.
 
+# v1.2.0 (Oct 6 2026) -- CLUSTERS CARRY THE BUTTERFLY.
+#
+# Until now a cluster was a display string and nothing more, so cluster_status()
+# could say "2 of 4 nodes firing" and could NOT say what 2 of 4 leads to. That
+# second clause is the whole point of a cluster: four Levant wheat nodes do not
+# produce four butterflies, they produce one compounding regional one.
+#
+# A cluster may now be either a plain string (legacy, still valid -- every
+# consumer below normalises) or a dict with these keys:
+#
+#   label            display name. Required.
+#   shared_mechanism the physical path the shock travels. ONE sentence.
+#   why_together     what makes these nodes one story rather than N stories.
+#   compounding      what N nodes means that 1 node does not. The actual
+#                    analytic claim, and the one that must not overreach.
+#   transmission     per-node: how the SAME shock lands differently here.
+#                    Keyed by entry id. This is the richest field, because the
+#                    Levant nodes fail through genuinely different mechanisms.
+#   butterfly        downstream exposure, the exposure-surface shape one
+#                    altitude up. Roles and observables, never tickers.
+#   not_implied      explicit non-claims. The doctrine guard.
+#   as_of            date-stamped, so staleness is visible rather than assumed.
+#
+# EVERY field except `label` is optional and absent means absent -- cluster_status
+# omits what is not written rather than emitting an empty string, so a half-filled
+# cluster reads as half-filled instead of as a thin finding.
+
 CLUSTER_LABELS = {
-    'levant_wheat': 'Levant wheat / food security',
-    'palestinian_financial_access': 'Palestinian financial access',
+    'levant_wheat': {
+        'label': 'Levant wheat / food security',
+        'as_of': '2026-10-06',
+        'shared_mechanism': (
+            'Black Sea export corridor (Ukraine + Russia, ~80-90% of Levant wheat) '
+            'into Eastern Mediterranean import dependence. One upstream corridor, '
+            'four downstream states with no domestic buffer.'
+        ),
+        'why_together': (
+            'These four do not share a border problem, they share a SUPPLIER. A '
+            'Black Sea disruption reaches all four through the same corridor in the '
+            'same shipping cycle, which is why reading them one country at a time '
+            'understates the exposure.'
+        ),
+        'compounding': (
+            'Simultaneous stress removes the regional release valves: these states '
+            'historically cover shortfalls partly from each other and from the same '
+            'tender market. Four nodes under pressure at once means no intra-regional '
+            'substitution and competing bids into one supply.'
+        ),
+        # THE KEY INSIGHT: same shock, four different failure modes. Lifted from
+        # the per-entry detail fields, which already carried this and had nowhere
+        # to say it collectively.
+        'transmission': {
+            'wheat_lebanon': 'RESERVE DEPTH -- ~1 month of national reserves since the '
+                             '2020 Beirut port silos were destroyed and never rebuilt.',
+            'wheat_gaza':    'CROSSING THROUGHPUT -- aid-delivered supply, no sovereign '
+                             'imports; the binding constraint is trucks through Kerem '
+                             'Shalom, not price. West Bank is a second lane: ACCESS and '
+                             'PURCHASING POWER, not delivery.',
+            'wheat_egypt':   'SUBSIDY BUDGET -- the failure mode is fiscal before it is '
+                             'hunger. A wheat shock arrives as an FX and subsidy-cost '
+                             'problem and becomes a bread problem only downstream.',
+            'wheat_syria':   'PRODUCTION COLLAPSE -- a former Levantine breadbasket now '
+                             'import-exposed, with transition-era institutions doing the '
+                             'procurement.',
+        },
+        'butterfly': [
+            {'effect': 'Bread-price pass-through on different clocks',
+             'how':    'Egypt absorbs into the budget first and the street later; Lebanon '
+                       'has no buffer to absorb into, so retail moves with the corridor.',
+             'observables': ['Lebanese Pound bread-price index',
+                             'Egyptian subsidy outlay and FX reserve prints',
+                             'GASC tender results and award prices']},
+            {'effect': 'Humanitarian appeal competition',
+             'how':    'Four simultaneous appeals draw on one donor pool; the thinnest-funded '
+                       'appeal degrades fastest regardless of need ranking.',
+             'observables': ['OCHA Flash Appeal funding percentages',
+                             'WFP pipeline-break announcements', 'IPC classifications']},
+            {'effect': 'Freight and insurance repricing on the Black Sea leg',
+             'how':    'Corridor risk is priced once and charged to every importer on it, '
+                       'so a shock that never reaches a given port still raises its landed cost.',
+             'observables': ['Black Sea war-risk premium', 'grain corridor transit counts',
+                             'Russian wheat export tax and quota announcements'],
+             'exposed_roles': ['marine cargo underwriters', 'grain trading desks',
+                               'state procurement agencies', 'humanitarian logistics operators']},
+        ],
+        'not_implied': [
+            'This is NOT a forecast of famine, shortage, or price level in any of the four.',
+            'Simultaneous exposure is not evidence of a coordinated cause -- these nodes '
+            'share a supplier, not an actor.',
+            'The corridor being stressed does not mean any specific shipment failed.',
+            'Node count is a measure of BREADTH, not of severity: four nodes at low '
+            'pressure is not worse than one node in crisis.',
+        ],
+    },
+    'palestinian_financial_access': {
+        'label': 'Palestinian financial access',
+        'as_of': '2026-10-06',
+        'shared_mechanism': (
+            'Correspondent-banking and clearance-revenue dependence: the channels that '
+            'move money INTO and WITHIN the Palestinian economy are held by parties '
+            'outside it.'
+        ),
+        'why_together': (
+            'Each node is a separate chokepoint on the same payment system. Losing any '
+            'one re-routes pressure onto the others rather than isolating the loss.'
+        ),
+        # Left for Rachel: compounding / transmission / butterfly / not_implied.
+        # Deliberately absent rather than guessed -- cluster_status omits what is
+        # not written, so this renders as a thinner cluster, which it is.
+    },
 }
+
+
+def cluster_meta(cluster_id):
+    """Normalise a CLUSTER_LABELS entry to a dict, whichever shape it was written in.
+
+    A legacy string becomes {'label': <string>}. An unknown cluster becomes a
+    de-slugged label and nothing else. Never raises, never invents fields.
+    """
+    raw = CLUSTER_LABELS.get(cluster_id)
+    if isinstance(raw, dict):
+        meta = dict(raw)
+        meta.setdefault('label', cluster_id.replace('_', ' '))
+        return meta
+    if isinstance(raw, str) and raw:
+        return {'label': raw}
+    return {'label': cluster_id.replace('_', ' ')}
 
 
 def find_cluster(cluster_id):
@@ -1494,7 +1617,8 @@ def cluster_status(cluster_id, active_ids):
     total = len(members)
     n = len(lit)
 
-    label = CLUSTER_LABELS.get(cluster_id, cluster_id.replace('_', ' '))
+    meta = cluster_meta(cluster_id)
+    label = meta['label']
     countries = [e['country'].replace('_', ' ').title() for e in lit]
 
     if n == 0:
@@ -1509,7 +1633,11 @@ def cluster_status(cluster_id, active_ids):
         headline = (f'{label}: {n} of {total} nodes firing '
                     f'({", ".join(countries)}) -- broader than one country.')
 
-    return {
+    # v1.2.0 -- the ANALYTIC half. "2 of 4 firing" says breadth; these say what
+    # breadth means. Every field is omitted when the cluster does not define it,
+    # so a half-written cluster renders as half-written rather than as thin
+    # analysis dressed up in empty strings.
+    out = {
         'cluster':      cluster_id,
         'label':        label,
         'total':        total,
@@ -1520,4 +1648,40 @@ def cluster_status(cluster_id, active_ids):
         'max_priority': max([e['priority'] for e in lit], default=0),
         'headline':     headline,
         'is_regional':  n >= 2,
+        # Absence-honest: name the dark nodes, do not merely count them. A reader
+        # who cannot see WHICH node is unlit cannot tell a quiet node from an
+        # unbuilt one.
+        'inactive_countries': [e['country'].replace('_', ' ').title() for e in dark],
     }
+
+    for key in ('shared_mechanism', 'why_together', 'as_of'):
+        if meta.get(key):
+            out[key] = meta[key]
+
+    # `compounding` is the claim that N nodes means something 1 node does not.
+    # It is therefore only true when N >= 2, and publishing it on a single-node
+    # reading would be exactly the overclaim this cluster layer exists to prevent.
+    if n >= 2 and meta.get('compounding'):
+        out['compounding'] = meta['compounding']
+
+    # Per-node transmission for the nodes ACTUALLY LIT. Same shock, different
+    # failure mode per country -- which is the most useful thing a cluster can
+    # say and the thing a per-entry card structurally cannot.
+    trans = meta.get('transmission') or {}
+    if trans:
+        out['transmission'] = [
+            {'id': e['id'],
+             'country': e['country'].replace('_', ' ').title(),
+             'how': trans[e['id']]}
+            for e in lit if e['id'] in trans
+        ]
+        missing = [e['id'] for e in lit if e['id'] not in trans]
+        if missing:
+            out['transmission_unwritten'] = missing
+
+    if meta.get('butterfly'):
+        out['butterfly'] = meta['butterfly']
+    if meta.get('not_implied'):
+        out['not_implied'] = meta['not_implied']
+
+    return out

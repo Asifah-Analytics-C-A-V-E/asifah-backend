@@ -2672,6 +2672,12 @@ def _narrative_belt_and_road_resource_leverage(blufs):
 # ════════════════════════════════════════════════════════════════════
 # REGISTRY-DRIVEN CONVERGENCE DETECTOR (Layer 1)
 # ════════════════════════════════════════════════════════════════════
+# v3.10.0 -- how many live nodes a cluster needs before it is reported as a
+# regional pattern rather than as separate country readings. Two is the point at
+# which "broader than one country" becomes a true statement; one is an anecdote.
+CLUSTER_ROLLUP_MIN_NODES = 2
+
+
 def _detect_convergences_from_registry(blufs):
     """
     Generic Tier-1 cross-axis convergence detector.
@@ -2695,6 +2701,8 @@ def _detect_convergences_from_registry(blufs):
             CONVERGENCE_REGISTRY,
             format_headline,
             convergence_priority,
+            cluster_status,
+            all_clusters,
         )
     except ImportError:
         # Registry module not available — silent no-op
@@ -2752,7 +2760,15 @@ def _detect_convergences_from_registry(blufs):
         # Pull the convergence state stamped by Layer 2 (alert level + signal count)
         states = trigger_sig.get('convergence_states') or {}
         state = states.get(entry['id']) or {}
-        alert_level = state.get('alert_level', 'elevated')
+        # v3.10.0 (Oct 6 2026) -- THE DEFAULT THAT INVENTED A READING.
+        # This was `state.get('alert_level', 'elevated')`. On the cross-regional
+        # fallback path a signal carries the {id}_active flag but NOT the
+        # convergence_states dict, so `state` is {} and the card printed
+        # "global wheat ELEVATED" -- a specific, quotable pressure level that
+        # nobody measured, and the reason the GPI and the commodities page have
+        # been disagreeing about wheat. A hardcoded default is not a reading.
+        alert_level = state.get('alert_level') or 'unread'
+        alert_stamped = bool(state.get('alert_level'))
         # Freshness tiering (Jun 2026): topline only when Layer 2 marks the commodity
         # pressure RISING. A steady baseline drops to watch_priority AND sheds its
         # cross-regional tag (so it loses the +30 Tier-1 boost in top_signals too),
@@ -2777,7 +2793,102 @@ def _detect_convergences_from_registry(blufs):
             'detail':           entry['detail'],
             'detected_via':     found_in_region,   # diagnostic: which region's signal triggered detection
             'fresh':            is_fresh,           # diagnostic: topline vs watch tier
+            # v3.10.0 -- False means Layer 2 never stamped a pressure level for
+            # this entry and the word in the headline is a placeholder, not a
+            # measurement. The page renders the caveat; it is never silent.
+            'alert_stamped':    alert_stamped,
+            'cluster':          entry.get('cluster'),
         })
+
+    # ════════════════════════════════════════════════════════════════
+    # v3.10.0 (Oct 6 2026) -- CLUSTER ROLLUP
+    #
+    # Until now this function appended one card per registry entry and stopped.
+    # Four Levant wheat nodes firing produced four cards, each independently
+    # claiming a country, and the reader had to assemble "this is one regional
+    # story" unaided. Meanwhile cluster_status() -- which has produced exactly
+    # that sentence since September -- was called by nothing anywhere in the
+    # platform.
+    #
+    # The rollup does NOT delete the per-entry cards. Each keeps its country
+    # detail and gains `clustered_into`; the page nests them under the cluster
+    # card. Deleting them would trade one kind of information loss for another.
+    #
+    # Single-node clusters are left alone: cluster_status itself says a lone node
+    # is "not yet a regional pattern", and promoting one would be the overclaim
+    # this layer exists to prevent.
+    # ════════════════════════════════════════════════════════════════
+    try:
+        by_cluster = {}
+        for m in matches:
+            cid = m.get('cluster')
+            if cid:
+                by_cluster.setdefault(cid, []).append(m)
+
+        cluster_cards = []
+        for cid, members in by_cluster.items():
+            if len(members) < CLUSTER_ROLLUP_MIN_NODES:
+                continue
+            cs = cluster_status(cid, [m['category'] for m in members])
+            if not cs:
+                continue
+
+            for m in members:
+                m['clustered_into'] = cid
+
+            # The cluster inherits the loudest member's priority -- it is the
+            # same finding at a wider aperture, not a louder one. +0, not +1.
+            top = max(members, key=lambda m: m.get('priority', 0))
+            regions = []
+            for m in members:
+                for r in (m.get('regions') or []):
+                    if r not in regions:
+                        regions.append(r)
+
+            card = {
+                'priority':      top.get('priority', 0),
+                'category':      'cluster:%s' % cid,
+                'regions':       regions,
+                'icon':          top.get('icon', '\U0001f310'),
+                'color':         top.get('color', '#f59e0b'),
+                'headline':      cs['headline'],
+                'detail':        cs.get('shared_mechanism', '') or cs.get('why_together', ''),
+                'detected_via':  'cluster_rollup',
+                # A cluster is as fresh as its freshest member: one node rising
+                # makes the regional reading news even if the others are steady.
+                'fresh':         any(m.get('fresh') for m in members),
+                'is_cluster':    True,
+                'cluster':       cid,
+                'cluster_state': cs,
+                'member_ids':    [m['category'] for m in members],
+                # If ANY member's pressure level was unstamped, say so at the
+                # cluster level too -- otherwise the rollup would launder an
+                # unread node into a confident regional claim.
+                'alert_stamped': all(m.get('alert_stamped', True) for m in members),
+            }
+            cluster_cards.append(card)
+
+        if cluster_cards:
+            matches.extend(cluster_cards)
+            print('[GPI] cluster rollup: %d cluster card(s) -- %s'
+                  % (len(cluster_cards),
+                     '; '.join('%s %d/%d' % (c['cluster'],
+                                             c['cluster_state']['active_count'],
+                                             c['cluster_state']['total'])
+                               for c in cluster_cards)))
+        else:
+            # Absence-honest: say that no cluster reached the threshold, and name
+            # what WAS seen, so "no cluster card" is distinguishable from "the
+            # rollup did not run".
+            print('[GPI] cluster rollup: no cluster reached %d live nodes (clusters '
+                  'with live members: %s)'
+                  % (CLUSTER_ROLLUP_MIN_NODES,
+                     ', '.join('%s=%d' % (k, len(v)) for k, v in by_cluster.items())
+                     or 'none'))
+    except Exception as _cluster_err:
+        print('[GPI] cluster rollup error (non-critical, per-entry cards '
+              'unaffected): %s' % str(_cluster_err)[:200])
+
     return matches
 
 
