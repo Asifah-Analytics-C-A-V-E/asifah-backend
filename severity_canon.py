@@ -61,7 +61,7 @@ if it did -- so no arithmetic flips without someone having read the list first.
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 CANON_AS_OF = '2026-10-06'
 
 
@@ -282,6 +282,67 @@ LADDERS = {
     # "elevated" by a rhetoric tracker is a weaker claim than a commodity at
     # ELEVATED, which is a measured concentration. Same word, different
     # instrument, and naming the ladder is what finally lets both be correct.
+    # ══════════════════════════════════════════════════════════
+    # v1.1.0 (Oct 6 2026) -- GREECE VECTOR BAND
+    #
+    # THE CASE THAT PROVED THIS MODULE'S THESIS IN PRODUCTION.
+    #
+    # On 6 Oct 2026 the Europe BLUF reported "Greece -- active war footing (L5)".
+    # Greece was not at war. rhetoric_tracker_greece carries its OWN six-rung
+    # ladder, never routed through this file, and it collides with the platform
+    # ladder in three places at once:
+    #
+    #   Greece L3 'Crisis'         the WORD 'crisis' resolves to platform 5 here
+    #   Greece L4 'Confrontation'  the WORD 'confrontation' IS platform 3
+    #   Greece L5 'Rupture'        the WORD 'rupture' resolves to platform 4 here
+    #
+    # The integer 5 crossed a backend boundary and the meaning did not. Greece's
+    # L5 means "detente collapse, ambassadorial recall"; the platform's L5 means
+    # open hostilities. Nothing translated, so the GPI printed a war.
+    #
+    # THE CAP, AND WHY IT IS NOT TIMIDITY
+    # -----------------------------------
+    # Greece's rung 5 reads "Maximal -- kinetic, detente collapse, ambassadorial
+    # recall". Those are not one thing. A tracker whose top rung cannot
+    # distinguish a kinetic exchange from a recalled ambassador has not earned
+    # the right to assert platform 5 ACTIVE CONFLICT, because it has no sensor
+    # that separates them. So rungs 4 AND 5 both land on platform 4, and this
+    # ladder cannot emit a 5 until the rung is split.
+    #
+    # Deliberate information loss, declared out loud, native reading preserved
+    # alongside. The alternative -- passing the integer through -- is what
+    # printed "active war footing" for a diplomatic row.
+    # ══════════════════════════════════════════════════════════
+    'greece_vector_band': {
+        'label': 'Greece vector band',
+        'measures': ('The per-vector intensity rung rhetoric_tracker_greece assigns '
+                     'each of its six vectors. A LOCAL ladder with local words; its '
+                     'integers are NOT platform levels and must be translated.'),
+        'source': 'rhetoric_tracker_greece.ESCALATION_LEVELS',
+        'rungs': {
+            'baseline':      {'rank': 0, 'display': 'BASELINE',      'to_platform': 0,
+                              'means': 'routine diplomatic noise, no active friction'},
+            'rhetoric':      {'rank': 1, 'display': 'RHETORIC',      'to_platform': 1,
+                              'means': 'statements and framing, no concrete moves'},
+            'pressure':      {'rank': 2, 'display': 'PRESSURE',      'to_platform': 2,
+                              'means': 'concrete moves -- drills, NAVTEX, deportations'},
+            'crisis':        {'rank': 3, 'display': 'CRISIS',        'to_platform': 3,
+                              'means': ('significant escalation -- formal protest, incident. '
+                                        'The word "crisis" means platform 5 on the '
+                                        'rhetoric_band ladder: same word, different ladder, '
+                                        'different answer, which is the whole point.')},
+            'confrontation': {'rank': 4, 'display': 'CONFRONTATION', 'to_platform': 4,
+                              'means': ('militarized incident, recall, casus belli '
+                                        'activation. "Confrontation" is the platform word '
+                                        'for 3, not 4.')},
+            'rupture':       {'rank': 5, 'display': 'RUPTURE',       'to_platform': 4,
+                              'means': ('detente collapse / ambassadorial recall -- CAPPED '
+                                        'at platform 4. This rung conflates kinetic action '
+                                        'with diplomatic rupture, so it cannot assert '
+                                        'ACTIVE CONFLICT. See PENDING_RULINGS.')},
+        },
+    },
+
     'rhetoric_band': {
         'label': 'Rhetoric band',
         'measures': ('The posture word a tracker assigns a vector or actor. '
@@ -444,6 +505,23 @@ def families(ladder):
 # Rungs carried on a provisional reading rather than a ruling. Surfaced in the
 # payload so a provisional decision cannot quietly become a settled one.
 PENDING_RULINGS = {
+    'greece_vector_band': {
+        'rupture': ('RAISED 6 Oct 2026, DECIDES: Rachel. Greece rung 5 is defined as '
+                    '"Maximal -- kinetic, detente collapse, ambassadorial recall". A '
+                    'kinetic exchange and a recalled ambassador are different events '
+                    'with different consequences and one rung cannot report both. '
+                    'SHOULD IT BE SPLIT -- diplomatic rupture at platform 4, kinetic at '
+                    'platform 5 -- and what observable separates them? INTERIM: rungs 4 '
+                    'and 5 both map to platform 4, so this ladder cannot emit platform '
+                    '5. COST OF WAITING: a genuine Greece-Turkey kinetic incident '
+                    'under-reads as Coercion rather than Active Conflict. That is the '
+                    'safer of the two errors but it is still an error.'),
+        'crisis':  ('Greece rank 3 is "Crisis"; the same word is rank 5 on '
+                    'rhetoric_band. Mapped here to platform 3 on Greece\'s own '
+                    'definition ("formal protest, incident, talks strain"), NOT on the '
+                    'word. Flagged so the collision is visible rather than settled by '
+                    'whichever table a caller happened to reach first.'),
+    },
     'rhetoric_band': {
         'crisis':   'placed at rank 5 by Claude; not ruled on',
         'incident': 'placed at rank 4 by Claude (L4 armed incident); not ruled on',
