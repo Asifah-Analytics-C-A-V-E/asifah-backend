@@ -52,6 +52,54 @@ ME_BACKEND_SELF_URL = os.environ.get(
 )
 COMMODITY_FINGERPRINT_AVAILABLE = True  # always — we use HTTP proxy, not import
 
+# ── Telegram (v2.1.0+) ──────────────────────────────────────────────
+# Optional: absent module = no Telegram, tracker still scans RSS/GDELT.
+try:
+    from telegram_signals import (fetch_telegram_signals_yemen,
+                                  fetch_telegram_signals_iran,
+                                  get_channel_meta)
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[KSA Rhetoric] telegram_signals unavailable -- Telegram disabled")
+
+
+# ════════════════════════════════════════════════════════════
+# TELEGRAM SOURCE-TIER POLICY  (v2.1.0 Oct 11 2026)
+#
+# telegram_signals.py already classifies every channel it emits:
+#   official | wire | mainstream | aggregator | aligned | state | unverified
+# and its own header states the principle this block implements --
+#   "an aligned channel is a primary instrument for rhetoric measurement
+#    and a weak input for event confirmation, and consumers cannot tell
+#    those apart without the tier field."
+#
+# THIS TRACKER MEASURES RHETORIC. So an Ansar Allah channel is a STRONG
+# source here: when the Houthis say something about Riyadh, the saying IS
+# the signal. Aligned and state tiers therefore carry near-full weight for
+# ACTOR SCORING.
+#
+# But a TRIPWIRE is an event assertion -- 'homeland_attack' claims a thing
+# happened. A tripwire fired only by channels aligned with the party making
+# the claim is a CLAIM, and is labelled one rather than suppressed. See
+# _check_tripwires_tiered().
+#
+# 'unverified' weights ZERO. Rachel's own rule in telegram_signals.py:
+# "fetch normally but MUST NOT be weighted as corroboration until assessed."
+# They are fetched, counted and listed, and they do not move a score.
+TELEGRAM_TIER_WEIGHT = {
+    'official':   1.00,   # a government saying it IS the rhetoric
+    'wire':       0.95,
+    'mainstream': 0.90,
+    'aligned':    0.85,   # primary rhetoric instrument, weak confirmer
+    'state':      0.85,
+    'aggregator': 0.75,   # mixed sourcing, fast, accuracy varies
+    'unverified': 0.00,   # fetched and visible; never weighted
+}
+
+# Tiers that cannot CONFIRM an event on their own.
+CLAIM_ONLY_TIERS = ('aligned', 'state', 'unverified')
+
 print("[KSA Rhetoric] Module loading...")
 
 # Try to import signal interpreter for prose generation
@@ -349,8 +397,15 @@ TRIPWIRES = {
         'note': 'Abqaiq-class energy-infrastructure strike -- the 2019 precedent halved output in a day.',
     },
     'houthi_salvo': {
-        'patterns': ['houthi missile riyadh','houthi drone attack saudi','missiles fired saudi','drone swarm saudi',
-                     'houthi attack jeddah','houthi attack abha'],
+        # RETARGETED 11 Oct 2026 alongside the actor keywords. The v1.0.0 set
+        # named Jeddah and Abha -- the 2019-2022 targets -- and never Riyadh
+        # airport, which is the Oct 2026 one.
+        'patterns': ['houthi missile riyadh', 'houthi drone attack saudi',
+                     'missiles fired saudi', 'drone swarm saudi',
+                     'houthi attack jeddah', 'houthi attack abha',
+                     'riyadh airport attack', 'saudi airport attack',
+                     'king khalid airport attack', 'houthi salvo saudi',
+                     'houthi strike riyadh', 'missiles riyadh'],
         'severity': 'high',
         'note': 'Kinetic-inbound salvo on Saudi territory.',
     },
@@ -566,6 +621,176 @@ def fetch_rss_articles(feed_id, feed_config, max_articles=30):
     except Exception as e:
         print(f"[KSA Rhetoric] RSS fetch error ({feed_id}): {str(e)[:120]}")
     return articles
+
+
+def fetch_saudi_telegram(hours_back=48):
+    """Pull the Yemen and Iran channel sets and shape them like articles.
+
+    WHY THESE TWO SETS. The Houthi claim channels (al-Masirah, Ansar Allah
+    media, SABA) live in YEMEN_CHANNELS; the IRGC/state and proxy-direction
+    channels live in IRAN_CHANNELS. Those are the two voices that speak
+    before and after a strike on Saudi Arabia. The Saudi country gate then
+    throws away everything in them that is not about Saudi Arabia, which is
+    most of it -- that is the gate doing its job, not a thin fetch.
+
+    Never raises. Returns [] when Telegram is unavailable or floods.
+    """
+    if not TELEGRAM_AVAILABLE:
+        return []
+    out = []
+    for label, fn in (('yemen', fetch_telegram_signals_yemen),
+                      ('iran', fetch_telegram_signals_iran)):
+        try:
+            msgs = fn(hours_back=hours_back) or []
+        except Exception as e:
+            print(f"[KSA Rhetoric] Telegram {label} fetch error: {str(e)[:110]}")
+            continue
+        for m in msgs:
+            tier = m.get('source_tier') or 'unverified'
+            out.append({
+                'title':       (m.get('title') or '')[:400],
+                'description': (m.get('body') or m.get('title') or '')[:1200],
+                'url':         m.get('url', ''),
+                'published':   m.get('published', ''),
+                'source':      m.get('source', 'Telegram'),
+                'feed_id':     'telegram_' + label,
+                'feed_type':   'telegram',
+                'language':    (m.get('source_lang') or ['en'])[0],
+                # Weight by TIER, not by a flat guess. unverified -> 0.0.
+                'feed_weight': TELEGRAM_TIER_WEIGHT.get(tier, 0.0),
+                # Provenance survives into scoring, tripwires and the page.
+                'source_tier': tier,
+                'source_lang': m.get('source_lang') or [],
+                'channel':     m.get('channel', ''),
+                'views':       m.get('views', 0) or 0,
+            })
+    if out:
+        tiers = {}
+        for a in out:
+            tiers[a['source_tier']] = tiers.get(a['source_tier'], 0) + 1
+        print(f"[KSA Rhetoric] Telegram: {len(out)} messages -- tiers: {tiers}")
+    return out
+
+
+def _check_tripwires_tiered(articles_for_actor):
+    """Tripwires WITH a confirmation class.
+
+    A tripwire asserts that an EVENT happened. When every article that fired
+    it came from a channel aligned with the party making the claim, that is
+    a claim being made -- not a confirmed event. It is surfaced either way
+    and labelled, because suppressing it would hide a real pattern and
+    reporting it as fact would manufacture one.
+
+    Returns [{'id', 'severity', 'confirmation', 'claim_channels'}].
+    """
+    hits = {}
+    for art in articles_for_actor or []:
+        text = f"{art.get('title','')} {art.get('description','')}"
+        tier = art.get('source_tier')          # None for RSS/GDELT/wire
+        for tw_id, sev in _check_tripwires(text):
+            rec = hits.setdefault(tw_id, {'id': tw_id, 'severity': sev,
+                                          'confirmed_by': 0, 'claim_by': 0,
+                                          'claim_channels': []})
+            if tier is None or tier not in CLAIM_ONLY_TIERS:
+                # No tier = conventional feed (RSS/GDELT/NewsAPI/Brave), which
+                # is an independent source for this purpose.
+                rec['confirmed_by'] += 1
+            else:
+                rec['claim_by'] += 1
+                ch = art.get('channel')
+                if ch and ch not in rec['claim_channels']:
+                    rec['claim_channels'].append(ch)
+    out = []
+    for rec in hits.values():
+        rec['confirmation'] = ('confirmed' if rec['confirmed_by'] > 0
+                               else 'claim_sourced')
+        rec['claim_channels'] = rec['claim_channels'][:4]
+        out.append(rec)
+    return out
+
+
+CLAIM_BASELINE_KEY = 'rhetoric:saudi_arabia:claim_baseline'
+
+
+def build_claim_posture(all_articles, kinetic_level):
+    """Claim-channel volume as its own reading, against a rolling baseline.
+
+    WHY SEPARATE FROM THE ACTOR SCORE. Folding aligned-channel volume into
+    houthi_yemen's score makes two different facts one number. The Houthis
+    claiming loudly and the Houthis going quiet are BOTH signals, and the
+    second is only visible if claim volume is counted apart.
+
+    THE TELL. A channel that normally claims, falling silent while kinetic
+    tempo holds, reads as tempo change rather than calm -- the same logic as
+    the Africa trackers' claiming-actor silence anomaly. Reconstitution and
+    operational-security posture both look like this.
+
+    ABSENCE-HONEST. No baseline = 'unread', never 'quiet'. A FloodWait or an
+    absent module is a COVERAGE GAP and says so; it must never render as
+    claim-channel silence.
+    """
+    tg = [a for a in (all_articles or []) if a.get('feed_type') == 'telegram']
+    claim = [a for a in tg if a.get('source_tier') in CLAIM_ONLY_TIERS]
+    today = len(claim)
+
+    if not TELEGRAM_AVAILABLE:
+        return {'state': 'unread', 'reason': 'telegram_module_absent',
+                'claim_volume': 0, 'baseline': None, 'channels': [],
+                'telegram_total': 0,
+                'note': ('Telegram is not deployed on this backend, so claim-channel '
+                         'posture is UNREAD this cycle -- a coverage gap, not quiet.')}
+    if not tg:
+        return {'state': 'unread', 'reason': 'no_telegram_messages',
+                'claim_volume': 0, 'baseline': None, 'channels': [],
+                'telegram_total': 0,
+                'note': ('No Telegram messages returned this scan (FloodWait, session '
+                         'or connectivity). Claim posture is UNREAD -- a coverage gap, '
+                         'not silence from the channels.')}
+
+    hist = _redis_get(CLAIM_BASELINE_KEY) or []
+    if not isinstance(hist, list):
+        hist = []
+    baseline = round(sum(hist) / len(hist), 1) if hist else None
+    channels = sorted({a.get('channel') for a in claim if a.get('channel')})
+
+    state, note = 'nominal', ''
+    if baseline is None:
+        state = 'unread'
+        note = ('First cycles -- no claim-volume baseline yet. %d claim-channel '
+                'messages logged; the silence read needs history before it means '
+                'anything.' % today)
+    elif baseline >= 3 and today == 0:
+        state = 'silent'
+        note = ('Claim channels are SILENT this cycle against a baseline of %.1f. '
+                'For actors that normally claim, quiet reads as tempo change, not '
+                'absence of activity -- historically consistent with reconstitution '
+                'or operational-security posture ahead of renewed claiming.' % baseline)
+    elif baseline >= 3 and today < baseline * 0.4:
+        state = 'quieting'
+        note = ('Claim-channel volume at %d against a baseline of %.1f -- a marked '
+                'drop.' % (today, baseline))
+    elif baseline and today > baseline * 2.0:
+        state = 'surging'
+        note = ('Claim-channel volume at %d against a baseline of %.1f. A claim surge '
+                'is evidence that claims are being MADE, which is not evidence that '
+                'the ground moved.' % (today, baseline))
+    else:
+        note = ('Claim-channel volume at %d against a baseline of %.1f -- within '
+                'normal range.' % (today, baseline))
+
+    if state in ('silent', 'quieting') and kinetic_level in ('high', 'surge'):
+        note += (' Kinetic tempo is %s in the same window; claims dropping while '
+                 'kinetics hold is the specific pattern, not the volume alone.'
+                 % str(kinetic_level).upper())
+
+    try:
+        _redis_set(CLAIM_BASELINE_KEY, ([today] + hist)[:14], ttl_hours=24 * 30)
+    except Exception:
+        pass
+
+    return {'state': state, 'reason': '', 'claim_volume': today,
+            'baseline': baseline, 'channels': channels[:8],
+            'telegram_total': len(tg), 'note': note}
 
 
 def fetch_all_rss():
@@ -839,12 +1064,25 @@ def _classify_article_actor(article):
 
 
 def _check_tripwires(text):
-    """Check article text against TRIPWIRES patterns. Returns list of (tripwire_id, severity)."""
+    """Check article text against TRIPWIRES patterns, COUNTRY-GATED.
+
+    v2.0.0: patterns go through _kw_match, exactly like actor keywords. They
+    had the identical adjacent-substring defect -- 'houthi missile riyadh'
+    could not match "Houthi missiles struck Riyadh" -- so the tripwires were
+    as blind to this war as the keywords were, and for the same reason.
+    Fixing one without the other would have left the loudest events unseen.
+
+    The country gate applies here too: tokens-present matching without it
+    would fire Saudi tripwires on Yemen-only copy.
+    """
     text_lower = _normalize_text(text)
+    if not _passes_country_gate(text_lower):
+        return []
+    tokens = set(re.findall(r"[a-z0-9']+", text_lower))
     triggered = []
     for tw_id, tw_data in TRIPWIRES.items():
         for pattern in tw_data['patterns']:
-            if pattern.lower() in text_lower:
+            if _kw_match(pattern, text_lower, tokens):
                 triggered.append((tw_id, tw_data['severity']))
                 break  # only count each tripwire once per article
     return triggered
@@ -863,14 +1101,27 @@ def _score_actor_articles(articles_for_actor, actor_id):
             'sources': [],
             'top_articles': [],
             'tripwires': [],
+            'tier_breakdown': {},
+            'telegram_count': 0,
+            'claim_tier_count': 0,
         }
 
     score = 0
     lang_count = {}
     src_count = {}
     tripwires_seen = set()
+    tier_counts = {}
+    tg_count = 0
+    claim_count = 0
 
     for art in articles_for_actor:
+        _tier = art.get('source_tier')
+        if _tier:
+            tier_counts[_tier] = tier_counts.get(_tier, 0) + 1
+            if art.get('feed_type') == 'telegram':
+                tg_count += 1
+            if _tier in CLAIM_ONLY_TIERS:
+                claim_count += 1
         feed_w = art.get('feed_weight', 1.0)
         kw_hits = art.get('_actor_hits', 1)  # set by classifier
         kw_factor = min(1.0 + (kw_hits - 1) * 0.15, 2.0)  # diminishing returns
@@ -902,6 +1153,11 @@ def _score_actor_articles(articles_for_actor, actor_id):
             'language':    a.get('language', 'en'),
             'published':   a.get('published', ''),
             'feed_type':   a.get('feed_type', ''),
+            # v2.1.0: the page must be able to show that a source is an
+            # aligned claim channel rather than a wire. Same headline, very
+            # different evidentiary weight.
+            'source_tier': a.get('source_tier'),
+            'channel':     a.get('channel'),
         })
 
     sources = sorted(src_count.items(), key=lambda x: -x[1])[:6]
@@ -912,7 +1168,17 @@ def _score_actor_articles(articles_for_actor, actor_id):
         'language_breakdown': lang_count,
         'sources':            [{'source': s, 'count': c} for s, c in sources],
         'top_articles':       top_articles,
-        'tripwires':          [{'id': tw_id, 'severity': sev} for tw_id, sev in tripwires_seen],
+        # v2.1.0: tripwires now carry a CONFIRMATION CLASS. A tripwire fired
+        # only by channels aligned with the claiming party is a claim, and is
+        # labelled rather than suppressed -- the Sahel lesson applied to
+        # Telegram.
+        'tripwires':          _check_tripwires_tiered(articles_for_actor),
+        # Provenance mix for this actor, so a reader can see whether a score
+        # is carried by wires or by claim channels. Those are different
+        # readings and must not render identically.
+        'tier_breakdown':     tier_counts,
+        'telegram_count':     tg_count,
+        'claim_tier_count':   claim_count,
     }
 
 
@@ -1278,7 +1544,9 @@ def scan_saudi_rhetoric(force=False, days=7):
         newsapi_count=len(newsapi_articles),
     )
 
-    all_articles = rss_articles + gdelt_articles + newsapi_articles + brave_articles
+    telegram_articles = fetch_saudi_telegram(hours_back=max(24, days * 24))
+    all_articles = (rss_articles + gdelt_articles + newsapi_articles
+                    + brave_articles + telegram_articles)
     # Dedupe by URL
     seen_urls = set()
     deduped = []
@@ -1327,6 +1595,8 @@ def scan_saudi_rhetoric(force=False, days=7):
             'tripwires':           scored['tripwires'],
         }
         for tw in scored['tripwires']:
+            # tw now carries confirmation / claim_channels; both ride up so the
+            # interpreter and the page can label a claim-sourced tripwire.
             tripwires_global.append({'actor': actor_id, **tw})
 
     # ── Compute 4-vector composite scores ──
@@ -1351,6 +1621,15 @@ def scan_saudi_rhetoric(force=False, days=7):
     if _story:
         commodity_pressure['_pressure_story'] = _story
     crosstheater_amplifiers = _read_crosstheater_amplifiers()
+
+    # ── Claim-channel posture (v2.1.0) ──
+    # Counted APART from the actor scores on purpose: claiming loudly and
+    # going quiet are both signals, and the second is only visible if claim
+    # volume has its own number.
+    claim_posture = build_claim_posture(
+        all_articles, vector_levels.get('kinetic_inbound', 'low'))
+    print(f"[KSA Rhetoric] Claim posture: {claim_posture['state']} "
+          f"(vol={claim_posture['claim_volume']}, baseline={claim_posture['baseline']})")
 
     # ── Write Saudi Arabia fingerprints for downstream consumers ──
     _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global)
@@ -1473,11 +1752,14 @@ def scan_saudi_rhetoric(force=False, days=7):
         'tripwires_global':      tripwires_global,
         'commodity_pressure':    commodity_pressure,
         'crosstheater_amplifiers': crosstheater_amplifiers,
+        'claim_posture':         claim_posture,
+        'telegram_available':    TELEGRAM_AVAILABLE,
         'top_signals':           top_signals,
         'executive_summary':     executive_summary,
         'so_what':               so_what,
         'alignment_drift':       alignment_drift,
         'source_breakdown': {
+            'telegram': len(telegram_articles),
             'rss':     len(rss_articles),
             'gdelt':   len(gdelt_articles),
             'newsapi': len(newsapi_articles),
