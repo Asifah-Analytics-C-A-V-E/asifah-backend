@@ -1,7 +1,7 @@
 """
 me_regional_bluf.py
 Asifah Analytics -- ME Backend Module
-v2.4.0  (Oct 5 2026)
+v2.4.1  (Oct 11 2026; v2.4.0 Oct 5 2026)
 
 VERSION HISTORY AT A GLANCE
   v2.4.0 Oct 5 2026 -- country_ids canon applied to humanitarian country ids;
@@ -711,12 +711,35 @@ def _legacy_get_theatre_level(data, theatre):
         if score >= 10: return 1
         return 0
     else:
-        # Composite-family trackers (Gulf trio, Jul 2026): map composite_level -> 0-5 int
-        if 'theatre_escalation_level' not in data and 'composite_level' in data:
-            _comp_map = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4}
+        # ── v2.4.1 Oct 11 2026: THE L5 GATE WAS BEING OVERRIDDEN HERE ──────
+        # The Gulf-trio branch below re-derived a level from `composite_level`
+        # whenever `theatre_escalation_level` was absent -- and it checked
+        # that field ONLY, never `theatre_level`. But theatre_level is the
+        # field the L5 Reservation Contract writes: it is composite_level
+        # AFTER the gate has capped or promoted it.
+        #
+        # So a tracker that did the work was ignored:
+        #   Saudi   composite 'high'  + theatre_level 4  -> BLUF read 3
+        #   UAE     composite 'surge' + theatre_level 5  -> BLUF read 4
+        # The second is the serious one. The UAE gate promotes surge -> L5
+        # only when a real L5 axis trigger fired; that verdict was then
+        # thrown away one layer up and the region read L4. A gate that is
+        # overridden by its own consumer is not a gate.
+        #
+        # Order now: explicit escalation level, then the GATED theatre_level,
+        # then the composite word as a last resort for trackers that emit
+        # nothing else.
+        lvl = data.get('theatre_escalation_level')
+        if isinstance(lvl, (int, float)) and not isinstance(lvl, bool):
+            return int(lvl)
+        lvl = data.get('theatre_level')
+        if isinstance(lvl, (int, float)) and not isinstance(lvl, bool):
+            return int(lvl)
+        if 'composite_level' in data:
+            _comp_map = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3,
+                         'surge': 4, 'rupture': 5}
             return _comp_map.get(str(data.get('composite_level', 'low')).lower(), 0)
-        return data.get('theatre_escalation_level',
-               data.get('theatre_level', 0))
+        return 0
 
 
 # ══════════════════════════════════════════════════════════════════════
