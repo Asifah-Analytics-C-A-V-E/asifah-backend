@@ -257,11 +257,50 @@ ACTORS = {
         'role': 'Accords drift axis: holdout <-> signature',
         'description': 'Saudi-Israel normalization signals: official statements, preconditions (Palestinian state language), US-brokered package news. Each signal moves the drift read on the axis KSA has NOT yet crossed.',
         'vector': 'normalization_watch',
+        # 11 Oct 2026: the defence-transfer terms are here as well as in the
+        # israel_defense_transfer tripwire. The tripwire alone moved the axis
+        # score but left this ACTOR flat, so a transfer story read as pure
+        # kinetics and the normalization card stayed quiet through the one
+        # event judged capable of forcing the hand.
         'keywords': ['saudi israel normalization','saudi abraham accords','saudi israel relations',
                      'saudi normalization deal','israel saudi talks','saudi palestinian state condition',
-                     'saudi israel flights','التطبيع'],
+                     'saudi israel flights',
+                     'israel air defense saudi','israeli systems saudi','israel arms saudi',
+                     'israel saudi defense cooperation','israel saudi defence',
+                     'التطبيع'],
         'baseline_statements_per_week': 4,
     },
+    # ════════════════════════════════════════════════════════════
+    # THE HOLDOUT ANCHORS, MADE CONCRETE  (new 11 Oct 2026)
+    #
+    # Rachel's ruling, 11 Oct 2026: "continue to track what's happening in
+    # Gaza, West Bank, and even Lebanon as KSA's reasons to abstain from the
+    # Accords."
+    #
+    # v1.0.0 modelled the holdout side as 'Palestinian-file preconditions' --
+    # a PHRASE, with no actor measuring it. The drift axis therefore netted a
+    # measured inroad against an unmeasured anchor, which can only ever drift
+    # one way. This actor is the counterweight, and it is deliberately a
+    # SEPARATE actor rather than more keywords on accords_normalization:
+    # Riyadh talking about Gaza and Riyadh talking about signature are
+    # opposite-polarity signals and must never land in the same bucket.
+    #
+    # Reads from Saudi statements ABOUT these files -- the country gate means
+    # a Gaza story that never mentions Saudi Arabia does not score here.
+    'palestinian_file': {
+        'name': 'Palestinian File / Holdout Anchors', 'flag': '\U0001F1F5\U0001F1F8', 'icon': '\u2693', 'color': '#a855f7',
+        'role': 'Accords COUNTERWEIGHT -- Riyadh\'s stated reasons to abstain',
+        'description': 'Saudi statements on Gaza, the West Bank and Lebanon -- the files Riyadh names as preconditions for normalization. Hardening language re-anchors holdout; softening or silence is the signature-adjacent tell. Opposite polarity to accords_normalization by construction.',
+        'vector': 'normalization_watch',
+        'keywords': ['saudi gaza', 'saudi palestinian state', 'saudi west bank',
+                     'saudi annexation', 'saudi two-state', 'saudi lebanon',
+                     'riyadh gaza', 'saudi palestinian statehood',
+                     'saudi condemns israel', 'saudi ceasefire gaza',
+                     'kingdom palestinian', 'saudi arab peace initiative',
+                     '\u063a\u0632\u0629', '\u0641\u0644\u0633\u0637\u064a\u0646'],
+        'baseline_statements_per_week': 5,
+    },
+
     'us_saudi': {
         'name': 'US-Saudi Track', 'flag': '🇺🇸', 'icon': '🛡️', 'color': '#64748b',
         'role': 'Ally anchor -- security guarantees, arms, strategic pacts',
@@ -325,6 +364,31 @@ TRIPWIRES = {
                      'saudi recognizes israel','normalization announced saudi'],
         'severity': 'elevated',
         'note': 'THE normalization milestone -- the drift axis crossing. De-escalatory for the region, seismic for the map.',
+    },
+    # ADDED 11 Oct 2026, per Rachel's ruling: the one thing she judges could
+    # force the Accords -- "unless KSA needs some kind of defense/weapons from
+    # Israel to a degree that it forces their hand".
+    #
+    # This is not speculative: it is the UAE's documented path. The UAE took
+    # Israeli air-defence help under fire, and this platform already tracks it
+    # as israel_uae_axis ("Israeli training and air-defense transfers"). With
+    # Houthi missiles reaching Riyadh and the Mecca Pact activating, the same
+    # road exists for Riyadh -- and capability arriving under fire is a far
+    # stronger signature-track driver than any summit.
+    #
+    # DELIBERATELY NOT severity 'surge': a transfer is an inroad accelerant on
+    # the Accords axis, not a kinetic L5 event.
+    'israel_defense_transfer': {
+        'patterns': ['israel air defense saudi', 'israeli systems saudi',
+                     'israel arms saudi', 'saudi israeli interceptors',
+                     'israel defense deal saudi', 'israeli radar saudi',
+                     'israel saudi defense cooperation'],
+        'severity': 'high',
+        'note': ('Israeli defence capability moving toward Riyadh under kinetic '
+                 'pressure. The UAE precedent: capability arriving under fire '
+                 'normalizes faster than any summit. Strong INROAD driver on '
+                 'the Accords axis -- it is the scenario in which the holdout '
+                 'becomes materially expensive.'),
     },
     'succession_event': {
         'patterns': ['king salman dies','saudi king death','mbs becomes king','saudi succession crisis',
@@ -1022,19 +1086,59 @@ def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global):
                    'note': 'IMEC counter-hub -- level tracks via commodity/IMEC signals, not a rhetoric actor v1'},
         'israel': _slice('accords_normalization', 'normalization'),
         'us':     _slice('us_saudi', 'ally'),
+        # NEW 11 Oct 2026 -- the Mecca Pact guarantor, and Turkiye is a HUB.
+        'turkey': _slice('mecca_pact_turkiye', 'mecca_pact_guarantor'),
     }
     slices_active = sum(1 for w in hub_presence.values() if w.get('active'))
+
+    _lvl_to_int = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4}
+    _tk = actor_levels.get('mecca_pact_turkiye', 'low')
 
     slice_payload = {
         'ts':               now_iso,
         'theatre':          'saudi_arabia',
+        'country':          'saudi_arabia',
         'node_class':       'friction_detente',
         'hub_presence':     hub_presence,
         'slices_active':    slices_active,
         'detente_intact':   not any((tw.get('id') == 'detente_rupture') for tw in (tripwires_global or []) if isinstance(tw, dict)),
         'kinetic_inbound':  vector_scores.get('kinetic_inbound', 0),
         'normalization_watch': vector_scores.get('normalization_watch', 0),
+        'guarantor_response':  vector_scores.get('guarantor_response', 0),
         'houthi_level':     actor_levels.get('houthi_yemen', 'low'),
+        # ── turkey_spoke (11 Oct 2026) ──────────────────────────────────
+        # The block spoke_wheel_reader._extract_hub_detail() looks for when
+        # the TURKEY wheel reads Saudi Arabia. rhetoric_tracker_turkey.py has
+        # no Saudi actor and no mention of Mecca at all, so without this the
+        # pact is invisible on both ends. Writing it HERE means the Turkey
+        # wheel gains a Saudi spoke with no change to the Europe backend --
+        # which is the whole promise of the shared reader.
+        #
+        # NO 'trajectory' KEY. Saudi has no directional sensor for Turkiye;
+        # defaulting one to 'holding' would invent a reading from a module
+        # that never ran. Absent means no sensor, and the panel says so.
+        'turkey_spoke': {
+            'level': _lvl_to_int.get(_tk, 0),
+            'role': 'mecca_pact_guarantor',
+            'note': ('Mecca Joint Defence Agreement (Aug 2026; collective '
+                     'deterrence activated 5 Oct 2026). Turkiye is a guarantor '
+                     'of Saudi Arabia, so Ankara reads here as an inbound '
+                     'commitment rather than an outbound projection.'),
+        },
+        # Pakistan is the OTHER guarantor and is deliberately NOT written as a
+        # spoke block: it is not in spoke_wheel_reader._KNOWN_HUBS, so nothing
+        # would discover it, and inventing a Pakistan wheel to hold one actor
+        # would be a hub asserted rather than measured. It rides as an actor
+        # on the guarantor_response vector until a Pakistan tracker drives it.
+        'mecca_pact': {
+            'turkiye_level':  actor_levels.get('mecca_pact_turkiye', 'low'),
+            'pakistan_level': actor_levels.get('mecca_pact_pakistan', 'low'),
+            'guarantors_responding': [
+                g for g in ('mecca_pact_turkiye', 'mecca_pact_pakistan')
+                if actor_levels.get(g, 'low') in ('elevated', 'high', 'surge')],
+            'note': ('Flat guarantor tempo during a Saudi strike cycle is a '
+                     'READING -- the pact is paper -- not a missing sensor.'),
+        },
         'tripwires':        tripwires_global[:5] if isinstance(tripwires_global, list) else [],
     }
     _redis_set('crosstheater:saudi_arabia:fingerprint', slice_payload, ttl_hours=14)

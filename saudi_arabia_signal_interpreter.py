@@ -10,12 +10,14 @@ holdout anchors (Palestinian-file preconditions, Iran-detente hedge).
 Estimative voice. Convergence, not prediction. The reader completes the inference.
 """
 
-import re
-from datetime import datetime, timezone
-
 # ============================================
 # CONFIGURATION
 # ============================================
+# v1.1.0: `import re` and `from datetime import ...` removed -- neither name
+# was referenced anywhere in this module.
+
+MODULE_VERSION = '1.1.0'
+
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
 
@@ -295,7 +297,9 @@ def _convergence_signal(elevated_vectors, vector_levels, actor_summaries):
         "domestic-stability pressure intersects with resource-sector or alignment vectors, "
         "Saudi Arabia's risk profile compounds across normally-independent dimensions."
     )
-    long_text = ' '.join(long_parts) if False else '\n'.join(long_parts)
+    # v1.1.0: was `' '.join(...) if False else '\n'.join(...)` -- a ternary
+    # with a constant-false test, i.e. a dead branch pretending to be a choice.
+    long_text = '\n'.join(long_parts)
     return {
         'short_text': short,
         'long_text':  long_text,
@@ -319,7 +323,9 @@ def _actor_signal(actor_id, actor):
 
     # Build short_text
     if deescalation and level in ('elevated', 'high'):
-        short = f"{icon} {name} — {level} but with de-escalatory rhetoric (dialogue / consulta previa)"
+        # v1.1.0: "(dialogue / consulta previa)" -- consulta previa is the
+        # Peruvian prior-consultation statute. Peru is not in this tracker.
+        short = f"{icon} {name} — {level}, but de-escalatory vocabulary in the same window"
     elif level == 'surge':
         short = f"{icon} {name} — SURGE-level rhetoric ({article_count} signals)"
     elif level == 'high':
@@ -415,9 +421,10 @@ def _commodity_coupling_signal(commodity_id, risk, actor_summaries):
     long_text = (
         f"The commodity tracker is reporting {alert}-level pressure on Saudi Arabia's {commodity_id} "
         f"sector (Saudi Arabia is a {role}{rank_str}). {sig_count} cross-tracker signals flagged. "
-        f"This is a coupling event — what the rhetoric tracker observes in illicit_economy / "
-        f"wheat/corridor channels has a direct supply-side implication for global {commodity_id} "
-        f"markets. Watch for sector-rhetoric and price-impact alignment."
+        f"This is a coupling event: the energy_infrastructure vector -- Aramco facilities, "
+        f"the Petroline/Yanbu bypass, Ras Tanura throughput -- is where Saudi rhetoric meets "
+        f"{commodity_id} supply, and the Kingdom's supply-risk premium is partly a political "
+        f"risk premium. Watch for sector-rhetoric and price-impact alignment."
     )
     sources = []
     if top_signal.get('title'):
@@ -432,29 +439,49 @@ def _commodity_coupling_signal(commodity_id, risk, actor_summaries):
         'long_text':  long_text,
         'level':      alert,
         'type':       'commodity_coupling',
-        'actor':      'drug_economy',
+        # v1.1.0: was hardcoded 'drug_economy' -- not an actor in this file.
+        'actor':      None,
         'sources':    sources,
     }
 
 
 def _crosstheater_signal(amp_label, amp_data):
     """Signal for an active sibling-wheel fingerprint (absence-honest: only called when present)."""
+    # v1.1.0 -- REALIGNED TO WHAT THE TRACKER ACTUALLY READS.
+    # rhetoric_tracker_saudi_arabia._read_crosstheater_amplifiers() fetches
+    # exactly three keys: iran_fingerprint, israel_fingerprint,
+    # yemen_fingerprint. The old table had prose for pakistan and china --
+    # neither is fetched, so neither could ever render -- and NONE for israel
+    # or yemen, the two that matter most this month. The china entry described
+    # "extraction-track positioning in Kabul (Mes Aynak, Amu Darya)", which is
+    # Afghanistan, in a Saudi file.
+    #
+    # Pakistan WOULD now be analytically live via the Mecca Pact. It is not
+    # added here because the tracker does not fetch that key -- writing prose
+    # for a feed nobody reads is how the last table got this way. If a
+    # Pakistan fingerprint is wired in, add the entry then.
     prose = {
-        'pakistan_fingerprint': (
-            '\U0001f1f5\U0001f1f0 Pakistan wheel active -- kinetic-side amplification',
-            'The Pakistan tracker\'s crosstheater fingerprint is live and elevated. For Saudi Arabia '
-            'this amplifies the Af-Pak kinetic vector: Pakistani domestic pressure has historically '
-            'transmitted into harder Saudi Arabia policy (strikes, closures, deportation waves).'),
         'iran_fingerprint': (
             '\U0001f1ee\U0001f1f7 Iran wheel active -- friction-side amplification',
-            'The Iran tracker\'s crosstheater fingerprint is live. Elevated Iranian theater pressure '
-            'has historically hardened Tehran\'s Saudi Arabia file (water ultimatums, deportation '
-            'acceleration, border posture) -- friction-spoke amplification on the contested node.'),
-        'china_fingerprint': (
-            '\U0001f1e8\U0001f1f3 China wheel active -- extraction-track amplification',
-            'The China tracker\'s crosstheater fingerprint is live. Elevated Chinese theater activity '
-            'is consistent with accelerated extraction-track positioning in Kabul (Mes Aynak, Amu '
-            'Darya) -- the dependency channel of the normalization-drift read.'),
+            'The Iran tracker\'s crosstheater fingerprint is live. With the detente '
+            'shim no longer load-bearing, elevated Iranian theatre pressure now '
+            'transmits to Riyadh through the Houthi file rather than through the '
+            'bilateral channel -- watch kinetic_inbound and guarantor_response '
+            'together, not the Iran actor alone.'),
+        'israel_fingerprint': (
+            '\U0001f1ee\U0001f1f1 Israel wheel active -- Accords-axis amplification',
+            'The Israel tracker\'s crosstheater fingerprint is live. This cuts BOTH '
+            'ways on the Accords axis and the direction is the whole question: '
+            'Israeli operations in Gaza, the West Bank or Lebanon re-anchor Riyadh\'s '
+            'holdout, while Israeli defence capability moving toward Riyadh under '
+            'fire is the inroad path -- the UAE\'s road. Read which one is driving.'),
+        'yemen_fingerprint': (
+            '\U0001f1fe\U0001f1ea Yemen wheel active -- inbound-threat amplification',
+            'The Yemen tracker\'s crosstheater fingerprint is live. Yemen-theatre '
+            'pressure is the most direct amplifier on Saudi kinetic_inbound: the '
+            'Oct 2026 Riyadh airport strikes are the current precedent set, and '
+            'claim tempo plus named-target specificity moving together is the '
+            'pre-strike pattern.'),
     }
     short, long = prose.get(amp_label, (
         f'\U0001f6de Sibling-wheel fingerprint active: {amp_label}',
@@ -500,10 +527,19 @@ def build_executive_summary(actor_summaries, vector_scores, vector_levels, tripw
 def score_alignment_drift(actor_summaries, tripwires_global,
                           commodity_pressure, crosstheater_amplifiers,
                           country='saudi_arabia', profile=None):
-    """Portable great-power alignment-drift convergence read ("BRI writ large").
-    Nets challenger (China/BRI) inroad pressure against incumbent (US) counter-
-    pressure: US-anchored -> Contested -> Drifting -> Realigning. Registry-shaped
-    output (id: bri_inroad_<country>). CONVERGENCE, not prediction."""
+    """The SAUDI ACCORDS AXIS: is the signature track outpacing the holdout?
+
+    Nets normalization-inroad pressure against the anchors Riyadh actually
+    names. Bands, calm to hot:
+        Holdout -> Warming -> Converging -> Signature-Track
+    Emits id accords_axis_<country>. CONVERGENCE, not prediction.
+
+    v1.1.0: the docstring used to describe the BRI tracker this was cloned
+    from -- "challenger (China/BRI) ... US-anchored -> Contested -> Drifting
+    -> Realigning", id bri_inroad_<country>. None of those bands or that id
+    exist here, and that stale ladder is where the dead 'US-anchored' calm
+    guard came from. A wrong comment propagated into working code.
+    """
     prof = profile or DRIFT_PROFILES.get((country or '').lower())
     if not prof:
         return None
@@ -552,8 +588,10 @@ def score_alignment_drift(actor_summaries, tripwires_global,
     ip = prof['inroad_power']; cp_ = prof['incumbent_power']; cc = 'Saudi Arabia'
     if band == 'Holdout':
         so_what = ("Normalization signals read as routine diplomatic maintenance rather than a converging "
-                   "signature pattern; the holdout anchors -- Palestinian-file preconditions and the Iran-"
-                   "detente hedge -- are uncontested this cycle.")
+                   "signature pattern. Riyadh's stated anchors -- Gaza, the West Bank and Lebanon -- are "
+                   "holding, and holdout is this axis's EXPECTED state, not a surprise. The reading that "
+                   "would move it is not a summit but a capability transfer: Israeli air defence arriving "
+                   "under fire, as it did for the UAE.")
     elif band == 'Warming':
         so_what = ("Signature-track signals and holdout anchors are both active -- a contested file "
                    "consistent with " + prof['precedents'] + ". The axis is being negotiated, not crossed.")
@@ -575,6 +613,7 @@ def score_alignment_drift(actor_summaries, tripwires_global,
         'id':                'accords_axis_' + (country or '').lower(),
         'country':           (country or '').lower(),
         'flag':              prof.get('flag', ''),
+        'axis_label':        prof.get('axis_label', 'Accords axis'),
         'band':              band,
         'inroad_power':      ip,
         'incumbent_power':   cp_,
@@ -597,9 +636,25 @@ def score_alignment_drift(actor_summaries, tripwires_global,
 
 
 def build_alignment_drift_top_signal(drift):
-    """Canonical-schema top_signal for the alignment-drift read -> regional BLUF / GPI.
-    Returns None for US-anchored (calm baseline)."""
-    if not drift or drift.get('band') in (None, 'US-anchored'):
+    """Canonical-schema top_signal for the Accords axis -> ME BLUF / GPI.
+
+    Returns None on the CALM band, so a quiet cycle stays quiet.
+
+    ── v1.1.0 Oct 11 2026: THIS GUARD WAS DEAD ──────────────────────────
+    It tested for band 'US-anchored'. This module's bands are Holdout /
+    Warming / Converging / Signature-Track. 'US-anchored' is the band name
+    from the BRI-drift tracker this file was cloned from, and the old
+    score_alignment_drift docstring still described that ladder -- so the
+    guard was written from a stale COMMENT rather than from the code.
+    It could never match. A dead-calm scan (band 'Holdout') therefore
+    broadcast an alignment_drift signal to the regional BLUF and the GPI on
+    EVERY cycle. The BLUF could not tell a finding from a heartbeat.
+
+    The calm band here is HOLDOUT. Saudi Arabia has not crossed this axis
+    and, per Rachel's 11 Oct 2026 ruling, no crossing is judged imminent --
+    so holdout IS the baseline, and a baseline is not news.
+    """
+    if not drift or drift.get('band') in (None, AXIS_CALM_BAND):
         return None
     return {
         'priority':   drift['priority'],
@@ -608,8 +663,11 @@ def build_alignment_drift_top_signal(drift):
         'level':      drift['level'],
         'icon':       drift['icon'],
         'color':      drift['color'],
+        # v1.1.0: this spliced in `inroad_power`, a full explanatory clause,
+        # into a field with a 120-char budget.
         'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
-                       drift['inroad_power'] + ' alignment drift -- ' + drift['band']),
+                       drift.get('axis_label', 'Accords axis') +
+                       ' -- ' + drift['band']),
         'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
     }
 
@@ -700,7 +758,8 @@ def interpret_saudi_arabia_signals(scan_data):
     }
 
 
-print("[Saudi Arabia Signal Interpreter] Module loaded — v1.0.0")
+# Constants sit below the functions that read them (fine at runtime), but the
+# load banner printed from the MIDDLE of the file. Moved to the true end.
 DRIFT_BAND_META = {
     'Holdout':         {'level': 1, 'color': '#38bdf8', 'priority': 8},
     'Warming':         {'level': 3, 'color': '#f59e0b', 'priority': 12},
@@ -708,26 +767,78 @@ DRIFT_BAND_META = {
     'Signature-Track': {'level': 5, 'color': '#dc2626', 'priority': 14},
 }
 
+# The calm band, named ONCE. build_alignment_drift_top_signal returns None on
+# it, and that return is the only thing between a quiet cycle and a signal
+# broadcast to the GPI.
+AXIS_CALM_BAND = 'Holdout'
+
+# Structural guard. The old guard named a band absent from the table above and
+# nothing caught it for three months, because a guard that never fires looks
+# exactly like a guard that is never needed.
+assert AXIS_CALM_BAND in DRIFT_BAND_META, (
+    "AXIS_CALM_BAND must name a real band in DRIFT_BAND_META, or the calm "
+    "guard in build_alignment_drift_top_signal can never return None and the "
+    "Accords axis broadcasts on every scan, including dead-calm ones.")
+
+# ════════════════════════════════════════════════════════════
+# RACHEL'S RULING, 11 OCT 2026 -- what changed in this profile
+#
+#   "By accords are we referencing the Abraham Accords, to which KSA is still
+#    holding out -- we do want to keep it mentioned and tracked -- but I don't
+#    necc see any change imminently, unless KSA needs some kind of defense/
+#    weapons from Israel to a degree that it forces their hand - otherwise,
+#    continue to track what's happening in Gaza, West Bank, and even Lebanon
+#    as KSA's reasons to abstain from the Accords."
+#
+# Three consequences, all implemented below:
+#
+# 1. THE ANCHOR IS NOW MEASURED. v1.0.0 netted a measured inroad
+#    (accords_normalization) against an UNMEASURED anchor -- "Palestinian-file
+#    preconditions" was a phrase with no actor behind it, and counter_actor
+#    pointed at iran_saudi instead. An axis that measures one side and asserts
+#    the other can only ever drift one way. counter_actor is now
+#    palestinian_file: Riyadh on Gaza, the West Bank and Lebanon.
+#
+# 2. THE IRAN-DETENTE HEDGE IS RETIRED AS AN ANCHOR. It was a holdout anchor
+#    when Beijing-2023 was the live frame. There is now a war with Iran and
+#    Houthi missiles reaching Riyadh; detente is not holding Riyadh back from
+#    anything. detente_rupture stays as an INROAD tripwire (losing the hedge
+#    strengthens the US-Israel security logic) but no longer anchors holdout.
+#
+# 3. THE ONE PATH THAT FORCES IT. israel_defense_transfer joins the inroad
+#    tripwires. This is the UAE's documented road -- capability arriving under
+#    fire normalizes faster than any summit.
 DRIFT_PROFILES = {
     'saudi_arabia': {
         'flag':            '\U0001F1F8\U0001F1E6',
-        'inroad_power':    'the normalization track (US-brokered Israel package)',
-        'incumbent_power': 'the holdout anchors (Palestinian-file preconditions + the Iran-detente hedge)',
+        'axis_label':      'Accords axis',          # short form, for short_text
+        'inroad_power':    'the normalization track (US-brokered Israel package; Israeli defence capability under fire)',
+        'incumbent_power': 'the holdout anchors Riyadh actually names (Gaza, the West Bank, Lebanon)',
         'inroad_actor':    'accords_normalization',
-        'counter_actor':   'iran_saudi',
-        'inroad_tripwires':  ('accords_signature', 'detente_rupture'),
+        # v1.1.0: was 'iran_saudi'. The anchor is the Palestinian file, and it
+        # is now an actor rather than a phrase.
+        'counter_actor':   'palestinian_file',
+        'inroad_tripwires':  ('accords_signature', 'detente_rupture',
+                              'israel_defense_transfer'),
         'counter_tripwires': (),
-        'dependency_channel': 'the US security-guarantee package under negotiation (defense pact + civil-nuclear track)',
+        'dependency_channel': ('the US security-guarantee package under negotiation (defense pact + '
+                               'civil-nuclear track), and -- newly live since Oct 2026 -- the question '
+                               'of whether Riyadh needs Israeli air-defence capability badly enough to '
+                               'pay for it in signature'),
         'commodity_keys':     ('oil',),
         'crosstheater_amp':   'israel_fingerprint',
         'structural_dependency_baseline': False,   # the pact is NOT signed -- no drift floor
         'precedents': ("the UAE/Bahrain 2020 Accords sequence (holdout-to-signature in one diplomatic "
-                       "season once the package priced), and the 2023 pre-Oct-7 Saudi track that reached "
-                       "'closer than ever' before re-anchoring"),
+                       "season once the package priced); the 2023 pre-Oct-7 Saudi track that reached "
+                       "'closer than ever' before re-anchoring; and the UAE's own wartime path, where "
+                       "Israeli air-defence cooperation deepened under inbound fire rather than at a "
+                       "summit table"),
         'leading_indicators': [
+            'Gaza / West Bank / Lebanon language from Riyadh -- hardening re-anchors holdout, '
+            'softening or SILENCE is the signature-adjacent tell',
+            'Israeli defence capability toward Riyadh under fire (the UAE path; the one lever '
+            'judged capable of forcing the hand)',
             'US-brokered package milestones (defense pact text, civil-nuclear terms)',
-            'Palestinian-state precondition language -- hardening or softening',
-            'Iran-detente channel health (embassy/hajj/trade signals; rupture = accelerant)',
             'Israeli-overflight and business-access gestures (signature-adjacent tells)',
             'Accords-anniversary and summit signaling windows',
         ],
@@ -738,50 +849,4 @@ _DRIFT_LEVEL_RANK = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4
 
 
 
-def build_alignment_drift_top_signal(drift):
-    """Canonical-schema top_signal for the alignment-drift read -> regional BLUF / GPI.
-    Returns None for US-anchored (calm baseline)."""
-    if not drift or drift.get('band') in (None, 'US-anchored'):
-        return None
-    return {
-        'priority':   drift['priority'],
-        'category':   'alignment_drift',
-        'theatre':    drift['country'],
-        'level':      drift['level'],
-        'icon':       drift['icon'],
-        'color':      drift['color'],
-        'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
-                       drift['inroad_power'] + ' alignment drift -- ' + drift['band']),
-        'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
-    }
-
-
-
-def interpret_saudi_arabia_signals(scan_data):
-    """
-    Convenience wrapper — accepts a complete scan_data dict and returns the
-    three derived analytical fields. Mirrors the Japan tracker's contract.
-    """
-    actor_summaries        = scan_data.get('actor_summaries', {}) or {}
-    vector_scores          = scan_data.get('vector_scores', {}) or {}
-    vector_levels          = scan_data.get('vector_levels', {}) or {}
-    tripwires_global       = scan_data.get('tripwires_global', []) or []
-    commodity_pressure     = scan_data.get('commodity_pressure', {}) or {}
-    crosstheater_amplifiers = scan_data.get('crosstheater_amplifiers', {}) or {}
-
-    drift = score_alignment_drift(actor_summaries, tripwires_global,
-                                  commodity_pressure, crosstheater_amplifiers,
-                                  country='saudi_arabia')
-    return {
-        'top_signals':       build_top_signals(actor_summaries, tripwires_global,
-                                                commodity_pressure, crosstheater_amplifiers),
-        'executive_summary': build_executive_summary(actor_summaries, vector_scores,
-                                                     vector_levels, tripwires_global),
-        'so_what':           build_so_what_factor(actor_summaries, vector_scores, vector_levels,
-                                                   tripwires_global, commodity_pressure,
-                                                   alignment_drift=drift),
-        'alignment_drift':   drift,
-    }
-
-
-
+print("[Saudi Arabia Signal Interpreter] Module loaded -- v%s" % MODULE_VERSION)
