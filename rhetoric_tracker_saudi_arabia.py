@@ -149,13 +149,68 @@ ACTORS = {
     'houthi_yemen': {
         'name': 'Houthi / Yemen Front', 'flag': '🇾🇪', 'icon': '🚀', 'color': '#dc2626',
         'role': 'Kinetic-inbound driver -- drones, missiles, ceasefire state',
-        'description': 'Houthi claims and attacks toward Saudi territory + Yemen truce/ceasefire signals. The 2019-2022 strike record (Abqaiq, Jeddah, Abha) is the inbound-threat precedent.',
+        'description': 'Houthi claims and attacks toward Saudi territory + Yemen truce/ceasefire signals. The 2019-2022 record (Abqaiq, Jeddah, Abha) is the older precedent; the Oct 2026 Riyadh airport strikes are the current set.',
         'vector': 'kinetic_inbound',
-        'keywords': ['houthi saudi','houthi attack saudi','houthi drone saudi','houthi missile saudi',
-                     'yemen ceasefire','houthi claim','ansar allah saudi','abha airport attack',
-                     'houthi strikes riyadh','الحوثي','أنصار الله'],
+        # RETARGETED 11 Oct 2026. Every term below is traceable to a verbatim
+        # published headline from the Oct 8-11 2026 strike cycle:
+        #   "Saudi Arabia reopens Riyadh airport after Houthi attack kills three" (Al Jazeera)
+        #   "Attack on Saudi airport kills 3 as Iran-backed Houthis warn of long conflict" (CNN)
+        #   "12 killed in Saudi Arabia airport attack, underscoring peril in Houthi strikes" (WaPo)
+        #   "World condemns deadly Houthi attack on Saudi Arabia's Riyadh airport" (Al Jazeera)
+        # v1.0.0's set named ABHA -- the 2019-2022 target -- and never named
+        # RIYADH AIRPORT, which is the 2026 one. A tracker keyworded to the
+        # last war reads the current one as quiet.
+        'keywords': ['houthi saudi', 'houthi attack saudi', 'houthi drone saudi',
+                     'houthi missile saudi', 'houthi strike saudi',
+                     'houthi riyadh', 'riyadh airport attack', 'saudi airport attack',
+                     'king khalid airport', 'abha airport attack', 'jizan attack',
+                     'yemen ceasefire', 'yemen truce', 'houthi claim',
+                     'ansar allah saudi', 'iran-backed houthis', 'houthi salvo',
+                     'الحوثي', 'أنصار الله', 'مطار الرياض'],
         'baseline_statements_per_week': 6,
     },
+    # ════════════════════════════════════════════════════════════
+    # MECCA PACT GUARANTORS  (new 11 Oct 2026)
+    #
+    # The Mecca Joint Defence Agreement (Saudi Arabia / Turkiye / Pakistan,
+    # signed Aug 2026) changed the attribution problem. Before it, a Houthi
+    # strike on Riyadh was a Saudi-Iran bilateral. On 5 Oct 2026 the
+    # signatories agreed to activate collective deterrence and a Saudi
+    # deployment, and met in Riyadh over the escalating attacks.
+    #
+    # THE FALSIFIER IS THE POINT. These actors exist to measure whether the
+    # guarantors' RHETORIC MOVES when the pact is tested. If Turkish and
+    # Pakistani tempo stays flat through a mass-casualty strike on Riyadh,
+    # the pact is paper -- and that is a finding, not an absence. An actor
+    # that can only detect activation can only ever confirm the pact.
+    #
+    # Keywords from verbatim Oct 2026 headlines:
+    #   "Turkiye, Pakistan agree Saudi Arabia military deployment under Mecca pact" (Al Jazeera)
+    #   "Mecca defense pact signatories meeting in Riyadh over escalating Houthi attacks" (JPost)
+    #   "Mecca alliance agrees to activate collective deterrence measures" (Al Jazeera)
+    'mecca_pact_turkiye': {
+        'name': 'Mecca Pact / Turkiye', 'flag': '\U0001F1F9\U0001F1F7', 'icon': '\U0001F91D', 'color': '#f97316',
+        'role': 'Guarantor response -- does Ankara move when the pact is tested',
+        'description': 'Turkish signals under the Mecca Joint Defence Agreement: deployment language, collective-deterrence vocabulary, basing and overflight. Turkiye is a HUB on this platform, so an active reading here also lights the Turkey wheel\'s Saudi spoke.',
+        'vector': 'guarantor_response',
+        'keywords': ['mecca pact turkiye', 'mecca pact turkey', 'turkiye saudi deployment',
+                     'turkey saudi deployment', 'turkiye saudi defence', 'turkish troops saudi',
+                     'mecca joint defence', 'mecca defense pact', 'mecca alliance',
+                     'collective deterrence saudi', 'ankara riyadh defence'],
+        'baseline_statements_per_week': 2,
+    },
+    'mecca_pact_pakistan': {
+        'name': 'Mecca Pact / Pakistan', 'flag': '\U0001F1F5\U0001F1F0', 'icon': '\U0001F91D', 'color': '#22c55e',
+        'role': 'Guarantor response -- does Islamabad move when the pact is tested',
+        'description': 'Pakistani signals under the Mecca Joint Defence Agreement: troop deployment to Saudi Arabia, collective-deterrence activation, nuclear-umbrella vocabulary. Pakistan is NOT a hub on this platform -- it is a guarantor actor, and stays one until a Pakistan tracker drives it.',
+        'vector': 'guarantor_response',
+        'keywords': ['mecca pact pakistan', 'pakistan saudi deployment', 'pakistani troops saudi',
+                     'pakistan saudi defence', 'pakistan saudi defense', 'islamabad riyadh defence',
+                     'mecca joint defence', 'strategic mutual defence agreement',
+                     'pakistan collective deterrence'],
+        'baseline_statements_per_week': 2,
+    },
+
     'saudi_mod_airdefense': {
         'name': 'Saudi MOD / Air Defense', 'flag': '🇸🇦', 'icon': '🛡️', 'color': '#f97316',
         'role': 'Defense posture -- intercepts, coalition ops, procurement',
@@ -230,7 +285,18 @@ VECTOR_GROUPS = {
     'energy_infrastructure':   ['aramco_energy', 'opec_policy'],
     'normalization_watch':     ['accords_normalization', 'us_saudi', 'gcc_saudi'],
     'domestic_transformation': ['royal_court_mbs', 'vision2030_domestic'],
+    # NEW 11 Oct 2026. The question the Mecca Pact creates: does an attack on
+    # Saudi Arabia pull in third parties, and do the guarantors' words move
+    # before their forces do? Flat guarantor tempo through a mass-casualty
+    # strike is a REAL READING -- the pact is paper -- not a missing sensor.
+    'guarantor_response':      ['mecca_pact_turkiye', 'mecca_pact_pakistan'],
 }
+
+# ⚠ FIFTH VECTOR. saudi_arabia-stability.html renders a FOUR-gauge contract.
+# guarantor_response is emitted in vector_scores/vector_levels but will not
+# appear on that page until its gauge row is extended -- it is absent from
+# the page, not absent from the data, and the rhetoric page reads the dict
+# dynamically so it shows up there immediately.
 
 
 # ============================================
@@ -613,21 +679,95 @@ def _normalize_text(text):
     return (text or '').lower()
 
 
-def _classify_article_actor(article):
+# ════════════════════════════════════════════════════════════
+# COUNTRY GATE  (v2.0.0 Oct 11 2026)
+#
+# An article must name Saudi Arabia, a Saudi place, or a Saudi institution
+# BEFORE any actor keyword is allowed to run. This is the Burkina pattern and
+# it is load-bearing here for a specific reason: the matcher below was
+# loosened from adjacent-substring to tokens-present, which is the only way
+# it can see real headlines -- and loosening without a gate is how a tracker
+# starts scoring Yemen-only and Iran-only stories as Saudi signals.
+#
+# Gate first, actors second. Always.
+COUNTRY_GATE = (
+    'saudi', 'saudi arabia', 'saudia', 'riyadh', 'jeddah', 'mecca', 'makkah',
+    'medina', 'madinah', 'dhahran', 'dammam', 'abha', 'jizan', 'najran',
+    'khamis mushait', 'tabuk', 'yanbu', 'jubail', 'ras tanura', 'abqaiq',
+    'buqayq', 'khurais', 'neom', 'tadawul', 'aramco', 'kingdom of saudi',
+    'ksa', 'king khalid international', 'king abdulaziz international',
+    'al-ula', 'alula', 'qatif', 'eastern province',
+    '\u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629',      # al-Sa'udiyya
+    '\u0627\u0644\u0631\u064a\u0627\u0636',                     # al-Riyadh
+    '\u062c\u062f\u0629',                                          # Jeddah
+    '\u0623\u0631\u0627\u0645\u0643\u0648',                     # Aramco
+)
+
+
+def _passes_country_gate(text):
+    """True when the text names Saudi Arabia or a Saudi place/institution."""
+    t = _normalize_text(text)
+    return any(g in t for g in COUNTRY_GATE)
+
+
+def _kw_match(kw, text, tokens):
+    """Does this keyword match?
+
+    ── v2.0.0 Oct 11 2026: THE DEFECT THIS FIXES ─────────────────────────
+    v1.0.0 did `kw.lower() in text` for every keyword. That is an ADJACENT
+    SUBSTRING test, and multi-word keywords are written as word sequences:
+
+        'houthi attack saudi' in "Houthi attack ON Saudi Arabia's airport"
+            -> False.  One preposition and the match dies.
+
+    9 of houthi_yemen's 11 keywords needed two or three words to be exactly
+    adjacent. The only two that ever fired were the single-token Arabic ones,
+    which is precisely why that card's sources were 100% GoogleNews-AR while
+    the deadliest attack on Saudi soil of this war went unscored in English.
+    Meanwhile aramco_energy's five SINGLE-token keywords over-collected, so
+    the airport story surfaced on the oil card. Both halves, one root cause.
+
+    Now: a single-token keyword matches on a word boundary; a multi-word
+    keyword matches when ALL its tokens are present anywhere in the text.
+    Order-free, because headlines reorder and insert prepositions freely.
+    A keyword wrapped in "double quotes" keeps the old strict-phrase
+    behaviour, for the handful where adjacency is the whole point.
     """
-    Match an article against actor keyword lists. Returns (actor_id, hit_count) tuples
-    for all matching actors. Multi-actor matching is allowed (e.g., a "Boluarte visits
-    Las Bambas" headline can hit both presidency AND las_bambas).
+    k = kw.lower().strip()
+    if len(k) > 2 and k[0] == '"' and k[-1] == '"':
+        return k[1:-1] in text              # explicit strict phrase
+    parts = k.split()
+    if len(parts) == 1:
+        # Non-ASCII (Arabic) has no useful \b word boundary -- substring it.
+        if not k.isascii():
+            return k in text
+        return k in tokens
+    return all((p in tokens) if p.isascii() else (p in text) for p in parts)
+
+
+def _classify_article_actor(article):
+    """Match an article against actor keyword lists, COUNTRY-GATED.
+
+    Returns (actor_id, hit_count) tuples for all matching actors. Multi-actor
+    matching is allowed -- "Houthi strike on Riyadh airport, Aramco exports
+    unaffected" legitimately hits both houthi_yemen and aramco_energy.
     """
     title = _normalize_text(article.get('title', ''))
     desc  = _normalize_text(article.get('description', ''))
     text  = title + ' ' + desc
 
+    # GATE FIRST. An article that never names Saudi Arabia is not a Saudi
+    # signal, however many actor keywords it happens to contain.
+    if not _passes_country_gate(text):
+        return []
+
+    tokens = set(re.findall(r"[a-z0-9']+", text))
+
     matches = []
     for actor_id, actor_data in ACTORS.items():
         hit_count = 0
         for kw in actor_data['keywords']:
-            if kw.lower() in text:
+            if _kw_match(kw, text, tokens):
                 hit_count += 1
         if hit_count > 0:
             matches.append((actor_id, hit_count))
