@@ -1,5 +1,7 @@
 """
-uae_signal_interpreter.py -- Asifah Analytics ME Backend -- v1.0.0 Jul 2026
+uae_signal_interpreter.py -- Asifah Analytics ME Backend -- v1.1.0 Oct 11 2026
+  (v1.0.0 Jul 2026. v1.1.0 = dead calm guard fixed, duplicate definitions
+   removed, Peru/Afghanistan/Pakistan clone residue purged.)
 Analyst layer for rhetoric_tracker_uae (aligned-hub node).
 5-function contract as canon. DRIFT AXIS: the DUAL-TRACK BALANCE AXIS --
 lifeline-dominant <-> friction-dominant. Bands: Lifeline-Dominant -> Mixed ->
@@ -9,12 +11,16 @@ quantitative: divergence between kinetic and commercial tracks IS the tell.
 Estimative voice. Convergence, not prediction.
 """
 
-import re
-from datetime import datetime, timezone
-
 # ============================================
 # CONFIGURATION
 # ============================================
+# v1.1.0: `import re` and `from datetime import ...` removed -- neither name
+# was referenced anywhere in this module.
+
+# ONE version string, read by the load banner. Two hand-maintained copies is
+# how a module reports one version in a log line and another in a payload.
+MODULE_VERSION = '1.1.0'
+
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
 
@@ -218,7 +224,14 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
     for amp_label, amp_data in (crosstheater_amplifiers or {}).items():
         if not isinstance(amp_data, dict):
             continue
-        if not amp_data.get('active'):
+        # v1.1.0: the gate was `amp_data.get('active')` alone. The sibling
+        # fingerprints this reads are canonical crosstheater payloads, which
+        # carry a numeric `level` and may carry no 'active' key at all -- in
+        # which case every amplifier read as calm forever. Accept either, at
+        # the platform's standard lit threshold of 2.
+        _lvl = amp_data.get('level')
+        _lvl = _lvl if isinstance(_lvl, (int, float)) else -1
+        if not amp_data.get('active') and _lvl < 2:
             continue
         sig = _crosstheater_signal(amp_label, amp_data)
         if sig:
@@ -279,11 +292,15 @@ def _convergence_signal(elevated_vectors, vector_levels, actor_summaries):
         lvl = vector_levels[v]
         long_parts.append(f"• {VECTOR_NAMES.get(v, v).title()} at {lvl}")
     long_parts.append(
-        "Convergence is more analytically significant than any individual vector — when "
-        "domestic-stability pressure intersects with resource-sector or alignment vectors, "
-        "UAE's risk profile compounds across normally-independent dimensions."
+        "Convergence is more analytically significant than any single vector. For an "
+        "aligned hub the specific worry is the kinetic and commercial tracks moving "
+        "TOGETHER: friction rising while the Dubai lifeline holds has historically read "
+        "as contained, and the two breaking in the same window is the pattern that has "
+        "preceded broader rupture. CONVERGENCE indicator, NOT a probability of action."
     )
-    long_text = ' '.join(long_parts) if False else '\n'.join(long_parts)
+    # v1.1.0: was `' '.join(...) if False else '\n'.join(...)` -- a ternary with
+    # a constant-false test, i.e. a dead branch pretending to be a choice.
+    long_text = '\n'.join(long_parts)
     return {
         'short_text': short,
         'long_text':  long_text,
@@ -307,7 +324,9 @@ def _actor_signal(actor_id, actor):
 
     # Build short_text
     if deescalation and level in ('elevated', 'high'):
-        short = f"{icon} {name} — {level} but with de-escalatory rhetoric (dialogue / consulta previa)"
+        # v1.1.0: "(dialogue / consulta previa)" -- consulta previa is the
+        # Peruvian prior-consultation statute. Peru is not in this tracker.
+        short = f"{icon} {name} — {level}, but de-escalatory vocabulary in the same window"
     elif level == 'surge':
         short = f"{icon} {name} — SURGE-level rhetoric ({article_count} signals)"
     elif level == 'high':
@@ -390,12 +409,16 @@ def _commodity_coupling_signal(commodity_id, risk, actor_summaries):
     top_signal = risk.get('top_signal') or {}
 
     short = f"⛏️ Commodity coupling: {commodity_id} {role}{rank_str} — {alert} pressure from sector signals"
+    # v1.1.0: this used to say the coupling ran through "illicit_economy /
+    # wheat/corridor channels". The UAE tracker has no such vectors -- its
+    # four are kinetic_inbound, israel_axis, iran_dual and economic_hub.
     long_text = (
         f"The commodity tracker is reporting {alert}-level pressure on UAE's {commodity_id} "
         f"sector (UAE is a {role}{rank_str}). {sig_count} cross-tracker signals flagged. "
-        f"This is a coupling event — what the rhetoric tracker observes in illicit_economy / "
-        f"wheat/corridor channels has a direct supply-side implication for global {commodity_id} "
-        f"markets. Watch for sector-rhetoric and price-impact alignment."
+        f"This is a coupling event: the economic_hub vector -- Jebel Ali throughput, "
+        f"Fujairah war-risk, DMCC flows -- is where UAE rhetoric meets {commodity_id} "
+        f"supply, and the UAE's supply-risk premium is partly a political risk premium. "
+        f"Watch for sector-rhetoric and price-impact alignment."
     )
     sources = []
     if top_signal.get('title'):
@@ -410,29 +433,45 @@ def _commodity_coupling_signal(commodity_id, risk, actor_summaries):
         'long_text':  long_text,
         'level':      alert,
         'type':       'commodity_coupling',
-        'actor':      'drug_economy',
+        # v1.1.0: was hardcoded 'drug_economy' -- not a UAE actor, and not an
+        # actor in any tracker this file ships beside. Commodity coupling is
+        # a theatre-level read, not an actor's, so it carries no actor at all.
+        'actor':      None,
         'sources':    sources,
     }
 
 
 def _crosstheater_signal(amp_label, amp_data):
     """Signal for an active sibling-wheel fingerprint (absence-honest: only called when present)."""
+    # v1.1.0 -- REALIGNED TO WHAT THE TRACKER ACTUALLY READS.
+    # rhetoric_tracker_uae._read_crosstheater_amplifiers() reads exactly three
+    # keys: iran_fingerprint, israel_fingerprint, saudi_fingerprint. The old
+    # table had prose for pakistan_fingerprint and china_fingerprint -- neither
+    # is ever fetched, so neither could ever render -- and NO prose for israel
+    # or saudi, the two that are. The china entry described "extraction-track
+    # positioning in Kabul (Mes Aynak, Amu Darya)", which is Afghanistan.
     prose = {
-        'pakistan_fingerprint': (
-            '\U0001f1f5\U0001f1f0 Pakistan wheel active -- kinetic-side amplification',
-            'The Pakistan tracker\'s crosstheater fingerprint is live and elevated. For UAE '
-            'this amplifies the Af-Pak kinetic vector: Pakistani domestic pressure has historically '
-            'transmitted into harder UAE policy (strikes, closures, deportation waves).'),
         'iran_fingerprint': (
             '\U0001f1ee\U0001f1f7 Iran wheel active -- friction-side amplification',
-            'The Iran tracker\'s crosstheater fingerprint is live. Elevated Iranian theater pressure '
-            'has historically hardened Tehran\'s UAE file (water ultimatums, deportation '
-            'acceleration, border posture) -- friction-spoke amplification on the contested node.'),
-        'china_fingerprint': (
-            '\U0001f1e8\U0001f1f3 China wheel active -- extraction-track amplification',
-            'The China tracker\'s crosstheater fingerprint is live. Elevated Chinese theater activity '
-            'is consistent with accelerated extraction-track positioning in Kabul (Mes Aynak, Amu '
-            'Darya) -- the dependency channel of the normalization-drift read.'),
+            'The Iran tracker\'s crosstheater fingerprint is live. Elevated Iranian '
+            'theatre pressure has historically hardened both polarities of the UAE '
+            'dual-track at once: kinetic threat vocabulary rises while the Dubai '
+            're-export lifeline is simultaneously leaned on. Divergence between the '
+            'two is the tell this amplifier sharpens.'),
+        'israel_fingerprint': (
+            '\U0001f1ee\U0001f1f1 Israel wheel active -- alignment-side amplification',
+            'The Israel tracker\'s crosstheater fingerprint is live. The UAE is the '
+            'Gulf\'s most forward-leaning Accords signatory, so Israeli theatre '
+            'pressure transmits into the israel_axis vector directly -- defense '
+            'cooperation deepening under pressure is the pattern, and it hardens '
+            'Tehran\'s read of the hub\'s alignment.'),
+        'saudi_fingerprint': (
+            '\U0001f1f8\U0001f1e6 Saudi wheel active -- Gulf-rival amplification',
+            'The Saudi tracker\'s crosstheater fingerprint is live. Riyadh and Abu '
+            'Dhabi run as partners on security and as rivals on OPEC+ quota, ports, '
+            'and regional headquarters policy. Elevated Saudi activity is read here '
+            'as competitive context for the economic_hub vector, not as a shared '
+            'posture.'),
     }
     short, long = prose.get(amp_label, (
         f'\U0001f6de Sibling-wheel fingerprint active: {amp_label}',
@@ -475,10 +514,21 @@ def build_executive_summary(actor_summaries, vector_scores, vector_levels, tripw
 def score_alignment_drift(actor_summaries, tripwires_global,
                           commodity_pressure, crosstheater_amplifiers,
                           country='uae', profile=None):
-    """Portable great-power alignment-drift convergence read ("BRI writ large").
-    Nets challenger (China/BRI) inroad pressure against incumbent (US) counter-
-    pressure: US-anchored -> Contested -> Drifting -> Realigning. Registry-shaped
-    output (id: bri_inroad_<country>). CONVERGENCE, not prediction."""
+    """The UAE DUAL-TRACK BALANCE AXIS: is friction outpacing the lifeline?
+
+    Nets friction pressure (kinetic threats, intercepts, trade-rupture
+    signals) against the commercial lifeline (Dubai re-export trade, flights,
+    diaspora finance). Bands, calm to hot:
+        Lifeline-Dominant -> Mixed -> Friction-Rising -> Friction-Dominant
+    Emits id dualtrack_axis_<country>. CONVERGENCE, not prediction.
+
+    v1.1.0: this docstring used to describe the BRI tracker this file was
+    cloned from -- "challenger (China/BRI) ... US-anchored -> Contested ->
+    Drifting -> Realigning", and a promised id of bri_inroad_<country>. Not
+    one of those bands or ids exists in this module. That stale ladder is
+    where the dead 'US-anchored' calm guard came from, so this was not a
+    cosmetic error: a wrong comment propagated into working code.
+    """
     prof = profile or DRIFT_PROFILES.get((country or '').lower())
     if not prof:
         return None
@@ -550,6 +600,7 @@ def score_alignment_drift(actor_summaries, tripwires_global,
         'id':                'dualtrack_axis_' + (country or '').lower(),
         'country':           (country or '').lower(),
         'flag':              prof.get('flag', ''),
+        'axis_label':        prof.get('axis_label', 'dual-track balance'),
         'band':              band,
         'inroad_power':      ip,
         'incumbent_power':   cp_,
@@ -572,9 +623,24 @@ def score_alignment_drift(actor_summaries, tripwires_global,
 
 
 def build_alignment_drift_top_signal(drift):
-    """Canonical-schema top_signal for the alignment-drift read -> regional BLUF / GPI.
-    Returns None for US-anchored (calm baseline)."""
-    if not drift or drift.get('band') in (None, 'US-anchored'):
+    """Canonical-schema top_signal for the dual-track balance read -> ME BLUF / GPI.
+
+    Returns None on the CALM band, so a quiet cycle stays quiet.
+
+    ── v1.1.0 Oct 11 2026: THIS GUARD WAS DEAD ──────────────────────────
+    It tested for band 'US-anchored'. This module's bands are
+    Lifeline-Dominant / Mixed / Friction-Rising / Friction-Dominant --
+    'US-anchored' is not among them and never was; it is a band name from the
+    BRI-drift tracker this file was cloned from (see the old
+    score_alignment_drift docstring, which still described that ladder). So
+    the guard could never match, and a dead-calm scan -- every actor at 'low',
+    band 'Lifeline-Dominant' -- emitted a signal to the regional BLUF and the
+    GPI EVERY SINGLE CYCLE. The BLUF could not tell a finding from a heartbeat.
+
+    The calm band here is LIFELINE-DOMINANT: commercial lifeline healthy,
+    friction routine. That is the baseline, and a baseline is not news.
+    """
+    if not drift or drift.get('band') in (None, AXIS_CALM_BAND):
         return None
     return {
         'priority':   drift['priority'],
@@ -583,8 +649,13 @@ def build_alignment_drift_top_signal(drift):
         'level':      drift['level'],
         'icon':       drift['icon'],
         'color':      drift['color'],
+        # v1.1.0: short_text spliced in `inroad_power`, which is a full
+        # explanatory clause, producing "UAE: the friction track (kinetic
+        # threats, intercepts, trade-rupture pressure) alignment drift --
+        # Mixed". Short text has a 120-char budget and a job.
         'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
-                       drift['inroad_power'] + ' alignment drift -- ' + drift['band']),
+                       drift.get('axis_label', 'dual-track balance') +
+                       ' -- ' + drift['band']),
         'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
     }
 
@@ -652,7 +723,8 @@ def build_so_what_factor(actor_summaries, vector_scores, vector_levels, tripwire
 def interpret_uae_signals(scan_data):
     """
     Convenience wrapper — accepts a complete scan_data dict and returns the
-    three derived analytical fields. Mirrors the Japan tracker's contract.
+    four derived analytical fields (it returns four, not three: top_signals,
+    executive_summary, so_what, alignment_drift).
     """
     actor_summaries        = scan_data.get('actor_summaries', {}) or {}
     vector_scores          = scan_data.get('vector_scores', {}) or {}
@@ -676,7 +748,10 @@ def interpret_uae_signals(scan_data):
     }
 
 
-print("[UAE Signal Interpreter] Module loaded — v1.0.0")
+# ── Module constants sit BELOW the functions that read them. That is fine at
+# runtime (they resolve at call time) but it meant the "Module loaded" banner
+# printed from the MIDDLE of the file, before DRIFT_BAND_META existed. Moved
+# to the true end of file.
 DRIFT_BAND_META = {
     'Lifeline-Dominant': {'level': 1, 'color': '#22c55e', 'priority': 8},
     'Mixed':             {'level': 3, 'color': '#f59e0b', 'priority': 12},
@@ -684,9 +759,24 @@ DRIFT_BAND_META = {
     'Friction-Dominant': {'level': 5, 'color': '#dc2626', 'priority': 14},
 }
 
+# The calm band, named ONCE. build_alignment_drift_top_signal returns None on
+# it, and that return is the only thing between a quiet cycle and a signal
+# broadcast to the GPI.
+AXIS_CALM_BAND = 'Lifeline-Dominant'
+
+# Structural guard. The old guard referenced a band absent from the table
+# above, and nothing caught it for three months because a guard that never
+# fires looks exactly like a guard that is never needed. Name a calm band that
+# is not real and this module now refuses to load.
+assert AXIS_CALM_BAND in DRIFT_BAND_META, (
+    "AXIS_CALM_BAND must name a real band in DRIFT_BAND_META, or the calm "
+    "guard in build_alignment_drift_top_signal can never return None and the "
+    "dual-track axis broadcasts on every scan, including dead-calm ones.")
+
 DRIFT_PROFILES = {
     'uae': {
         'flag':            '\U0001F1E6\U0001F1EA',
+        'axis_label':      'dual-track balance',   # short form, for short_text
         'inroad_power':    'the friction track (kinetic threats, intercepts, trade-rupture pressure)',
         'incumbent_power': 'the commercial lifeline (Dubai re-export trade, flights, diaspora finance)',
         'inroad_actor':    'uae_mod_airdefense',
@@ -714,50 +804,4 @@ _DRIFT_LEVEL_RANK = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4
 
 
 
-def build_alignment_drift_top_signal(drift):
-    """Canonical-schema top_signal for the alignment-drift read -> regional BLUF / GPI.
-    Returns None for US-anchored (calm baseline)."""
-    if not drift or drift.get('band') in (None, 'US-anchored'):
-        return None
-    return {
-        'priority':   drift['priority'],
-        'category':   'alignment_drift',
-        'theatre':    drift['country'],
-        'level':      drift['level'],
-        'icon':       drift['icon'],
-        'color':      drift['color'],
-        'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
-                       drift['inroad_power'] + ' alignment drift -- ' + drift['band']),
-        'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
-    }
-
-
-
-def interpret_uae_signals(scan_data):
-    """
-    Convenience wrapper — accepts a complete scan_data dict and returns the
-    three derived analytical fields. Mirrors the Japan tracker's contract.
-    """
-    actor_summaries        = scan_data.get('actor_summaries', {}) or {}
-    vector_scores          = scan_data.get('vector_scores', {}) or {}
-    vector_levels          = scan_data.get('vector_levels', {}) or {}
-    tripwires_global       = scan_data.get('tripwires_global', []) or []
-    commodity_pressure     = scan_data.get('commodity_pressure', {}) or {}
-    crosstheater_amplifiers = scan_data.get('crosstheater_amplifiers', {}) or {}
-
-    drift = score_alignment_drift(actor_summaries, tripwires_global,
-                                  commodity_pressure, crosstheater_amplifiers,
-                                  country='uae')
-    return {
-        'top_signals':       build_top_signals(actor_summaries, tripwires_global,
-                                                commodity_pressure, crosstheater_amplifiers),
-        'executive_summary': build_executive_summary(actor_summaries, vector_scores,
-                                                     vector_levels, tripwires_global),
-        'so_what':           build_so_what_factor(actor_summaries, vector_scores, vector_levels,
-                                                   tripwires_global, commodity_pressure,
-                                                   alignment_drift=drift),
-        'alignment_drift':   drift,
-    }
-
-
-
+print("[UAE Signal Interpreter] Module loaded -- v%s" % MODULE_VERSION)
