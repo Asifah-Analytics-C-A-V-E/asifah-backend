@@ -1,7 +1,7 @@
 """
 spoke_wheel_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.4.0 -- Oct 5, 2026  (v1.0.6 Jul 25 2026)
+v1.5.0 -- Oct 11, 2026  (v1.4.0 Oct 5 2026; v1.0.6 Jul 25 2026)
 
 One reader for the whole spoke-and-wheel architecture. Give it a hub and it
 returns that hub's rim; give it a country list and it returns what those
@@ -88,7 +88,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.4.0'
+__version__ = '1.5.0'
 
 # ============================================================
 # CONFIG
@@ -232,6 +232,40 @@ HUB_REGISTRY = {
             'taiwan': 'security_assistance',
             # Peers -- wheel-to-wheel, excluded from rim force-render
             'russia': 'peer', 'china': 'peer', 'iran': 'peer', 'dprk': 'peer',
+        },
+    },
+    # The UAE is the platform's FIRST COMMERCIAL HUB, and it reads differently
+    # from every wheel above it. Russia projects with troops, Turkey with
+    # drones and basing, China with debt and corridors. The UAE projects with
+    # PURCHASE: it is the buyer of last resort for production whose other
+    # buyers have walked away -- Burkinabe gold after the coups, Sudanese gold
+    # through a war economy, Malian gold under junta sanctions exposure.
+    #
+    # NODE CLASSES NAME A RELATIONSHIP TYPE, NEVER A MEASURED QUANTITY.
+    # 'resource_client' says the UAE buys significant production here. It does
+    # NOT say the UAE is dominant -- dominance is the thing the wheel MEASURES
+    # (via each spoke's dominant_commercial_counterparty), and encoding today's
+    # share into a static registry would freeze a 2024 number into a permanent
+    # label and then report it back to us as a finding every cycle.
+    #
+    # Rim is deliberately short: only countries that HAVE a tracker. Listing
+    # Egypt or Zimbabwe because a gold route exists would render a rim of
+    # NOT REPORTING that is roadmap, not coverage gap.
+    'uae': {
+        'title': 'UAE WHEEL',
+        'icon': '\U0001F1E6\U0001F1EA',
+        'node_classes': {
+            # Africa rim -- the purchasing wheel
+            'sudan':        'war_economy_client',
+            'burkina_faso': 'resource_client',
+            'mali':         'resource_client',
+            'somalia':      'port_concession',
+            'libya':        'proxy_backing',
+            # Near abroad
+            'yemen':        'proxy_backing',
+            'saudi_arabia': 'rival_gulf',
+            # Peers -- wheel-to-wheel, excluded from rim force-render
+            'israel': 'peer', 'iran': 'peer', 'us': 'peer',
         },
     },
 }
@@ -447,7 +481,19 @@ _NESTED_HUB_CONTAINERS = ('inbound', 'outbound', 'hub_touches', 'external',
 # Every hub the platform knows. Matching is TOKEN-based (split on '_'), never
 # substring: 'us' is a substring of 'russia', so `russia_arctic_level` would
 # otherwise register as a US touch.
-_KNOWN_HUBS = ('russia', 'turkey', 'iran', 'china', 'israel', 'dprk', 'us')
+# v1.5.0 Oct 11 2026 -- 'uae' added. Sudan has written a `uae_spoke` block into
+# its canonical fingerprint since Jul 2026 and NOTHING has ever read it: the
+# extractor and the trajectory reader both handle hub='uae' correctly, but
+# discovery could never produce that hub, so neither was called. Third instance
+# of this exact failure (after Azerbaijan present:false and Somalia's dead
+# Turkey read) -- connected pipes returning nothing, with nothing saying so.
+#
+# SIDE EFFECT, deliberate: _contested_spokes() skips countries in this tuple as
+# hub-on-hub traffic. The UAE sits on the Israel wheel as 'normalisation_track',
+# so it stops being counted as a contested THIRD country there. Correct -- a hub
+# touching a hub is not a node being fought over -- but it is a visible change.
+_KNOWN_HUBS = ('russia', 'turkey', 'iran', 'china', 'israel', 'dprk', 'us',
+               'uae')
 
 
 def _hub_tokens(key):
@@ -467,6 +513,10 @@ _HUB_AFFINITY_HINTS = {
     'us':     ('us_pressure', 'us_posture', 'us_acquisition', 'americom',
                'africom', 'centcom', 'indopacom', 'southcom', 'monroe'),
     'dprk':   ('dprk_spoke', 'dprk_axis', 'kursk_corps'),
+    # UAE-signifying vocabulary that does NOT contain the token 'uae' -- the
+    # generic token rule already catches uae_spoke / uae_axis / uae_plug.
+    'uae':    ('uae_spoke', 'uae_axis', 'uae_plug', 'dmcc', 'gulf_gold',
+               'emirati', 'adnoc', 'dp_world', 'edge_rafael'),
 }
 
 
@@ -631,7 +681,14 @@ def _infer_hubs_from_payload(fp):
     for k in scan_keys:
         hubs |= _hub_tokens(k)
 
-    hubs.discard(str(fp.get('country', '')).lower())   # a hub is not its own spoke
+    # A hub is not its own spoke. Check BOTH self-naming fields: trackers
+    # disagree about which one they write ('country' on the Africa trackers,
+    # 'theatre' on the UAE fingerprint), and a tracker whose self-name was not
+    # checked would discover itself the moment its own hub joined _KNOWN_HUBS --
+    # the UAE's own fingerprint carries a dp_world_ports field.
+    for _self_name in (fp.get('country'), fp.get('theatre')):
+        if isinstance(_self_name, str) and _self_name:
+            hubs.discard(_self_name.lower())
     return hubs
 
 
@@ -729,7 +786,24 @@ def _resolve_spoke(hub, country, collective=None):
         detail = _extract_hub_detail(fp, hub)
         if detail is not None:
             return detail, 'canonical_hub_block'
-        return fp, 'canonical'
+        # ── v1.5.0 Oct 11 2026 -- THE BARE-FINGERPRINT LEAK ──────────────
+        # _extract_hub_detail exists to stop a country's THEATRE level being
+        # reported as its HUB-TOUCH level. It only ever worked when a hub
+        # block was present: when it returned None we handed back the whole
+        # fingerprint anyway and _coerce_level read the theatre level off it.
+        # Mali has no UAE sensor of any kind, yet resolved as a UAE spoke at
+        # its own theatre level -- 'wrong number, confidently displayed',
+        # which this module's own docstring calls worse than no number.
+        #
+        # Accept the bare fingerprint ONLY when the payload shows affinity for
+        # THIS hub. Otherwise report absent, with a reason that distinguishes
+        # the two build to-dos: 'absent' means no fingerprint at all (dead or
+        # unbuilt tracker); 'no_hub_block' means the tracker runs fine and
+        # carries no sensor for this hub (a missing vector, not a missing
+        # tracker). Those need different fixes and must not look alike.
+        if hub in _infer_hubs_from_payload(fp):
+            return fp, 'canonical'
+        return None, 'no_hub_block'
 
     if collective is None:
         collective = _redis_get_json(COLLECTIVE_KEY) or {}
@@ -859,8 +933,12 @@ def _spoke_state(fp, source, freshness_hours, lit_threshold):
     not currently know -- which is categorically different from 'quiet'.
     """
     if fp is None:
-        return {'state': 'not_reporting', 'reason': 'absent', 'level': 0,
-                'age_hours': None}
+        # `source` was accepted and ignored here until v1.5.0. It carries the
+        # only thing that tells a dead tracker apart from a live tracker with
+        # no sensor for this hub.
+        return {'state': 'not_reporting',
+                'reason': 'no_hub_block' if source == 'no_hub_block' else 'absent',
+                'level': 0, 'age_hours': None}
     age = _age_hours(fp.get('ts') or fp.get('timestamp') or fp.get('scanned_at'))
     level = _coerce_level(fp)
     if age is not None and age > freshness_hours:
@@ -999,7 +1077,14 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
                 'reason': st['reason'],
                 'age_hours': st['age_hours'],
                 'source': source,
-                'node_class': fp.get('node_class') or _node_class(hub, country),
+                # REGISTRY FIRST (v1.5.0). The registry entry is HUB-SPECIFIC
+                # -- Sudan is 'expeditionary_client' to Russia and
+                # 'war_economy_client' to the UAE. A fingerprint's own
+                # node_class is a generic self-label ('sudan_hub') that says
+                # nothing about the pairing, and it was overriding both.
+                'node_class': (_node_class(hub, country)
+                               if _node_class(hub, country) != 'unclassified'
+                               else (fp.get('node_class') or 'unclassified')),
                 'relationship': fp.get('relationship', ''),
                 # NOTE: 'direction' below is the RELATIONSHIP direction
                 # (inbound/outbound), not the movement read. They are easy to
@@ -1114,7 +1199,9 @@ def read_emanating(countries, exclude_hubs=(), freshness_hours=DEFAULT_FRESHNESS
                     'hub_icon': (HUB_REGISTRY.get(hub, {}) or {}).get('icon', '\u2699\uFE0F'),
                     'level': st['level'], 'state': st['state'],
                     'source': source,
-                    'node_class': fp.get('node_class') or _node_class(hub, country),
+                    'node_class': (_node_class(hub, country)
+                                   if _node_class(hub, country) != 'unclassified'
+                                   else (fp.get('node_class') or 'unclassified')),
                     'trajectory': _spoke_trajectory(fp, hub),   # v1.4.0
                     'top_signal': str(fp.get('top_signal', ''))[:180],
                 })
