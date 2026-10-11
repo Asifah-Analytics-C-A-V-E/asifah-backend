@@ -1091,6 +1091,36 @@ def _rim_note(r):
     return ' '.join(parts)
 
 
+def _default_spoke_axis_reader(country):
+    """Read a spoke's OWN commercial-axis call from its crosstheater fingerprint.
+
+    This is the half that keeps the rim a reader rather than a second scanner.
+    Burkina computes capture/refusal/unread with its own country-gated corpus
+    and publishes the verdict; we read the verdict. If this function ever
+    starts DERIVING a state instead of reading one, there are two writers for
+    one fact and they will drift.
+
+    Returns {'state': <axis state>, 'dominant': bool} or None when that spoke
+    carries no commercial axis -- which is NOT the same as reading 'unread' on
+    an axis that exists, and the rim counts them separately.
+    """
+    fp = _redis_get('crosstheater:%s:fingerprint' % country)
+    if not isinstance(fp, dict):
+        return None
+    sub_block = fp.get('uae_spoke') if isinstance(fp.get('uae_spoke'), dict) else {}
+    state = sub_block.get('axis_state') or fp.get('commercial_axis_state')
+    if state not in AXIS_STATES:
+        return None            # no axis here -- uninstrumented, not calm
+    dominant = sub_block.get('uae_dominant')
+    if dominant is None:
+        # Fall back to the spoke's own dominance flag. Burkina's
+        # dominant_actor_on_wheel went True on 11 Oct 2026 when this hub
+        # shipped; before that it meant the opposite, so a stale fingerprint
+        # written by an older tracker is read conservatively as not-dominant.
+        dominant = bool(sub_block) and bool(fp.get('dominant_actor_on_wheel'))
+    return {'state': state, 'dominant': bool(dominant)}
+
+
 def build_purchasing_rim(spoke_axis_reader=None, _wheel_fn=None):
     """Hub-side read of the UAE rim. Never raises.
 
@@ -1351,11 +1381,11 @@ def scan_uae_rhetoric(force=False, days=7):
     crosstheater_amplifiers = _read_crosstheater_amplifiers()
 
     # ── THE PURCHASING RIM (v2.0.0) ──
-    # spoke_axis_reader is left None until the country trackers publish a
-    # commercial axis into their spoke blocks. Until then the rim reports
-    # presence and breadth honestly and says the axis is uninstrumented,
-    # rather than defaulting every spoke to 'capture'.
-    purchasing_rim = build_purchasing_rim()
+    # The axis reader READS each spoke's own capture/refusal verdict; it never
+    # derives one. Spokes with no axis are counted as axis-uninstrumented, not
+    # defaulted to 'capture'.
+    purchasing_rim = build_purchasing_rim(
+        spoke_axis_reader=_default_spoke_axis_reader)
     print("[UAE Rhetoric] Purchasing rim: %d/%d reporting, %d dominant, converged=%s"
           % (purchasing_rim.get('reporting', 0),
              purchasing_rim.get('rim_instrumented', 0),
