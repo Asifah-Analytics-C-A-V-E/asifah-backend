@@ -24,7 +24,7 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 
-MODULE_VERSION = '2.0.0'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.0.1'   # ONE version string -- every payload/debug field reads this
 
 # Optional dependencies — degrade gracefully if missing
 try:
@@ -432,6 +432,25 @@ def is_cache_fresh(data):
 # ============================================
 # DATA FETCHERS — RSS / GDELT / NewsAPI / Brave
 # ============================================
+# Oct 18 2026: RSS RECENCY GATE. Google News search feeds (Urdu especially)
+# return items a year old; with no date filter, Sep 2025 coverage of the pact
+# SIGNING read as Pakistan "responding" in Oct 2026. Items whose date parses
+# and is older than this are dropped. Undated items are KEPT -- a missing date
+# is not evidence of an old one.
+RSS_MAX_AGE_DAYS = 8
+
+
+def _rss_entry_too_old(entry):
+    st = entry.get('published_parsed') or entry.get('updated_parsed')
+    if not st:
+        return False
+    try:
+        dt = datetime(*st[:6], tzinfo=timezone.utc)
+    except Exception:
+        return False
+    return (datetime.now(timezone.utc) - dt) > timedelta(days=RSS_MAX_AGE_DAYS)
+
+
 def fetch_rss_articles(feed_id, feed_config, max_articles=30):
     """Fetch + parse a single RSS feed."""
     if not FEEDPARSER_AVAILABLE:
@@ -440,6 +459,8 @@ def fetch_rss_articles(feed_id, feed_config, max_articles=30):
     try:
         feed = feedparser.parse(feed_config['url'])
         for entry in feed.entries[:max_articles]:
+            if _rss_entry_too_old(entry):
+                continue
             articles.append({
                 'title':       entry.get('title', ''),
                 'description': entry.get('summary', '') or entry.get('description', ''),
@@ -768,7 +789,7 @@ def _score_actor_articles(articles_for_actor, actor_id):
     score = 0
     lang_count = {}
     src_count = {}
-    tripwires_seen = set()
+    tripwires_seen = {}   # (id, severity) -> evidence (the articles that fired it)
 
     for art in articles_for_actor:
         feed_w = art.get('feed_weight', 1.0)
@@ -785,7 +806,10 @@ def _score_actor_articles(articles_for_actor, actor_id):
         # Tripwire check
         full_text = f"{art.get('title', '')} {art.get('description', '')}"
         for tw_id, severity in _check_tripwires(full_text):
-            tripwires_seen.add((tw_id, severity))
+            ev = tripwires_seen.setdefault((tw_id, severity), [])
+            if len(ev) < 3:
+                ev.append({'title': art.get('title', ''), 'url': art.get('url', ''),
+                           'source': art.get('source', '')})
 
     # Sort articles by article_score descending
     sorted_articles = sorted(
@@ -812,7 +836,10 @@ def _score_actor_articles(articles_for_actor, actor_id):
         'language_breakdown': lang_count,
         'sources':            [{'source': s, 'count': c} for s, c in sources],
         'top_articles':       top_articles,
-        'tripwires':          [{'id': tw_id, 'severity': sev} for tw_id, sev in tripwires_seen],
+        # v2.0.1: each tripwire carries the articles that fired it (evidence),
+        # so the page cites the event, not the actor's top headline.
+        'tripwires':          [{'id': tw_id, 'severity': sev, 'evidence': ev}
+                               for (tw_id, sev), ev in tripwires_seen.items()],
     }
 
 
@@ -1172,12 +1199,15 @@ def scan_qatar_rhetoric(force=False, days=7):
     # v2.0.0: tripwires used to be checked ONLY on articles some actor keyword
     # had already claimed -- so "explosions in Doha" with no mediation/gas
     # vocabulary was never looked at. Unclaimed articles still get the check.
-    orphan_tripwires = set()
+    orphan_tripwires = {}
     for art in all_articles:
         matches = _classify_article_actor(art)
         if not matches:
             for _tw in _check_tripwires(f"{art.get('title', '')} {art.get('description', '')}"):
-                orphan_tripwires.add(_tw)
+                _ev = orphan_tripwires.setdefault(_tw, [])
+                if len(_ev) < 3:
+                    _ev.append({'title': art.get('title', ''), 'url': art.get('url', ''),
+                                'source': art.get('source', '')})
         for actor_id, hit_count in matches:
             art_copy = dict(art)
             art_copy['_actor_hits'] = hit_count
@@ -1214,9 +1244,9 @@ def scan_qatar_rhetoric(force=False, days=7):
             tripwires_global.append({'actor': actor_id, **tw})
 
     _claimed = {tw.get('id') for tw in tripwires_global}
-    for _tw_id, _sev in sorted(orphan_tripwires):
+    for (_tw_id, _sev), _ev in sorted(orphan_tripwires.items()):
         if _tw_id not in _claimed:
-            tripwires_global.append({'actor': None, 'id': _tw_id, 'severity': _sev})
+            tripwires_global.append({'actor': None, 'id': _tw_id, 'severity': _sev, 'evidence': _ev})
 
     # ── Compute 4-vector composite scores ──
     vector_scores = {}

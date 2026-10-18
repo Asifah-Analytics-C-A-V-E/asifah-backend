@@ -14,7 +14,7 @@ Estimative voice. Convergence, not prediction. Tempo, not threat.
 import re
 from datetime import datetime, timezone
 
-MODULE_VERSION = '1.1.0'
+MODULE_VERSION = '1.1.1'
 
 # ============================================
 # CONFIGURATION
@@ -172,8 +172,19 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
         seen_tripwires.add(tw_id)
         actor_id = tw.get('actor')
         actor_data = actor_summaries.get(actor_id, {}) if actor_id else {}
-        top_art = _top_article_for_actor(actor_data) if actor_data else None
-        sources = []
+        # Oct 18 2026: cite the articles that FIRED the tripwire (tracker
+        # 'evidence'); fall back to the actor's top article only when a tracker
+        # predates evidence. Live: 'Infrastructure Strike' cited an article
+        # about conjoined-twin surgery because it was the actor's top story.
+        _ev = []
+        for _t in (tripwires_global or []):
+            if _t.get('id') == tw_id:
+                for _e in (_t.get('evidence') or []):
+                    if _e.get('url') not in {x.get('url') for x in _ev}:
+                        _ev.append(_e)
+        top_art = None if _ev else (_top_article_for_actor(actor_data) if actor_data else None)
+        sources = [{'title': e.get('title', ''), 'url': e.get('url', ''), 'source': e.get('source', '')}
+                   for e in _ev[:3]]
         if top_art:
             sources.append({
                 'title':  top_art.get('title', ''),
@@ -657,7 +668,7 @@ def build_alignment_drift_top_signal(drift):
         'level':      drift['level'],
         'icon':       drift['icon'],
         'color':      drift['color'],
-        'short_text': (drift['flag'] + ' ' + drift['country'].upper() +
+        'short_text': (drift['flag'] + ' ' + drift['country'].replace('_', ' ').upper() +
                        ' off-ramp axis: ' + drift['band']),
         'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
     }

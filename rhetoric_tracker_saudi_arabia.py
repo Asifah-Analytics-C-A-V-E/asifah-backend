@@ -29,7 +29,7 @@ import os
 import re
 import json
 
-MODULE_VERSION = '2.1.1'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.1.3'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
@@ -438,7 +438,14 @@ VECTOR_GROUPS = {
 TRIPWIRES = {
     'infrastructure_strike': {
         'patterns': ['abqaiq attack','aramco facility attack','saudi pipeline attack','east-west pipeline strike',
-                     'saudi refinery struck','jubail attack','ras tanura attack','yanbu attack'],
+                     'saudi refinery struck','jubail attack','ras tanura attack','yanbu attack',
+                     # v2.1.3: verbatim live headlines that fired nothing --
+                     #   "Iran-backed Houthis strike Saudi oil company Aramco's headquarters" (AP)
+                     #   "Houthis strike Aramco hours after Saudi-led coalition hits Sanaa oil site" (Al Jazeera)
+                     # Verb-anchored to the Houthis so explainers ("How Saudi Aramco
+                     # restores operations after attacks") stay out.
+                     'houthi strike aramco', 'houthi attack aramco', 'houthi drone aramco',
+                     'houthi missile aramco'],
         'severity': 'surge',
         'note': 'Abqaiq-class energy-infrastructure strike -- the 2019 precedent halved output in a day.',
     },
@@ -673,6 +680,25 @@ def is_cache_fresh(data):
 # ============================================
 # DATA FETCHERS — RSS / GDELT / NewsAPI / Brave
 # ============================================
+# Oct 18 2026: RSS RECENCY GATE. Google News search feeds (Urdu especially)
+# return items a year old; with no date filter, Sep 2025 coverage of the pact
+# SIGNING read as Pakistan "responding" in Oct 2026. Items whose date parses
+# and is older than this are dropped. Undated items are KEPT -- a missing date
+# is not evidence of an old one.
+RSS_MAX_AGE_DAYS = 8
+
+
+def _rss_entry_too_old(entry):
+    st = entry.get('published_parsed') or entry.get('updated_parsed')
+    if not st:
+        return False
+    try:
+        dt = datetime(*st[:6], tzinfo=timezone.utc)
+    except Exception:
+        return False
+    return (datetime.now(timezone.utc) - dt) > timedelta(days=RSS_MAX_AGE_DAYS)
+
+
 def fetch_rss_articles(feed_id, feed_config, max_articles=30):
     """Fetch + parse a single RSS feed."""
     if not FEEDPARSER_AVAILABLE:
@@ -681,6 +707,8 @@ def fetch_rss_articles(feed_id, feed_config, max_articles=30):
     try:
         feed = feedparser.parse(feed_config['url'])
         for entry in feed.entries[:max_articles]:
+            if _rss_entry_too_old(entry):
+                continue
             articles.append({
                 'title':       entry.get('title', ''),
                 'description': entry.get('summary', '') or entry.get('description', ''),
@@ -764,7 +792,15 @@ def _check_tripwires_tiered(articles_for_actor):
         for tw_id, sev in _check_tripwires(text):
             rec = hits.setdefault(tw_id, {'id': tw_id, 'severity': sev,
                                           'confirmed_by': 0, 'claim_by': 0,
-                                          'claim_channels': []})
+                                          'claim_channels': [], 'evidence': []})
+            # v2.1.3: keep the articles that ACTUALLY fired the tripwire. The
+            # page used to cite the actor's top article instead -- live 18 Oct
+            # 'Infrastructure Strike' cited "Fijian conjoined twins successfully
+            # separated". Evidence must be the evidence.
+            if len(rec['evidence']) < 3:
+                rec['evidence'].append({'title': art.get('title', ''), 'url': art.get('url', ''),
+                                        'source': art.get('source', ''),
+                                        'source_tier': tier})
             if tier is None or tier not in CLAIM_ONLY_TIERS:
                 # No tier = conventional feed (RSS/GDELT/NewsAPI/Brave), which
                 # is an independent source for this purpose.
@@ -820,13 +856,13 @@ def build_claim_posture(all_articles, kinetic_level):
     if not TELEGRAM_AVAILABLE:
         return {'state': 'unread', 'reason': 'telegram_module_absent',
                 'claim_volume': 0, 'baseline': None, 'channels': [],
-                'telegram_total': 0,
+                'telegram_total': 0, 'scope': 'saudi_gated',
                 'note': ('Telegram is not deployed on this backend, so claim-channel '
                          'posture is UNREAD this cycle -- a coverage gap, not quiet.')}
     if not tg:
         return {'state': 'unread', 'reason': 'no_telegram_messages',
                 'claim_volume': 0, 'baseline': None, 'channels': [],
-                'telegram_total': 0,
+                'telegram_total': 0, 'scope': 'saudi_gated',
                 'note': ('No Telegram messages returned this scan (FloodWait, session '
                          'or connectivity). Claim posture is UNREAD -- a coverage gap, '
                          'not silence from the channels.')}
@@ -1529,6 +1565,41 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
     return sigs[:8], ' '.join(parts), so_what[:6]
 
 
+def _mecca_pact_reading(actor_levels):
+    """The Mecca Pact reading -- ONE writer for the fingerprint AND the page.
+
+    v2.1.2 Oct 18 2026: the note used to be a constant ("the pact is paper"),
+    so it asserted paper even when guarantors WERE responding. Now a state:
+      responding      -- a guarantor at elevated+
+      flat_under_fire -- Saudi kinetic tempo high/surge, no guarantor moving.
+                         THE FINDING the falsifier names.
+      no_test         -- no kinetic cycle to respond to; flat means nothing yet.
+    """
+    _O = ['low', 'normal', 'elevated', 'high', 'surge']
+    tk = actor_levels.get('mecca_pact_turkiye', 'low')
+    pk = actor_levels.get('mecca_pact_pakistan', 'low')
+    kin = max(actor_levels.get('houthi_yemen', 'low'),
+              actor_levels.get('saudi_mod_airdefense', 'low'), key=_O.index)
+    responding = [g for g, lv in (('turkiye', tk), ('pakistan', pk))
+                  if lv in ('elevated', 'high', 'surge')]
+    if responding:
+        reading = 'responding'
+        note = ('Guarantor tempo is moving (' + ', '.join(responding) + ') against a Saudi '
+                'kinetic cycle at ' + kin + '. Words first: watch whether deployment, '
+                'intercept or basing vocabulary follows.')
+    elif kin in ('high', 'surge'):
+        reading = 'flat_under_fire'
+        note = ('Saudi kinetic tempo is at ' + kin + ' and neither guarantor is moving. '
+                'This is a READING, not a missing sensor: flat guarantor tempo through '
+                'a strike cycle is the pact-is-paper pattern.')
+    else:
+        reading = 'no_test'
+        note = ('No Saudi strike cycle this scan, so guarantor quiet tests nothing yet.')
+    return {'turkiye_level': tk, 'pakistan_level': pk, 'kinetic_level': kin,
+            'guarantors_responding': ['mecca_pact_' + g for g in responding],
+            'reading': reading, 'note': note}
+
+
 def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global):
     """
     Saudi crosstheater slice -- FRICTION-TIER node with DETENTE SHIM (Iran wheel).
@@ -1596,15 +1667,7 @@ def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global):
         # would discover it, and inventing a Pakistan wheel to hold one actor
         # would be a hub asserted rather than measured. It rides as an actor
         # on the guarantor_response vector until a Pakistan tracker drives it.
-        'mecca_pact': {
-            'turkiye_level':  actor_levels.get('mecca_pact_turkiye', 'low'),
-            'pakistan_level': actor_levels.get('mecca_pact_pakistan', 'low'),
-            'guarantors_responding': [
-                g for g in ('mecca_pact_turkiye', 'mecca_pact_pakistan')
-                if actor_levels.get(g, 'low') in ('elevated', 'high', 'surge')],
-            'note': ('Flat guarantor tempo during a Saudi strike cycle is a '
-                     'READING -- the pact is paper -- not a missing sensor.'),
-        },
+        'mecca_pact': _mecca_pact_reading(actor_levels),
         'tripwires':        tripwires_global[:5] if isinstance(tripwires_global, list) else [],
     }
     _redis_set('crosstheater:saudi_arabia:fingerprint', slice_payload, ttl_hours=14)
@@ -1959,6 +2022,7 @@ def scan_saudi_rhetoric(force=False, days=7):
         'commodity_pressure':    commodity_pressure,
         'crosstheater_amplifiers': crosstheater_amplifiers,
         'crosstheater_absent':     list(_CROSSTHEATER_ABSENT),
+        'mecca_pact':              _mecca_pact_reading(actor_levels),   # v2.1.2: page reads this
         'claim_posture':         claim_posture,
         'telegram_available':    TELEGRAM_AVAILABLE,
         'top_signals':           top_signals,

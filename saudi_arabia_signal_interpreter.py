@@ -16,7 +16,7 @@ Estimative voice. Convergence, not prediction. The reader completes the inferenc
 # v1.1.0: `import re` and `from datetime import ...` removed -- neither name
 # was referenced anywhere in this module.
 
-MODULE_VERSION = '1.2.1'
+MODULE_VERSION = '1.2.3'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -27,6 +27,7 @@ VECTOR_NAMES = {
     'energy_infrastructure':   'Energy Infrastructure',
     'normalization_watch':     'Normalization Watch',
     'domestic_transformation': 'Domestic Transformation',
+    'guarantor_response':      'Guarantor Response',
 }
 
 VECTOR_MEMBERS = {
@@ -158,8 +159,19 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
         seen_tripwires.add(tw_id)
         actor_id = tw.get('actor')
         actor_data = actor_summaries.get(actor_id, {}) if actor_id else {}
-        top_art = _top_article_for_actor(actor_data) if actor_data else None
-        sources = []
+        # Oct 18 2026: cite the articles that FIRED the tripwire (tracker
+        # 'evidence'); fall back to the actor's top article only when a tracker
+        # predates evidence. Live: 'Infrastructure Strike' cited an article
+        # about conjoined-twin surgery because it was the actor's top story.
+        _ev = []
+        for _t in (tripwires_global or []):
+            if _t.get('id') == tw_id:
+                for _e in (_t.get('evidence') or []):
+                    if _e.get('url') not in {x.get('url') for x in _ev}:
+                        _ev.append(_e)
+        top_art = None if _ev else (_top_article_for_actor(actor_data) if actor_data else None)
+        sources = [{'title': e.get('title', ''), 'url': e.get('url', ''), 'source': e.get('source', '')}
+                   for e in _ev[:3]]
         if top_art:
             sources.append({
                 'title':  top_art.get('title', ''),
@@ -173,6 +185,14 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
         # (alignment drift included) to the tracker's builtin fallback.
         long_text = _tripwire_prose(tw_id, actor_id)
         short = "\u26a0 Tripwire: " + str(tw_id).replace('_', ' ').title()
+        # v1.2.2: carry the tripwire id + confirmation class to the page. The
+        # same tripwire can fire under several actors with different classes
+        # (live: succession_event confirmed under one actor, claim_sourced
+        # under another) -- aggregate: confirmed if ANY entry is confirmed.
+        _same = [t for t in (tripwires_global or []) if t.get('id') == tw_id]
+        _conf = ('confirmed' if any(t.get('confirmation') == 'confirmed' for t in _same)
+                 else next((t.get('confirmation') for t in _same if t.get('confirmation')), None))
+        _chans = sorted({c for t in _same for c in (t.get('claim_channels') or [])})
         signals.append({
             'short_text': short,
             'long_text':  long_text,
@@ -180,6 +200,10 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
             'type':       'tripwire',
             'actor':      actor_id,
             'sources':    sources,
+            'tripwire_id':    tw_id,
+            'confirmation':   _conf,                       # confirmed | claim_sourced | None (RSS-only path)
+            'confirmed_by':   sum(int(t.get('confirmed_by') or 0) for t in _same),
+            'claim_channels': _chans[:6],
         })
 
     # ── 2. Convergence signals ──
@@ -689,7 +713,7 @@ def build_alignment_drift_top_signal(drift):
         'color':      drift['color'],
         # v1.1.0: this spliced in `inroad_power`, a full explanatory clause,
         # into a field with a 120-char budget.
-        'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
+        'short_text': (drift['flag'] + ' ' + drift['country'].replace('_', ' ').upper() + ': ' +
                        drift.get('axis_label', 'Accords axis') +
                        ' -- ' + drift['band']),
         'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
