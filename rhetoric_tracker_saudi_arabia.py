@@ -30,7 +30,7 @@ import os
 import re
 import json
 
-MODULE_VERSION = '2.2.0'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.2.1'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
@@ -1512,6 +1512,49 @@ def _read_commodity_pressure_story_for_saudi_arabia():
         return {}
 
 
+# Oct 18 2026 -- TWO CONVENTIONS, ONE READER. Iran writes its own key
+# (crosstheater:iran:fingerprint). Israel and Yemen write a SLICE of the shared
+# collective dict rhetoric:crosstheater:fingerprints (spoke_wheel_reader
+# convention #3). This reader only looked at the first, so Israel and Yemen
+# read as "not reporting" every scan while both trackers were running fine.
+# Fix is in the READER (one writer, many readers): dedicated key first, then
+# the collective slice. A slice older than CROSSTHEATER_FRESH_HOURS is reported
+# as stale -- never presented as a current reading.
+COLLECTIVE_CROSSTHEATER_KEY = 'rhetoric:crosstheater:fingerprints'
+CROSSTHEATER_FRESH_HOURS = 24
+_COLLECTIVE_SLICE = {'iran_fingerprint': 'iran', 'israel_fingerprint': 'israel',
+                     'yemen_fingerprint': 'yemen', 'saudi_fingerprint': 'saudi_arabia'}
+
+
+def _slice_age_hours(ts):
+    try:
+        dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() / 3600.0
+    except Exception:
+        return None
+
+
+def _read_one_fingerprint(label, redis_key, collective_cache):
+    """Returns (payload or None, absence_reason or None)."""
+    val = _redis_get(redis_key)
+    if val:
+        return val, None
+    if 'd' not in collective_cache:
+        collective_cache['d'] = _redis_get(COLLECTIVE_CROSSTHEATER_KEY) or {}
+    coll = collective_cache['d'] if isinstance(collective_cache['d'], dict) else {}
+    sl = coll.get(_COLLECTIVE_SLICE.get(label, label.replace('_fingerprint', '')))
+    if not isinstance(sl, dict) or not sl:
+        return None, label
+    age = _slice_age_hours(sl.get('ts'))
+    if age is not None and age > CROSSTHEATER_FRESH_HOURS:
+        return None, '%s (stale %dh)' % (label, int(age))
+    out = dict(sl)
+    out['_source'] = 'collective'
+    return out, None
+
+
 def _read_crosstheater_amplifiers():
     """
     Sibling-tracker fingerprints that shape Saudi Arabia's analytical context
@@ -1527,12 +1570,13 @@ def _read_crosstheater_amplifiers():
         'yemen_fingerprint':  'crosstheater:yemen:fingerprint',
     }
     absent = []
+    _coll = {}
     for label, redis_key in candidate_keys.items():
-        val = _redis_get(redis_key)
+        val, why = _read_one_fingerprint(label, redis_key, _coll)
         if val:
             amplifiers[label] = val
         else:
-            absent.append(label)
+            absent.append(why)
     # v2.1.0: absence is REPORTED, not inferred. Live 18 Oct showed only
     # iran_fingerprint -- israel/yemen vanished with nothing saying so.
     # Module-level so the result dict can carry it without changing the

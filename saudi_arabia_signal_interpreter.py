@@ -16,7 +16,7 @@ Estimative voice. Convergence, not prediction. The reader completes the inferenc
 # v1.1.0: `import re` and `from datetime import ...` removed -- neither name
 # was referenced anywhere in this module.
 
-MODULE_VERSION = '1.3.0'
+MODULE_VERSION = '1.3.1'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -556,7 +556,7 @@ def _crosstheater_signal(amp_label, amp_data):
             'bilateral channel -- watch kinetic_inbound and guarantor_response '
             'together, not the Iran actor alone.'),
         'israel_fingerprint': (
-            '\U0001f1ee\U0001f1f1 Israel wheel active -- Accords-axis amplification',
+            '\U0001f1ee\U0001f1f1 Israel wheel active -- Accords-axis context (cuts both ways)',
             'The Israel tracker\'s crosstheater fingerprint is live. This cuts BOTH '
             'ways on the Accords axis and the direction is the whole question: '
             'Israeli operations in Gaza, the West Bank or Lebanon re-anchor Riyadh\'s '
@@ -648,9 +648,19 @@ def score_alignment_drift(actor_summaries, tripwires_global,
                 dep_active = True
                 break
 
-    amp_active = bool((crosstheater_amplifiers or {}).get(prof.get('crosstheater_amp', '')))
+    _amp = (crosstheater_amplifiers or {}).get(prof.get('crosstheater_amp', '')) or {}
+    _amp_lvl = _amp.get('level') if isinstance(_amp, dict) else None
+    amp_active = isinstance(_amp_lvl, (int, float)) and _amp_lvl >= 2
 
-    inroad  = inroad_lvl + len(inroad_tw) + (1 if dep_active else 0) + (1 if amp_active else 0)
+    # v1.3.1 Oct 18 2026 -- ISRAEL'S WAR TEMPO IS CONTEXT, NOT SIGNATURE PRESSURE.
+    # v1 added +1 to the inroad side whenever the Israel fingerprint merely
+    # EXISTED. Harmless only while that fingerprint never arrived (it lives in
+    # the collective dict, which the tracker did not read). Once connected, every
+    # scan would carry a permanent +1 toward normalization because Israel is at
+    # war. Per Rachel's 11 Oct ruling the inroad evidence is the normalization
+    # track + the israel_defense_transfer forcing path; Israel's theatre level is
+    # neither. It stays reported (regional_amp_active), not scored.
+    inroad  = inroad_lvl + len(inroad_tw) + (1 if dep_active else 0)
     counter = counter_lvl + len(counter_tw)
 
     # ── band the NET drift ──

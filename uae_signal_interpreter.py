@@ -19,7 +19,7 @@ Estimative voice. Convergence, not prediction.
 
 # ONE version string, read by the load banner. Two hand-maintained copies is
 # how a module reports one version in a log line and another in a payload.
-MODULE_VERSION = '1.2.2'
+MODULE_VERSION = '1.2.3'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -573,7 +573,12 @@ def score_alignment_drift(actor_summaries, tripwires_global,
                 dep_active = True
                 break
 
-    amp_active = bool((crosstheater_amplifiers or {}).get(prof.get('crosstheater_amp', '')))
+    # v1.2.3 Oct 18 2026: was presence-only (any dict = active). Now the same
+    # lit threshold the top-signal gate uses -- level >= 2. Iran is live at
+    # 2-3, so no reading changes today; absence can no longer count as pressure.
+    _amp = (crosstheater_amplifiers or {}).get(prof.get('crosstheater_amp', '')) or {}
+    _amp_lvl = _amp.get('level') if isinstance(_amp, dict) else None
+    amp_active = (isinstance(_amp_lvl, (int, float)) and _amp_lvl >= 2) or bool(_amp.get('active'))
 
     inroad  = inroad_lvl + len(inroad_tw) + (1 if dep_active else 0) + (1 if amp_active else 0)
     counter = counter_lvl + len(counter_tw)
