@@ -1,5 +1,6 @@
 """
-rhetoric_tracker_saudi_arabia.py -- Asifah Analytics ME Backend -- v1.0.0 Jul 2026
+rhetoric_tracker_saudi_arabia.py -- Asifah Analytics ME Backend -- v2.1.0 Oct 18 2026
+(v2.0.0 Oct 11 2026 matcher/gate/Mecca Pact; v1.0.0 Jul 2026)
 FRICTION-TIER TRACKER with DETENTE SHIM (Iran wheel step 5, per Jun 28 scoping):
 Saudi Arabia sits on the Iran wheel as friction-tier WITH an active detente track
 (post-2023 Beijing-brokered normalization) -- escalatory and de-escalatory signals
@@ -9,9 +10,12 @@ SLICES (crosstheater:saudi_arabia:fingerprint): iran (friction+detente),
 china (counter-BRI reverse polarity -- IMEC hub), israel (normalization drift:
 Accords holdout <-> signature), us (ally anchor).
 
-ACTORS (10): royal_court_mbs, saudi_mod_airdefense, aramco_energy, houthi_yemen,
-  iran_saudi, accords_normalization, us_saudi, vision2030_domestic,
-  opec_policy, gcc_saudi
+ACTORS (13): royal_court_mbs, vision2030_domestic, gcc_saudi, houthi_yemen,
+  mecca_pact_turkiye, mecca_pact_pakistan, saudi_mod_airdefense, aramco_energy,
+  opec_policy, iran_saudi, accords_normalization, palestinian_file, us_saudi
+MECCA PACT: Saudi Arabia · Turkiye · Pakistan (signed Aug 2026; collective
+  deterrence activated 5 Oct 2026). Turkiye is a hub (turkey_spoke block);
+  Pakistan is a guarantor ACTOR, not a hub.
 VECTORS (4 -- these keys ARE the saudi_arabia-stability.html gauge contract):
   kinetic_inbound, energy_infrastructure, normalization_watch, domestic_transformation
 CALENDAR: Hajj window = timing MULTIPLIER on kinetic/mass-casualty tripwires
@@ -24,6 +28,8 @@ Convergence, not prediction. The reader completes the inference.
 import os
 import re
 import json
+
+MODULE_VERSION = '2.1.0'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
@@ -244,7 +250,14 @@ ACTORS = {
         'keywords': ['mecca pact turkiye', 'mecca pact turkey', 'turkiye saudi deployment',
                      'turkey saudi deployment', 'turkiye saudi defence', 'turkish troops saudi',
                      'mecca joint defence', 'mecca defense pact', 'mecca alliance',
-                     'collective deterrence saudi', 'ankara riyadh defence'],
+                     'collective deterrence saudi', 'ankara riyadh defence',
+                     # Turkish -- Ankara's own reporting, same reasoning as the
+                     # Urdu set on mecca_pact_pakistan. Kept deliberately SHORT:
+                     # these are transliterations of terms seen in Turkish-language
+                     # coverage of the pact, and the list stays minimal until it
+                     # has been validated against verbatim Turkish headlines the
+                     # way the Urdu set was.
+                     'mekke savunma', 'mekke anlasmasi', 'ortak savunma suudi'],
         'baseline_statements_per_week': 2,
     },
     'mecca_pact_pakistan': {
@@ -252,10 +265,43 @@ ACTORS = {
         'role': 'Guarantor response -- does Islamabad move when the pact is tested',
         'description': 'Pakistani signals under the Mecca Joint Defence Agreement: troop deployment to Saudi Arabia, collective-deterrence activation, nuclear-umbrella vocabulary. Pakistan is NOT a hub on this platform -- it is a guarantor actor, and stays one until a Pakistan tracker drives it.',
         'vector': 'guarantor_response',
+        # URDU ADDED 11 Oct 2026. Pakistan's own reporting on the pact runs in
+        # Urdu, and the authoritative voice is DG ISPR -- the Army spokesman --
+        # not an English wire. Every term below is traceable to a verbatim
+        # published Urdu headline:
+        #   "مکہ دفاعی معاہدہ: پاکستانی فوجی دستے سعودی عرب میں موجود ہیں، ڈی جی آئی ایس پی آر"
+        #       (Mecca Defence Agreement: Pakistani troops ARE PRESENT in
+        #        Saudi Arabia — DG ISPR)  — Aaj / Hotline News
+        #   "سعودی عرب کا دفاع مکہ معاہدے کا بنیادی مقصد ہے، دفاع کریں گے: ترجمان پاک فوج"
+        #       (Defending Saudi Arabia is the Mecca agreement's core purpose,
+        #        and we will defend it — Pakistan Army spokesman)  — Shafaqna / Aaj
+        #   "پاکستان اور سعودی عرب کا مکہ مشترکہ دفاعی معاہدے پر تعاون جاری رکھنے کا عزم"
+        #       — Geo Urdu
+        #
+        # ⚠ THAT FIRST HEADLINE IS ITSELF A FINDING. Pakistan has publicly
+        # confirmed troops are IN Saudi Arabia under the pact. The guarantor
+        # has moved -- this actor is not measuring a hypothetical.
         'keywords': ['mecca pact pakistan', 'pakistan saudi deployment', 'pakistani troops saudi',
                      'pakistan saudi defence', 'pakistan saudi defense', 'islamabad riyadh defence',
                      'mecca joint defence', 'strategic mutual defence agreement',
-                     'pakistan collective deterrence'],
+                     'pakistan collective deterrence', 'dg ispr saudi',
+                     # Urdu
+                     '\u0645\u06a9\u06c1 \u062f\u0641\u0627\u0639\u06cc \u0645\u0639\u0627\u06c1\u062f\u06c1',          # Mecca defence agreement
+                     '\u0645\u06a9\u06c1 \u0645\u0634\u062a\u0631\u06a9\u06c1 \u062f\u0641\u0627\u0639\u06cc',          # Mecca joint defence
+                     '\u0645\u06a9\u06c1 \u0645\u0639\u0627\u06c1\u062f\u06c1',                                              # Mecca agreement
+                     '\u067e\u0627\u06a9\u0633\u062a\u0627\u0646\u06cc \u0641\u0648\u062c\u06cc \u062f\u0633\u062a\u06d2',  # Pakistani troop contingents
+                     '\u067e\u0627\u06a9 \u0641\u0648\u062c \u062f\u0633\u062a\u06d2',                                      # Pak Army contingents
+                     # v2.1.0 Oct 18 2026: DG ISPR fixed -- 11 Oct had a stray
+                     # space ('...\u0627\u06cc \u0633...' = "ای س") so it could never match.
+                     '\u0688\u06cc \u062c\u06cc \u0622\u0626\u06cc \u0627\u06cc\u0633 \u067e\u06cc \u0622\u0631',       # DG ISPR
+                     '\u062a\u0631\u062c\u0645\u0627\u0646 \u067e\u0627\u06a9 \u0641\u0648\u062c',                        # Pak Army spokesman
+                     # v2.1.0: the 11 Oct set all hinged on Mecca (\u0645\u06a9\u06c1); Pakistani
+                     # press mostly says "Pak-Saudi defence agreement". Verbatim:
+                     #   "\u067e\u0627\u06a9 \u0633\u0639\u0648\u062f\u06cc \u062f\u0641\u0627\u0639\u06cc \u0645\u0639\u0627\u06c1\u062f\u06c1 \u0637\u0648\u06cc\u0644 \u0627\u0644\u0645\u062f\u062a\u06cc \u062a\u0639\u0627\u0648\u0646 \u06a9\u0627 \u0639\u06a9\u0627\u0633 \u06c1\u06d2" -- Jang
+                     # Order-free substring parts: \u067e\u0627\u06a9 also catches \u067e\u0627\u06a9\u0633\u062a\u0627\u0646.
+                     '\u067e\u0627\u06a9 \u0633\u0639\u0648\u062f\u06cc \u062f\u0641\u0627\u0639\u06cc',                    # Pak Saudi defence
+                     '\u0628\u0627\u06c1\u0645\u06cc \u062f\u0641\u0627\u0639\u06cc \u0645\u0639\u0627\u06c1\u062f',        # mutual defence agreement (SMDA)
+                     '\u0645\u0634\u062a\u0631\u06a9\u06c1 \u062f\u0641\u0627\u0639 \u067e\u0627\u06a9\u0633\u062a\u0627\u0646'],  # joint defence + Pakistan (Geo)
         'baseline_statements_per_week': 2,
     },
 
@@ -405,7 +451,11 @@ TRIPWIRES = {
                      'houthi attack jeddah', 'houthi attack abha',
                      'riyadh airport attack', 'saudi airport attack',
                      'king khalid airport attack', 'houthi salvo saudi',
-                     'houthi strike riyadh', 'missiles riyadh'],
+                     'houthi strike riyadh', 'missiles riyadh',
+                     # v2.2.0: irregular past tense -- "King Fahd Air Base
+                     # struck by Houthi drones" fired nothing.
+                     'houthi drone struck', 'houthi missile struck',
+                     'houthi drone strike'],
         'severity': 'high',
         'note': 'Kinetic-inbound salvo on Saudi territory.',
     },
@@ -437,7 +487,15 @@ TRIPWIRES = {
         'patterns': ['israel air defense saudi', 'israeli systems saudi',
                      'israel arms saudi', 'saudi israeli interceptors',
                      'israel defense deal saudi', 'israeli radar saudi',
-                     'israel saudi defense cooperation'],
+                     'israel saudi defense cooperation',
+                     # v2.1.0 Oct 18 2026: live miss -- "Trump: Israel helping
+                     # Saudi Arabia against Houthis, normalization closer than
+                     # ever". Verb-anchored (help/assist/defend) so that
+                     # "Israel strikes Houthi port as Saudi watches" stays out.
+                     'israel helping saudi', 'israel helps saudi',
+                     'israel assisting saudi', 'israel assist saudi',
+                     'israeli help saudi', 'israel defending saudi',
+                     'israel defend saudi', 'israeli intercept saudi'],
         'severity': 'high',
         'note': ('Israeli defence capability moving toward Riyadh under kinetic '
                  'pressure. The UAE precedent: capability arriving under fire '
@@ -446,8 +504,19 @@ TRIPWIRES = {
                  'becomes materially expensive.'),
     },
     'succession_event': {
-        'patterns': ['king salman dies','saudi king death','mbs becomes king','saudi succession crisis',
-                     'new saudi king'],
+        # v2.2.0: STRICT PHRASES ONLY. Even sentence-scoping cannot save a
+        # pattern like 'new saudi king' from "NEW: Saudi King Fahd Air Base
+        # struck" -- one sentence, all three tokens, no succession. A false
+        # succession signal is the most market-moving and diplomatically
+        # loaded claim this tracker can make, so it fires only on formulaic
+        # succession language that a facility name cannot assemble.
+        'patterns': ['"king salman dies"', '"king salman has died"', '"death of king salman"',
+                     '"king salman passed away"', '"mbs becomes king"',
+                     '"crown prince becomes king"', '"proclaimed king"',
+                     '"sworn in as king"', '"new king of saudi arabia"',
+                     '"saudi succession crisis"', '"allegiance council"',
+                     '\u0648\u0641\u0627\u0629 \u0627\u0644\u0645\u0644\u0643 \u0633\u0644\u0645\u0627\u0646',   # death of King Salman
+                     '\u0647\u064a\u0626\u0629 \u0627\u0644\u0628\u064a\u0639\u0629'],                              # Allegiance Council
         'severity': 'high',
         'note': 'Royal succession event -- domestic-transformation rupture watch.',
     },
@@ -466,6 +535,11 @@ TRIPWIRES = {
 RSS_FEEDS = {
     'gn_en':   {'url': 'https://news.google.com/rss/search?q=Saudi%20Arabia%20(MBS%20OR%20Aramco%20OR%20Houthi%20OR%20Iran)&hl=en-US&gl=US&ceid=US:en', 'name': 'GoogleNews-EN', 'weight': 0.85, 'language': 'en'},
     'gn_ar':   {'url': 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9&hl=ar&gl=SA&ceid=SA:ar', 'name': 'GoogleNews-AR', 'weight': 0.8, 'language': 'ar'},
+    # v2.1.0 Oct 18 2026: Urdu source. The mecca_pact_pakistan Urdu keywords
+    # (11 Oct) had NO Urdu feed to match against -- GoogleNews-AR is Arabic
+    # script but not Urdu vocabulary, and the Pakistani Telegram channels post
+    # in English. Query is the Urdu name for Saudi Arabia, Pakistan edition.
+    'gn_ur':   {'url': 'https://news.google.com/rss/search?q=%D8%B3%D8%B9%D9%88%D8%AF%DB%8C%20%D8%B9%D8%B1%D8%A8&hl=ur&gl=PK&ceid=PK:ur', 'name': 'GoogleNews-UR', 'weight': 0.8, 'language': 'ur'},
     'arabnews':{'url': 'https://www.arabnews.com/rss.xml', 'name': 'Arab News', 'weight': 1.0, 'language': 'en'},
     'saudigaz':{'url': 'https://saudigazette.com.sa/rssFeed/74', 'name': 'Saudi Gazette', 'weight': 0.95, 'language': 'en'},
     'alarabiya':{'url': 'https://www.alarabiya.net/feed/rss2/ar.xml', 'name': 'Al Arabiya', 'weight': 0.9, 'language': 'ar'},
@@ -709,7 +783,12 @@ def _check_tripwires_tiered(articles_for_actor):
     return out
 
 
-CLAIM_BASELINE_KEY = 'rhetoric:saudi_arabia:claim_baseline'
+# v2.1.0 Oct 18 2026: key bumped to :v2. The v1 baseline was built from an
+# UNGATED count -- every claim-tier message on every axis channel (1,938 of
+# 2,687 live), i.e. the whole axis media ecosystem, not Saudi. Reusing it
+# would compare the first gated reading (tens) against ~1,955 and print a
+# false SILENT. A fresh key restarts the baseline honestly at 'unread'.
+CLAIM_BASELINE_KEY = 'rhetoric:saudi_arabia:claim_baseline:v2'
 
 
 def build_claim_posture(all_articles, kinetic_level):
@@ -730,7 +809,12 @@ def build_claim_posture(all_articles, kinetic_level):
     claim-channel silence.
     """
     tg = [a for a in (all_articles or []) if a.get('feed_type') == 'telegram']
-    claim = [a for a in tg if a.get('source_tier') in CLAIM_ONLY_TIERS]
+    # v2.1.0: GATED. A Houthi channel claiming a strike on Eilat or a US
+    # destroyer is a claim -- but not a claim about Saudi Arabia. Only
+    # claim-tier messages that pass the Saudi country gate count here.
+    claim_all = [a for a in tg if a.get('source_tier') in CLAIM_ONLY_TIERS]
+    claim = [a for a in claim_all
+             if _passes_country_gate((a.get('title') or '') + ' ' + (a.get('description') or ''))]
     today = len(claim)
 
     if not TELEGRAM_AVAILABLE:
@@ -790,7 +874,10 @@ def build_claim_posture(all_articles, kinetic_level):
 
     return {'state': state, 'reason': '', 'claim_volume': today,
             'baseline': baseline, 'channels': channels[:8],
-            'telegram_total': len(tg), 'note': note}
+            'telegram_total': len(tg),
+            'claim_tier_total': len(claim_all),   # ungated, for context only
+            'scope': 'saudi_gated',
+            'note': note}
 
 
 def fetch_all_rss():
@@ -986,10 +1073,26 @@ COUNTRY_GATE = (
     'buqayq', 'khurais', 'neom', 'tadawul', 'aramco', 'kingdom of saudi',
     'ksa', 'king khalid international', 'king abdulaziz international',
     'al-ula', 'alula', 'qatif', 'eastern province',
-    '\u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629',      # al-Sa'udiyya
-    '\u0627\u0644\u0631\u064a\u0627\u0636',                     # al-Riyadh
-    '\u062c\u062f\u0629',                                          # Jeddah
-    '\u0623\u0631\u0627\u0645\u0643\u0648',                     # Aramco
+    # v2.2.0: the monarch and crown prince by name. A succession headline can
+    # name King Salman without ever saying "Saudi", and the gate rejected it
+    # before the tripwire ran. Bare 'mbs' is deliberately NOT here: in
+    # financial copy it means mortgage-backed securities.
+    'king salman', 'bin salman', 'salman bin abdulaziz', 'allegiance council',
+    '\u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629',      # AR  al-Sa'udiyya
+    '\u0627\u0644\u0631\u064a\u0627\u0636',                     # AR  al-Riyadh
+    '\u062c\u062f\u0629',                                          # AR  Jeddah
+    '\u0623\u0631\u0627\u0645\u0643\u0648',                     # AR  Aramco
+    # ── URDU (added 11 Oct 2026) ────────────────────────────────────
+    # Without these the gate rejects every Urdu article BEFORE any actor
+    # keyword runs, so Urdu keywords on mecca_pact_pakistan would have been
+    # unreachable code. Urdu writes Saudi Arabia as 'سعودی عرب', which does
+    # NOT contain the Arabic 'السعودية' -- different script conventions, same
+    # country, and a substring test cannot bridge them. Caught before ship by
+    # running real Urdu headlines through the gate.
+    '\u0633\u0639\u0648\u062f\u06cc \u0639\u0631\u0628',       # UR  Saudi Arab
+    '\u0633\u0639\u0648\u062f\u06cc',                            # UR  Saudi
+    '\u0631\u06cc\u0627\u0636',                                    # UR  Riyadh
+    '\u0645\u06a9\u06c1',                                           # UR  Makkah
 )
 
 
@@ -1050,7 +1153,11 @@ def _classify_article_actor(article):
     if not _passes_country_gate(text):
         return []
 
-    tokens = set(re.findall(r"[a-z0-9']+", text))
+    # v2.2.0: apostrophe dropped from the token class. "Riyadh's" was a single
+    # token, so 'riyadh' never matched a possessive -- and headlines are full
+    # of them (Saudi Arabia's, Riyadh's, Iran's). No keyword contains an
+    # apostrophe, so nothing depended on it.
+    tokens = set(re.findall(r"[a-z0-9]+", text))
 
     matches = []
     for actor_id, actor_data in ACTORS.items():
@@ -1061,6 +1168,61 @@ def _classify_article_actor(article):
         if hit_count > 0:
             matches.append((actor_id, hit_count))
     return matches
+
+
+# ════════════════════════════════════════════════════════════
+# KEYWORDS SCORE. TRIPWIRES ASSERT.  (v2.2.0, 18 Oct 2026)
+#
+# On 11 Oct tripwires were moved onto the same tokens-present matcher as
+# actor keywords, so they could see this war at all. That was right for
+# keywords and WRONG for tripwires, and the live payload of 18 Oct proved it:
+#
+#   "NEW: Egypt's National Defense Council has approved providing 'all
+#    necessary support' to help Saudi Arabia ... Egyptian C-130H military
+#    transport aircraft already landed at King Fahd Air Base in Taif"
+#
+#   'new saudi king'  ->  new  (from the Telegram "NEW:" prefix)
+#                         saudi (from "Saudi Arabia")
+#                         king  (from "King Fahd Air Base")
+#                     ->  succession_event, CONFIRMED, severity high,
+#                         riding to the ME BLUF as a top signal.
+#
+# An Egyptian transport plane landing at an airbase was reported as a change
+# of Saudi monarch, during a war. Saudi copy is wall-to-wall "King <facility>"
+# (King Khalid Airport, King Fahd Air Base, King Abdulaziz Port) and Telegram
+# prefixes breaking posts with "NEW:" -- so scattered-token matching on a
+# succession pattern was a false positive waiting for a busy week.
+#
+# The asymmetry: a loose KEYWORD costs a fraction of an actor score. A loose
+# TRIPWIRE broadcasts a false event. So tripwires get a precision-first rule:
+# all tokens must appear inside ONE SENTENCE. An event assertion is a
+# sentence; tokens scattered across a whole Telegram post are not one.
+#
+# Plural-tolerant ('missile' matches 'missiles') but NEVER prefix-matched:
+# 'king' must not match 'kingdom', which appears in nearly every Saudi story.
+_SENTENCE_SPLIT = re.compile(r'(?<=[.!?\u061f\u06d4])\s+|\n+|\s+[\u2014\u2013]\s+|[:;\u061b]\s+')
+
+
+def _tripwire_match(pattern, text):
+    """Sentence-scoped, plural-tolerant, quoted = strict phrase."""
+    p = pattern.lower().strip()
+    if len(p) > 2 and p[0] == '"' and p[-1] == '"':
+        return p[1:-1] in text                      # explicit strict phrase
+    parts = p.split()
+    for sent in _SENTENCE_SPLIT.split(text):
+        if not sent:
+            continue
+        toks = set(re.findall(r"[a-z0-9]+", sent))
+        ok = True
+        for w in parts:
+            if not w.isascii():
+                if w not in sent:
+                    ok = False; break
+            elif not (w in toks or (w + 's') in toks or (w + 'es') in toks):
+                ok = False; break
+        if ok:
+            return True
+    return False
 
 
 def _check_tripwires(text):
@@ -1078,11 +1240,11 @@ def _check_tripwires(text):
     text_lower = _normalize_text(text)
     if not _passes_country_gate(text_lower):
         return []
-    tokens = set(re.findall(r"[a-z0-9']+", text_lower))
     triggered = []
     for tw_id, tw_data in TRIPWIRES.items():
         for pattern in tw_data['patterns']:
-            if _kw_match(pattern, text_lower, tokens):
+            # v2.2.0: sentence-scoped, NOT the actor-keyword matcher.
+            if _tripwire_match(pattern, text_lower):
                 triggered.append((tw_id, tw_data['severity']))
                 break  # only count each tripwire once per article
     return triggered
@@ -1247,9 +1409,9 @@ def _read_crosstheater_amplifiers():
     """
     Sibling-tracker fingerprints that shape Saudi Arabia's analytical context
     (the wheels, read from the shared Redis -- absence-honest when missing):
-      pakistan_fingerprint -- crosstheater:pakistan:fingerprint (confirmed sibling)
-      iran_fingerprint     -- crosstheater:iran:fingerprint     (ME backend, attempted)
-      china_fingerprint    -- crosstheater:china:fingerprint    (attempted)
+      iran_fingerprint   -- crosstheater:iran:fingerprint   (patron of the Houthi front)
+      israel_fingerprint -- crosstheater:israel:fingerprint (Accords axis / defense path)
+      yemen_fingerprint  -- crosstheater:yemen:fingerprint  (the kinetic front itself)
     """
     amplifiers = {}
     candidate_keys = {
@@ -1257,11 +1419,24 @@ def _read_crosstheater_amplifiers():
         'israel_fingerprint': 'crosstheater:israel:fingerprint',
         'yemen_fingerprint':  'crosstheater:yemen:fingerprint',
     }
+    absent = []
     for label, redis_key in candidate_keys.items():
         val = _redis_get(redis_key)
         if val:
             amplifiers[label] = val
+        else:
+            absent.append(label)
+    # v2.1.0: absence is REPORTED, not inferred. Live 18 Oct showed only
+    # iran_fingerprint -- israel/yemen vanished with nothing saying so.
+    # Module-level so the result dict can carry it without changing the
+    # return shape every caller (and the interpreter) depends on.
+    global _CROSSTHEATER_ABSENT
+    _CROSSTHEATER_ABSENT = absent
+    if absent:
+        print(f"[KSA Rhetoric] crosstheater NOT REPORTING: {', '.join(absent)}")
     return amplifiers
+
+_CROSSTHEATER_ABSENT = []
 
 def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
                               vector_levels, actor_summaries, tripwires_global,
@@ -1514,7 +1689,10 @@ def _build_saudi_signal_text(theatre_level, theatre_score, vector_levels, actor_
     if l5_capped:
         long_parts.append("L5 axis gate did not fire — capped at L4 ceiling per platform L5 Reservation Contract.")
     else:
-        long_parts.append("Saudi Arabia is a contested-node tracker: four mixed-polarity wheels (Iran friction, Pakistan kinetic, Russia normalization, China extraction).")
+        # v2.1.0: was "four mixed-polarity wheels (Iran friction, Pakistan
+        # kinetic, ...)" -- written before the Mecca Pact. Pakistan is a treaty
+        # guarantor now; calling it a kinetic wheel inverted the alliance.
+        long_parts.append("Saudi Arabia is the Mecca Pact anchor (with Turkiye and Pakistan as guarantors) and a friction-tier node on the Iran wheel: Houthi kinetic front inbound, Accords holdout anchored by the Palestinian file.")
 
     return {'short': short, 'long': ' '.join(long_parts)}
 
@@ -1671,7 +1849,7 @@ def scan_saudi_rhetoric(force=False, days=7):
                         top_signals.append(_sig)
             except Exception as _e:
                 print(f'[KSA Rhetoric] cross-read append error: {str(_e)[:100]}')
-            election_watch = None   # N/A -- the Emirate rules by decree; no electoral cycle to watch
+            election_watch = None   # N/A -- absolute monarchy; no electoral cycle to watch
         except Exception as e:
             print(f"[KSA Rhetoric] Interpreter error: {str(e)[:200]}")
             traceback.print_exc()
@@ -1745,13 +1923,14 @@ def scan_saudi_rhetoric(force=False, days=7):
         'l5_gate':               l5_gate,
         'raw_theatre_level':     raw_theatre_level,
         'l5_capped':             l5_capped,
-        'source_class':          'contested_node',  # four-wheel contested node (AZ schema)
+        'source_class':          'contested_node',  # mixed-polarity node: pact anchor + Iran-wheel friction tier
         'vector_scores':         vector_scores,
         'vector_levels':         vector_levels,
         'actor_summaries':       actor_summaries,
         'tripwires_global':      tripwires_global,
         'commodity_pressure':    commodity_pressure,
         'crosstheater_amplifiers': crosstheater_amplifiers,
+        'crosstheater_absent':     list(_CROSSTHEATER_ABSENT),
         'claim_posture':         claim_posture,
         'telegram_available':    TELEGRAM_AVAILABLE,
         'top_signals':           top_signals,
@@ -1770,7 +1949,7 @@ def scan_saudi_rhetoric(force=False, days=7):
         'days_analyzed':          days,
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.0.0',
+        'version':                MODULE_VERSION,
     }
 
     save_cache(result)
@@ -1870,7 +2049,7 @@ def register_saudi_rhetoric_routes(app, start_background=True):
         """Diagnostic — config snapshot + cache freshness."""
         cached = load_cache()
         return jsonify({
-            'version':                  '1.0.0',
+            'version':                  MODULE_VERSION,
             'actor_count':              len(ACTORS),
             'actors':                   list(ACTORS.keys()),
             'vector_count':             len(VECTOR_GROUPS),

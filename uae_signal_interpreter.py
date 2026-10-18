@@ -19,7 +19,7 @@ Estimative voice. Convergence, not prediction.
 
 # ONE version string, read by the load banner. Two hand-maintained copies is
 # how a module reports one version in a log line and another in a payload.
-MODULE_VERSION = '1.1.0'
+MODULE_VERSION = '1.2.0'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -168,7 +168,12 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
                 'source': top_art.get('source', ''),
             })
 
-        short, long_text = _tripwire_prose(tw_id, actor_id)
+        # v1.2.0: _tripwire_prose returns ONE string (the long text). The old
+        # line unpacked it into two names, which raised ValueError the first
+        # time a tripwire fired live -- silently dropping the whole interpreter
+        # (alignment drift included) to the tracker's builtin fallback.
+        long_text = _tripwire_prose(tw_id, actor_id)
+        short = "\u26a0 Tripwire: " + str(tw_id).replace('_', ' ').title()
         signals.append({
             'short_text': short,
             'long_text':  long_text,
@@ -238,13 +243,20 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
             signals.append(sig)
 
     # Sort: surge → high → elevated → normal → low; within same level, signals with sources first
+    # v1.2.0: tripwires are pinned above everything. A tripwire is an event
+    # assertion ("a strike happened"); a surge actor is a volume reading
+    # ("lots of talk"). Sorting by level alone let surge-level rhetoric -- and
+    # the commodity story forced into slot 0 -- outrank a confirmed strike.
     signals.sort(
-        key=lambda s: (-_level_rank(s['level']), -len(s.get('sources', [])))
+        key=lambda s: (0 if s.get('type') == 'tripwire' else 1,
+                       -_level_rank(s['level']), -len(s.get('sources', [])))
     )
-    # Composite commodity story rides high when escalated (mirrors stability page)
+    # Composite commodity story rides high when escalated (mirrors stability
+    # page) -- but directly BELOW any tripwires, never above them.
     _cs = _commodity_story_signal(commodity_pressure)
     if _cs:
-        signals.insert(0, _cs)
+        _n_tw = sum(1 for s in signals if s.get('type') == 'tripwire')
+        signals.insert(_n_tw, _cs)
     return signals[:12]   # cap at 12 -- UI shows ~8 by default
 
 

@@ -16,7 +16,7 @@ Estimative voice. Convergence, not prediction. The reader completes the inferenc
 # v1.1.0: `import re` and `from datetime import ...` removed -- neither name
 # was referenced anywhere in this module.
 
-MODULE_VERSION = '1.1.0'
+MODULE_VERSION = '1.2.0'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -167,7 +167,12 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
                 'source': top_art.get('source', ''),
             })
 
-        short, long_text = _tripwire_prose(tw_id, actor_id)
+        # v1.2.0: _tripwire_prose returns ONE string (the long text). The old
+        # line unpacked it into two names, which raised ValueError the first
+        # time a tripwire fired live -- silently dropping the whole interpreter
+        # (alignment drift included) to the tracker's builtin fallback.
+        long_text = _tripwire_prose(tw_id, actor_id)
+        short = "\u26a0 Tripwire: " + str(tw_id).replace('_', ' ').title()
         signals.append({
             'short_text': short,
             'long_text':  long_text,
@@ -223,20 +228,33 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
     for amp_label, amp_data in (crosstheater_amplifiers or {}).items():
         if not isinstance(amp_data, dict):
             continue
-        if not amp_data.get('active'):
+        # v1.2.0: ported from UAE v1.1.0. The gate was `active` alone; canonical
+        # crosstheater fingerprints carry a numeric `level` and often no
+        # 'active' key (live 18 Oct: iran_fingerprint level 2, active None --
+        # dropped). Accept either, at the platform's lit threshold of 2.
+        _lvl = amp_data.get('level')
+        _lvl = _lvl if isinstance(_lvl, (int, float)) else -1
+        if not amp_data.get('active') and _lvl < 2:
             continue
         sig = _crosstheater_signal(amp_label, amp_data)
         if sig:
             signals.append(sig)
 
     # Sort: surge → high → elevated → normal → low; within same level, signals with sources first
+    # v1.2.0: tripwires are pinned above everything. A tripwire is an event
+    # assertion ("a strike happened"); a surge actor is a volume reading
+    # ("lots of talk"). Sorting by level alone let surge-level rhetoric -- and
+    # the commodity story forced into slot 0 -- outrank a confirmed strike.
     signals.sort(
-        key=lambda s: (-_level_rank(s['level']), -len(s.get('sources', [])))
+        key=lambda s: (0 if s.get('type') == 'tripwire' else 1,
+                       -_level_rank(s['level']), -len(s.get('sources', [])))
     )
-    # Composite commodity story rides high when escalated (mirrors stability page)
+    # Composite commodity story rides high when escalated (mirrors stability
+    # page) -- but directly BELOW any tripwires, never above them.
     _cs = _commodity_story_signal(commodity_pressure)
     if _cs:
-        signals.insert(0, _cs)
+        _n_tw = sum(1 for s in signals if s.get('type') == 'tripwire')
+        signals.insert(_n_tw, _cs)
     return signals[:12]   # cap at 12 -- UI shows ~8 by default
 
 
@@ -266,7 +284,7 @@ def _tripwire_prose(tw_id, actor_id):
         'succession_event': (
             "Royal-succession vocabulary at tripwire confidence. Succession is the domestic-"
             "transformation vector's maximum-weight event class -- historically the moment when every "
-            "external file (Iran detente, Accords, US pact) gets re-anchored at once. Watch allegiance-"
+            "external file (Mecca Pact, Accords, US pact) gets re-anchored at once. Watch allegiance-"
             "council reporting and decree tempo."),
         'detente_rupture': (
             "Detente-rupture vocabulary at tripwire confidence. The Beijing-2023 normalization track is "
@@ -274,6 +292,12 @@ def _tripwire_prose(tw_id, actor_id):
             "detente channel have escalated further than identical spikes with the channel intact. This "
             "also accelerates the Accords drift axis: losing the Iran hedge strengthens the US-Israel "
             "security logic."),
+        'israel_defense_transfer': (
+            "Israeli defense-cooperation vocabulary on the Saudi file at tripwire confidence. This is the "
+            "one forcing path on the Accords axis: Riyadh's stated holdout is anchored by Gaza, the West "
+            "Bank and Lebanon, and only a defense need acute enough to outweigh that file moves it. The "
+            "tell is Riyadh's response -- a public denial keeps the holdout intact; silence is the signal. "
+            "US-sourced claims of cooperation are not Saudi confirmation."),
         'hajj_mass_casualty': (
             "Hajj mass-casualty signals at tripwire confidence -- a Custodian-legitimacy event class. "
             "NOTE: Hajj-window timing itself is a calendar MULTIPLIER on other tripwires, never a "
