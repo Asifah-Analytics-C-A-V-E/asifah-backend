@@ -30,13 +30,29 @@ import os
 import re
 import json
 
-MODULE_VERSION = '2.2.1'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.2.2'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
 from datetime import datetime, timezone, timedelta
 
 import requests
+
+# Oct 18 2026: GDELT goes ONLY through the shared gateway (v2.4.x): one
+# platform-wide clock (1 request / 5.5s), a shared 15-min stand-down after
+# any 429, a call budget and a shared Upstash cache. NO direct fallback: a
+# direct call during a stand-down re-arms GDELT's IP block for every module.
+try:
+    from gdelt_gateway import gdelt_fetch_probed as _gw_fetch_probed
+    _GDELT_GATEWAY = True
+except ImportError:
+    _gw_fetch_probed = None
+    _GDELT_GATEWAY = False
+    print('[KSA Rhetoric] gdelt_gateway unavailable -- GDELT disabled this process (no direct fallback, by design)')
+try:
+    from gdelt_trickle import register_queries as _trickle_register
+except ImportError:
+    _trickle_register = None
 
 # Optional dependencies — degrade gracefully if missing
 try:
@@ -972,49 +988,74 @@ def fetch_all_rss():
     return all_articles
 
 
+# Oct 18 2026 -- ROUTED THROUGH gdelt_gateway. This was one of 13 direct ME
+# callers: no shared pacing, 0.5s between queries, and `if 429: return []` --
+# a rate limit read as "no news". English keeps its explicit English-only
+# filter (unchanged behaviour); other languages are mapped by the gateway to
+# the names GDELT documents ('ara' -> sourcelang:arabic).
+_GDELT_HEALTH = {'queries': 0, 'sensed': 0, 'cached': 0, 'articles': 0, 'not_sensed': {}}
+
+
+def _gdelt_gw_query(query, language):
+    return f'{query} sourcelang:english' if language == 'eng' else query
+
+
 def fetch_gdelt_query(query, language='eng', days=7, max_articles=50):
-    """Fetch a single GDELT query with circuit-breaker timeout."""
-    params = {
-        'query':       f'{query} sourcelang:{language}',
-        'mode':        'artlist',
-        'maxrecords':  max_articles,
-        'format':      'json',
-        'timespan':    f'{days}d',
-    }
-    try:
-        resp = requests.get(GDELT_BASE_URL, params=params, timeout=(5, 12))
-        if resp.status_code == 429:
-            return []  # rate limited — bail silently
-        if resp.status_code != 200:
-            return []
-        data = resp.json()
-        articles = []
-        for item in data.get('articles', []):
-            articles.append({
-                'title':       item.get('title', ''),
-                'description': '',
-                'url':         item.get('url', ''),
-                'published':   item.get('seendate', ''),
-                'source':      item.get('domain', 'GDELT'),
-                'feed_id':     'gdelt',
-                'feed_type':   'gdelt',
-                'language':    'ar' if language == 'ara' else 'en',
-                'feed_weight': 0.85,
-            })
-        return articles
-    except Exception:
+    """One GDELT query through the shared gateway (absence-honest tally)."""
+    if not _GDELT_GATEWAY:
         return []
+    _GDELT_HEALTH['queries'] += 1
+    try:
+        raw, probe = _gw_fetch_probed(_gdelt_gw_query(query, language), language=language,
+                                      timespan=f'{days}d', maxrecords=max_articles,
+                                      label='saudi/' + language)
+    except Exception as e:
+        _GDELT_HEALTH['not_sensed']['exception'] = _GDELT_HEALTH['not_sensed'].get('exception', 0) + 1
+        print(f"[KSA Rhetoric] GDELT gateway error: {str(e)[:100]}")
+        return []
+    if probe.get('sensed'):
+        _GDELT_HEALTH['sensed'] += 1
+        if probe.get('cached'):
+            _GDELT_HEALTH['cached'] += 1
+    else:
+        r = probe.get('reason') or 'unknown'
+        _GDELT_HEALTH['not_sensed'][r] = _GDELT_HEALTH['not_sensed'].get(r, 0) + 1
+    articles = []
+    for item in raw or []:
+        articles.append({
+            'title':       item.get('title', ''),
+            'description': '',
+            'url':         item.get('url', ''),
+            'published':   item.get('published', ''),
+            'source':      item.get('source') or 'GDELT',
+            'feed_id':     'gdelt',
+            'feed_type':   'gdelt',
+            'language':    'ar' if language == 'ara' else 'en',
+            'feed_weight': 0.85,
+        })
+    _GDELT_HEALTH['articles'] += len(articles)
+    return articles
 
 
 def fetch_all_gdelt(days=7):
+    # Oct 18 2026: queries are REGISTERED with the trickle, which re-fetches them
+    # slowly in the background into the shared cache; this scan then mostly
+    # READS. The 0.5s sleeps are gone -- the gateway owns pacing.
+    for k in list(_GDELT_HEALTH):
+        _GDELT_HEALTH[k] = {} if k == 'not_sensed' else 0
+    plan = [(q, 'eng') for q in GDELT_QUERIES_EN] + [(q, 'ara') for q in GDELT_QUERIES_ES]
+    if _trickle_register and _GDELT_GATEWAY:
+        try:
+            _trickle_register('saudi', [{'query': _gdelt_gw_query(q, l), 'language': l,
+                                      'timespan': f'{days}d', 'maxrecords': 50} for q, l in plan])
+        except Exception as e:
+            print(f"[KSA Rhetoric] trickle registration failed (non-fatal): {str(e)[:80]}")
     all_articles = []
-    for q in GDELT_QUERIES_EN:
-        all_articles.extend(fetch_gdelt_query(q, language='eng', days=days))
-        time.sleep(0.5)
-    for q in GDELT_QUERIES_ES:
-        all_articles.extend(fetch_gdelt_query(q, language='ara', days=days))
-        time.sleep(0.5)
-    print(f"[KSA Rhetoric] GDELT: {len(all_articles)} articles")
+    for q, lang in plan:
+        all_articles.extend(fetch_gdelt_query(q, language=lang, days=days))
+    h = _GDELT_HEALTH
+    print(f"[KSA Rhetoric] GDELT: {len(all_articles)} articles (sensed {h['sensed']}/{h['queries']} "
+          f"queries, {h['cached']} from cache" + (f"; NOT sensed: {h['not_sensed']}" if h['not_sensed'] else '') + ")")
     return all_articles
 
 
@@ -2128,6 +2169,8 @@ def scan_saudi_rhetoric(force=False, days=7):
         'executive_summary':     executive_summary,
         'so_what':               so_what,
         'alignment_drift':       alignment_drift,
+        # Oct 18 2026: WHY GDELT returned what it did (throttled / budget / cache).
+        'gdelt_health':          dict(_GDELT_HEALTH),
         'source_breakdown': {
             'telegram': len(telegram_articles),
             'rss':     len(rss_articles),

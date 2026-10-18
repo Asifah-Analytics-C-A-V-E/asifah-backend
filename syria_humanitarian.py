@@ -851,7 +851,14 @@ def _fetch_gdelt(query, sourcelang, exclude_domains=None, max_items=20):
             print(f"[Syria News] GDELT gateway error {sourcelang}: {str(e)[:120]}")
 
     # ---- Tier 3: direct HTTPS fallback ----
-    if raw is None:
+    # Oct 18 2026: ONLY when the gateway is absent or unusable. It used to fire
+    # whenever the gateway said "not sensed" -- including THROTTLED -- so every
+    # platform stand-down got a direct GDELT call that re-armed the IP block
+    # (live log: "GDELT ara: direct HTTP 429 ... BLIND (route=gateway+direct)").
+    _gw_answered = isinstance(probe.get('gateway_probe'), dict)
+    if raw is None and _gw_answered:
+        probe['error'] = 'gateway: %s' % probe['gateway_probe'].get('reason')
+    if raw is None and not _gw_answered:
         try:
             probe['attempted'] += 1
             raw, status = _gdelt_direct(query, sourcelang, max_items)
@@ -874,7 +881,7 @@ def _fetch_gdelt(query, sourcelang, exclude_domains=None, max_items=20):
     probe['raw_count'] = len(raw)
     lang_code = {'eng': 'en', 'ara': 'ar', 'heb': 'he', 'fas': 'fa'}.get(sourcelang, 'en')
     for a in raw:
-        domain = a.get('domain', '')
+        domain = a.get('domain') or a.get('source', '') or ''
         if exclude_domains and any(d in domain for d in exclude_domains):
             probe['excluded'] += 1
             continue
@@ -882,7 +889,10 @@ def _fetch_gdelt(query, sourcelang, exclude_domains=None, max_items=20):
             'title': a.get('title', ''),
             'url': a.get('url', ''),
             'description': a.get('title', ''),
-            'publishedAt': a.get('seendate', ''),
+            # Oct 18 2026: gateway articles carry 'published'/'source', raw GDELT
+            # carries 'seendate'/'domain'. Reading only the raw names meant every
+            # gateway article went out with no date and no source (§5.7).
+            'publishedAt': a.get('seendate') or a.get('published', ''),
             'source': {'name': domain},
             'language': lang_code
         })

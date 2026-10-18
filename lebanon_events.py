@@ -24,6 +24,15 @@ Env vars required (shared with lebanon_humanitarian.py):
 import os
 import json
 import requests
+
+# Oct 18 2026: the GEO API now goes through the shared gateway too
+# (gdelt_get_json_probed, gateway v2.4.1+) -- same platform clock, stand-down,
+# budget and cache as every DOC query. This module was the last unpaced caller.
+try:
+    from gdelt_gateway import gdelt_get_json_probed as _gw_json_probed
+except ImportError:
+    _gw_json_probed = None
+    print('[Lebanon Events] gdelt_gateway < 2.4.1 or missing -- GEO fetch disabled (no direct fallback)')
 from datetime import datetime, timezone, timedelta
 
 UPSTASH_URL = os.environ.get('UPSTASH_REDIS_REST_URL')
@@ -151,6 +160,7 @@ def fetch_gdelt_events_lebanon(days=7, force=False):
     start_date = end_date - timedelta(days=days)
 
     all_events = []
+    _sensed, _not = 0, {}
 
     # Query GDELT for Lebanon-related conflict events
     # Using multiple queries to maximize coverage
@@ -173,18 +183,17 @@ def fetch_gdelt_events_lebanon(days=7, force=False):
                 'timespan': f'{days}d',
                 'maxrecords': 250,
             }
-            resp = requests.get(
-                GDELT_EVENT_URL,
-                params=params,
-                timeout=15
-            )
-
-            if resp.status_code != 200:
-                print(f"[Lebanon Events] GDELT error {resp.status_code} for '{query}'")
+            if _gw_json_probed is None:
+                break
+            data, probe = _gw_json_probed(GDELT_EVENT_URL, params,
+                                          label='lebanon_events/geo')
+            if not probe.get('sensed'):
+                print(f"[Lebanon Events] '{query}' not sensed ({probe.get('reason')}) -- "
+                      f"not 'no events'")
+                _not[probe.get('reason') or 'unknown'] = _not.get(probe.get('reason') or 'unknown', 0) + 1
                 continue
-
-            data = resp.json()
-            features = data.get('features', []) if data else []
+            _sensed += 1
+            features = data.get('features', []) if isinstance(data, dict) else []
 
             for feature in features:
                 props = feature.get('properties', {})
@@ -261,9 +270,28 @@ def fetch_gdelt_events_lebanon(days=7, force=False):
 
         except Exception as e:
             print(f"[Lebanon Events] Query '{query}' error: {e}")
-        # Small delay between queries
-        import time
-        time.sleep(0.5)
+        # (Oct 18 2026: the 0.5s sleep is gone -- the gateway owns pacing now.)
+
+    # Absence is reported, not inferred. If NO query was sensed (throttle,
+    # circuit, budget), we did not look -- so we must not cache "0 events"
+    # over the last real answer. Serve the last good payload, marked stale.
+    if _sensed == 0:
+        print(f"[Lebanon Events] BLIND -- 0/{len(queries)} queries sensed {_not}; "
+              f"keeping last good cache")
+        prior = _redis_get(EVENTS_CACHE_KEY)
+        if isinstance(prior, dict) and prior.get('events') is not None:
+            prior = dict(prior)
+            prior['stale'] = True
+            prior['gdelt_sensed'] = {'sensed': 0, 'queries': len(queries), 'not_sensed': _not}
+            return prior
+        return {
+            'success': False, 'events': [], 'total_events': 0,
+            'days_analyzed': days, 'event_type_counts': {},
+            'gdelt_sensed': {'sensed': 0, 'queries': len(queries), 'not_sensed': _not},
+            'error': 'GDELT not sensed (no prior data to fall back on)',
+            'cached_at': datetime.now(timezone.utc).isoformat(),
+            'version': '1.1.0',
+        }
 
     # Deduplicate by lat/lng/date/actor1 combination
     seen = set()
@@ -295,8 +323,9 @@ def fetch_gdelt_events_lebanon(days=7, force=False):
         'total_events': len(deduped),
         'days_analyzed': days,
         'event_type_counts': event_type_counts,
+        'gdelt_sensed': {'sensed': _sensed, 'queries': len(queries), 'not_sensed': _not},
         'cached_at': datetime.now(timezone.utc).isoformat(),
-        'version': '1.0.0',
+        'version': '1.1.0',
     }
 
     # Cache result

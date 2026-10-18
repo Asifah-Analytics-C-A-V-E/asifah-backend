@@ -27,6 +27,18 @@ Replaces: iran_protests.py + Iran-specific code from app.py
 """
 
 import requests
+
+# Oct 18 2026: GDELT goes ONLY through the shared gateway (v2.4.x): one
+# platform-wide clock (1 request / 5.5s), a shared 15-min stand-down after
+# any 429, a call budget and a shared Upstash cache. NO direct fallback: a
+# direct call during a stand-down re-arms GDELT's IP block for every module.
+try:
+    from gdelt_gateway import gdelt_fetch_probed as _gw_fetch_probed
+    _GDELT_GATEWAY = True
+except ImportError:
+    _gw_fetch_probed = None
+    _GDELT_GATEWAY = False
+    print('[Iran] gdelt_gateway unavailable -- GDELT disabled this process (no direct fallback, by design)')
 import json
 import os
 import re
@@ -952,47 +964,30 @@ def fetch_newsapi_articles(query, days=7):
 
 
 def fetch_gdelt_articles(query, days=7, language='eng'):
-    """Fetch articles from GDELT"""
+    """Fetch articles from GDELT -- through the shared gateway (Oct 18 2026).
+    Was a direct caller (2 attempts, 30s) and printed 'Failed after retries'
+    for a 429 -- a rate limit read as a GDELT outage."""
     try:
+        if not _GDELT_GATEWAY:
+            return []
         wrapped_query = f"({query})" if ' OR ' in query else query
-        params = {
-            'query': wrapped_query, 'mode': 'artlist', 'maxrecords': 75,
-            'timespan': f'{days}d', 'format': 'json', 'sourcelang': language
-        }
-
-        response = None
-        for attempt in range(2):
-            try:
-                response = requests.get(GDELT_BASE_URL, params=params, timeout=30)
-                if response.status_code == 200:
-                    break
-            except requests.Timeout:
-                if attempt == 0:
-                    print(f"[Iran] GDELT {language}: Retry after timeout...")
-                    time.sleep(2)
-                    continue
-                raise
-
-        if not response or response.status_code != 200:
-            print(f"[Iran] GDELT {language}: Failed after retries")
+        raw, probe = _gw_fetch_probed(wrapped_query, language=language,
+                                      timespan=f'{days}d', maxrecords=75,
+                                      label=f'iran_protests/{language}')
+        if not probe.get('sensed'):
+            print(f"[Iran] GDELT {language}: not sensed ({probe.get('reason')}) -- "
+                  f"we did not get to look; this is not 'no protests'")
             return []
 
-        try:
-            data = response.json()
-        except (json.JSONDecodeError, ValueError) as e:
-            print(f"[Iran] GDELT {language}: JSON parse error: {str(e)[:100]}")
-            return []
-
-        articles = data.get('articles', [])
         lang_code = {'eng': 'en', 'ara': 'ar', 'heb': 'he', 'fas': 'fa'}.get(language, 'en')
         standardized = []
-        for article in articles:
+        for article in raw or []:
             standardized.append({
                 'title': article.get('title', ''),
                 'description': article.get('title', ''),
                 'url': article.get('url', ''),
-                'publishedAt': article.get('seendate', ''),
-                'source': {'name': article.get('domain', 'GDELT')},
+                'publishedAt': article.get('published', ''),
+                'source': {'name': article.get('source') or 'GDELT'},
                 'content': article.get('title', ''),
                 'language': lang_code
             })

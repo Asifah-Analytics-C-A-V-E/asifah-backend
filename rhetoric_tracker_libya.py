@@ -58,6 +58,22 @@ print("[Rhetoric Tracker] Module loading...")
 # ========================================
 import requests
 
+# Oct 18 2026: GDELT goes ONLY through the shared gateway (v2.4.x): one
+# platform-wide clock (1 request / 5.5s), a shared 15-min stand-down after
+# any 429, a call budget and a shared Upstash cache. NO direct fallback: a
+# direct call during a stand-down re-arms GDELT's IP block for every module.
+try:
+    from gdelt_gateway import gdelt_fetch_probed as _gw_fetch_probed
+    _GDELT_GATEWAY = True
+except ImportError:
+    _gw_fetch_probed = None
+    _GDELT_GATEWAY = False
+    print('[Libya Rhetoric] gdelt_gateway unavailable -- GDELT disabled this process (no direct fallback, by design)')
+try:
+    from gdelt_trickle import register_queries as _trickle_register
+except ImportError:
+    _trickle_register = None
+
 # ── Shared trajectory reader (v1.0.0, Jul 25 2026) ────────────────────
 # Byte-identical across ALL backends. Answers the directional question the
 # wheel panel could not: is this hub GAINING or LOSING ground here?
@@ -1293,45 +1309,48 @@ def fetch_libya_articles(days=3):
         ],
     }
 
+    # Oct 18 2026 -- ROUTED THROUGH gdelt_gateway. This loop fired every query
+    # directly (60s timeout, 2 attempts, 0.5s apart) from the same IP as every
+    # other module. The queries are now REGISTERED with the trickle, which keeps
+    # them warm in the shared cache; the scan mostly READS. Language is passed
+    # as a code and the gateway puts sourcelang:<name> INSIDE the query, where
+    # GDELT reads it (the old URL parameter was ignored -- no filtering at all).
+    if _trickle_register and _GDELT_GATEWAY:
+        try:
+            _trickle_register('libya', [{'query': q, 'language': l, 'timespan': f'{days}d', 'maxrecords': 30}
+                                            for l, qs in gdelt_queries.items() for q in qs])
+        except Exception as _e:
+            print(f"[Libya Rhetoric] trickle registration failed (non-fatal): {str(_e)[:80]}")
     gdelt_count = 0
-    for lang, queries in gdelt_queries.items():
+    _gd_total = _gd_sensed = _gd_cached = 0
+    _gd_not = {}
+    for lang, queries in (gdelt_queries.items() if _GDELT_GATEWAY else []):
         for query in queries:
+            _gd_total += 1
             try:
-                params = {
-                    'query': query, 'mode': 'artlist', 'maxrecords': 30,
-                    'timespan': f'{days}d', 'format': 'json', 'sourcelang': lang,
-                }
-                resp = None
-                for attempt in range(2):
-                    try:
-                        resp = requests.get(GDELT_BASE_URL, params=params, timeout=60)
-                        if resp.status_code == 200:
-                            break
-                    except requests.Timeout:
-                        if attempt == 0:
-                            time.sleep(2)
-                            continue
-                        raise
-                if resp and resp.status_code == 200:
-                    try:
-                        data = resp.json()
-                    except (json.JSONDecodeError, ValueError):
-                        continue
-                    for art in data.get('articles', []):
-                        all_articles.append({
-                            'title': art.get('title', ''),
-                            'description': art.get('title', ''),
-                            'url': art.get('url', ''),
-                            'publishedAt': art.get('seendate', ''),
-                            'source': f'GDELT ({lang})',
-                            'content': art.get('title', ''),
-                        })
-                        gdelt_count += 1
+                raw, probe = _gw_fetch_probed(query, language=lang, timespan=f'{days}d',
+                                              maxrecords=30, label=f'libya/{lang}')
+                if probe.get('sensed'):
+                    _gd_sensed += 1
+                    _gd_cached += 1 if probe.get('cached') else 0
+                else:
+                    r = probe.get('reason') or 'unknown'
+                    _gd_not[r] = _gd_not.get(r, 0) + 1
+                for art in raw or []:
+                    all_articles.append({
+                        'title': art.get('title', ''),
+                        'description': art.get('title', ''),
+                        'url': art.get('url', ''),
+                        'publishedAt': art.get('published', ''),
+                        'source': f'GDELT ({lang})',
+                        'content': art.get('title', ''),
+                    })
+                    gdelt_count += 1
             except Exception as e:
-                print(f"[Rhetoric GDELT] {lang} error: {str(e)[:80]}")
-            time.sleep(0.5)
+                print(f"[Libya Rhetoric] GDELT {lang} error: {str(e)[:80]}")
 
-    print(f"[Rhetoric] GDELT: {gdelt_count} articles")
+    print(f"[Libya Rhetoric] GDELT: {gdelt_count} articles (sensed {_gd_sensed}/{_gd_total} queries, "
+          f"{_gd_cached} from cache" + (f"; NOT sensed: {_gd_not}" if _gd_not else '') + ")")
 
     # NewsAPI
     if NEWSAPI_KEY:

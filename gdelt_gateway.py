@@ -1,6 +1,11 @@
 """
 Asifah Analytics -- GDELT Gateway
-v2.4.0 -- October 18 2026  |  portable, drop into any backend (same file everywhere)
+v2.4.1 -- October 18 2026  |  portable, drop into any backend (same file everywhere)
+
+v2.4.1 (same day): sourcelang codes mapped to the NAMES GDELT documents
+('ara' -> 'arabic'); gdelt_get_json_probed() routes the GEO API (and any other
+GDELT endpoint) through the same slot / stand-down / budget / cache, via ONE
+request core, _gated_request().
 
 ═══════════════════════════════════════════════════════════════════════
 WHY v2.4.0 EXISTS -- A REGRESSION, THEN THREE THINGS NOBODY KNEW
@@ -95,7 +100,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '2.4.0'
+__version__ = '2.4.1'
 
 
 def _env_f(name, default):
@@ -132,6 +137,7 @@ L1_MAX_ENTRIES        = 400
 THROTTLE_CHECK_EVERY  = 5.0     # seconds between shared stand-down reads
 
 GDELT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc'
+GDELT_GEO_API = 'https://api.gdeltproject.org/api/v2/geo/geo'
 KEY_PREFIX    = 'gdelt_gw:'
 
 UPSTASH_URL = (os.environ.get('UPSTASH_REDIS_URL')
@@ -399,15 +405,48 @@ def _succeed(n):
 
 
 # ── Query shaping ───────────────────────────────────────────────────────
+# GDELT's DOC 2.0 documentation shows sourcelang by NAME ("sourcelang:spanish");
+# 3-character codes are mentioned but no list of accepted codes is published.
+# Callers across five backends pass ISO-style codes ('ara', 'fas', 'heb', ...),
+# so the gateway translates to the documented form. Unknown values pass
+# through unchanged (a caller that already passes a name keeps working).
+# Names follow CLD2, the language detector GDELT uses.
+_LANG_NAMES = {
+    'ara': 'arabic', 'heb': 'hebrew', 'fas': 'persian', 'per': 'persian', 'far': 'persian',
+    'eng': 'english', 'fra': 'french', 'fre': 'french', 'deu': 'german', 'ger': 'german',
+    'spa': 'spanish', 'por': 'portuguese', 'ita': 'italian', 'rus': 'russian',
+    'ukr': 'ukrainian', 'tur': 'turkish', 'hun': 'hungarian', 'pol': 'polish',
+    'ron': 'romanian', 'rum': 'romanian', 'srp': 'serbian', 'hrv': 'croatian',
+    'bos': 'bosnian', 'ell': 'greek', 'gre': 'greek', 'bul': 'bulgarian',
+    'ces': 'czech', 'cze': 'czech', 'slk': 'slovak', 'slo': 'slovak', 'nld': 'dutch',
+    'dut': 'dutch', 'dan': 'danish', 'swe': 'swedish', 'nor': 'norwegian',
+    'fin': 'finnish', 'est': 'estonian', 'lav': 'latvian', 'lit': 'lithuanian',
+    'zho': 'chinese', 'chi': 'chinese', 'jpn': 'japanese', 'kor': 'korean',
+    'vie': 'vietnamese', 'tha': 'thai', 'ind': 'indonesian', 'msa': 'malay',
+    'may': 'malay', 'tgl': 'tagalog', 'hin': 'hindi', 'urd': 'urdu', 'ben': 'bengali',
+    'kat': 'georgian', 'geo': 'georgian', 'hye': 'armenian', 'arm': 'armenian',
+    'aze': 'azerbaijani', 'kaz': 'kazakh', 'uzb': 'uzbek', 'som': 'somali',
+    'amh': 'amharic', 'swa': 'swahili', 'hau': 'hausa', 'pus': 'pashto',
+    'kur': 'kurdish', 'sqi': 'albanian', 'alb': 'albanian', 'mkd': 'macedonian',
+    'mac': 'macedonian', 'slv': 'slovenian', 'bel': 'belarusian', 'mon': 'mongolian',
+}
+
+
+def _lang_name(language):
+    lang = (language or '').strip().lower()
+    return _LANG_NAMES.get(lang, lang)
+
+
 def _apply_language(query, language):
-    """GDELT reads sourcelang ONLY inside the query text (DOC 2.0 docs)."""
+    """GDELT reads sourcelang ONLY inside the query text (DOC 2.0 docs).
+    English: no filter (unchanged behaviour -- GDELT searches all languages)."""
     q = (query or '').strip()
-    lang = (language or '').strip()
-    if not lang or lang.lower() in ('eng', 'english', 'en'):
+    name = _lang_name(language)
+    if not name or name in ('eng', 'english', 'en'):
         return q
     if 'sourcelang:' in q.lower():
         return q            # caller already put it where GDELT reads it
-    return '%s sourcelang:%s' % (q, lang)
+    return '%s sourcelang:%s' % (q, name)
 
 
 def _parse(payload):
@@ -434,70 +473,58 @@ def _probe(sensed, reason, attempts=0, cached=False, layer=None):
             'cached': cached, 'cache_layer': layer}
 
 
-# ── Public API ──────────────────────────────────────────────────────────
-def gdelt_fetch_probed(query, language='eng', timespan='3d', maxrecords=75,
-                       label='', refresh=False, sourcelang=None, **extra):
-    """Fetch through the shared gateway. Returns (articles, probe).
+def _cache_read(k, refresh):
+    if refresh:
+        return None, None
+    hit = _l1_get(k)
+    if hit is not None:
+        with _lock:
+            _state['cache_hits'] += 1
+            _state['l1_hits'] += 1
+        return hit, 'l1'
+    hit = _l2_get(k)
+    if hit is not None:
+        _l1_put(k, hit)
+        with _lock:
+            _state['cache_hits'] += 1
+            _state['l2_hits'] += 1
+        return hit, 'l2'
+    return None, None
 
-    probe['sensed'] is True only when GDELT (or a cache of a real GDELT
-    answer) produced this result. An empty list with sensed=False means we
-    did not get to look -- never score that as quiet.
+
+def _gated_request(url, params, tag, label, parse):
+    """The ONE place an HTTP request to GDELT is made.
+
+    Every GDELT endpoint (DOC, GEO) goes through the same shared stand-down,
+    breaker, slot, budget and accounting. `parse(resp_json)` turns the body
+    into the cached payload. Returns (payload_or_None, probe).
     """
-    if sourcelang and (not language or language == 'eng'):
-        language = sourcelang
-    if extra:
-        bad = tuple(sorted(extra))
-        if bad not in _warned_kwargs:
-            _warned_kwargs.add(bad)
-            print('[GDELT Gateway] ignoring unknown kwargs %s (from %s)' % (list(bad), label or '?'))
-    tag = label or language or 'eng'
-    full_query = _apply_language(query, language)
-    k = _cache_key(full_query, timespan, maxrecords)
-    with _lock:
-        _state['requests_seen'] += 1
-
-    if not refresh:
-        hit = _l1_get(k)
-        if hit is not None:
-            with _lock:
-                _state['cache_hits'] += 1
-                _state['l1_hits'] += 1
-            return list(hit), _probe(True, None, cached=True, layer='l1')
-        hit = _l2_get(k)
-        if hit is not None:
-            _l1_put(k, hit)
-            with _lock:
-                _state['cache_hits'] += 1
-                _state['l2_hits'] += 1
-            return list(hit), _probe(True, None, cached=True, layer='l2')
-
     attempts = 0
     last_reason = 'not attempted'
     for attempt in range(MAX_RETRIES + 1):
-        rem = _throttled_remaining()
-        if rem > 0:
+        if _throttled_remaining() > 0:
             with _lock:
                 _state['throttle_skips'] += 1
-            return [], _probe(False, 'throttled', attempts)
-        state, open_for = _circuit_state()
+            return None, _probe(False, 'throttled', attempts)
+        state, _open_for = _circuit_state()
         if state == 'open':
             with _lock:
                 _state['circuit_skips'] += 1
-            return [], _probe(False, 'circuit_open', attempts)
+            return None, _probe(False, 'circuit_open', attempts)
 
         # Bounded wait for the in-process lock too: with 4 threads, an
-        # unbounded `with _sem:` could stack 4 x SLOT_MAX_WAIT_SEC of stall.
+        # unbounded wait could stack 4 x SLOT_MAX_WAIT_SEC of stall.
         if not _sem.acquire(timeout=SLOT_MAX_WAIT_SEC):
             with _lock:
                 _state['slot_timeouts'] += 1
-            return [], _probe(False, 'slot_wait_timeout', attempts)
+            return None, _probe(False, 'slot_wait_timeout', attempts)
         try:
             ok, why = _acquire_slot(tag)
             if not ok:
                 if why == 'throttled':
                     with _lock:
                         _state['throttle_skips'] += 1
-                return [], _probe(False, why, attempts)
+                return None, _probe(False, why, attempts)
             allowed, used = _budget_take()
             if not allowed:
                 with _lock:
@@ -506,15 +533,13 @@ def gdelt_fetch_probed(query, language='eng', timespan='3d', maxrecords=75,
                     print('[GDELT Gateway] call budget spent (%d per %dh, scope %s) -- '
                           'standing down until the window rolls'
                           % (MAX_CALLS_PER_WINDOW, BUDGET_WINDOW_SEC // 3600, BUDGET_SCOPE))
-                return [], _probe(False, 'budget_exhausted', attempts)
+                return None, _probe(False, 'budget_exhausted', attempts)
 
             attempts += 1
             _record_call(label)
-            params = {'query': full_query, 'mode': 'ArtList', 'format': 'json',
-                      'maxrecords': maxrecords, 'timespan': timespan}
             try:
                 resp = requests.get(
-                    GDELT_DOC_API, params=params,
+                    url, params=params,
                     timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
                     headers={'User-Agent': 'AsifahAnalytics/%s (OSINT monitoring tool; '
                                            '+https://asifahanalytics.com)' % __version__})
@@ -525,12 +550,12 @@ def gdelt_fetch_probed(query, language='eng', timespan='3d', maxrecords=75,
                       % (tag, READ_TIMEOUT, attempt + 1, MAX_RETRIES + 1,
                          ' -- CIRCUIT OPEN %ds' % CIRCUIT_COOLDOWN if tripped else ''))
                 if tripped or attempt >= MAX_RETRIES:
-                    return [], _probe(False, 'timeout', attempts)
+                    return None, _probe(False, 'timeout', attempts)
                 continue
             except Exception as e:
                 _fail('error')
                 print('[GDELT Gateway] %s: %s: %s' % (tag, type(e).__name__, str(e)[:110]))
-                return [], _probe(False, type(e).__name__, attempts)
+                return None, _probe(False, type(e).__name__, attempts)
 
             if resp.status_code == 429:
                 # Never retried (v2.3.1). One refusal stands the WHOLE platform
@@ -540,30 +565,92 @@ def gdelt_fetch_probed(query, language='eng', timespan='3d', maxrecords=75,
                 _set_throttled()
                 print('[GDELT Gateway] %s: 429 -- platform stand-down %ds (shared)'
                       % (tag, THROTTLE_SEC))
-                return [], _probe(False, 'rate_limited', attempts)
+                return None, _probe(False, 'rate_limited', attempts)
 
             if resp.status_code != 200:
                 _fail('error')
                 print('[GDELT Gateway] %s: HTTP %s' % (tag, resp.status_code))
-                return [], _probe(False, 'http_%s' % resp.status_code, attempts)
+                return None, _probe(False, 'http_%s' % resp.status_code, attempts)
 
             try:
-                articles = _parse(resp.json())
+                payload = parse(resp.json())
             except Exception:
                 _fail('error')
                 print('[GDELT Gateway] %s: unparseable body (%d bytes)'
                       % (tag, len(getattr(resp, 'content', b'') or b'')))
-                return [], _probe(False, 'unparseable_body', attempts)
+                return None, _probe(False, 'unparseable_body', attempts)
 
-            _succeed(len(articles))
-            _l1_put(k, articles)
-            _l2_put(k, articles)
-            print('[GDELT Gateway] %s: %d articles' % (tag, len(articles)))
-            return articles, _probe(True, None, attempts)
+            n = len(payload) if isinstance(payload, list) else \
+                len((payload or {}).get('features', []) or []) if isinstance(payload, dict) else 0
+            _succeed(n)
+            return payload, _probe(True, None, attempts)
         finally:
             _sem.release()
+    return None, _probe(False, last_reason, attempts)
 
-    return [], _probe(False, last_reason, attempts)
+
+def _warn_extra(extra, label):
+    if extra:
+        bad = tuple(sorted(extra))
+        if bad not in _warned_kwargs:
+            _warned_kwargs.add(bad)
+            print('[GDELT Gateway] ignoring unknown kwargs %s (from %s)' % (list(bad), label or '?'))
+
+
+# ── Public API ──────────────────────────────────────────────────────────
+def gdelt_fetch_probed(query, language='eng', timespan='3d', maxrecords=75,
+                       label='', refresh=False, sourcelang=None, **extra):
+    """DOC API article search through the shared gateway. Returns (articles, probe).
+
+    probe['sensed'] is True only when GDELT (or a cache of a real GDELT
+    answer) produced this result. An empty list with sensed=False means we
+    did not get to look -- never score that as quiet.
+    """
+    if sourcelang and (not language or language == 'eng'):
+        language = sourcelang
+    _warn_extra(extra, label)
+    tag = label or language or 'eng'
+    full_query = _apply_language(query, language)
+    k = _cache_key(full_query, timespan, maxrecords)
+    with _lock:
+        _state['requests_seen'] += 1
+
+    hit, layer = _cache_read(k, refresh)
+    if hit is not None:
+        return list(hit), _probe(True, None, cached=True, layer=layer)
+
+    params = {'query': full_query, 'mode': 'ArtList', 'format': 'json',
+              'maxrecords': maxrecords, 'timespan': timespan}
+    articles, probe = _gated_request(GDELT_DOC_API, params, tag, label, _parse)
+    if articles is None:
+        return [], probe
+    _l1_put(k, articles)
+    _l2_put(k, articles)
+    print('[GDELT Gateway] %s: %d articles' % (tag, len(articles)))
+    return articles, probe
+
+
+def gdelt_get_json_probed(endpoint, params, label='', refresh=False):
+    """Any OTHER GDELT endpoint (e.g. GEO 2.0, mode=pointdata) through the same
+    stand-down, breaker, slot, budget and two-layer cache. Returns (json, probe);
+    json is None when not sensed. Added v2.4.1 for lebanon_events (GEO API),
+    which was the platform's last unpaced GDELT caller."""
+    tag = label or 'json'
+    raw_key = endpoint + '|' + json.dumps(params or {}, sort_keys=True, ensure_ascii=False)
+    k = 'j' + hashlib.sha1(raw_key.encode('utf-8')).hexdigest()
+    with _lock:
+        _state['requests_seen'] += 1
+    hit, layer = _cache_read(k, refresh)
+    if hit is not None:
+        return hit[0], _probe(True, None, cached=True, layer=layer)
+    payload, probe = _gated_request(endpoint, params, tag, label, lambda j: j)
+    if payload is None:
+        return None, probe
+    # Cached as a one-element list so the L1/L2 helpers (list-shaped) serve it.
+    _l1_put(k, [payload])
+    _l2_put(k, [payload])
+    print('[GDELT Gateway] %s: json ok' % tag)
+    return payload, probe
 
 
 def gdelt_fetch(query, language='eng', timespan='3d', maxrecords=75, label='',
@@ -732,7 +819,7 @@ if __name__ == '__main__':
     print('TEST 1 -- language goes INTO the query (GDELT ignores the URL param)')
     fresh(); requests.get = ok_get
     gdelt_fetch('قطر', language='ara', label='qatar/ara')
-    check('1a', sent[-1]['query'] == 'قطر sourcelang:ara', repr(sent[-1]['query']))
+    check('1a', sent[-1]['query'] == 'قطر sourcelang:arabic', repr(sent[-1]['query']))
     check('1b', 'sourcelang' not in sent[-1], 'no URL param')
     gdelt_fetch('Qatar', language='eng', label='qatar/eng')
     check('1c', sent[-1]['query'] == 'Qatar', 'eng unchanged')
@@ -742,9 +829,9 @@ if __name__ == '__main__':
     print('TEST 2 -- Syria News signatures: sourcelang= kwarg and positional')
     fresh(); requests.get = ok_get
     a, p = gdelt_fetch_probed('Syria', sourcelang='ara', maxrecords=20, timespan='7d')
-    check('2a', p['sensed'] and sent[-1]['query'].endswith('sourcelang:ara'), sent[-1]['query'])
+    check('2a', p['sensed'] and sent[-1]['query'].endswith('sourcelang:arabic'), sent[-1]['query'])
     a, p = gdelt_fetch_probed('Damascus', 'ara')
-    check('2b', p['sensed'] and sent[-1]['query'].endswith('sourcelang:ara'))
+    check('2b', p['sensed'] and sent[-1]['query'].endswith('sourcelang:arabic'))
 
     print('TEST 3 -- L1 then L2 cache (L2 is what the trickle warms)')
     fresh(); requests.get = ok_get
@@ -824,12 +911,37 @@ if __name__ == '__main__':
             'process_started_at', 'success_rate')
     check('11a', all(k in s for k in need), 'missing=%s' % [k for k in need if k not in s])
     check('11b', s['spend_by_label'].get('trickle') == 1 and s['spend_by_label'].get('saudi') == 1, s['spend_by_label'])
-    check('11c', s['gateway_version'] == '2.4.0' and isinstance(SHARED_CACHE_TTL_SEC, int))
+    check('11c', s['gateway_version'] == __version__ and isinstance(SHARED_CACHE_TTL_SEC, int))
 
     print('TEST 12 -- unknown kwargs never TypeError (they are logged once)')
     fresh(); requests.get = ok_get
     a, p = gdelt_fetch_probed('K1', mode='ArtList')
     check('12a', p['sensed'])
+
+    print('TEST 13 -- codes map to GDELT\'s documented NAMES; unknown passes through')
+    fresh(); requests.get = ok_get
+    gdelt_fetch('Lebanon', language='fas'); q1 = sent[-1]['query']
+    gdelt_fetch('Libia', language='ita'); q2 = sent[-1]['query']
+    gdelt_fetch('X', language='klingon'); q3 = sent[-1]['query']
+    check('13a', q1.endswith('sourcelang:persian') and q2.endswith('sourcelang:italian'), '%s | %s' % (q1, q2))
+    check('13b', q3.endswith('sourcelang:klingon'), q3)
+
+    print('TEST 14 -- GEO API goes through the SAME gates (stand-down, cache)')
+    fresh()
+    geo = {'type': 'FeatureCollection', 'features': [{'properties': {'name': 'Khiam'}, 'geometry': {'coordinates': [35.6, 33.3]}}]}
+    def geo_get(url, params=None, **k):
+        sent.append(dict(params or {}, _url=url)); return Resp(200, geo)
+    requests.get = geo_get
+    j, p = gdelt_get_json_probed(GDELT_GEO_API, {'query': 'Lebanon', 'mode': 'pointdata', 'format': 'json'}, label='lebanon_events')
+    check('14a', p['sensed'] and j['features'][0]['properties']['name'] == 'Khiam' and sent[-1]['_url'] == GDELT_GEO_API)
+    n = len(sent); _l1.clear()
+    j2, p2 = gdelt_get_json_probed(GDELT_GEO_API, {'query': 'Lebanon', 'mode': 'pointdata', 'format': 'json'}, label='lebanon_events')
+    check('14b', len(sent) == n and p2['cache_layer'] == 'l2' and j2 == j, 'L2 serves GEO too')
+    requests.get = rl_get
+    gdelt_get_json_probed(GDELT_GEO_API, {'query': 'Hezbollah'}, label='lebanon_events')
+    requests.get = ok_get; n = len(sent)
+    a, p = gdelt_fetch_probed('after-geo-429')
+    check('14c', p['reason'] == 'throttled' and len(sent) == n, 'a GEO 429 stands the DOC API down too')
 
     requests.get = real_get
     if failures:
