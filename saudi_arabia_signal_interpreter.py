@@ -16,7 +16,7 @@ Estimative voice. Convergence, not prediction. The reader completes the inferenc
 # v1.1.0: `import re` and `from datetime import ...` removed -- neither name
 # was referenced anywhere in this module.
 
-MODULE_VERSION = '1.2.3'
+MODULE_VERSION = '1.3.0'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -35,6 +35,16 @@ VECTOR_MEMBERS = {
     'energy_infrastructure':   ('aramco_energy', 'opec_policy'),
     'normalization_watch':     ('accords_normalization', 'us_saudi', 'gcc_saudi'),
     'domestic_transformation': ('royal_court_mbs', 'vision2030_domestic'),
+    # v1.3.0: the two vectors/actors added 11 + 18 Oct had no members here, so
+    # so-what "Driving this scan" never named them.
+    'guarantor_response':      ('mecca_pact_turkiye', 'mecca_pact_pakistan', 'egypt_support'),
+}
+
+TRIPWIRE_LABELS = {
+    'non_pact_deployment':     'Non-Pact Deployment (Egypt)',
+    'israel_defense_transfer': 'Israeli Defence Transfer',
+    'hormuz_closure':          'Hormuz Closure',
+    'hajj_mass_casualty':      'Hajj Mass Casualty',
 }
 
 # Actor display names for prose (cleaner than the formal `name` field)
@@ -49,6 +59,10 @@ ACTOR_PROSE_NAMES = {
     'accords_normalization': 'the Israel normalization watch',
     'us_saudi':              'the US-Saudi track',
     'gcc_saudi':             'the GCC posture line',
+    'palestinian_file':      'the Palestinian file (holdout anchors)',
+    'mecca_pact_turkiye':    'Turkiye (Mecca Pact guarantor)',
+    'mecca_pact_pakistan':   'Pakistan (Mecca Pact guarantor)',
+    'egypt_support':         'Egypt (non-pact support)',
 }
 
 # Off-ramp / de-escalation patterns (lowered urgency when present)
@@ -184,7 +198,7 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
         # time a tripwire fired live -- silently dropping the whole interpreter
         # (alignment drift included) to the tracker's builtin fallback.
         long_text = _tripwire_prose(tw_id, actor_id)
-        short = "\u26a0 Tripwire: " + str(tw_id).replace('_', ' ').title()
+        short = "\u26a0 Tripwire: " + (TRIPWIRE_LABELS.get(tw_id) or str(tw_id).replace('_', ' ').title())
         # v1.2.2: carry the tripwire id + confirmation class to the page. The
         # same tripwire can fire under several actors with different classes
         # (live: succession_event confirmed under one actor, claim_sourced
@@ -322,6 +336,11 @@ def _tripwire_prose(tw_id, actor_id):
             "Bank and Lebanon, and only a defense need acute enough to outweigh that file moves it. The "
             "tell is Riyadh's response -- a public denial keeps the holdout intact; silence is the signal. "
             "US-sourced claims of cooperation are not Saudi confirmation."),
+        'non_pact_deployment': (
+            "A non-signatory's forces arriving in the Kingdom, at tripwire confidence. Egypt is not in the "
+            "Mecca Pact; its deployment answers the pact's own question -- does an attack on Saudi Arabia "
+            "pull in third parties -- from OUTSIDE the treaty. Read it against Turkiye and Pakistan: if the "
+            "outsider arrives before the guarantors move, the pact is being priced by its absence."),
         'hajj_mass_casualty': (
             "Hajj mass-casualty signals at tripwire confidence -- a Custodian-legitimacy event class. "
             "NOTE: Hajj-window timing itself is a calendar MULTIPLIER on other tripwires, never a "
@@ -452,6 +471,26 @@ def _actor_specific_long_text(actor_id, actor, deescalation):
             "GCC posture line at " + lvl + ". Riyadh's cohesion/rift vocabulary reads against the 2017 "
             "blockade precedent -- rift language from the GCC's anchor member is never noise. Summit "
             "outcomes and bilateral normalization gestures are the confirmation gauges.",
+        # v1.3.0: these four fell through to the generic line ("Actor signal
+        # tempo at elevated versus baseline") -- live for Pakistan on 18 Oct.
+        'palestinian_file':
+            "Palestinian-file tempo at " + lvl + " -- the holdout anchors Riyadh actually names (Gaza, the "
+            "West Bank, Lebanon). Hardening language here re-anchors the Accords holdout; softening or "
+            "SILENCE while the normalization track is active is the signature-adjacent tell.",
+        'mecca_pact_turkiye':
+            "Turkiye guarantor tempo at " + lvl + ". Ankara is a Mecca Pact guarantor AND a hub on this "
+            "platform -- deployment, basing or overflight vocabulary here also lights the Turkey wheel's "
+            "Saudi spoke. Words usually move before forces; watch whether they do.",
+        'mecca_pact_pakistan':
+            "Pakistan guarantor tempo at " + lvl + ". DG ISPR is the authoritative voice and it speaks in "
+            "Urdu first. Islamabad has already said troops are present in the Kingdom under the pact; "
+            "tempo here measures whether that presence is being publicly re-committed under fire.",
+        'egypt_support':
+            "Egyptian support tempo at " + lvl + " -- a NON-signatory. Cairo moving (defence-council "
+            "approval, transport aircraft at Taif, parliamentary authorisation for troops) while the pact "
+            "guarantors stay flat is the comparison that matters: an outsider responding first re-prices "
+            "what the pact is worth. The Houthis have warned Cairo directly -- watch Red Sea / Suez "
+            "exposure as the cost Egypt is accepting.",
     }
     return P.get(actor_id, "Actor signal tempo at " + lvl + " versus baseline.") + de
 
@@ -753,6 +792,12 @@ def build_so_what_factor(actor_summaries, vector_scores, vector_levels, tripwire
             "tempo reads as fiscal pressure -- PIF is a mega-allocator, so deployment shifts transmit into "
             "global asset markets within quarters; succession signals ride this vector at maximum weight. "
             "Confirmation gauges: giga-project milestones, budget statements, the Tadawul tile.", 0.8),
+        'guarantor_response': ("Guarantor & third-party response at {lvl}. What it means: an attack on "
+            "the Kingdom is pulling in outside military support -- the question the Mecca Pact was built "
+            "to answer. Who is moving matters more than how much: guarantor movement (Turkiye, Pakistan) "
+            "tests the pact; non-signatory movement (Egypt) tests the region around it. The Mecca Pact "
+            "card carries the measured reading. Confirmation gauges: deployment and basing statements, "
+            "DG ISPR, transport-aircraft and air-defence arrivals.", 0.88),
     }
     for vec, (txt, w) in CHAINS.items():
         l = lv.get(vec)

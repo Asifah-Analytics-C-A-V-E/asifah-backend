@@ -10,9 +10,10 @@ SLICES (crosstheater:saudi_arabia:fingerprint): iran (friction+detente),
 china (counter-BRI reverse polarity -- IMEC hub), israel (normalization drift:
 Accords holdout <-> signature), us (ally anchor).
 
-ACTORS (13): royal_court_mbs, vision2030_domestic, gcc_saudi, houthi_yemen,
+ACTORS (14): royal_court_mbs, vision2030_domestic, gcc_saudi, houthi_yemen,
   mecca_pact_turkiye, mecca_pact_pakistan, saudi_mod_airdefense, aramco_energy,
-  opec_policy, iran_saudi, accords_normalization, palestinian_file, us_saudi
+  opec_policy, iran_saudi, accords_normalization, palestinian_file, us_saudi,
+  egypt_support (non-pact third party, 18 Oct 2026)
 MECCA PACT: Saudi Arabia · Turkiye · Pakistan (signed Aug 2026; collective
   deterrence activated 5 Oct 2026). Turkiye is a hub (turkey_spoke block);
   Pakistan is a guarantor ACTOR, not a hub.
@@ -29,7 +30,7 @@ import os
 import re
 import json
 
-MODULE_VERSION = '2.1.3'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.2.0'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
@@ -305,6 +306,39 @@ ACTORS = {
         'baseline_statements_per_week': 2,
     },
 
+    # NEW 18 Oct 2026 (Rachel's ruling): Egypt is NOT a Mecca Pact signatory,
+    # but it is the one outside power visibly moving -- National Defense
+    # Council approval, El-Sisi's "any measure" pledge, C-130s at King Fahd
+    # Air Base (Taif), parliament approving troops. It sits on the
+    # guarantor_response vector, whose question was always "does an attack on
+    # Saudi Arabia pull in third parties" -- but it is kept OUT of the pact's
+    # own reading, so the page can say the finding plainly: the guarantors
+    # are flat while a non-signatory deploys. Keywords trace to verbatim Oct
+    # 2026 headlines:
+    #   "Egypt Deploys Troops To Saudi Arabia"                         (Kurdistan24)
+    #   "Egypt approves sending troops to Saudi amid Houthi attacks"   (Siasat)
+    #   "Egypt's president vows to use 'any measure' to defend Saudi Arabia" (Fortune)
+    #   "Egypt pledges support for Saudi Arabia as Houthis warn Cairo" (The National)
+    #   "Egypt's Sisi seeks authorisation for defence assistance to Saudi Arabia" (Al Jazeera)
+    #   "Egypt says ready to give Saudi Arabia necessary support"      (Al-Monitor)
+    # Deliberately NOT 'egypt support saudi': Saudi deposits and aid TO Egypt
+    # are a standing story and would read as Egypt mobilising.
+    'egypt_support': {
+        'name': 'Egypt (Non-Pact Support)', 'flag': '\U0001F1EA\U0001F1EC', 'icon': '\U0001F6E1\uFE0F', 'color': '#eab308',
+        'role': 'Third-party military support -- not a Mecca Pact signatory',
+        'description': 'Egyptian military support to Saudi Arabia outside the Mecca Pact: defence-council approval, troop and air-defence deployment, parliamentary authorisation. Read against the pact guarantors: an outsider moving while the guarantors stay flat is itself the finding.',
+        'vector': 'guarantor_response',
+        'keywords': ['egypt troops saudi', 'egyptian troops saudi', 'egyptian forces saudi',
+                     'egypt defend saudi', 'egypt pledges support saudi',
+                     'egypt necessary support saudi', 'egypt defence assistance saudi',
+                     'egypt defense assistance saudi', 'egyptian military transport saudi',
+                     'egyptian parliament troops', 'egypt national defense council saudi',
+                     'sisi defend saudi',
+                     '\u0642\u0648\u0627\u062a \u0645\u0635\u0631\u064a\u0629',     # AR  Egyptian forces
+                     '\u0645\u0635\u0631 \u0627\u0644\u062f\u0641\u0627\u0639 \u0639\u0646 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629'],  # AR  Egypt + defend + Saudi
+        'baseline_statements_per_week': 2,
+    },
+
     'saudi_mod_airdefense': {
         'name': 'Saudi MOD / Air Defense', 'flag': '🇸🇦', 'icon': '🛡️', 'color': '#f97316',
         'role': 'Defense posture -- intercepts, coalition ops, procurement',
@@ -422,7 +456,7 @@ VECTOR_GROUPS = {
     # Saudi Arabia pull in third parties, and do the guarantors' words move
     # before their forces do? Flat guarantor tempo through a mass-casualty
     # strike is a REAL READING -- the pact is paper -- not a missing sensor.
-    'guarantor_response':      ['mecca_pact_turkiye', 'mecca_pact_pakistan'],
+    'guarantor_response':      ['mecca_pact_turkiye', 'mecca_pact_pakistan', 'egypt_support'],
 }
 
 # ⚠ FIFTH VECTOR. saudi_arabia-stability.html renders a FOUR-gauge contract.
@@ -509,6 +543,18 @@ TRIPWIRES = {
                  'normalizes faster than any summit. Strong INROAD driver on '
                  'the Accords axis -- it is the scenario in which the holdout '
                  'becomes materially expensive.'),
+    },
+    # NEW 18 Oct 2026: an outside power's forces ARRIVING in the Kingdom.
+    # Sentence-scoped (tripwire matcher), so "Egypt pledges support" alone
+    # does not fire -- arrival/deployment vocabulary does.
+    'non_pact_deployment': {
+        'patterns': ['egypt deploys troops saudi', 'egyptian troops arrive saudi',
+                     'egyptian forces arrive saudi', 'egyptian military transport saudi',
+                     'egypt approves sending troops saudi', 'egyptian troops deployed saudi'],
+        'severity': 'elevated',
+        'note': ('A non-signatory deploying forces into the Kingdom. Read against the '
+                 'Mecca Pact guarantors: an outsider arriving first re-prices what the '
+                 'pact is worth.'),
     },
     'succession_event': {
         # v2.2.0: STRICT PHRASES ONLY. Even sentence-scoping cannot save a
@@ -1578,6 +1624,7 @@ def _mecca_pact_reading(actor_levels):
     _O = ['low', 'normal', 'elevated', 'high', 'surge']
     tk = actor_levels.get('mecca_pact_turkiye', 'low')
     pk = actor_levels.get('mecca_pact_pakistan', 'low')
+    eg = actor_levels.get('egypt_support', 'low')   # NON-pact: reported, never counted as a guarantor
     kin = max(actor_levels.get('houthi_yemen', 'low'),
               actor_levels.get('saudi_mod_airdefense', 'low'), key=_O.index)
     responding = [g for g, lv in (('turkiye', tk), ('pakistan', pk))
@@ -1595,8 +1642,16 @@ def _mecca_pact_reading(actor_levels):
     else:
         reading = 'no_test'
         note = ('No Saudi strike cycle this scan, so guarantor quiet tests nothing yet.')
+    third_party = [n for n, lv in (('egypt', eg),) if lv in ('elevated', 'high', 'surge')]
+    if third_party and reading == 'flat_under_fire':
+        note += (' Meanwhile a NON-signatory is moving (' + ', '.join(n.title() for n in third_party) + ' at ' + eg +
+                 '): the outsider responding before the guarantors is itself the finding.')
+    elif third_party:
+        note += (' Non-pact support is also moving (' + ', '.join(n.title() for n in third_party) + ' at ' + eg + ').')
     return {'turkiye_level': tk, 'pakistan_level': pk, 'kinetic_level': kin,
             'guarantors_responding': ['mecca_pact_' + g for g in responding],
+            'third_party': {'egypt': eg},
+            'third_party_responding': third_party,
             'reading': reading, 'note': note}
 
 
