@@ -16,7 +16,7 @@ Estimative voice. Convergence, not prediction. The reader completes the inferenc
 # v1.1.0: `import re` and `from datetime import ...` removed -- neither name
 # was referenced anywhere in this module.
 
-MODULE_VERSION = '1.2.0'
+MODULE_VERSION = '1.2.1'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -125,8 +125,8 @@ def _commodity_story_signal(commodity_pressure):
         'long_text':  ('Composite news-signal pressure (weighted volume/severity '
                        'of matched reporting, NOT price) is at ' + alert.upper()
                        + ' across ' + esc_txt + '. Saudi Arabia supply-risk premium is '
-                       'partly a political risk premium -- this composite and the '
-                       'runoff count are stacking on the same window.'),
+                       'partly a political risk premium -- read this composite against '
+                       'the rhetoric vectors, which are scored on the same window.'),
         'source_link': '/saudi_arabia-stability.html#commodities',
     }
 

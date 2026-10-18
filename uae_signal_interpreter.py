@@ -19,7 +19,7 @@ Estimative voice. Convergence, not prediction.
 
 # ONE version string, read by the load banner. Two hand-maintained copies is
 # how a module reports one version in a log line and another in a payload.
-MODULE_VERSION = '1.2.0'
+MODULE_VERSION = '1.2.1'
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -126,8 +126,8 @@ def _commodity_story_signal(commodity_pressure):
         'long_text':  ('Composite news-signal pressure (weighted volume/severity '
                        'of matched reporting, NOT price) is at ' + alert.upper()
                        + ' across ' + esc_txt + '. UAE supply-risk premium is '
-                       'partly a political risk premium -- this composite and the '
-                       'runoff count are stacking on the same window.'),
+                       'partly a political risk premium -- read this composite against '
+                       'the rhetoric vectors, which are scored on the same window.'),
         'source_link': '/uae-stability.html#commodities',
     }
 

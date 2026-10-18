@@ -1,5 +1,7 @@
 """
-rhetoric_tracker_qatar.py -- Asifah Analytics ME Backend -- v1.0.0 Jul 2026
+rhetoric_tracker_qatar.py -- Asifah Analytics ME Backend -- v2.0.0 Oct 18 2026
+(v2.0.0: Saudi v2.1.1 matcher port, mediation doctrine enforced, force-majeure
+ + Doha-strike tripwires, tripwire alert floor. v1.0.0 Jul 2026)
 MEDIATION-CLASS TRACKER (Iran wheel step 4). DOCTRINE: mediation activity is
 TEMPO, not threat -- active Doha channels are mostly composite-neutral;
 mediation COLLAPSE is the pressure event. The Iran wheel consumes the mediation
@@ -21,6 +23,8 @@ import traceback
 from datetime import datetime, timezone, timedelta
 
 import requests
+
+MODULE_VERSION = '2.0.0'   # ONE version string -- every payload/debug field reads this
 
 # Optional dependencies — degrade gracefully if missing
 try:
@@ -112,9 +116,21 @@ ACTORS = {
         'role': 'THE mediation voice -- Iran-US channels, hostage files, shuttle diplomacy',
         'description': 'Qatari FM/MOFA mediation statements: Iran-US back-channels, prisoner exchanges, ceasefire brokering. Tempo here is a de-escalation sensor -- active channels historically precede off-ramps.',
         'vector': 'mediation_activity',
+        # v2.0.0 Oct 18 2026: live payload read this actor at 0 articles in a
+        # week Doha was mediating mid-war. Adjacent-phrase matching could not
+        # see "Qatar's Amir vows to defend sovereignty while maintaining
+        # MEDIATION efforts" (Doha News). Tokens-present matching fixes that;
+        # added terms trace to verbatim Oct 2026 headlines:
+        #   "Qatar's prime minister to visit Tehran, seeking to revive US-Iran talks" (Al Jazeera)
+        #   "Qatar welcomes start of US-Iran talks, seeks lasting solutions"        (AA)
+        #   "Qatar ... reaffirms its role as mediator in negotiations between the US and Iran"
+        #   "Qatar PM-FM meets Lebanese leaders in Beirut ..."                      (Doha News)
         'keywords': ['qatar mediation','qatar mediates','qatar broker','doha talks','qatar foreign minister',
                      'qatar hosts talks','qatari mediation','al thani mediation','doha negotiations',
-                     'qatar prisoner exchange','وساطة قطر'],
+                     'qatar prisoner exchange','وساطة قطر',
+                     'qatar mediator', 'qatari mediators', 'qatar us iran talks',
+                     'qatar prime minister tehran', 'qatar pm-fm', 'qatar mediation efforts',
+                     'majed al-ansari', 'الوساطة القطرية'],
         'baseline_statements_per_week': 7,
     },
     'hamas_gaza_file': {
@@ -123,7 +139,9 @@ ACTORS = {
         'description': 'Qatar-hosted Gaza negotiations: ceasefire rounds, hostage releases, Hamas political-office status. Office-expulsion signals mark a mediation-posture rupture.',
         'vector': 'mediation_activity',
         'keywords': ['qatar hamas','doha ceasefire talks','qatar gaza mediation','hamas office doha',
-                     'qatar hostage deal','gaza negotiations doha'],
+                     'qatar hostage deal','gaza negotiations doha',
+                     # v2.0.0: tokens-present widens these; two order-free adds
+                     'qatar gaza ceasefire', 'qatari mediators gaza'],
         'baseline_statements_per_week': 6,
     },
     'emir_leadership': {
@@ -131,8 +149,11 @@ ACTORS = {
         'role': 'Sheikh Tamim statements -- strategic posture and QIA direction',
         'description': 'Emiri statements, summit appearances, sovereign-wealth signals.',
         'vector': 'mediation_activity',
+        # v2.0.0: Doha News and QNA write "Amir", not "Emir" -- "Qatar's Amir
+        # calls for stronger Asian cooperation" never matched 'qatar emir'.
         'keywords': ['sheikh tamim','qatar emir','emir of qatar','tamim bin hamad','qatari leadership',
-                     'qatar investment authority','تميم بن حمد'],
+                     'qatar investment authority','تميم بن حمد',
+                     'qatar amir', 'amir of qatar', 'amir tamim'],
         'baseline_statements_per_week': 5,
     },
     'qatarenergy_lng': {
@@ -149,7 +170,11 @@ ACTORS = {
         'role': 'Structural pragmatism -- shared field, careful neutrality',
         'description': 'Iran-Qatar signals: the shared North Field/South Pars condominium forces pragmatism. Friction here would be a structural rupture, not a Tuesday.',
         'vector': 'gas_infrastructure',
-        'keywords': ['iran qatar','qatar iran relations','south pars','iran qatar gas','qatar iran talks',
+        # v2.0.0: bilateral terms are STRICT. Order-free 'iran qatar' matched
+        # "Qatar welcomes start of US-Iran talks" -- Doha MEDIATING the Iran
+        # file counted as Iran-Qatar bilateral friction, on a threat vector.
+        'keywords': ['"iran-qatar"', '"qatar-iran"', 'qatar iran relations', 'south pars',
+                     'iran qatar gas', '"qatar-iran talks"', '"iran-qatar talks"',
                      'إيران قطر'],
         'baseline_statements_per_week': 4,
     },
@@ -189,6 +214,11 @@ ALIGNMENT_ACTORS = {'al_udeid_us': 'base_posture', 'turkey_qatar': 'base_posture
 
 # Vector groupings -- these keys ARE the qatar-stability.html gauge contract.
 # DOCTRINE: mediation_activity measures TEMPO (channel activity), not threat.
+# v2.0.0: the vectors that feed the THREAT composite. mediation_activity is
+# deliberately absent -- doctrine: tempo, not threat.
+THREAT_VECTORS = ('gcc_cohesion', 'gas_infrastructure', 'base_posture')
+DEESCALATORY_TRIPWIRES = ('mediation_breakthrough',)
+
 VECTOR_GROUPS = {
     'mediation_activity':  ['qatar_mofa_mediation', 'hamas_gaza_file', 'emir_leadership'],
     'gcc_cohesion':        ['gcc_relations'],
@@ -230,6 +260,34 @@ TRIPWIRES = {
                      'al udeid targeted'],
         'severity': 'surge',
         'note': 'Direct attack on the US anchor -- escalation-class event for the whole theater.',
+    },
+    # v2.0.0 Oct 18 2026: LIVE MISS. "QatarEnergy Prepares to Extend Force
+    # Majeure on LNG into Mid-October" (Bloomberg via EnergyNow) -- a fifth of
+    # global LNG under force majeure -- fired nothing, because the only gas
+    # tripwire required a physical ATTACK on North Field. Force majeure is
+    # the commercial form of the same event and is the one actually live.
+    'lng_force_majeure': {
+        'patterns': ['qatarenergy force majeure', 'qatar lng force majeure',
+                     'qatar force majeure lng', 'qatar declares force majeure',
+                     'ras laffan force majeure'],
+        # 'elevated', not 'high': a commercial declaration, not an attack. Via
+        # the tripwire floor 'high' would read L3 'Direct Threat'; 'elevated'
+        # floors at L2 'Warning' -- the gas vector already carries the weight.
+        'severity': 'elevated',
+        'note': 'Qatari LNG under force majeure -- global supply event by construction.',
+    },
+    # v2.0.0: strike on Qatari soil OTHER than Al Udeid. Precedent: the Sep
+    # 2025 Israeli strike on Hamas negotiators in Doha -- an attack on the
+    # VENUE itself. STRICT PHRASES on purpose: "Doha" is also metonym for the
+    # Qatari government ("Doha condemns Israeli strike on Lebanon"), so any
+    # scattered-token pattern would fire on Qatari statements about others.
+    'doha_strike': {
+        'patterns': ['"strike in doha"', '"strikes in doha"', '"strike on doha"',
+                     '"strikes on doha"', '"explosions in doha"', '"explosions heard in doha"',
+                     '"attack on doha"', '"attack on qatar"', '"strike on qatar"',
+                     '"strikes on qatar"', '"struck doha"', '"attacked qatar"'],
+        'severity': 'surge',
+        'note': 'Kinetic strike on Qatari territory -- an attack on the mediation venue itself.',
     },
     'hamas_office_expulsion': {
         'patterns': ['hamas office closed doha','qatar expels hamas','hamas leaves qatar',
@@ -573,34 +631,120 @@ def _normalize_text(text):
     return (text or '').lower()
 
 
+# ════════════════════════════════════════════════════════════
+# MATCHER -- ported from rhetoric_tracker_saudi_arabia v2.1.1 (Oct 18 2026)
+#
+# v1.0.0 did `kw.lower() in text`: an ADJACENT-SUBSTRING test. Live 18 Oct it
+# read Qatar's mediation track at ZERO articles mid-war, because "Qatar's
+# Amir ... maintaining mediation efforts" does not contain the adjacent
+# string 'qatar mediation'. Keywords now match when all their tokens are
+# present (order-free), gated on the article naming Qatar at all.
+# Tripwires are stricter: tokens must sit in ONE sentence.
+#   KEYWORDS SCORE. TRIPWIRES ASSERT.
+# ════════════════════════════════════════════════════════════
+COUNTRY_GATE = (
+    'qatar', 'doha', 'al udeid', 'al-udeid', 'ras laffan', 'north field',
+    'qatarenergy', 'lusail', 'hamad port', 'tamim bin hamad', 'al thani',
+    'majed al-ansari',
+    '\u0642\u0637\u0631',                 # AR  Qatar (also catches 'qatari' forms)
+    '\u0627\u0644\u062f\u0648\u062d\u0629',     # AR  al-Doha
+)
+# NOTE: the Arabic gate term is a bare substring, so it also matches the
+# plural 'aqtar' (regions/countries, as in "al-aqtar al-arabiya"). Accepted:
+# GoogleNews-AR already queries that same string, so the gate adds no new
+# noise; actor keywords still have to match after it.
+
+
+def _passes_country_gate(text):
+    """True when the text names Qatar or a Qatari place/institution."""
+    t = _normalize_text(text)
+    return any(g in t for g in COUNTRY_GATE)
+
+
+def _kw_parts(k):
+    """Split a keyword into match parts the SAME way text is tokenized.
+    ASCII words split on every non-alphanumeric ('al-udeid' -> al, udeid;
+    'pm-fm' -> pm, fm); non-ASCII words stay whole. Without this, a
+    hyphenated keyword needs a token the tokenizer can never produce."""
+    out = []
+    for w in k.split():
+        if w.isascii():
+            out.extend(re.findall(r"[a-z0-9]+", w))
+        else:
+            out.append(w)
+    return out
+
+
+def _kw_match(kw, text, tokens):
+    """Keyword match: single token on a word boundary; multi-token when ALL
+    tokens are present (order-free). "Double quotes" = strict phrase.
+    Non-ASCII parts are substring-matched (no useful word boundary)."""
+    k = kw.lower().strip()
+    if len(k) > 2 and k[0] == '"' and k[-1] == '"':
+        return k[1:-1] in text
+    parts = _kw_parts(k)
+    if not parts:
+        return False
+    return all((p in tokens) if p.isascii() else (p in text) for p in parts)
+
+
 def _classify_article_actor(article):
-    """
-    Match an article against actor keyword lists. Returns (actor_id, hit_count) tuples
-    for all matching actors. Multi-actor matching is allowed (e.g., a "Boluarte visits
-    Las Bambas" headline can hit both presidency AND las_bambas).
-    """
+    """Match an article against actor keyword lists, COUNTRY-GATED.
+    Returns (actor_id, hit_count) tuples; multi-actor matching allowed."""
     title = _normalize_text(article.get('title', ''))
     desc  = _normalize_text(article.get('description', ''))
     text  = title + ' ' + desc
-
+    if not _passes_country_gate(text):
+        return []
+    tokens = set(re.findall(r"[a-z0-9]+", text))   # no apostrophe: "Qatar's" -> qatar, s
     matches = []
     for actor_id, actor_data in ACTORS.items():
         hit_count = 0
         for kw in actor_data['keywords']:
-            if kw.lower() in text:
+            if _kw_match(kw, text, tokens):
                 hit_count += 1
         if hit_count > 0:
             matches.append((actor_id, hit_count))
     return matches
 
 
+_SENTENCE_SPLIT = re.compile(r'(?<=[.!?\u061f\u06d4])\s+|\n+|\s+[\u2014\u2013]\s+|[:;\u061b]\s+')
+
+
+def _tripwire_match(pattern, text):
+    """Sentence-scoped, plural-tolerant, never prefix-matched; "quoted" = strict phrase."""
+    p = pattern.lower().strip()
+    if len(p) > 2 and p[0] == '"' and p[-1] == '"':
+        return p[1:-1] in text
+    parts = _kw_parts(p)
+    if not parts:
+        return False
+    for sent in _SENTENCE_SPLIT.split(text):
+        if not sent:
+            continue
+        toks = set(re.findall(r"[a-z0-9]+", sent))
+        ok = True
+        for w in parts:
+            if not w.isascii():
+                if w not in sent:
+                    ok = False; break
+            elif not (w in toks or (w + 's') in toks or (w + 'es') in toks):
+                ok = False; break
+        if ok:
+            return True
+    return False
+
+
 def _check_tripwires(text):
-    """Check article text against TRIPWIRES patterns. Returns list of (tripwire_id, severity)."""
+    """Check article text against TRIPWIRES, COUNTRY-GATED and sentence-scoped.
+    Returns list of (tripwire_id, severity)."""
     text_lower = _normalize_text(text)
+    if not _passes_country_gate(text_lower):
+        return []
     triggered = []
     for tw_id, tw_data in TRIPWIRES.items():
         for pattern in tw_data['patterns']:
-            if pattern.lower() in text_lower:
+            if _tripwire_match(pattern, text_lower):
                 triggered.append((tw_id, tw_data['severity']))
                 break  # only count each tripwire once per article
     return triggered
@@ -737,9 +881,9 @@ def _read_crosstheater_amplifiers():
     """
     Sibling-tracker fingerprints that shape Qatar's analytical context
     (the wheels, read from the shared Redis -- absence-honest when missing):
-      pakistan_fingerprint -- crosstheater:pakistan:fingerprint (confirmed sibling)
-      iran_fingerprint     -- crosstheater:iran:fingerprint     (ME backend, attempted)
-      china_fingerprint    -- crosstheater:china:fingerprint    (attempted)
+      iran_fingerprint   -- the file Doha mediates (ceasefire trajectory lives here)
+      saudi_fingerprint  -- the GCC neighbour under Houthi fire (cohesion context)
+      israel_fingerprint -- the Gaza-file counterpart
     """
     amplifiers = {}
     candidate_keys = {
@@ -747,11 +891,21 @@ def _read_crosstheater_amplifiers():
         'saudi_fingerprint':  'crosstheater:saudi_arabia:fingerprint',
         'israel_fingerprint': 'crosstheater:israel:fingerprint',
     }
+    absent = []
     for label, redis_key in candidate_keys.items():
         val = _redis_get(redis_key)
         if val:
             amplifiers[label] = val
+        else:
+            absent.append(label)
+    # v2.0.0: absence is REPORTED, not inferred (mirrors Saudi v2.1.0).
+    global _CROSSTHEATER_ABSENT
+    _CROSSTHEATER_ABSENT = absent
+    if absent:
+        print(f"[QAT Rhetoric] crosstheater NOT REPORTING: {', '.join(absent)}")
     return amplifiers
+
+_CROSSTHEATER_ABSENT = []
 
 def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
                               vector_levels, actor_summaries, tripwires_global,
@@ -832,7 +986,11 @@ def _write_qatar_fingerprints(actor_levels, vector_scores, tripwires_global):
         return {'level': lvl, 'role': role,
                 'active': lvl in ('elevated', 'high', 'surge')}
 
-    med_lvl = actor_levels.get('qatar_mofa_mediation', 'low')
+    # v2.0.0: MOFA OR the Gaza file. Either channel being active means Doha's
+    # table is open; reading MOFA alone undercounted the busiest portfolio.
+    _O = ['low', 'normal', 'elevated', 'high', 'surge']
+    med_lvl = max(actor_levels.get('qatar_mofa_mediation', 'low'),
+                  actor_levels.get('hamas_gaza_file', 'low'), key=_O.index)
     tw_ids = {tw.get('id') for tw in (tripwires_global or []) if isinstance(tw, dict)}
 
     hub_presence = {
@@ -852,6 +1010,8 @@ def _write_qatar_fingerprints(actor_levels, vector_scores, tripwires_global):
         'mediation_tempo':    med_lvl,
         'gaza_file_tempo':    actor_levels.get('hamas_gaza_file', 'low'),
         'breakthrough_fired': 'mediation_breakthrough' in tw_ids,
+        'venue_struck':       'doha_strike' in tw_ids,
+        'lng_force_majeure':  'lng_force_majeure' in tw_ids,
         'collapse_fired':     'mediation_collapse' in tw_ids,
         'gcc_cohesion':       vector_scores.get('gcc_cohesion', 0),
         'gas_infrastructure': vector_scores.get('gas_infrastructure', 0),
@@ -904,7 +1064,7 @@ def _compute_qatar_l5_gate(tripwires_global, actor_summaries, vector_scores):
 
     # ── HUMANITARIAN L5 (scaffold — refine in weekend audit) ──
     # Would fire on: famine-scale rupture, catastrophic quake displacement,
-    # deportation-wave humanitarian collapse. No severity-5 tripwires currently defined.
+    # mass-casualty event on Qatari soil. No severity-5 tripwires currently defined.
     # Today: never fires.
 
     # ── ECONOMIC L5 (scaffold — refine in weekend audit) ──
@@ -963,7 +1123,9 @@ def _build_qatar_signal_text(theatre_level, theatre_score, vector_levels, actor_
     if l5_capped:
         long_parts.append("L5 axis gate did not fire — capped at L4 ceiling per platform L5 Reservation Contract.")
     else:
-        long_parts.append("Qatar is a contested-node tracker: four mixed-polarity wheels (Iran friction, Pakistan kinetic, Russia normalization, China extraction).")
+        # v2.0.0: was the Afghanistan/Saudi clone line ("four mixed-polarity
+        # wheels ... Pakistan kinetic ..."). Qatar is a mediation-class node.
+        long_parts.append("Qatar is a mediation-class node: mediation tempo is the region's off-ramp sensor (tempo, not threat); the threat read covers GCC cohesion, gas infrastructure and base posture.")
 
     return {'short': short, 'long': ' '.join(long_parts)}
 
@@ -1007,8 +1169,15 @@ def scan_qatar_rhetoric(force=False, days=7):
 
     # ── Classify articles by actor ──
     articles_by_actor = {actor_id: [] for actor_id in ACTORS.keys()}
+    # v2.0.0: tripwires used to be checked ONLY on articles some actor keyword
+    # had already claimed -- so "explosions in Doha" with no mediation/gas
+    # vocabulary was never looked at. Unclaimed articles still get the check.
+    orphan_tripwires = set()
     for art in all_articles:
         matches = _classify_article_actor(art)
+        if not matches:
+            for _tw in _check_tripwires(f"{art.get('title', '')} {art.get('description', '')}"):
+                orphan_tripwires.add(_tw)
         for actor_id, hit_count in matches:
             art_copy = dict(art)
             art_copy['_actor_hits'] = hit_count
@@ -1044,6 +1213,11 @@ def scan_qatar_rhetoric(force=False, days=7):
         for tw in scored['tripwires']:
             tripwires_global.append({'actor': actor_id, **tw})
 
+    _claimed = {tw.get('id') for tw in tripwires_global}
+    for _tw_id, _sev in sorted(orphan_tripwires):
+        if _tw_id not in _claimed:
+            tripwires_global.append({'actor': None, 'id': _tw_id, 'severity': _sev})
+
     # ── Compute 4-vector composite scores ──
     vector_scores = {}
     vector_levels = {}
@@ -1071,15 +1245,35 @@ def scan_qatar_rhetoric(force=False, days=7):
     _write_qatar_fingerprints(actor_levels, vector_scores, tripwires_global)
 
     # ── Compute composite Qatar pressure score ──
-    composite_score = round(sum(vector_scores.values()), 2)
+    # v2.0.0 Oct 18 2026 -- DOCTRINE ENFORCED. This file's own header says
+    # mediation is "TEMPO, not threat ... composite-neutral", but v1 summed
+    # EVERY vector and took the max of EVERY actor -- so a busy week of Doha
+    # diplomacy would have pushed Qatar UP the threat ladder (to L4
+    # 'Coercion' at surge). The composite now reads only the threat vectors.
+    # Mediation tempo still ships in vector_scores / vector_levels / the
+    # fingerprint, where the Iran wheel reads it as the off-ramp sensor.
+    composite_score = round(sum(v for k, v in vector_scores.items()
+                                if k in THREAT_VECTORS), 2)
 
     # (No disaster-sensor cross-read: GCC trackers are market/energy-sensored by design.)
     disaster_state = {}
+    _ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
     composite_level = max(
-        (actor_summaries[a]['level'] for a in actor_summaries),
-        key=lambda lv: ['low', 'normal', 'elevated', 'high', 'surge'].index(lv),
+        (actor_summaries[a]['level'] for a in actor_summaries
+         if actor_summaries[a].get('vector') in THREAT_VECTORS),
+        key=lambda lv: _ORDER.index(lv),
         default='low',
     )
+    # v2.0.0: TRIPWIRE FLOOR. The TRIPWIRES block header promises "events that
+    # escalate alert level regardless of volume"; v1 never did. A fired
+    # PRESSURE tripwire now floors the composite at its severity. The one
+    # de-escalatory tripwire (mediation_breakthrough) is excluded.
+    for _tw in tripwires_global:
+        if _tw.get('id') in DEESCALATORY_TRIPWIRES:
+            continue
+        _sev = _tw.get('severity', 'low')
+        if _sev in _ORDER and _ORDER.index(_sev) > _ORDER.index(composite_level):
+            composite_level = _sev
 
     # ── Build executive summary + so-what + top signals via interpreter ──
     if QAT_INTERPRETER_AVAILABLE:
@@ -1107,7 +1301,7 @@ def scan_qatar_rhetoric(force=False, days=7):
                         top_signals.append(_sig)
             except Exception as _e:
                 print(f'[QAT Rhetoric] cross-read append error: {str(_e)[:100]}')
-            election_watch = None   # N/A -- the Emirate rules by decree; no electoral cycle to watch
+            election_watch = None   # N/A -- hereditary emirate; no national electoral cycle to watch
         except Exception as e:
             print(f"[QAT Rhetoric] Interpreter error: {str(e)[:200]}")
             traceback.print_exc()
@@ -1123,18 +1317,20 @@ def scan_qatar_rhetoric(force=False, days=7):
         election_watch = None
         alignment_drift = None
 
-    # ── Alignment-drift convergence signal (BRI inroad read) -> WHA BLUF / GPI ──
+    # ── Off-ramp axis signal -> ME BLUF / GPI (calm band returns None) ──
     if QAT_INTERPRETER_AVAILABLE and alignment_drift:
         _drift_sig = build_alignment_drift_top_signal(alignment_drift)
         if _drift_sig and not any(s.get('category') == 'alignment_drift' for s in top_signals):
-            top_signals = [_drift_sig] + list(top_signals)
+            # Oct 18 2026: directly BELOW the tripwires, not above them -- the
+            # axis reading is a consequence of the events, so events lead.
+            _n_tw = sum(1 for s in top_signals if isinstance(s, dict) and s.get('type') == 'tripwire')
+            top_signals = list(top_signals[:_n_tw]) + [_drift_sig] + list(top_signals[_n_tw:])
 
 
     # ── BLUF compatibility shim ──
-    # wha_regional_bluf.py's _normalize_tracker_data() expects an integer
-    # theatre_level (0-5) and a 0-100 theatre_score. Qatar emits a
-    # categorical composite_level + a free-running composite_score; map
-    # them so the regional BLUF can ingest Qatar cleanly alongside Cuba.
+    # The regional BLUF expects an integer theatre_level (0-5) and a 0-100
+    # theatre_score. Qatar emits a categorical composite_level + a
+    # free-running composite_score; map them here.
     LEVEL_TO_THEATRE_INT = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4}
     raw_theatre_level = LEVEL_TO_THEATRE_INT.get(composite_level, 0)
     # Cap theatre_score at 100 — composite_score is unbounded by design
@@ -1181,13 +1377,14 @@ def scan_qatar_rhetoric(force=False, days=7):
         'l5_gate':               l5_gate,
         'raw_theatre_level':     raw_theatre_level,
         'l5_capped':             l5_capped,
-        'source_class':          'contested_node',  # four-wheel contested node (AZ schema)
+        'source_class':          'mediation_node',  # v2.0.0: was the AZ-schema 'contested_node' clone label
         'vector_scores':         vector_scores,
         'vector_levels':         vector_levels,
         'actor_summaries':       actor_summaries,
         'tripwires_global':      tripwires_global,
         'commodity_pressure':    commodity_pressure,
         'crosstheater_amplifiers': crosstheater_amplifiers,
+        'crosstheater_absent':     list(_CROSSTHEATER_ABSENT),
         'top_signals':           top_signals,
         'executive_summary':     executive_summary,
         'so_what':               so_what,
@@ -1203,7 +1400,7 @@ def scan_qatar_rhetoric(force=False, days=7):
         'days_analyzed':          days,
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.0.0',
+        'version':                MODULE_VERSION,
     }
 
     save_cache(result)
@@ -1218,10 +1415,13 @@ def scan_qatar_rhetoric(force=False, days=7):
             'theatre_score':       theatre_score,
             'scanned_at':          result.get('last_updated') or datetime.now(timezone.utc).isoformat(),
             'red_lines_count':     len(tripwires_global),
-            'kinetic_afpak':       vector_levels.get('kinetic_afpak'),
-            'repression_rights':   vector_levels.get('repression_rights'),
-            'external_friction':   vector_levels.get('external_friction'),
-            'illicit_economy':     vector_levels.get('illicit_economy'),
+            # Oct 18 2026 FIX: these four fields used to be kinetic_afpak,
+            # repression_rights, external_friction, illicit_economy --
+            # AFGHANISTAN vectors this tracker has never had, so every history
+            # entry since July recorded None x4 and none of its real vectors.
+            # Now: whatever VECTOR_GROUPS defines (the stability-page gauge
+            # contract), so the snapshot can never drift from the vectors again.
+            **{v: vector_levels.get(v) for v in VECTOR_GROUPS},
         }, max_len=336)
     except Exception as e:
         print(f"[QAT Rhetoric] History snapshot write failed: {e}")
@@ -1303,7 +1503,7 @@ def register_qatar_rhetoric_routes(app, start_background=True):
         """Diagnostic — config snapshot + cache freshness."""
         cached = load_cache()
         return jsonify({
-            'version':                  '1.0.0',
+            'version':                  MODULE_VERSION,
             'actor_count':              len(ACTORS),
             'actors':                   list(ACTORS.keys()),
             'vector_count':             len(VECTOR_GROUPS),

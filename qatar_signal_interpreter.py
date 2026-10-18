@@ -1,5 +1,7 @@
 """
-qatar_signal_interpreter.py -- Asifah Analytics ME Backend -- v1.0.0 Jul 2026
+qatar_signal_interpreter.py -- Asifah Analytics ME Backend -- v1.1.0 Oct 18 2026
+(v1.1.0: tripwire crash, calm-band guard, off-ramp axis no longer counts war as
+ closure, clone residue purged, duplicates removed. v1.0.0 Jul 2026)
 Analyst layer for rhetoric_tracker_qatar (mediation-class node).
 5-function contract as canon. DRIFT AXIS: the OFF-RAMP AXIS -- channels-open <->
 channels-closed. Bands: Channels-Open -> Strained -> Narrowing -> Channels-Closed.
@@ -12,11 +14,28 @@ Estimative voice. Convergence, not prediction. Tempo, not threat.
 import re
 from datetime import datetime, timezone
 
+MODULE_VERSION = '1.1.0'
+
 # ============================================
 # CONFIGURATION
 # ============================================
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
+DEESCALATORY_TRIPWIRES = ('mediation_breakthrough',)
+# Doctrine: mediation is TEMPO, not threat. It never counts toward a
+# convergence of THREAT vectors.
+TEMPO_VECTORS = ('mediation_activity',)
+MEDIATION_ACTORS = ('qatar_mofa_mediation', 'hamas_gaza_file')
+TRIPWIRE_LABELS = {
+    'lng_force_majeure':         'LNG Force Majeure',
+    'doha_strike':               'Strike on Qatari Soil',
+    'al_udeid_attack':           'Al Udeid Attack',
+    'north_field_incident':      'North Field Incident',
+    'mediation_breakthrough':    'Doha-Brokered Deal',
+    'mediation_collapse':        'Doha Mediation Collapse',
+    'blockade_language_revival': 'Blockade Language Revival',
+    'hamas_office_expulsion':    'Hamas Office Expulsion',
+}
 
 # Vector display names for prose
 VECTOR_NAMES = {
@@ -120,8 +139,8 @@ def _commodity_story_signal(commodity_pressure):
         'long_text':  ('Composite news-signal pressure (weighted volume/severity '
                        'of matched reporting, NOT price) is at ' + alert.upper()
                        + ' across ' + esc_txt + '. Qatar supply-risk premium is '
-                       'partly a political risk premium -- this composite and the '
-                       'runoff count are stacking on the same window.'),
+                       'partly a political risk premium -- read this composite against '
+                       'the rhetoric vectors, which are scored on the same window.'),
         'source_link': '/qatar-stability.html#commodities',
     }
 
@@ -162,7 +181,13 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
                 'source': top_art.get('source', ''),
             })
 
-        short, long_text = _tripwire_prose(tw_id, actor_id)
+        # v1.1.0: _tripwire_prose returns ONE string. Unpacking it into two
+        # names raised ValueError the first time any tripwire fired, dropping
+        # the whole interpreter to the tracker's builtin fallback.
+        long_text = _tripwire_prose(tw_id, actor_id)
+        _label = TRIPWIRE_LABELS.get(tw_id) or str(tw_id).replace('_', ' ').title()
+        short = (("\U0001F54A\uFE0F Breakthrough: " if tw_id in DEESCALATORY_TRIPWIRES
+                  else "\u26a0 Tripwire: ") + _label)
         signals.append({
             'short_text': short,
             'long_text':  long_text,
@@ -182,7 +207,8 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
             existing = vector_levels.get(vec, 'low')
             if _level_rank(lvl) > _level_rank(existing):
                 vector_levels[vec] = lvl
-    elevated_vectors = [v for v, lv in vector_levels.items() if lv in ESCALATORY_LEVELS]
+    elevated_vectors = [v for v, lv in vector_levels.items()
+                        if lv in ESCALATORY_LEVELS and v not in TEMPO_VECTORS]
     if len(elevated_vectors) >= 2:
         sig = _convergence_signal(elevated_vectors, vector_levels, actor_summaries)
         if sig:
@@ -218,20 +244,27 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
     for amp_label, amp_data in (crosstheater_amplifiers or {}).items():
         if not isinstance(amp_data, dict):
             continue
-        if not amp_data.get('active'):
+        # v1.1.0: canonical fingerprints carry a numeric `level` and often no
+        # 'active' key (live 18 Oct: iran_fingerprint level 2, no 'active').
+        _lvl = amp_data.get('level')
+        _lvl = _lvl if isinstance(_lvl, (int, float)) else -1
+        if not amp_data.get('active') and _lvl < 2:
             continue
         sig = _crosstheater_signal(amp_label, amp_data)
         if sig:
             signals.append(sig)
 
     # Sort: surge → high → elevated → normal → low; within same level, signals with sources first
+    # v1.1.0: tripwires (events) pinned above volume readings; the commodity
+    # story sits directly below them, never above.
     signals.sort(
-        key=lambda s: (-_level_rank(s['level']), -len(s.get('sources', [])))
+        key=lambda s: (0 if s.get('type') == 'tripwire' else 1,
+                       -_level_rank(s['level']), -len(s.get('sources', [])))
     )
-    # Composite commodity story rides high when escalated (mirrors stability page)
     _cs = _commodity_story_signal(commodity_pressure)
     if _cs:
-        signals.insert(0, _cs)
+        _n_tw = sum(1 for s in signals if s.get('type') == 'tripwire')
+        signals.insert(_n_tw, _cs)
     return signals[:12]   # cap at 12 -- UI shows ~8 by default
 
 
@@ -262,6 +295,17 @@ def _tripwire_prose(tw_id, actor_id):
             "on CENTCOM's forward HQ historically forces theater-wide US posture change and puts the "
             "response question on Washington's desk, not Doha's. Every regional file reprices "
             "simultaneously."),
+        'lng_force_majeure': (
+            "Qatari LNG force-majeure vocabulary at tripwire confidence. Force majeure is the "
+            "commercial form of a supply outage: contracted cargoes are formally excused, so buyers "
+            "scramble for spot volume. Roughly a fifth of global LNG sits behind this word -- TTF and "
+            "JKM reprice by construction, and EU storage math moves within weeks. Watch the "
+            "extension/lifting language and Hormuz transit reporting as the recovery tells."),
+        'doha_strike': (
+            "Strike on Qatari soil at tripwire confidence -- an attack on the mediation VENUE. The "
+            "September 2025 Israeli strike on Hamas negotiators in Doha is the precedent: the table "
+            "itself became a target. The off-ramp axis reads this as closure pressure; watch whether "
+            "Doha suspends or doubles down on its mediation role, and US posture at Al Udeid."),
         'hamas_office_expulsion': (
             "Hamas-office expulsion signals at tripwire confidence -- a mediation-posture rupture. The "
             "Gaza channel losing its Doha address removes the region's most-used negotiation venue; "
@@ -308,8 +352,12 @@ def _actor_signal(actor_id, actor):
     deescalation = _has_deescalation(actor)
 
     # Build short_text
-    if deescalation and level in ('elevated', 'high'):
-        short = f"{icon} {name} — {level} but with de-escalatory rhetoric (dialogue / consulta previa)"
+    if actor_id in MEDIATION_ACTORS:
+        # v1.1.0: doctrine -- mediation tempo is the off-ramp sensor, not threat.
+        short = f"\U0001F54A\uFE0F {name} -- {level.upper()} mediation tempo (off-ramp activity, not threat)"
+    elif deescalation and level in ('elevated', 'high'):
+        # v1.1.0: was "(dialogue / consulta previa)" -- Peru-tracker residue.
+        short = f"{icon} {name} — {level} but with de-escalatory vocabulary (talks / ceasefire / agreement)"
     elif level == 'surge':
         short = f"{icon} {name} — SURGE-level rhetoric ({article_count} signals)"
     elif level == 'high':
@@ -393,8 +441,8 @@ def _commodity_coupling_signal(commodity_id, risk, actor_summaries):
     long_text = (
         f"The commodity tracker is reporting {alert}-level pressure on Qatar's {commodity_id} "
         f"sector (Qatar is a {role}{rank_str}). {sig_count} cross-tracker signals flagged. "
-        f"This is a coupling event — what the rhetoric tracker observes in illicit_economy / "
-        f"wheat/corridor channels has a direct supply-side implication for global {commodity_id} "
+        f"This is a coupling event -- what the rhetoric tracker observes on the gas-infrastructure "
+        f"and base-posture vectors has a direct supply-side implication for global {commodity_id} "
         f"markets. Watch for sector-rhetoric and price-impact alignment."
     )
     sources = []
@@ -410,33 +458,39 @@ def _commodity_coupling_signal(commodity_id, risk, actor_summaries):
         'long_text':  long_text,
         'level':      alert,
         'type':       'commodity_coupling',
-        'actor':      'drug_economy',
+        'actor':      'qatarenergy_lng',   # v1.1.0: was 'drug_economy' (clone residue)
         'sources':    sources,
     }
 
 
 def _crosstheater_signal(amp_label, amp_data):
     """Signal for an active sibling-wheel fingerprint (absence-honest: only called when present)."""
+    # v1.1.0: the v1 prose described Pakistan, Iran and China wheels in
+    # AFGHANISTAN terms (water ultimatums, deportation waves, Mes Aynak) --
+    # clone residue. Qatar reads Iran, Saudi Arabia and Israel.
+    _cf = (amp_data.get('ceasefire_trajectory') or {}) if isinstance(amp_data, dict) else {}
+    _cf_line = (' Iran tracker this cycle: ' + _cf['headline'] + '.') if _cf.get('headline') else ''
     prose = {
-        'pakistan_fingerprint': (
-            '\U0001f1f5\U0001f1f0 Pakistan wheel active -- kinetic-side amplification',
-            'The Pakistan tracker\'s crosstheater fingerprint is live and elevated. For Qatar '
-            'this amplifies the Af-Pak kinetic vector: Pakistani domestic pressure has historically '
-            'transmitted into harder Qatar policy (strikes, closures, deportation waves).'),
         'iran_fingerprint': (
-            '\U0001f1ee\U0001f1f7 Iran wheel active -- friction-side amplification',
-            'The Iran tracker\'s crosstheater fingerprint is live. Elevated Iranian theater pressure '
-            'has historically hardened Tehran\'s Qatar file (water ultimatums, deportation '
-            'acceleration, border posture) -- friction-spoke amplification on the contested node.'),
-        'china_fingerprint': (
-            '\U0001f1e8\U0001f1f3 China wheel active -- extraction-track amplification',
-            'The China tracker\'s crosstheater fingerprint is live. Elevated Chinese theater activity '
-            'is consistent with accelerated extraction-track positioning in Kabul (Mes Aynak, Amu '
-            'Darya) -- the dependency channel of the normalization-drift read.'),
+            '\U0001f1ee\U0001f1f7 Iran wheel active -- the file Doha mediates',
+            'The Iran tracker\'s crosstheater fingerprint is live. For Qatar, Iranian pressure is the '
+            'demand side of mediation: escalation WITH Doha\'s channels active has historically stayed '
+            'contained; the same escalation with the channels quiet is the no-exit pattern. Read it '
+            'against the mediation tempo on this page.' + _cf_line),
+        'saudi_fingerprint': (
+            '\U0001f1f8\U0001f1e6 Saudi wheel active -- GCC neighbour under fire',
+            'The Saudi tracker\'s fingerprint is live. A Gulf neighbour under Houthi fire is GCC-'
+            'cohesion context for Doha: solidarity vocabulary reads against the 2017 rift precedent, '
+            'and shared Hormuz exposure links the two energy files.'),
+        'israel_fingerprint': (
+            '\U0001f1ee\U0001f1f1 Israel wheel active -- the Gaza-file counterpart',
+            'The Israel tracker\'s fingerprint is live. Israeli escalation moves the Gaza file Doha '
+            'hosts -- and the September 2025 Doha strike is the precedent for the venue itself being '
+            'in range.'),
     }
     short, long = prose.get(amp_label, (
         f'\U0001f6de Sibling-wheel fingerprint active: {amp_label}',
-        f'A sibling tracker fingerprint ({amp_label}) is live -- crosstheater amplification on the contested node.'))
+        f'A sibling tracker fingerprint ({amp_label}) is live -- crosstheater context for the mediation node.'))
     return {
         'level': 'elevated', 'type': 'crosstheater', 'priority': 6,
         'category': 'crosstheater', 'theatre': 'qatar',
@@ -500,9 +554,20 @@ def score_alignment_drift(actor_summaries, tripwires_global,
                 dep_active = True
                 break
 
-    amp_active = bool((crosstheater_amplifiers or {}).get(prof.get('crosstheater_amp', '')))
+    _amp = (crosstheater_amplifiers or {}).get(prof.get('crosstheater_amp', '')) or {}
+    _amp_lvl = _amp.get('level') if isinstance(_amp, dict) else None
+    amp_active = isinstance(_amp_lvl, (int, float)) and _amp_lvl >= 2
 
-    inroad  = inroad_lvl + len(inroad_tw) + (1 if dep_active else 0) + (1 if amp_active else 0)
+    # v1.1.0 -- WAR IS CONTEXT, NOT CLOSURE. v1 (cloned from the China/BRI
+    # template) added +1 for elevated gas prices and +1 for the Iran
+    # fingerprint merely EXISTING. During a Gulf war with routine mediation
+    # that read 'Narrowing' without one closure signal. On this axis only
+    # closure evidence (actor + tripwires) counts; gas and Iran are reported
+    # as context fields below.
+    # A strike on the venue counts double: alone, +1 left the axis in the calm
+    # band even with Doha's negotiators under fire. Double puts it at
+    # 'Strained' (channels tested, not lost) when mediation holds.
+    inroad  = inroad_lvl + len(inroad_tw) + (1 if 'doha_strike' in inroad_tw else 0)
     counter = counter_lvl + len(counter_tw)
 
     # ── band the NET drift ──
@@ -510,17 +575,21 @@ def score_alignment_drift(actor_summaries, tripwires_global,
         band = 'Channels-Open'
     elif inroad >= 2 and counter >= 2:
         band = 'Strained'
-    elif inroad >= 5 and counter <= 1 and dep_active:
+    elif inroad >= 5 and counter <= 1:
+        # v1.1.0: no longer requires dep_active (a gas-price spike) -- BRI
+        # template residue; channels can close in a calm gas market.
         band = 'Channels-Closed'
     elif (inroad - counter) >= 2:
         band = 'Narrowing'
     elif counter >= 2:
         band = 'Strained'
     else:
-        band = 'Channels-Open'
+        # v1.1.0: inroad >= 2 with weak anchors and net < 2 used to fall
+        # through to Channels-Open -- a strike on Doha with routine mediation
+        # read calm. Real closure pressure is at least Strained.
+        band = 'Strained'
 
-    # structural-dependency floor: an entrenched, operational inroad means the
-    # alignment has already structurally landed -- at minimum 'Drifting'.
+    # structural floor (unused for Qatar: structural_dependency_baseline=False)
     if prof.get('structural_dependency_baseline') and band == 'Channels-Open':
         band = 'Narrowing'
 
@@ -570,10 +639,16 @@ def score_alignment_drift(actor_summaries, tripwires_global,
     }
 
 
+AXIS_CALM_BAND = 'Channels-Open'
+
+
 def build_alignment_drift_top_signal(drift):
-    """Canonical-schema top_signal for the alignment-drift read -> regional BLUF / GPI.
-    Returns None for US-anchored (calm baseline)."""
-    if not drift or drift.get('band') in (None, 'US-anchored'):
+    """Canonical-schema top_signal for the off-ramp axis -> regional BLUF / GPI.
+    Returns None for the calm band.
+
+    v1.1.0: the guard tested 'US-anchored' -- a band THIS axis never emits --
+    so 'Channels-Open' (calm) was pinned to the top of the page every scan."""
+    if not drift or drift.get('band') in (None, AXIS_CALM_BAND):
         return None
     return {
         'priority':   drift['priority'],
@@ -582,8 +657,8 @@ def build_alignment_drift_top_signal(drift):
         'level':      drift['level'],
         'icon':       drift['icon'],
         'color':      drift['color'],
-        'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
-                       drift['inroad_power'] + ' alignment drift -- ' + drift['band']),
+        'short_text': (drift['flag'] + ' ' + drift['country'].upper() +
+                       ' off-ramp axis: ' + drift['band']),
         'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
     }
 
@@ -641,6 +716,21 @@ def build_so_what_factor(actor_summaries, vector_scores, vector_levels, tripwire
             "Off-ramp axis reads " + alignment_drift['band'] + ": " +
             (alignment_drift.get('so_what_factor') or '')})
 
+    # v1.1.0: the doctrine's named pattern -- escalation elsewhere WITH Doha
+    # quiet -- had no bullet. Fires only when mediation is below baseline AND
+    # the threat side is lit (a pressure tripwire or an elevated threat vector).
+    _med_low = lv.get('mediation_activity') in (None, 'low')
+    _threat_lit = any(lv.get(v) in esc for v in ('gcc_cohesion', 'gas_infrastructure', 'base_posture')) \
+        or any(isinstance(t, dict) and t.get('id') not in DEESCALATORY_TRIPWIRES
+               for t in (tripwires_global or []))
+    if _med_low and _threat_lit:
+        bullets.append({'weight': 0.9, 'bullet':
+            "Mediation tempo reads BELOW baseline while the threat side is lit -- the combination "
+            "the mediation doctrine calls the no-exit pattern. Two readings, and the page cannot "
+            "yet tell them apart: Doha's channels have gone quiet (a finding), or Qatari mediation is "
+            "running through channels this tracker does not see (a coverage gap). Check the "
+            "mediation source cards before treating the quiet as signal."})
+
     if not bullets:
         bullets.append({'weight': 0.3, 'bullet':
             "All four vectors at baseline this scan. For the mediation node, baseline quiet cuts both "
@@ -676,7 +766,7 @@ def interpret_qatar_signals(scan_data):
     }
 
 
-print("[Qatar Signal Interpreter] Module loaded — v1.0.0")
+print("[Qatar Signal Interpreter] Module loaded -- v" + MODULE_VERSION)
 DRIFT_BAND_META = {
     'Channels-Open':   {'level': 1, 'color': '#22c55e', 'priority': 8},
     'Strained':        {'level': 3, 'color': '#f59e0b', 'priority': 12},
@@ -691,7 +781,8 @@ DRIFT_PROFILES = {
         'incumbent_power': 'the channel anchors (active mediation tempo, hosted rounds, both-sides trust)',
         'inroad_actor':    'gcc_relations',
         'counter_actor':   'qatar_mofa_mediation',
-        'inroad_tripwires':  ('mediation_collapse', 'hamas_office_expulsion', 'blockade_language_revival'),
+        'inroad_tripwires':  ('mediation_collapse', 'hamas_office_expulsion', 'blockade_language_revival',
+                              'doha_strike'),   # v1.1.0: a strike on the venue is closure pressure
         'counter_tripwires': ('mediation_breakthrough',),
         'dependency_channel': 'the Al Udeid hosting relationship and the shared North Field geology that anchor trust with both Washington and Tehran',
         'commodity_keys':     ('gas',),
@@ -711,52 +802,6 @@ DRIFT_PROFILES = {
 
 _DRIFT_LEVEL_RANK = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4}
 
-
-
-def build_alignment_drift_top_signal(drift):
-    """Canonical-schema top_signal for the alignment-drift read -> regional BLUF / GPI.
-    Returns None for US-anchored (calm baseline)."""
-    if not drift or drift.get('band') in (None, 'US-anchored'):
-        return None
-    return {
-        'priority':   drift['priority'],
-        'category':   'alignment_drift',
-        'theatre':    drift['country'],
-        'level':      drift['level'],
-        'icon':       drift['icon'],
-        'color':      drift['color'],
-        'short_text': (drift['flag'] + ' ' + drift['country'].upper() + ': ' +
-                       drift['inroad_power'] + ' alignment drift -- ' + drift['band']),
-        'long_text':  ((drift['so_what_factor'] + ' ' + drift['disclaimer'])[:480]),
-    }
-
-
-
-def interpret_qatar_signals(scan_data):
-    """
-    Convenience wrapper — accepts a complete scan_data dict and returns the
-    three derived analytical fields. Mirrors the Japan tracker's contract.
-    """
-    actor_summaries        = scan_data.get('actor_summaries', {}) or {}
-    vector_scores          = scan_data.get('vector_scores', {}) or {}
-    vector_levels          = scan_data.get('vector_levels', {}) or {}
-    tripwires_global       = scan_data.get('tripwires_global', []) or []
-    commodity_pressure     = scan_data.get('commodity_pressure', {}) or {}
-    crosstheater_amplifiers = scan_data.get('crosstheater_amplifiers', {}) or {}
-
-    drift = score_alignment_drift(actor_summaries, tripwires_global,
-                                  commodity_pressure, crosstheater_amplifiers,
-                                  country='qatar')
-    return {
-        'top_signals':       build_top_signals(actor_summaries, tripwires_global,
-                                                commodity_pressure, crosstheater_amplifiers),
-        'executive_summary': build_executive_summary(actor_summaries, vector_scores,
-                                                     vector_levels, tripwires_global),
-        'so_what':           build_so_what_factor(actor_summaries, vector_scores, vector_levels,
-                                                   tripwires_global, commodity_pressure,
-                                                   alignment_drift=drift),
-        'alignment_drift':   drift,
-    }
-
-
-
+# v1.1.0: duplicate build_alignment_drift_top_signal + interpret_qatar_signals
+# definitions that used to follow here were removed. Python keeps the LAST
+# definition, so the stale copies silently overrode every fix above.

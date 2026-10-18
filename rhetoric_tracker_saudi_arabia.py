@@ -29,7 +29,7 @@ import os
 import re
 import json
 
-MODULE_VERSION = '2.1.0'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.1.1'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
@@ -1102,6 +1102,26 @@ def _passes_country_gate(text):
     return any(g in t for g in COUNTRY_GATE)
 
 
+def _kw_parts(k):
+    """Split a keyword/pattern into match parts, the SAME way text is tokenized.
+
+    v2.1.1 Oct 18 2026: keywords were split on spaces only, but text is split
+    on every non-alphanumeric character. So 'east-west pipeline' needed the
+    single token 'east-west', which the tokenizer can never produce -- the
+    keyword was dead from 11 Oct. Same for 'saudi f-35', 'opec+ meeting',
+    'iran-backed houthis', 'saudi two-state', and the 'east-west pipeline
+    strike' TRIPWIRE (the Petroline is the Hormuz bypass). ASCII words are
+    now split into their alphanumeric pieces; non-ASCII words stay whole.
+    """
+    out = []
+    for w in k.split():
+        if w.isascii():
+            out.extend(re.findall(r"[a-z0-9]+", w))
+        else:
+            out.append(w)
+    return out
+
+
 def _kw_match(kw, text, tokens):
     """Does this keyword match?
 
@@ -1128,8 +1148,11 @@ def _kw_match(kw, text, tokens):
     k = kw.lower().strip()
     if len(k) > 2 and k[0] == '"' and k[-1] == '"':
         return k[1:-1] in text              # explicit strict phrase
-    parts = k.split()
+    parts = _kw_parts(k)
+    if not parts:
+        return False
     if len(parts) == 1:
+        k = parts[0]
         # Non-ASCII (Arabic) has no useful \b word boundary -- substring it.
         if not k.isascii():
             return k in text
@@ -1208,7 +1231,9 @@ def _tripwire_match(pattern, text):
     p = pattern.lower().strip()
     if len(p) > 2 and p[0] == '"' and p[-1] == '"':
         return p[1:-1] in text                      # explicit strict phrase
-    parts = p.split()
+    parts = _kw_parts(p)                            # v2.1.1: hyphen-safe
+    if not parts:
+        return False
     for sent in _SENTENCE_SPLIT.split(text):
         if not sent:
             continue
@@ -1869,7 +1894,10 @@ def scan_saudi_rhetoric(force=False, days=7):
     if KSA_INTERPRETER_AVAILABLE and alignment_drift:
         _drift_sig = build_alignment_drift_top_signal(alignment_drift)
         if _drift_sig and not any(s.get('category') == 'alignment_drift' for s in top_signals):
-            top_signals = [_drift_sig] + list(top_signals)
+            # Oct 18 2026: directly BELOW the tripwires, not above them -- the
+            # axis reading is a consequence of the events, so events lead.
+            _n_tw = sum(1 for s in top_signals if isinstance(s, dict) and s.get('type') == 'tripwire')
+            top_signals = list(top_signals[:_n_tw]) + [_drift_sig] + list(top_signals[_n_tw:])
 
 
     # ── BLUF compatibility shim ──
@@ -1964,10 +1992,13 @@ def scan_saudi_rhetoric(force=False, days=7):
             'theatre_score':       theatre_score,
             'scanned_at':          result.get('last_updated') or datetime.now(timezone.utc).isoformat(),
             'red_lines_count':     len(tripwires_global),
-            'kinetic_afpak':       vector_levels.get('kinetic_afpak'),
-            'repression_rights':   vector_levels.get('repression_rights'),
-            'external_friction':   vector_levels.get('external_friction'),
-            'illicit_economy':     vector_levels.get('illicit_economy'),
+            # Oct 18 2026 FIX: these four fields used to be kinetic_afpak,
+            # repression_rights, external_friction, illicit_economy --
+            # AFGHANISTAN vectors this tracker has never had, so every history
+            # entry since July recorded None x4 and none of its real vectors.
+            # Now: whatever VECTOR_GROUPS defines (the stability-page gauge
+            # contract), so the snapshot can never drift from the vectors again.
+            **{v: vector_levels.get(v) for v in VECTOR_GROUPS},
         }, max_len=336)
     except Exception as e:
         print(f"[KSA Rhetoric] History snapshot write failed: {e}")
