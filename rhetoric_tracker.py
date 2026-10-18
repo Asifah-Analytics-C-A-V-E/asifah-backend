@@ -1703,21 +1703,9 @@ def fetch_lebanon_articles(days=3):
             seen.add(a['url'])
             unique.append(a)
 
-    # Nitter -- primary source accounts
-    try:
-        nitter_posts = fetch_nitter_lebanon(days=days)
-        for p in nitter_posts:
-            u = p.get('url', '')
-            if u and u not in seen:
-                seen.add(u)
-                unique.append(p)
-    except Exception as e:
-        print(f"[Lebanon Rhetoric] Nitter error: {e}")
-
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
-    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
-    rss_c = len(unique) - tg_c - nit_c
-    print(f"[Rhetoric] Total unique articles: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter)")
+    rss_c = len(unique) - tg_c
+    print(f"[Lebanon Rhetoric] Total unique articles: {len(unique)} ({rss_c} RSS + {tg_c} TG)")
     return unique
 
 
@@ -2121,103 +2109,10 @@ def _build_empty_result():
     }
 
 
-# ========================================
-# NITTER -- Primary source accounts
-# Lebanon: IDF, Israeli leadership, LAF, UNIFIL, France
-# ========================================
-NITTER_MIRRORS = [
-    "nitter.poast.org",
-    "nitter.privacydev.net",
-    "nitter.woodland.cafe",
-]
-
-NITTER_ACCOUNTS_LEBANON = [
-    # ── IDF / Israeli officials ──────────────────────────────────
-    ("IDF",                 1.3, "IDF -- Lebanon strike claims, Hezbollah warnings, GOL ultimatums"),
-    ("idfonline",           1.3, "IDF English -- primary strike/ops announcements"),
-    ("AvichayAdraee",       1.2, "IDF Arabic spokesperson -- operational claims vs Hezbollah"),
-    ("IsraeliPM",           1.1, "Israeli PM -- Lebanon red line statements"),
-    ("KatzIsrael",          1.1, "Defense Minister Katz -- Hezbollah/Lebanon ultimatums"),
-    # ── US diplomatic (key for Israel-Lebanon talks) ─────────────
-    ("CENTCOM",             1.0, "CENTCOM -- Lebanon/Hezbollah operations"),
-    ("StateDept",           1.0, "State Dept -- Lebanon diplomatic signals"),
-    ("USAmbLebanon",        1.2, "Michel Issa -- US Ambassador to Lebanon, direct talks broker"),
-    ("RubioState",          1.0, "SecState Rubio -- US Lebanon/ceasefire policy"),
-    # ── Lebanese government / diplomacy ──────────────────────────
-    ("LebarmyOfficial",     1.1, "Lebanese Armed Forces -- LAF deployment signals"),
-    ("LebanonMFA",          1.1, "Lebanese MFA -- Hamadeh, diplomatic signals, talks"),
-    # ── International ────────────────────────────────────────────
-    ("UNIFIL_Southlebanon", 1.0, "UNIFIL -- Blue Line incidents, withdrawal signals"),
-    ("francediplo_EN",      0.9, "French MFA -- Lebanon diplomatic push"),
-    # ── OSINT ────────────────────────────────────────────────────
-    ("LongWarJournal",      0.9, "Long War Journal -- Hezbollah/Lebanon analysis"),
-    ("ElintNews",           0.9, "ELINT News -- Lebanon/Hezbollah OSINT"),
-]
-
-
-def _fetch_nitter_lebanon(username, weight=1.0, timeout=8):
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
-    for mirror in NITTER_MIRRORS:
-        url = f"https://{mirror}/{username}/rss"
-        try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code != 200:
-                continue
-            root = ET.fromstring(resp.content)
-            posts = []
-            for item in root.findall(".//item")[:20]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                pubdate_el = item.find("pubDate")
-                if title_el is None:
-                    continue
-                title = title_el.text or ""
-                link  = link_el.text if link_el is not None else ""
-                pub   = ""
-                if pubdate_el is not None and pubdate_el.text:
-                    try:
-                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
-                    except Exception:
-                        pub = pubdate_el.text
-                posts.append({
-                    "title":     title,
-                    "url":       link,
-                    "published": pub,
-                    "source":    f"Nitter @{username}",
-                    "weight":    weight,
-                })
-            if posts:
-                print(f"[Lebanon Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
-                return posts
-        except Exception as e:
-            print(f"[Lebanon Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
-            continue
-    print(f"[Lebanon Rhetoric/Nitter] @{username}: all mirrors failed")
-    return []
-
-
-def fetch_nitter_lebanon(days=3):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    all_posts = []
-    seen = set()
-    for username, weight, desc in NITTER_ACCOUNTS_LEBANON:
-        posts = _fetch_nitter_lebanon(username, weight=weight)
-        for p in posts:
-            if p["url"] in seen:
-                continue
-            try:
-                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub < cutoff:
-                    continue
-            except Exception:
-                pass
-            seen.add(p["url"])
-            all_posts.append(p)
-        time.sleep(0.3)
-    print(f"[Lebanon Rhetoric/Nitter] Total: {len(all_posts)} posts")
-    return all_posts
+# NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
+# woodland.cafe) has been dead since X closed guest access; each scan spent
+# accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
+# Telegram and BlueSky carry the primary-source social layer.
 
 
 # ========================================

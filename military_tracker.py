@@ -6395,106 +6395,10 @@ def fetch_defense_rss(feed_name, feed_url, max_articles=15):
         return []
 
 
-# ========================================
-# DATA FETCHING -- NITTER (Twitter/X OSINT)
-# ========================================
-
-NITTER_MIRRORS = [
-    "nitter.poast.org",
-    "nitter.privacydev.net",
-    "nitter.woodland.cafe",
-]
-
-# Priority accounts for military tracker
-# (account, weight, description)
-NITTER_ACCOUNTS_MILITARY = [
-    ("CENTCOM",          1.2, "US Central Command -- ME/South Asia ops"),
-    ("INDOPACOM",        1.1, "US Indo-Pacific Command -- China/Taiwan/Korea"),
-    ("EUCOM",            1.0, "US European Command -- Russia/Ukraine/NATO"),
-    ("USNavy",           1.1, "US Navy -- CSG deployments, naval movements"),
-    ("SecDef",           1.1, "Secretary of Defense -- policy, posture"),
-    ("DeptofDefense",    1.0, "DoD -- official statements, deployments"),
-    ("IDF",              1.1, "Israel Defense Forces -- strikes, posture"),
-    ("AvichayAdraee",    1.0, "IDF Arabic spokesman -- ME escalation"),
-    ("StateDept",        1.0, "State Dept -- diplomatic signals, ceasefire"),
-    ("realDonaldTrump",  1.1, "Trump -- Iran ceasefire, military policy"),
-    ("OSINTdefender",    0.9, "OSINT Defender -- incident reports"),
-    ("ElintNews",        0.9, "ELINT News -- military incidents"),
-    ("WarMonitors",      0.85,"War Monitors -- strike reports"),
-    ("RALee85",          0.85,"Rob Lee -- Russia/Ukraine military analysis"),
-]
-
-
-def _fetch_nitter_account(username, weight=1.0, timeout=8):
-    """Fetch RSS from a single Nitter account, trying mirrors in order."""
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
-    for mirror in NITTER_MIRRORS:
-        url = f"https://{mirror}/{username}/rss"
-        try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code != 200:
-                continue
-            import xml.etree.ElementTree as _ET
-            from email.utils import parsedate_to_datetime as _ptd
-            root = _ET.fromstring(resp.content)
-            posts = []
-            for item in root.findall(".//item")[:20]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                pubdate_el = item.find("pubDate")
-                if title_el is None:
-                    continue
-                title = title_el.text or ""
-                link  = link_el.text  if link_el  is not None else ""
-                pub   = ""
-                if pubdate_el is not None and pubdate_el.text:
-                    try:
-                        pub = _ptd(pubdate_el.text).isoformat()
-                    except Exception:
-                        pub = pubdate_el.text
-                posts.append({
-                    'title':       title,
-                    'description': title,
-                    'url':         link,
-                    'publishedAt': pub,
-                    'source':      {'name': f'Nitter @{username}'},
-                    'content':     title,
-                    'feed_type':   'nitter',
-                    'weight':      weight,
-                })
-            if posts:
-                print(f"[Military/Nitter] @{username}: {len(posts)} posts via {mirror}")
-                return posts
-        except Exception as e:
-            print(f"[Military/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
-            continue
-    print(f"[Military/Nitter] @{username}: all mirrors failed")
-    return []
-
-
-def fetch_nitter_military(days=7):
-    """Fetch posts from all military OSINT Nitter accounts."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    all_posts = []
-    seen = set()
-    for username, weight, desc in NITTER_ACCOUNTS_MILITARY:
-        posts = _fetch_nitter_account(username, weight=weight)
-        for p in posts:
-            if p["url"] in seen:
-                continue
-            try:
-                pub = datetime.fromisoformat(p["publishedAt"].replace("Z", "+00:00"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub < cutoff:
-                    continue
-            except Exception:
-                pass
-            seen.add(p["url"])
-            all_posts.append(p)
-        time.sleep(0.3)
-    print(f"[Military/Nitter] Total: {len(all_posts)} posts from {len(NITTER_ACCOUNTS_MILITARY)} accounts")
-    return all_posts
+# NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
+# woodland.cafe) has been dead since X closed guest access; each scan spent
+# accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
+# Telegram and BlueSky carry the primary-source social layer.
 
 
 # ========================================
@@ -9627,30 +9531,6 @@ def _run_full_scan(days=7):
                          duration_ms=(time.time() - _tg_t0) * 1000)
 
     # ─────────────────────────────────────────────────────────────
-    # Nitter OSINT accounts — DEPRECATED May 6 2026
-    # Nitter has been chronically failing across all theaters.
-    # Migrating to BlueSky aggregator below. Code preserved (commented)
-    # for emergency rollback if BlueSky migration has issues.
-    # ─────────────────────────────────────────────────────────────
-    # nitter_articles = []
-    # try:
-    #     nitter_posts = fetch_nitter_military(days=days)
-    #     for p in nitter_posts:
-    #         nitter_articles.append({
-    #             'title':       p.get('title', '')[:200],
-    #             'description': p.get('title', '')[:500],
-    #             'url':         p.get('url', ''),
-    #             'publishedAt': p.get('publishedAt', ''),
-    #             'source':      p.get('source', {'name': 'Nitter'}),
-    #             'content':     p.get('title', '')[:500],
-    #             'feed_type':   'nitter',
-    #         })
-    #     print(f"[Military Tracker] Nitter: {len(nitter_articles)} posts")
-    # except Exception as e:
-    #     print(f"[Military Tracker] Nitter error: {str(e)[:100]}")
-    nitter_articles = []  # legacy — kept for downstream concatenation compat
-
-    # ─────────────────────────────────────────────────────────────
     # BlueSky OSINT — global '*'-scoped accounts from regional modules
     # Aggregates POTUS, SecDef, INDOPACOM, OSINT Defender, WarTranslated,
     # State Dept, etc. — accounts marked with '*' target scope across the
@@ -9670,7 +9550,7 @@ def _run_full_scan(days=7):
         _health_note('bluesky', error=e,
                      duration_ms=(time.time() - _bs_t0) * 1000)
 
-    all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles + nitter_articles + bluesky_articles + brave_articles
+    all_articles = rss_articles + gdelt_articles + newsapi_articles + reddit_posts + telegram_articles + bluesky_articles + brave_articles
 
     # One line per unhealthy source, so a dead feed is visible in the boot
     # log without anyone having to inspect a payload.
@@ -9945,7 +9825,6 @@ def _run_full_scan(days=7):
             'newsapi': len(newsapi_articles),
             'reddit': len(reddit_posts),
             'telegram': len(telegram_articles),
-            'nitter': len(nitter_articles),
             'brave': len(brave_articles),
             'bluesky': len(bluesky_articles)
         },
@@ -9974,7 +9853,6 @@ def _run_full_scan(days=7):
                 ('newsapi',     len(newsapi_articles)),
                 ('reddit',      len(reddit_posts)),
                 ('telegram',    len(telegram_articles)),
-                ('nitter',      len(nitter_articles)),
                 ('brave',       len(brave_articles)),
                 ('bluesky',     len(bluesky_articles)),
             )

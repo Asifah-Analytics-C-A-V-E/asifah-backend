@@ -1162,98 +1162,11 @@ RHETORIC_RSS_FEEDS = [
     ("https://www.syriahr.com/en/feed/", 1.0),
 ]
 
-# ============================================
-# NITTER -- Primary source Twitter/X accounts
-# ============================================
-NITTER_MIRRORS = [
-    "nitter.poast.org",
-    "nitter.privacydev.net",
-    "nitter.woodland.cafe",
-]
+# NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
+# woodland.cafe) has been dead since X closed guest access; each scan spent
+# accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
+# Telegram and BlueSky carry the primary-source social layer.
 
-NITTER_ACCOUNTS_SYRIA = [
-    ("TomBarrack",      1.3, "US Special Envoy -- primary Syria policy signal"),
-    ("StateDept",       1.0, "State Dept -- Syria sanctions, HTS engagement"),
-    ("CENTCOM",         1.0, "CENTCOM -- Syria force posture, SDF, ISIS strikes"),
-    ("SecRubio",        1.0, "US SecState -- Syria recognition/sanctions signals"),
-    ("realDonaldTrump", 1.1, "Trump -- Syria policy direction"),
-    ("IDF",             1.1, "IDF official -- Syria strike announcements"),
-    ("AvichayAdraee",   1.1, "IDF Arabic spokesperson -- Syria strike claims"),
-    ("MazloumAbdi",     1.1, "SDF Commander -- Kurdish forces statements"),
-    ("SyriaDirectNews", 0.9, "Syria Direct -- ground reporting"),
-    ("SOHR_News",       0.9, "SOHR -- strike/casualty reports"),
-]
-
-
-def _fetch_nitter_syria(username, weight=1.0, timeout=8):
-    import re as _re
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
-    for mirror in NITTER_MIRRORS:
-        url = f"https://{mirror}/{username}/rss"
-        try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code != 200:
-                continue
-            root = ET.fromstring(resp.content)
-            posts = []
-            for item in root.findall(".//item")[:20]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                pubdate_el = item.find("pubDate")
-                desc_el    = item.find("description")
-                if title_el is None:
-                    continue
-                title = title_el.text or ""
-                link  = link_el.text if link_el is not None else ""
-                pub   = ""
-                if pubdate_el is not None and pubdate_el.text:
-                    try:
-                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
-                    except Exception:
-                        pub = pubdate_el.text
-                desc = ""
-                if desc_el is not None and desc_el.text:
-                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
-                posts.append({
-                    "title":       title,
-                    "url":         link,
-                    "published":   pub,
-                    "description": desc,
-                    "source":      f"Nitter @{username}",
-                    "weight":      weight,
-                })
-            if posts:
-                print(f"[Syria Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
-                return posts
-        except Exception as e:
-            print(f"[Syria Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
-            continue
-    print(f"[Syria Rhetoric/Nitter] @{username}: all mirrors failed")
-    return []
-
-
-def fetch_nitter_syria(days=3):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    all_posts = []
-    seen = set()
-    for username, weight, desc in NITTER_ACCOUNTS_SYRIA:
-        posts = _fetch_nitter_syria(username, weight=weight)
-        for p in posts:
-            if p["url"] in seen:
-                continue
-            try:
-                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub < cutoff:
-                    continue
-            except Exception:
-                pass
-            seen.add(p["url"])
-            all_posts.append(p)
-        time.sleep(0.3)
-    print(f"[Syria Rhetoric/Nitter] Total: {len(all_posts)} posts")
-    return all_posts
 
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 SYRIA_SUBREDDITS = ['syriancivilwar', 'geopolitics', 'CredibleDefense', 'worldnews', 'Syria']
@@ -1419,14 +1332,6 @@ def fetch_rhetoric_articles(days=3):
     except Exception as e:
         print(f"[Syria Rhetoric] Reddit error: {e}")
 
-    # Nitter — executive & primary source accounts (v2.1)
-    try:
-        nitter_posts = fetch_nitter_syria(days=days)
-        articles.extend(nitter_posts)
-        print(f"[Syria Rhetoric] Nitter: {len(nitter_posts)} posts")
-    except Exception as e:
-        print(f"[Syria Rhetoric] Nitter error: {e}")
-
     seen = set()
     unique = []
     for a in articles:
@@ -1436,10 +1341,9 @@ def fetch_rhetoric_articles(days=3):
             unique.append(a)
 
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
-    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    rss_c = len(unique) - tg_c - nit_c - red_c
-    print(f"[Syria Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
+    rss_c = len(unique) - tg_c - red_c
+    print(f"[Syria Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {red_c} Reddit)")
     return unique
 
 

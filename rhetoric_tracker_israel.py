@@ -2294,107 +2294,11 @@ RHETORIC_RSS_FEEDS += [
     ('https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22&hl=iw&gl=IL&ceid=IL:iw', 1.2),
 ]
 
-# ============================================
-# NITTER -- Primary source Twitter/X accounts
-# ============================================
-NITTER_MIRRORS = [
-    "nitter.poast.org",
-    "nitter.privacydev.net",
-    "nitter.woodland.cafe",
-]
+# NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
+# woodland.cafe) has been dead since X closed guest access; each scan spent
+# accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
+# Telegram and BlueSky carry the primary-source social layer.
 
-NITTER_ACCOUNTS_ISRAEL = [
-    # US policy — greenlight/brake signals
-    ("realDonaldTrump", 1.2, "Trump — Israel/Iran/ceasefire direct statements"),
-    ("SecRubio",        1.1, "US SecState — Israel policy, Iran deal signals"),
-    ("CENTCOM",         1.0, "CENTCOM — regional force posture, Houthi strikes"),
-    ("StateDept",       1.0, "State Dept — ceasefire pressure, diplomatic signals"),
-    ("POTUS",           1.0, "White House — executive Israel statements"),
-    ("Witkoff",         1.1, "Steve Witkoff — hostage/ceasefire envoy"),
-    # IDF / Israeli official
-    ("IDF",             1.2, "IDF official — strike claims, operational language"),
-    ("AvichayAdraee",   1.1, "IDF Arabic spokesperson — Arabic-language claims"),
-    ("IsraeliPM",       1.1, "Israeli PM office — Netanyahu statements"),
-    # Hezbollah / inbound monitoring
-    ("ManarNewsEN",     1.1, "Al-Manar English — Hezbollah operational claims"),
-    ("AlMayadeenEng",   1.0, "Al Mayadeen — Hezbollah/resistance claims"),
-    # Houthi monitoring
-    ("YemenArmy1",      1.0, "Houthi military — operation announcements"),
-    ("AnsarAllahPK",    1.0, "Ansar Allah — conflict entry/operation claims"),
-    # Analysis
-    ("LongWarJournal",  0.9, "Long War Journal — operational analysis"),
-]
-
-
-def _fetch_nitter_israel(username, weight=1.0, timeout=8):
-    import re as _re
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
-    for mirror in NITTER_MIRRORS:
-        url = f"https://{mirror}/{username}/rss"
-        try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code != 200:
-                continue
-            root = ET.fromstring(resp.content)
-            posts = []
-            for item in root.findall(".//item")[:20]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                pubdate_el = item.find("pubDate")
-                desc_el    = item.find("description")
-                if title_el is None:
-                    continue
-                title = title_el.text or ""
-                link  = link_el.text if link_el is not None else ""
-                pub   = ""
-                if pubdate_el is not None and pubdate_el.text:
-                    try:
-                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
-                    except Exception:
-                        pub = pubdate_el.text
-                desc = ""
-                if desc_el is not None and desc_el.text:
-                    desc = _re.sub(r"<[^>]+>", "", desc_el.text)[:300]
-                posts.append({
-                    "title":       title,
-                    "url":         link,
-                    "published":   pub,
-                    "description": desc,
-                    "source":      f"Nitter @{username}",
-                    "weight":      weight,
-                })
-            if posts:
-                print(f"[Israel Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
-                return posts
-        except Exception as e:
-            print(f"[Israel Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
-            continue
-    print(f"[Israel Rhetoric/Nitter] @{username}: all mirrors failed")
-    return []
-
-
-def fetch_nitter_israel(days=3):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    all_posts = []
-    seen = set()
-    for username, weight, desc in NITTER_ACCOUNTS_ISRAEL:
-        posts = _fetch_nitter_israel(username, weight=weight)
-        for p in posts:
-            if p["url"] in seen:
-                continue
-            try:
-                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub < cutoff:
-                    continue
-            except Exception:
-                pass
-            seen.add(p["url"])
-            all_posts.append(p)
-        time.sleep(0.3)
-    print(f"[Israel Rhetoric/Nitter] Total: {len(all_posts)} posts")
-    return all_posts
 
 REDDIT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 ISRAEL_SUBREDDITS = ['IsraelPalestine', 'geopolitics', 'CredibleDefense',
@@ -2515,13 +2419,6 @@ def fetch_rhetoric_articles(days=3):
     except Exception as e:
         print(f"[Israel Rhetoric] Reddit error: {e}")
 
-    # Nitter — primary source accounts (v2.2)
-    try:
-        nitter_posts = fetch_nitter_israel(days=days)
-        articles.extend(nitter_posts)
-    except Exception as e:
-        print(f"[Israel Rhetoric] Nitter error: {e}")
-
     seen = set()
     unique = []
     for a in articles:
@@ -2531,10 +2428,9 @@ def fetch_rhetoric_articles(days=3):
             unique.append(a)
 
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
-    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
     red_c = sum(1 for a in unique if str(a.get('source', '')).startswith('r/'))
-    rss_c = len(unique) - tg_c - nit_c - red_c
-    print(f"[Israel Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter + {red_c} Reddit)")
+    rss_c = len(unique) - tg_c - red_c
+    print(f"[Israel Rhetoric] Total unique: {len(unique)} ({rss_c} RSS + {tg_c} TG + {red_c} Reddit)")
     return unique, tg_messages
 
 
@@ -3378,7 +3274,8 @@ def run_israel_rhetoric_scan(days=3):
         result['gaza_control_ratchet'] = _detect_gaza_control_ratchet(articles)
         _gr = result['gaza_control_ratchet']
         print(f"[Israel Rhetoric] Gaza ratchet: {_gr['ratchet_state']} "
-              f"(net {_gr['net_notches']}, no reversal {_gr['days_since_reversal']}d, "
+              f"(net {_gr['net_notches']}, no reversal "
+              f"{(str(_gr['days_since_reversal']) + 'd') if _gr.get('days_since_reversal') is not None else 'on record'}, "
               f"recon absent {_gr['reconstruction_absent_days']}d)")
     except Exception as _e:
         print(f"[Israel Rhetoric] Gaza ratchet read failed: {str(_e)[:120]}")

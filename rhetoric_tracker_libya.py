@@ -30,7 +30,8 @@ SOURCES:
     ANSAMed + Agenzia Nova (IT -- migration/ENI/Mattei angle), UN News,
     AllAfrica, Reuters/Al Jazeera (Google-News routed)
   - GDELT multi-language: English + Arabic + Italian (ita)
-  - Telegram (Libya channel subset), Nitter (institutional, fails soft)
+  - Telegram (Libya channel subset). (Nitter retired 18 Oct 2026 -- mirrors dead;
+    its NITTER_MIRRORS list was never defined here, so it NameError'd every scan.)
 
 CACHING:
   - Upstash Redis (REST) -- same instance as all backends
@@ -1393,21 +1394,10 @@ def fetch_libya_articles(days=3):
             seen.add(a['url'])
             unique.append(a)
 
-    # Nitter -- primary source accounts
-    try:
-        nitter_posts = fetch_nitter_libya(days=days)
-        for p in nitter_posts:
-            u = p.get('url', '')
-            if u and u not in seen:
-                seen.add(u)
-                unique.append(p)
-    except Exception as e:
-        print(f"[Libya Rhetoric] Nitter error: {e}")
-
     tg_c  = sum(1 for a in unique if 'Telegram' in str(a.get('source', '')))
-    nit_c = sum(1 for a in unique if 'Nitter' in str(a.get('source', '')))
-    rss_c = len(unique) - tg_c - nit_c
-    print(f"[Rhetoric] Total unique articles: {len(unique)} ({rss_c} RSS + {tg_c} TG + {nit_c} Nitter)")
+    rss_c = len(unique) - tg_c
+    # Oct 18 2026: label was "[Rhetoric]" (copied from Lebanon) -- unattributable in a shared log.
+    print(f"[Libya Rhetoric] Total unique articles: {len(unique)} ({rss_c} RSS + {tg_c} TG)")
     return unique
 
 
@@ -1775,7 +1765,10 @@ def _build_empty_result():
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'total_articles': 0,
         'articles_classified': 0,
-        'trajectories': _trajectories,
+        # Oct 18 2026: was `_trajectories` -- a local of the scan function, so this
+        # placeholder raised NameError on every pre-first-scan request (cold start,
+        # post-deploy). {} = trajectories not read yet: absence reported, not invented.
+        'trajectories': {},
         'theatre_escalation_level': 0,
         'theatre_escalation_label': 'Monitoring',
         'theatre_escalation_color': '#6b7280',
@@ -1811,87 +1804,10 @@ def _build_empty_result():
     }
 
 
-# ========================================
-# NITTER -- Primary source accounts (institutional + OSINT; Nitter is flaky, fails soft)
-# Libya: UNSMIL, EU/Italy missions, English OSINT outlets, eastern + western voices.
-# Real social-signal heavy lifting is the Telegram layer; Nitter is supplementary.
-NITTER_ACCOUNTS_LIBYA = [
-    ("UNSMILibya",     1.1, "UNSMIL -- UN mission, ceasefire / elections / 5+5 signals"),
-    ("LibyaReview",    1.0, "Libya Review -- English OSINT aggregator"),
-    ("Libya_Observer", 1.0, "Libya Observer -- Tripoli-aligned outlet"),
-    ("AddressLibya",   0.9, "Address Libya -- eastern-aligned outlet"),
-    ("LibyanExpress",  0.9, "Libyan Express -- English news"),
-    ("ReadLibya",      0.9, "Read Libya -- analysis"),
-    ("EUinLibya",      0.9, "EU Delegation Libya -- migration / energy signals"),
-    ("ItalyinLibya",   0.9, "Italy in Libya -- Mattei Plan / migration"),
-    ("StateDept",      0.8, "State Dept -- Libya diplomatic signals"),
-    ("Almarsad_En",    0.8, "Al-Marsad English -- eastern outlet"),
-]
-
-
-def _fetch_nitter_libya(username, weight=1.0, timeout=8):
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; AsifahAnalytics/1.0)"}
-    for mirror in NITTER_MIRRORS:
-        url = f"https://{mirror}/{username}/rss"
-        try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            if resp.status_code != 200:
-                continue
-            root = ET.fromstring(resp.content)
-            posts = []
-            for item in root.findall(".//item")[:20]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                pubdate_el = item.find("pubDate")
-                if title_el is None:
-                    continue
-                title = title_el.text or ""
-                link  = link_el.text if link_el is not None else ""
-                pub   = ""
-                if pubdate_el is not None and pubdate_el.text:
-                    try:
-                        pub = parsedate_to_datetime(pubdate_el.text).isoformat()
-                    except Exception:
-                        pub = pubdate_el.text
-                posts.append({
-                    "title":     title,
-                    "url":       link,
-                    "published": pub,
-                    "source":    f"Nitter @{username}",
-                    "weight":    weight,
-                })
-            if posts:
-                print(f"[Libya Rhetoric/Nitter] @{username}: {len(posts)} posts via {mirror}")
-                return posts
-        except Exception as e:
-            print(f"[Libya Rhetoric/Nitter] @{username} {mirror} failed: {str(e)[:60]}")
-            continue
-    print(f"[Libya Rhetoric/Nitter] @{username}: all mirrors failed")
-    return []
-
-
-def fetch_nitter_libya(days=3):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    all_posts = []
-    seen = set()
-    for username, weight, desc in NITTER_ACCOUNTS_LIBYA:
-        posts = _fetch_nitter_libya(username, weight=weight)
-        for p in posts:
-            if p["url"] in seen:
-                continue
-            try:
-                pub = datetime.fromisoformat(p["published"].replace("Z", "+00:00"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub < cutoff:
-                    continue
-            except Exception:
-                pass
-            seen.add(p["url"])
-            all_posts.append(p)
-        time.sleep(0.3)
-    print(f"[Libya Rhetoric/Nitter] Total: {len(all_posts)} posts")
-    return all_posts
+# NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
+# woodland.cafe) has been dead since X closed guest access; each scan spent
+# accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
+# Telegram and BlueSky carry the primary-source social layer.
 
 
 # ========================================
@@ -2145,6 +2061,12 @@ def run_rhetoric_scan(days=3):
     result = {
         'success': True,
         'theatre': 'Libya',
+        # Oct 18 2026: the dual-wheel trajectory read (Russia east / Turkey west)
+        # was computed above and then DROPPED -- never put in result -- so
+        # _write_crosstheater_signal read result['trajectories'] as {} and told
+        # both wheels 'holding' every scan. Syria carries this line; Libya lost it
+        # in the clone.
+        'trajectories': _trajectories,
         'scanned_at': datetime.now(timezone.utc).isoformat(),
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'scan_time_seconds': scan_time,
