@@ -1507,7 +1507,15 @@ if TEMPO_AVAILABLE:
 
     def _tempo_refresh_loop():
         _tempo_time.sleep(300)   # let the boot settle
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('tempo_refresh'):
+                continue
             try:
                 results = tempo_compute_all()
                 ready = [t for t, r in results.items() if r.get('ready')]
