@@ -2532,13 +2532,19 @@ def register_libya_rhetoric_endpoints(app):
 
     def _periodic_rhetoric_scan():
         time.sleep(180)
-        print("[Rhetoric Tracker] Starting initial scan...")
-        _run_rhetoric_scan_safe()
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('libya_rhetoric_scan'):
+                continue
+            print("[Rhetoric Tracker] Starting scan...")
+            _run_rhetoric_scan_safe()
             print(f"[Rhetoric Tracker] Sleeping {SCAN_INTERVAL_HOURS}h until next scan...")
             time.sleep(SCAN_INTERVAL_SECONDS)
-            print("[Rhetoric Tracker] Periodic scan starting...")
-            _run_rhetoric_scan_safe()
 
     thread = threading.Thread(target=_periodic_rhetoric_scan, daemon=True)
     thread.start()
