@@ -2247,7 +2247,15 @@ def start_iran_periodic_scan(app):
         # Initial delay — let Gunicorn finish booting
         time.sleep(15)
 
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('iran_protests_scan'):
+                continue
             try:
                 print(f"[Iran] Periodic scan starting at {datetime.now(timezone.utc).isoformat()}")
                 _trigger_iran_background_scan(app, days=7)
