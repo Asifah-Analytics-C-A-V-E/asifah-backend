@@ -1962,7 +1962,15 @@ def _bg_rhetoric_scan():
 def _start_periodic_scan(interval_hours=12):
     def _loop():
         time.sleep(120)  # Stagger startup -- give backend time to stabilize
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('syria_rhetoric_scan'):
+                continue
             try:
                 run_syria_rhetoric_scan()
             except Exception as e:
