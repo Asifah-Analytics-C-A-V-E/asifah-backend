@@ -459,7 +459,15 @@ _refresh_lock = threading.Lock()
 
 
 def _background_refresh_loop():
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('think_tank_refresh'):
+            continue
         try:
             scan_all_think_tanks()
         except Exception as e:

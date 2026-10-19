@@ -1724,7 +1724,15 @@ def _start_periodic_scan(interval_hours=12):
     """Start periodic background rhetoric scan"""
     def _loop():
         time.sleep(90)  # Stagger startup -- give backend time to stabilize
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('yemen_rhetoric_scan'):
+                continue
             try:
                 run_houthi_rhetoric_scan()
             except Exception as e:

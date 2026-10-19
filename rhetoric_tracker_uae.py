@@ -1690,7 +1690,15 @@ def _background_refresh_loop():
     """Periodic refresh — initial 90s delay, then every BACKGROUND_REFRESH_HOURS."""
     global _background_scan_running
     time.sleep(INITIAL_SCAN_DELAY_SECONDS)
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('uae_rhetoric_scan'):
+            continue
         try:
             with _background_scan_lock:
                 if _background_scan_running:

@@ -114,6 +114,15 @@ def _redis_set(key, value, ttl_seconds=DIPCONV_TTL_SECONDS):
 def _acquire_scheduler_lock(name, ttl_seconds):
     """Cross-worker guard (Redis SET NX EX) -- gunicorn --workers 2 would
     otherwise double every GDELT pull. Same pattern as the kinetic gatherer."""
+    # Oct 18 2026 -- delegate to instance_lock v1.1.0: ONE heartbeat-renewed
+    # leader per backend. This private copy identified workers by pid alone,
+    # and both Render instances run gunicorn as the same pid -- so both
+    # "owned" the lock and both scanned.
+    try:
+        from instance_lock import own_this_job as _own_job
+        return _own_job(name)
+    except ImportError:
+        pass
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
         return True   # no Redis = single-process dev; let it run
     try:

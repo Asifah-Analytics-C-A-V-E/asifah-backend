@@ -1058,7 +1058,15 @@ def _flight_periodic_scan_thread():
     print(f"[Flight Scan] Periodic thread started — {SCAN_INTERVAL // 3600}h interval, {INITIAL_DELAY}s initial delay")
     time.sleep(INITIAL_DELAY)
 
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('flight_scan'):
+            continue
         try:
             print(f"\n[Flight Scan] Periodic scan starting at {datetime.now(timezone.utc).isoformat()}")
             disruptions = _run_flight_disruption_scan()

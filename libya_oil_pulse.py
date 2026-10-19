@@ -536,7 +536,15 @@ def run_oil_pulse_scan():
 def _background_loop():
     print("[Libya Oil Pulse] Background thread started (6h cycle)")
     time.sleep(150)  # boot stagger
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('libya_oil_pulse'):
+            continue
         try:
             print("[Libya Oil Pulse] Background refresh triggered")
             run_oil_pulse_scan()

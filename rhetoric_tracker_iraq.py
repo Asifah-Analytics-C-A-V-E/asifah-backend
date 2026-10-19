@@ -1722,12 +1722,19 @@ def register_iraq_rhetoric_routes(app):
     # Background scan thread
     def _periodic_scan():
         time.sleep(120)
-        print("[Iraq Rhetoric] Starting initial scan...")
-        _bg_rhetoric_scan()
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('iraq_rhetoric_scan'):
+                continue
+            print("[Iraq Rhetoric] Starting scan...")
+            _bg_rhetoric_scan()
             print(f"[Iraq Rhetoric] Sleeping {SCAN_INTERVAL_HOURS}h until next scan...")
             time.sleep(SCAN_INTERVAL_HOURS * 3600)
-            _bg_rhetoric_scan()
 
     thread = threading.Thread(target=_periodic_scan, daemon=True)
     thread.start()

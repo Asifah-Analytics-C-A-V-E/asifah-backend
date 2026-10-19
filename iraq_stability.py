@@ -583,7 +583,15 @@ def get_stability_data(force_refresh=False):
 def _background_refresh():
     print("[Iraq Stability] Background refresh thread started (4h cycle)")
     time.sleep(120)  # Boot delay
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('iraq_stability_refresh'):
+            continue
         try:
             print("[Iraq Stability] Running background refresh...")
             _fetch_all_stability()

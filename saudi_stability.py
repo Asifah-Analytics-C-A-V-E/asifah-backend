@@ -752,7 +752,15 @@ def run_saudi_stability_scan():
 def _background_loop():
     print("[Saudi Stability] Background thread started (12h cycle)")
     time.sleep(300)   # 5 min stagger after boot (avoid contention with other backends)
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('saudi_stability_refresh'):
+            continue
         try:
             print("[Saudi Stability] Background refresh triggered")
             run_saudi_stability_scan()

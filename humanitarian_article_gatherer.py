@@ -151,6 +151,15 @@ _SCHED_WORKER_ID = f"w{os.getpid()}"
 def _acquire_scheduler_lock(name, ttl_seconds):
     """Return True if THIS worker owns the scheduler lock for `name`.
     Atomic claim via SET NX EX; renews the TTL if we already own it."""
+    # Oct 18 2026 -- delegate to instance_lock v1.1.0: ONE heartbeat-renewed
+    # leader per backend. This private copy identified workers by pid alone,
+    # and both Render instances run gunicorn as the same pid -- so both
+    # "owned" the lock and both scanned.
+    try:
+        from instance_lock import own_this_job as _own_job
+        return _own_job(name)
+    except ImportError:
+        pass
     if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
         return True  # no Redis -> assume single process, run normally
     key = f"sched_lock:{name}"

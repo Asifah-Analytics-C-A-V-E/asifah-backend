@@ -388,7 +388,15 @@ def register_notam_endpoints(app):
     # Background refresh thread
     def _periodic_notam_scan():
         time.sleep(45)  # Wait for app to boot
+        # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+        # the other Render instance serves pages and stands by).
+        try:
+            from instance_lock import my_turn as _my_turn
+        except ImportError:
+            _my_turn = lambda job: True   # no lock module: run (fail-open)
         while True:
+            if not _my_turn('notam_scan'):
+                continue
             try:
                 print("[ME NOTAM] Periodic scan starting...")
                 notams = scan_all_mideast_notams()

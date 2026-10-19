@@ -438,7 +438,15 @@ def _background_humanitarian_refresh():
     """Background thread: refresh Iraq humanitarian data every 6 hours."""
     print("[Iraq Humanitarian] Background refresh thread started (6h cycle)")
     time.sleep(90)  # Boot delay
+    # Oct 18 2026 -- one instance runs this (instance_lock v1.1.0 leader;
+    # the other Render instance serves pages and stands by).
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True   # no lock module: run (fail-open)
     while True:
+        if not _my_turn('iraq_humanitarian_refresh'):
+            continue
         try:
             print("[Iraq Humanitarian] Running background refresh...")
             _fetch_all_humanitarian()
