@@ -1,6 +1,8 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.10.0 -- October 19, 2026 (EBOLA MISS: country aliases, earliest-mention attribution,
+           filovirus vocabulary, reported-toll magnitude + ranking -- see below)
 v1.8.0 -- September 21, 2026 (BACKGROUND WARMER -- the cold-cache fix, see below)
 v1.7.0 -- (header never updated for this one; code said 1.7.0, header said 1.6.2)
 v1.6.2 -- June 22, 2026 (WB exposure/distress split: food-import is exposure; L5 needs distress)
@@ -10,6 +12,34 @@ v1.5.0 -- June 21, 2026 (UNHCR structured displacement-surge signals)
 (prior: v1.4.0 May 23 2026; v1.3.0 May 19 2026; v1.0.0 May 17 2026 baseline)
 
 GLOBAL HUMANITARIAN CONVERGENCE DETECTOR
+
+v1.10.0 -- THE EBOLA MISS (Oct 19 2026)
+  The 2026 Bundibugyo Ebola outbreak (DRC + Uganda, declared May 15; ~9,200
+  confirmed cases and ~4,400 deaths by mid-October, cases in Kenya and
+  France) never reached the GPI humanitarian axis. The gatherer HAD the
+  coverage -- it has carried WHO/CIDRAP/Ebola queries since May. Four faults
+  in this file, each tested against real headlines:
+    1. "Congo" / "DR Congo" matched no country -> article dropped unread.
+    2. Longest-pattern-anywhere attribution sent "...DR Congo province,
+       raising fears it could spread to South Sudan" to South Sudan.
+    3. Vocabulary: "Ebola spreads", "first Ebola death", "Ebola PHEIC",
+       "Bundibugyo virus" matched nothing; the PHEIC phrase was misspelled
+       (missing "of") and could never match.
+    4. No magnitude. 4,000 deaths ranked like one suspected case, below
+       every GDACS alert -- and GPI pulls only the top 3 per region.
+  Fixed: aliases, earliest-mention-wins, filovirus names as keywords, a
+  reported-toll parser (deaths/cases as printed, provenance attached) that
+  escalates severity at >= 100 deaths and ranks the signal with structured
+  casualty events. Before: 2 of 10 real headlines produced a signal.
+  ALSO v1.10.0: GROWING CONCERN -- per-country daily toll history in Upstash
+  (humanitarian:toll_history); signals up >= 10% week-on-week, or a country's
+  first health signal, carry growing_concern + a "▲ +N deaths since <date>"
+  tag and rank ahead of equal-class peers. Never reports a decline.
+  PLAGUE REVIEW -- headline phrasings ("dies of plague", "tests positive for
+  plague", "Black Death case"), marmot exposure routes, escalation markers
+  (second case, cluster, spreads), passive Russian containment copy
+  ("quarantine was introduced"), steppe foci (Altai, Tuva, Khovd, Bayan-Olgii)
+  and Inner Mongolia attributed to China, not Mongolia.
 
 v1.8.0 -- WHY humanitarian_warm WAS FALSE (Sep 21 2026)
   The BLUF was only ever built when someone HTTP-called /bluf, and it was
@@ -259,6 +289,16 @@ SIGNAL_CATEGORIES = {
             'ebola outbreak', 'ebola virus disease', 'ebola cases',
             'ebola death toll', 'ebola confirmed', 'ebola suspected',
             'ebola sudan strain', 'ebola zaire strain', 'sudan virus',
+            # v1.10.0 (Oct 19 2026) -- the 2026 DRC/Uganda outbreak is the
+            # BUNDIBUGYO species, and its coverage reads "Ebola spreads",
+            # "first Ebola death", "Ebola PHEIC" -- none of which contained a
+            # listed phrase. A named filovirus is specific enough to stand
+            # alone: 'ebola' and 'bundibugyo' are keywords by themselves.
+            'ebola', 'bundibugyo', 'bundibugyo virus', 'ebolavirus',
+            'ebola spreads', 'ebola spread', 'ebola death', 'ebola deaths',
+            'ebola treatment centre', 'ebola treatment center', 'ebola response',
+            'marburg virus', 'pheic',
+            'public health emergency of international concern',
             'marburg outbreak', 'marburg virus disease', 'marburg cases',
             'marburg confirmed', 'mvd outbreak',
             'cholera outbreak', 'cholera cases', 'cholera epidemic',
@@ -306,6 +346,23 @@ SIGNAL_CATEGORIES = {
             'bubonic plague', 'pneumonic plague', 'septicemic plague',
             'yersinia pestis', 'anti-plague institute', 'antiplague institute',
             'plague focus', 'natural plague focus', 'marmot plague',
+            # v1.10.0 (Oct 19 2026) PLAGUE REVIEW -- how plague is actually
+            # headlined. 'plague' alone is NOT a keyword (substring scan:
+            # "plagued by", "a plague of locusts"); every phrase below names
+            # the disease in a clinical or epidemiological sense.
+            'dies of plague', 'died of plague', 'died from plague',
+            'plague-related death', 'plague patient', 'plague-infected',
+            'tests positive for plague', 'tested positive for plague',
+            'positive for yersinia', 'case of plague', 'case of bubonic',
+            'case of pneumonic', 'plague confirmed', 'plague alert',
+            'plague quarantine', 'plague hotspot', 'plague season',
+            'plague-carrying', 'plague in humans', 'human plague',
+            'black death case', 'case of black death', 'black death outbreak',
+            'black death scare',
+            # Exposure routes that precede cases in the steppe foci
+            # (Mongolia, Inner Mongolia, Altai, Tuva, Buryatia).
+            'marmot meat', 'ate marmot', 'eating marmot', 'tarbagan',
+            'raw marmot', 'marmot hunting',
             # ── v1.9.0 HIGH-CONSEQUENCE PATHOGENS ──
             # Agents on the WHO priority / select-agent lists that this category
             # named nowhere. Each is a stability event in its own right.
@@ -329,6 +386,11 @@ SIGNAL_CATEGORIES = {
             # Severity-amplifying language that justifies SEVERITY_HIGH
             'pheic declared', 'who emergency declared',
             'public health emergency international concern',
+            # v1.10.0 -- the phrase as actually written (with "of"), the
+            # strain, and spread language. Magnitude also escalates: see
+            # HEALTH_DEATHS_HIGH in detect_humanitarian_signals().
+            'public health emergency of international concern', 'pheic',
+            'bundibugyo', 'ebola spreads', 'ebola death toll',
             'pandemic warning', 'pandemic alert',
             'ebola outbreak', 'marburg outbreak',
             'cases surge outbreak', 'mortality rate climbs',
@@ -338,6 +400,12 @@ SIGNAL_CATEGORIES = {
             # laboratory-acquired infection at a BSL facility is an escalation
             # regardless of which organism it turns out to be.
             'pneumonic plague', 'plague outbreak', 'suspected plague',
+            # v1.10.0 -- ESCALATION, the "growing concern" language: a second
+            # case, a cluster, or person-to-person spread is the moment a
+            # contained plague case stops being contained.
+            'second plague case', 'secondary plague case', 'new plague case',
+            'plague cluster', 'pneumonic plague cluster', 'plague spreads',
+            'plague cases rise', 'plague deaths rise', 'black death outbreak',
             'laboratory-acquired infection', 'lab-acquired infection',
             'containment breach', 'biosafety breach',
             'smallpox case', 'inhalational anthrax',
@@ -384,6 +452,13 @@ SIGNAL_CATEGORIES = {
             # ── Quarantine and isolation ──
             'placed under quarantine', 'under quarantine', 'quarantine imposed',
             'quarantine declared', 'quarantine zone', 'cordon sanitaire',
+            # v1.10.0 -- official Russian/CIS copy is passive: "quarantine was
+            # introduced", "restrictive measures were introduced".
+            'quarantine introduced', 'quarantine was introduced',
+            'quarantine has been introduced', 'restrictive measures introduced',
+            'restrictive measures were introduced', 'sanitary cordon',
+            'epidemiological investigation', 'disinfection measures',
+            'emergency anti-epidemic', 'anti-epidemic measures',
             'isolation ward', 'isolation unit', 'hospital sealed',
             'ward sealed', 'facility quarantined', 'hospital quarantined',
             # ── Movement, travel and trade restrictions ──
@@ -530,10 +605,14 @@ COUNTRY_PATTERNS = {
     'russia':           ['russia', 'russian federation', 'russian'],
     'irkutsk':          ['irkutsk', 'irkutsk region', 'irkutsk oblast', 'shelekhov'],
     'buryatia':         ['buryatia', 'buryat', 'ulan-ude'],
-    'siberia':          ['siberia', 'siberian'],
+    'siberia':          ['siberia', 'siberian',
+                          # v1.10.0: plague natural foci in southern Siberia
+                          'altai republic', 'gorno-altaysk', 'kosh-agach',
+                          'tuva', 'tyva', 'kyzyl'],
     'russian_far_east': ['russian far east', 'vladivostok', 'primorye', 'khabarovsk'],
     'north_caucasus':   ['north caucasus', 'dagestan', 'chechnya', 'ingushetia'],
-    'mongolia':         ['mongolia', 'mongolian'],
+    'mongolia':         ['mongolia', 'mongolian', 'ulaanbaatar', 'khovd',
+                          'bayan-olgii', 'bayan-ulgii', 'uvs province'],
     'belarus':          ['belarus', 'belarusian'],
     'georgia_country':  ['republic of georgia', 'tbilisi'],
     'armenia':          ['armenia', 'armenian'],
@@ -559,10 +638,19 @@ COUNTRY_PATTERNS = {
     'khartoum':         ['khartoum'],
     'south_sudan':      ['south sudan'],
     # DRC + sub-regions (eastern conflict zones)
-    'drc':              ['drc', 'democratic republic of the congo', 'eastern congo'],
-    'north_kivu':       ['north kivu', 'goma', 'kivu province'],
-    'south_kivu':       ['south kivu', 'bukavu'],
-    'ituri':            ['ituri province', 'ituri district'],
+    # v1.10.0 (Oct 19 2026): wire copy says "Congo" and "DR Congo" far more
+    # often than "DRC" -- and "Congo says confirmed Ebola cases rise..." matched
+    # NO country, so the article was dropped before any category was read.
+    # Bare 'congo' maps here; Congo-Brazzaville is matched by its longer names.
+    'drc':              ['drc', 'democratic republic of the congo',
+                          'democratic republic of congo', 'dr congo', 'd.r. congo',
+                          'dr. congo', 'rd congo', 'congo-kinshasa', 'kinshasa',
+                          'eastern congo', 'congo', 'congolese', 'kasai', 'tshopo',
+                          'equateur province', 'sankuru', 'maniema', 'tanganyika province'],
+    'north_kivu':       ['north kivu', 'goma', 'kivu province', 'butembo'],
+    'south_kivu':       ['south kivu', 'bukavu', 'uvira'],
+    'ituri':            ['ituri province', 'ituri district', 'ituri', 'bunia',
+                          'mambasa', 'mongbwalu'],
     # Somalia + Horn of Africa specifics
     'somalia':          ['somalia', 'somali'],
     'somaliland':       ['somaliland'],
@@ -613,7 +701,7 @@ COUNTRY_PATTERNS = {
     'gambia':           ['gambia', 'gambian'],
     'cameroon':         ['cameroon', 'cameroonian', 'yaounde', 'far north cameroon'],
     'gabon':            ['gabon', 'gabonese'],
-    'congo_brazzaville':['republic of the congo', 'congo-brazzaville',
+    'congo_brazzaville':['republic of the congo', 'republic of congo', 'congo-brazzaville',
                           'congo brazzaville', 'brazzaville'],
     # Angola (refugee receiver from DRC; cholera history)
     'angola':           ['angola', 'angolan', 'luanda'],
@@ -626,7 +714,7 @@ COUNTRY_PATTERNS = {
     # Eswatini (formerly Swaziland; food security)
     'eswatini':         ['eswatini', 'swaziland'],
     # Southern Africa (existing)
-    'madagascar':       ['madagascar', 'malagasy'],
+    'madagascar':       ['madagascar', 'malagasy', 'antananarivo'],
     'malawi':           ['malawi'],
     'zambia':           ['zambia'],
     'zimbabwe':         ['zimbabwe', 'zimbabwean'],
@@ -707,7 +795,10 @@ COUNTRY_PATTERNS = {
     'india':              ['india', 'indian'],
     # -- East Asia + Pacific (Ring of Fire, typhoon track) --
     'japan':              ['japan', 'japanese'],
-    'china':              ['china', 'chinese'],
+    # v1.10.0: 'inner mongolia' is CHINA. It is longer than 'mongolia' and
+    # starts earlier in the same phrase, so it wins attribution.
+    'china':              ['china', 'chinese', 'inner mongolia', 'bayannur',
+                            'hohhot', 'xilingol'],
     'taiwan':             ['taiwan', 'taiwanese'],
     'south_korea':        ['south korea', 'south korean'],
     'papua_new_guinea':   ['papua new guinea'],
@@ -770,6 +861,31 @@ for country_code, patterns in COUNTRY_PATTERNS.items():
     for pattern in patterns:
         _COUNTRY_TOKENS_SORTED.append((pattern, country_code))
 _COUNTRY_TOKENS_SORTED.sort(key=lambda kv: -len(kv[0]))
+# Sub-region -> country, for attribution (v1.10.0). Every sub-region code in
+# COUNTRY_PATTERNS must appear here, or a headline naming the country first
+# and the place second will lose the place.
+SUBREGION_PARENT = {
+    'irkutsk': 'russia', 'buryatia': 'russia', 'siberia': 'russia',
+    'russian_far_east': 'russia', 'north_caucasus': 'russia',
+    'tigray': 'ethiopia', 'amhara': 'ethiopia', 'afar_region': 'ethiopia',
+    'darfur': 'sudan', 'el_fasher': 'sudan', 'khartoum': 'sudan',
+    'north_kivu': 'drc', 'south_kivu': 'drc', 'ituri': 'drc',
+    'somaliland': 'somalia', 'mogadishu': 'somalia',
+    'borno_state': 'nigeria', 'cabo_delgado': 'mozambique',
+    'kampala': 'uganda', 'kigali': 'rwanda', 'bangui': 'car',
+    'rakhine': 'myanmar', 'karen_state': 'myanmar', 'shan_state': 'myanmar',
+    'kachin_state': 'myanmar', 'sagaing': 'myanmar', 'coxs_bazar': 'bangladesh',
+    'kabul': 'afghanistan', 'kandahar': 'afghanistan',
+    'port_au_prince': 'haiti', 'cap_haitien': 'haiti',
+    'gaza_north': 'gaza', 'khan_younis': 'gaza', 'rafah': 'gaza',
+    'bekaa_valley': 'lebanon', 'aleppo': 'syria', 'idlib': 'syria',
+    'hodeidah': 'yemen', 'sanaa': 'yemen', 'aden': 'yemen', 'saada': 'yemen',
+}
+# Display names the .title() rule gets wrong ("Drc"). v1.10.0.
+_COUNTRY_LABELS = {'drc': 'DR Congo', 'congo_brazzaville': 'Congo-Brazzaville',
+                   'car': 'Central African Republic', 'uae': 'UAE', 'usa': 'USA', 'uk': 'UK'}
+# Precompiled once (v1.10.0): ~250 patterns x ~500 articles per scan.
+_COUNTRY_RX = {p: re.compile(r'\b' + re.escape(p) + r'\b') for p, _c in _COUNTRY_TOKENS_SORTED}
 
 
 # ============================================================
@@ -852,11 +968,84 @@ def _extract_country_from_text(text):
     if not text:
         return None
     text_lower = text.lower()
+    # v1.10.0 (Oct 19 2026) -- the EARLIEST-mentioned country is the subject;
+    # then the most specific place INSIDE that country wins.
+    # Longest-pattern-anywhere picked the country a headline merely mentioned
+    # over the one it was about:
+    #   "Ebola spreads to sixth DR Congo province, raising fears it could
+    #    spread to South Sudan"  ->  south_sudan  (11 chars beat 'dr congo').
+    # But the sub-region precision longest-first gave must survive:
+    #   "Sudan: famine spreads in Darfur as El Fasher siege..." -> el_fasher.
+    # So: earliest match picks the COUNTRY; within that country (itself plus
+    # its sub-regions, SUBREGION_PARENT) the longest pattern picks the PLACE.
+    # 'south sudan' still beats 'sudan' (starts earlier); word boundaries
+    # still stop 'iran' matching 'transparent'.
+    hits = []
     for pattern, country_code in _COUNTRY_TOKENS_SORTED:
-        # Use word-boundary check to avoid 'iran' matching 'transparent'
-        if re.search(r'\b' + re.escape(pattern) + r'\b', text_lower):
-            return country_code
-    return None
+        m = _COUNTRY_RX[pattern].search(text_lower)
+        if m:
+            hits.append((m.start(), -len(pattern), country_code))
+    if not hits:
+        return None
+    hits.sort()
+    first = hits[0][2]
+    if first in SUBREGION_PARENT:
+        return first                       # the headline led with a place: keep it
+    subs = [h for h in hits if SUBREGION_PARENT.get(h[2]) == first]
+    if subs:
+        return min(subs, key=lambda h: (h[1], h[0]))[2]     # longest, then earliest
+    return first
+
+
+# ── Reported toll (v1.10.0, Oct 19 2026) ───────────────────────────────
+# Keyword matching says WHAT; it never said HOW BIG. A 4,000-death epidemic
+# and a single suspected case produced the same signal and the same rank, and
+# the epidemic sat below every GDACS alert. Parse the figure the article
+# itself prints. Largest figure seen this cycle per country wins (outbreak
+# tolls are cumulative). Provenance is carried, never implied.
+HEALTH_DEATHS_HIGH = 100        # reported deaths that make a health signal severity 3
+_NUM = r'(\d{1,3}(?:,\d{3})+|\d+)'
+_DEATH_RX = [
+    re.compile(_NUM + r'\s+(?:confirmed\s+|reported\s+|suspected\s+|probable\s+|people\s+|more\s+)?'
+               r'(?:deaths|dead|fatalities|killed|lives)\b', re.I),
+    re.compile(r'(?:death toll|deaths|dead|fatalities)(?:\s+[^\s.;]+){0,6}?\s+(?:has\s+|have\s+)?'
+               r'(?:rises?|rose|climbs?|climbed|reach(?:es|ed)?|pass(?:es|ed)?|tops?|topped|'
+               r'surpass(?:es|ed)?|exceeds?|exceeded|hits?|is|at|of|now)\s+'
+               r'(?:to\s+)?(?:over\s+|more than\s+|nearly\s+|almost\s+|about\s+)?' + _NUM, re.I),
+]
+_CASE_RX = [
+    re.compile(_NUM + r'\s+(?:confirmed\s+|reported\s+|suspected\s+|probable\s+|new\s+)?cases\b', re.I),
+    re.compile(r'cases\s+(?:rise|rose|climb|reach|pass|top|surpass|exceed|hit)\w*\s+'
+               r'(?:to\s+)?(?:over\s+|more than\s+)?' + _NUM, re.I),
+]
+
+
+def _reported_toll(text):
+    """(deaths, cases) printed in `text`, as the largest figure found; 0 if none."""
+    def _best(rxs):
+        best = 0
+        for rx in rxs:
+            for m in rx.finditer(text or ''):
+                try:
+                    n = int(m.group(1).replace(',', ''))
+                except (ValueError, IndexError):
+                    continue
+                if (1900 <= n <= 2100 and ',' not in m.group(1)
+                        and not m.group(0).lower().startswith(m.group(1))):
+                    continue      # "...toll in 2026" is a year; "2,000" is a count
+                if n < 10_000_000:
+                    best = max(best, n)
+        return best
+    return _best(_DEATH_RX), _best(_CASE_RX)
+
+
+def _toll_phrase(deaths, cases):
+    bits = []
+    if deaths:
+        bits.append(f'{deaths:,} deaths')
+    if cases:
+        bits.append(f'{cases:,} cases')
+    return ', '.join(bits)
 
 
 def detect_humanitarian_signals(articles):
@@ -887,6 +1076,7 @@ def detect_humanitarian_signals(articles):
 
     detected = []
     seen_country_category = set()  # dedupe per country+category
+    _toll = {}   # (country, 'health_emergency') -> {deaths, cases, title, url, source}
 
     for art in articles:
         title = (art.get('title') or '').strip()
@@ -906,6 +1096,20 @@ def detect_humanitarian_signals(articles):
             matched, severity, matched_kws = _scan_article_text(text, cat_cfg)
             if not matched:
                 continue
+
+            if cat_key == 'health_emergency':
+                _d, _c = _reported_toll(text)
+                if _d or _c:
+                    t = _toll.setdefault((country, cat_key), {'deaths': 0, 'cases': 0})
+                    # Each figure keeps its OWN provenance: the largest death
+                    # count and the largest case count may come from different
+                    # articles, and must not be cited as one source.
+                    if _d > t['deaths']:
+                        t.update({'deaths': _d, 'title': title, 'url': url, 'source': source})
+                    if _c > t['cases']:
+                        t.update({'cases': _c, 'cases_title': title, 'cases_source': source})
+                if _d >= HEALTH_DEATHS_HIGH:
+                    severity = SEVERITY_HIGH
 
             dedup_key = (country, cat_key)
             if dedup_key in seen_country_category:
@@ -952,7 +1156,7 @@ def detect_humanitarian_signals(articles):
 
             seen_country_category.add(dedup_key)
             level = _severity_to_level(severity)
-            country_label = country.replace('_', ' ').title()
+            country_label = _COUNTRY_LABELS.get(country) or country.replace('_', ' ').title()
 
             # SPECIFICITY IN THE HEADLINE (Aug 2026). This previously read
             # "Nepal: natural disaster signal" and discarded matched_kws -- which
@@ -992,6 +1196,39 @@ def detect_humanitarian_signals(articles):
                 'region':           'global_humanitarian',
                 'is_tracked_country': country in TRACKED_COUNTRIES,
             })
+
+    # ── Attach reported tolls (v1.10.0) ─────────────────────────────────
+    # After the loop, because the largest figure may come from a later article
+    # than the one that set the severity. The toll leads the headline so the
+    # GPI's casualty tiebreak and a human reader both see magnitude first.
+    for d in detected:
+        t = _toll.get((d['country'], d['category']))
+        if not t or not (t['deaths'] or t['cases']):
+            continue
+        d['reported_deaths'] = t['deaths']
+        d['reported_cases'] = t['cases']
+        d['toll_source'] = {'title': (t.get('title') or '')[:160], 'url': t.get('url', ''),
+                            'source': t.get('source', ''),
+                            'cases_title': (t.get('cases_title') or '')[:160],
+                            'cases_source': t.get('cases_source', ''),
+                            'basis': 'figures as printed in coverage (news-parsed)'}
+        cat_cfg = SIGNAL_CATEGORIES[d['category']]
+        _kw = ', '.join(d.get('matched_keywords', [])[:2])
+        d['short_text'] = (
+            f"{cat_cfg['icon']} {d['country_label']}: {cat_cfg['label'].lower()} — "
+            f"{_toll_phrase(t['deaths'], t['cases'])} reported"
+            f"{f' ({_kw})' if _kw else ''}"
+        )[:150]
+        d['long_text'] = (
+            f"{d['country_label']} showing {cat_cfg['label'].lower()} signals "
+            f"(severity {d['severity']}/3). Largest figures reported this cycle: "
+            + (f"{t['deaths']:,} deaths per \"{(t.get('title') or '')[:100]}\" "
+               f"({t.get('source') or 'source unknown'})" if t['deaths'] else '')
+            + ('; ' if t['deaths'] and t['cases'] else '')
+            + (f"{t['cases']:,} cases per \"{(t.get('cases_title') or '')[:100]}\" "
+               f"({t.get('cases_source') or 'source unknown'})" if t['cases'] else '')
+            + ". Figures as printed in coverage, not an official count."
+        )
 
     # ── WORLDWIDE STRUCTURED DISASTER CATCH ─────────────────────────────
     # RELOCATED HERE Aug 2026. This merge previously sat in
@@ -1274,6 +1511,13 @@ def _signal_class(sig):
             return SIGNAL_CLASS_WEIGHT['structured_acute_casualties']
         return SIGNAL_CLASS_WEIGHT['structured_acute']
 
+    # v1.10.0 (Oct 19 2026): an outbreak with a reported mass-casualty toll
+    # ranks WITH structured casualty events. Before this, a 4,000-death Ebola
+    # epidemic (class news_acute) sorted below every GDACS alert, and the GPI
+    # pulls only the top 3 humanitarian signals -- so it never surfaced. The
+    # figure is news-parsed and labelled as such (toll_source.basis).
+    if category == 'health_emergency' and (sig.get('reported_deaths') or 0) >= HEALTH_DEATHS_HIGH:
+        return SIGNAL_CLASS_WEIGHT['structured_acute_casualties']
     if category in ACUTE_SIGNAL_CATEGORIES:
         return SIGNAL_CLASS_WEIGHT['news_acute']
     return SIGNAL_CLASS_WEIGHT['structural_chronic']
@@ -1284,6 +1528,8 @@ def _casualty_count(sig):
     absence of a figure is NOT evidence of no casualties, usually just that the
     event is too new, so it never demotes below its class."""
     import re as _re
+    if sig.get('reported_deaths'):
+        return int(sig['reported_deaths'])          # v1.10.0: parsed, not re-scraped
     blob = ((sig.get('short_text') or '') + ' ' + (sig.get('long_text') or '')).replace(',', '')
     m = _re.search(r'(\d+)\s*(?:confirmed\s+)?deaths?', blob, _re.I)
     if m:
@@ -1347,6 +1593,7 @@ def build_humanitarian_bluf(signals, aggregation=None):
         key=lambda s: (
             -s.get('severity', 0),
             _signal_class(s),
+            0 if s.get('growing_concern') else 1,     # v1.10.0
             -_casualty_count(s),
             0 if not s.get('is_tracked_country') else 1,
             -s.get('level', 0),
@@ -1370,10 +1617,15 @@ def build_humanitarian_bluf(signals, aggregation=None):
             # every severity-3 signal arrived at priority 9 -- ~40 signals, one
             # value, nothing to discriminate on. Class now separates them while
             # keeping the same 3-9 band so no GPI threshold shifts.
-            'priority':      max(3, s['severity'] * 3 - _signal_class(s)),
+            'priority':      min(9, max(3, s['severity'] * 3 - _signal_class(s)
+                                    + (1 if s.get('growing_concern') else 0))),
             'signal_class':  _signal_class(s),
             'source_url':    s.get('source_url', ''),
             'source':        s.get('source', ''),
+            # v1.10.0 -- magnitude, provenance and trend ride along when present.
+            **{k: s[k] for k in ('reported_deaths', 'reported_cases', 'toll_source',
+                                 'trend', 'growing_concern', 'new_outbreak_signal',
+                                 'first_seen') if k in s},
         })
 
     return {
@@ -1954,13 +2206,144 @@ def summarise_claim_behaviour_gap(gap):
             'about intent.' % ', '.join(c.replace('_', ' ').title() for c in div))
 
 
-def detect_and_build_bluf(articles, extra_signals=None):
+# ======================================================================
+# GROWING CONCERN -- toll trend across cycles (v1.10.0, Oct 19 2026)
+# ======================================================================
+# Rachel: "we want to use this to flag when there is a growing concern."
+# A single cycle can say "4,444 deaths"; only history can say "up 600 this
+# week". The warmer keeps a small per-country daily record of the largest
+# toll seen in coverage (Upstash TOLL_HISTORY_KEY) and compares today with
+# ~a week ago.
+#
+# Rules, in doctrine order:
+#   * Tolls are cumulative, so each day carries forward the running maximum.
+#     A smaller figure today means today's pool lacked the latest article --
+#     never that the outbreak shrank. This code NEVER reports a decline.
+#   * Growth needs BOTH a relative and an absolute step (10% AND >= 10 deaths
+#     or >= 20 cases) so "1 -> 2 cases" is not a headline.
+#   * A country's FIRST health signal is flagged as new -- but only once the
+#     history has been running long enough that "first" means something
+#     (TREND_WARMUP_DAYS), so the first deploy does not call everything new.
+# Figures stay news-parsed and labelled as such; the trend inherits that.
+TOLL_HISTORY_KEY      = 'humanitarian:toll_history'
+TOLL_HISTORY_TTL_SEC  = 30 * 86400
+TREND_LOOKBACK_DAYS   = 7
+TREND_WARMUP_DAYS     = 3
+NEW_SIGNAL_WINDOW_DAYS = 7
+GROWTH_MIN_PCT        = 0.10
+GROWTH_MIN_DEATHS     = 10
+GROWTH_MIN_CASES      = 20
+
+
+def _days_between(a, b):
+    try:
+        return (datetime.strptime(b, '%Y-%m-%d') - datetime.strptime(a, '%Y-%m-%d')).days
+    except (TypeError, ValueError):
+        return 0
+
+
+def apply_toll_trend(signals, history, now=None):
+    """Annotate health signals with growth vs history. Mutates and returns `history`.
+
+    history shape: {'_meta': {'tracking_since': date},
+                    'countries': {country: {'first_seen': date,
+                                            'daily': [{'date','deaths','cases'}, ...]}}}
+    """
+    now = now or datetime.now(timezone.utc)
+    today = now.strftime('%Y-%m-%d')
+    if not isinstance(history, dict):
+        history = {}
+    meta = history.setdefault('_meta', {})
+    meta.setdefault('tracking_since', today)
+    warmed = _days_between(meta['tracking_since'], today) >= TREND_WARMUP_DAYS
+    countries = history.setdefault('countries', {})
+
+    for s in signals or []:
+        if s.get('category') != 'health_emergency' or not s.get('country'):
+            continue
+        rec = countries.setdefault(s['country'], {'first_seen': today, 'daily': []})
+        daily = rec.setdefault('daily', [])
+        d = int(s.get('reported_deaths') or 0)
+        c = int(s.get('reported_cases') or 0)
+        last = daily[-1] if daily else {'deaths': 0, 'cases': 0}
+        if daily and daily[-1].get('date') == today:
+            daily[-1]['deaths'] = max(daily[-1]['deaths'], d)
+            daily[-1]['cases'] = max(daily[-1]['cases'], c)
+        elif d or c or daily:
+            daily.append({'date': today, 'deaths': max(d, last.get('deaths', 0)),
+                          'cases': max(c, last.get('cases', 0))})
+        del daily[:-(TREND_LOOKBACK_DAYS + 2)]
+
+        cur = daily[-1] if daily else None
+        older = [e for e in daily if e.get('date') != today]
+        base = older[0] if older else None          # oldest kept: ~a week back
+        trend = None
+        growing = False
+        if cur and base:
+            dd = cur['deaths'] - base['deaths']
+            dc = cur['cases'] - base['cases']
+            grow_d = dd >= GROWTH_MIN_DEATHS and dd >= base['deaths'] * GROWTH_MIN_PCT
+            grow_c = dc >= GROWTH_MIN_CASES and dc >= base['cases'] * GROWTH_MIN_PCT
+            growing = bool(grow_d or grow_c)
+            trend = {'since': base['date'], 'deaths_delta': max(0, dd), 'cases_delta': max(0, dc),
+                     'deaths_then': base['deaths'], 'cases_then': base['cases'],
+                     'growing': growing,
+                     'basis': 'largest figure seen per day in coverage; a lower figure is '
+                              'treated as missing coverage, never as decline'}
+        is_new = (warmed and _days_between(rec.get('first_seen', today), today) <= NEW_SIGNAL_WINDOW_DAYS
+                  and _days_between(meta['tracking_since'], rec.get('first_seen', today)) >= TREND_WARMUP_DAYS)
+        if trend:
+            s['trend'] = trend
+        if is_new:
+            s['new_outbreak_signal'] = True
+            s['first_seen'] = rec.get('first_seen')
+        if growing or is_new:
+            s['growing_concern'] = True
+            bits = []
+            if is_new:
+                bits.append('NEW this week')
+            if growing:
+                when = datetime.strptime(trend['since'], '%Y-%m-%d').strftime('%b %d').replace(' 0', ' ')
+                delta = []
+                if trend['deaths_delta'] >= GROWTH_MIN_DEATHS:
+                    delta.append(f"+{trend['deaths_delta']:,} deaths")
+                if trend['cases_delta'] >= GROWTH_MIN_CASES:
+                    delta.append(f"+{trend['cases_delta']:,} cases")
+                bits.append('▲ ' + ' / '.join(delta) + f' since {when}')
+            tag = ' — ' + '; '.join(bits)
+            head = s.get('short_text') or ''
+            # Keep the trend visible inside the 150-char budget: drop the
+            # keyword parenthetical before cutting the trend.
+            if len(head) + len(tag) > 150 and ' (' in head:
+                head = head[:head.rfind(' (')]
+            s['short_text'] = (head + tag)[:150]
+            s['long_text'] = (s.get('long_text') or '') + (
+                f" GROWING CONCERN: {'; '.join(bits)} (trend from coverage, "
+                f"compared with {trend['since'] if trend else 'first sighting'}).")
+
+    meta['updated_at'] = now.isoformat()
+    return history
+
+
+def detect_and_build_bluf(articles, extra_signals=None, toll_history=None):
     """
     Convenience wrapper: run detection + aggregation + build BLUF.
     Returns the canonical BLUF payload ready for the API endpoint.
     extra_signals: pre-built signals (e.g. UNHCR structured surges) merged in.
+    toll_history: v1.10.0 -- dict from Upstash TOLL_HISTORY_KEY. When given,
+        health signals are annotated with week-on-week growth and the dict is
+        UPDATED IN PLACE for the caller to write back. None = no trend read
+        (the BLUF says so in meta.trend_status).
     """
     signals = detect_humanitarian_signals(articles or [])
+    _trend_status = 'not_read'
+    if toll_history is not None:
+        try:
+            apply_toll_trend(signals, toll_history)
+            _trend_status = 'ok'
+        except Exception as _te:
+            _trend_status = 'failed: %s' % str(_te)[:100]
+            print('[humanitarian] toll trend failed (non-fatal): %s' % str(_te)[:120])
 
     # NOTE: the structured disaster merge now lives inside
     # detect_humanitarian_signals() so that EVERY caller receives it --
@@ -1970,6 +2353,9 @@ def detect_and_build_bluf(articles, extra_signals=None):
         signals = signals + list(extra_signals)
     aggregation = aggregate_convergence(signals)
     bluf = build_humanitarian_bluf(signals, aggregation)
+    bluf.setdefault('meta', {})['trend_status'] = _trend_status
+    bluf['meta']['growing_concerns'] = [
+        s['short_text'] for s in bluf.get('signals', []) if s.get('growing_concern')][:10]
 
     # v1.9.0 -- the claim-vs-behaviour read rides the payload. It needs the raw
     # ARTICLES, which aggregate_convergence never sees, so it is computed here
@@ -2049,6 +2435,28 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
                 return raw
         except Exception as e:
             print(f'[humanitarian_convergence] Upstash GET error ({key}): {str(e)[:80]}')
+            return None
+
+    def _read_toll_history():
+        """v1.10.0. {} when the key is absent (start fresh); None when Upstash
+        could not be read -- so a blip never overwrites a week of history."""
+        if not UPSTASH_URL or not UPSTASH_TOKEN:
+            return None
+        import requests as _requests
+        try:
+            resp = _requests.get(f"{UPSTASH_URL}/get/{TOLL_HISTORY_KEY}",
+                                 headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+                                 timeout=5)
+            if not resp.ok:
+                return None
+            raw = resp.json().get('result')
+            if raw is None:
+                return {}
+            val = _json.loads(raw) if isinstance(raw, str) else raw
+            return val if isinstance(val, dict) else {}
+        except Exception as e:
+            print(f'[humanitarian_convergence] toll history read failed ({str(e)[:80]}) '
+                  f'-- trend skipped this cycle, history untouched')
             return None
 
     def _upstash_setex(key, ttl, value):
@@ -2182,7 +2590,13 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
                 wb_signals = detect_worldbank_structural_signals(_wb_struct)
         except Exception as _we:
             print(f'[humanitarian_convergence] World Bank signal read skipped: {str(_we)[:80]}')
-        bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals + wb_signals)
+        # v1.10.0 -- growing-concern trend. A failed read passes None, so the
+        # BLUF says trend_status='not_read' instead of pretending nothing grew.
+        _hist = _read_toll_history()
+        bluf = detect_and_build_bluf(articles, extra_signals=unhcr_signals + wb_signals,
+                                     toll_history=_hist)
+        if isinstance(_hist, dict) and bluf.get('meta', {}).get('trend_status') == 'ok':
+            _upstash_setex(TOLL_HISTORY_KEY, TOLL_HISTORY_TTL_SEC, _hist)
         bluf.setdefault('meta', {})
         bluf['meta']['built_by'] = source            # 'warmer' or 'request'
         bluf['meta']['article_count'] = len(articles)
@@ -2372,6 +2786,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.9.0'
+__version__ = '1.10.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
