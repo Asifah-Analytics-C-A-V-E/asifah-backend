@@ -706,6 +706,55 @@ def _extract_financial_access_signals(scan_data):
     }
 
 
+def _extract_formation_signals(scan_data):
+    """
+    Government formation -- the So What read. (v1.2.0, Oct 28 2026)
+
+    The tracker (rhetoric_tracker_israel._detect_government_formation) does the
+    measuring: path evidence states, stances, seat arithmetic, and an assembled
+    three-altitude So What. This function only decides what the executive
+    summary card leads with, so the reader meets the formation question first
+    while the window is open.
+
+    Estimative voice only. No odds, no "likely government".
+    """
+    gf = scan_data.get('government_formation') or {}
+    if not gf.get('active'):
+        return {'has_signal': False}
+
+    paths = gf.get('paths') or {}
+    leading = gf.get('leading_paths') or []
+    sit = [gf.get('headline', '')]
+
+    # One sentence per altitude -- the first fragment the tracker selected.
+    sw = gf.get('so_what') or {}
+    for alt in ('israel', 'region', 'global'):
+        frs = sw.get(alt) or []
+        if frs:
+            sit.append(frs[0])
+
+    indicator = ''
+    hinge = [p for p in ('B1', 'B2') if p in leading and paths.get(p, {}).get('blocked_by')]
+    if hinge:
+        who = ', '.join(paths[hinge[0]]['blocked_by'])
+        indicator = ('Formation: the leading path (%s) faces a public refusal from %s this cycle -- '
+                     'a stated position, reported beside the path rather than netted against it.'
+                     % (' / '.join(hinge), who))
+    elif any(paths.get(p, {}).get('state') == 'committed' for p in paths):
+        done = [p for p in paths if paths[p].get('state') == 'committed']
+        indicator = ('Formation: Path %s is reported as AGREED in firsthand coverage. Until the Knesset '
+                     'confidence vote, an agreement is formation, not a government.' % ' / '.join(done))
+
+    watch = (gf.get('watch_list') or [])[:1]
+    return {
+        'has_signal': True,
+        'situation_text': ' '.join(t for t in sit if t),
+        'indicator_text': indicator,
+        'watch_text': watch[0] if watch else '',
+        'leading': leading,
+    }
+
+
 def _build_so_what(scan_data, red_lines_triggered, historical_matches):
     """
     Generate plain-language executive assessment from current signals.
@@ -874,6 +923,19 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
         if commodity_signals.get('watch_text'):
             watch_items.insert(0, commodity_signals['watch_text'])
 
+    # -- Government formation (v1.2.0, Oct 28 2026) --
+    # LEADS the situation while the formation window is open: it is the
+    # question the reader has not asked yet ("which government, and what does
+    # each one change?"), and every theatre read below it is conditioned on it.
+    formation = _extract_formation_signals(scan_data)
+    if formation.get('has_signal'):
+        if formation.get('situation_text'):
+            situation_parts.insert(0, formation['situation_text'])
+        if formation.get('indicator_text'):
+            indicators.insert(0, formation['indicator_text'])
+        if formation.get('watch_text'):
+            watch_items.insert(0, formation['watch_text'])
+
     # -- Palestinian financial access compound read (v1.1.0, Oct 2026) --
     # Placed BEFORE the Gaza/WB read so that when both fire, the financial
     # mechanism is named before the territorial consequence -- the reader meets
@@ -956,7 +1018,7 @@ def interpret_signals(scan_data):
                 'highest_severity': max((r['severity'] for r in red_lines), default=0),
             },
             'historical_matches':  historical,
-            'interpreter_version': '1.1.0',
+            'interpreter_version': '1.2.0',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
 
@@ -1423,6 +1485,35 @@ def build_top_signals(scan_data):
                 + f' Corpus {_fa_corpus.get("firsthand", 0)} firsthand /'
                   f' {_fa_corpus.get("commentary", 0)} commentary.'
             )[:400],
+        })
+
+    # ── 12c. Government formation (v1.2.0, Oct 28 2026) ──────────────
+    # ONE canonical signal while the window is open. pressure_type is set to
+    # 'diplomatic' explicitly: me_regional_bluf routes an unmapped category by
+    # keyword hints and falls back to 'kinetic', which would file a coalition
+    # negotiation as a military event. A dissolution / repeat election lifts
+    # the priority, because it extends the freeze on every external decision.
+    _gf = scan_data.get('government_formation') or {}
+    if _gf.get('active') and _gf.get('cycle_state') in ('voted', 'formation'):
+        _gp = _gf.get('paths') or {}
+        _lead = _gf.get('leading_paths') or []
+        _d_hot = (_gp.get('D') or {}).get('state') in ('negotiating', 'committed')
+        _lead_txt = (' / '.join('Path %s' % p for p in _lead)) if _lead else 'no path yet'
+        _freeze_txt = (' Decision freeze ON: Lebanon/Gaza frameworks read PARKED, not failing.'
+                       if _gf.get('decision_freeze') else '')
+        _fr = ((_gf.get('so_what') or {}).get('israel') or [''])[0]
+        signals.append({
+            'priority':      10 if _d_hot else 9,
+            'category':      'government_formation',
+            'pressure_type': 'diplomatic',
+            'theatre':       'israel',
+            'level':         4 if _d_hot else 3,
+            'icon':          '🏛️',
+            'color':         '#f59e0b' if _d_hot else '#a78bfa',
+            'short_text':    (f'{ISRAEL_FLAG} ISRAEL: Formation day '
+                              f'{int(_gf.get("days_in_state") or 0)} -- {_lead_txt}')[:80],
+            'long_text':     (f'{ISRAEL_FLAG} ISRAEL government formation: {_gf.get("headline", "")}'
+                              f'{_freeze_txt} {_fr}')[:400],
         })
 
     # ── 13. Diplomatic active (cross-theater off-ramps) ─────────────

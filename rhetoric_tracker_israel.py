@@ -3173,7 +3173,8 @@ SO_WHAT_REGION = [
     (lambda c: c['cycle'].get('decision_freeze'),
      lambda c: ('While formation runs, the Lebanon framework and the Gaza roadmap read as PARKED rather than '
                 'failing: no Israeli government is positioned to take the decisions that gate them.%s'
-                % ((' Lebanon gates this cycle: ' + c['lebanon_gates']) if c['lebanon_gates'] else ''))),
+                % ((' Lebanon gates this cycle: ' + c['lebanon_gates'].rstrip('. ') + '.')
+                   if c['lebanon_gates'] else ''))),
     (lambda c: _is_live(c, 'A'),
      'A government drawn from the outgoing bloc would start from continuity on Lebanon, Gaza and the West Bank, '
      'with the new partner\'s price as the variable. The West Bank administrative-tempo and Gaza control-ratchet '
@@ -3186,7 +3187,7 @@ SO_WHAT_REGION = [
      'negotiated tracks or narrows territorial moves is an open question this page measures rather than '
      'assumes: the Lebanon gate ladder and the West Bank tempo panel would show it first.'),
     (lambda c: c['gaza_gates'],
-     lambda c: 'Gaza roadmap this cycle: ' + c['gaza_gates']),
+     lambda c: 'Gaza roadmap this cycle: ' + c['gaza_gates'].rstrip('. ') + '.'),
 ]
 
 SO_WHAT_GLOBAL = [
@@ -3223,10 +3224,43 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
     """Formation path read + dynamic So What. See the block comment above."""
     cycle = _redis_get(ELECTION_CYCLE_KEY_RO) or {}
     results = _redis_get(ELECTION_RESULTS_KEY_RO) or {}
+    source = 'redis'
+    # v1.2.1 -- FALLBACK. Both modules run on the ME backend, so if the shared
+    # Redis keys are missing (stability scan not run yet, or its Redis was
+    # misconfigured), read the same truth in-process instead of reporting the
+    # formation window as closed. Same functions, same rules -- not a copy.
+    if not cycle.get('state') or not results.get('paths'):
+        try:
+            import israel_stability as _ist
+            if not results.get('paths'):
+                results = _ist.build_election_results()
+            if not cycle.get('state'):
+                cycle = _ist._detect_election_state(articles or [])
+            source = 'in_process_fallback'
+        except Exception as _e:
+            print('[Israel Formation] in-process fallback failed: %s' % str(_e)[:120])
     state = cycle.get('state', 'unknown')
 
+    # The Redis key stores the machine's STATE (state, since, formed_at), not
+    # the derived read (days, freeze, overrun, off-ramp phase), because those
+    # depend on today's date. Derive them here from the same rules.
+    cycle = dict(cycle)
+    try:
+        import israel_stability as _ist2
+        _now = datetime.now(timezone.utc)
+        if cycle.get('days_in_state') is None and cycle.get('since'):
+            cycle['days_in_state'] = (_now - datetime.fromisoformat(cycle['since'])).days
+        cycle.setdefault('decision_freeze', state in _ist2.FREEZE_STATES)
+        _env = _ist2.STATE_ENVELOPE_DAYS.get(state)
+        cycle.setdefault('overrun', bool(_env and (cycle.get('days_in_state') or 0) > _env))
+        if state == 'formed' and cycle.get('formed_at') and not cycle.get('post_formation_phase'):
+            cycle['post_formation_phase'] = _ist2._post_formation_phase(
+                (_now - datetime.fromisoformat(cycle['formed_at'])).days)
+    except Exception as _e:
+        print('[Israel Formation] cycle derivation partial: %s' % str(_e)[:100])
+
     if state not in ('voted', 'formation', 'formed'):
-        return {'active': False, 'cycle_state': state,
+        return {'active': False, 'cycle_state': state, 'cycle_source': source,
                 'headline': 'No government-formation window is open.',
                 'note': ('The path detector runs between an election and a sworn-in government. '
                          'Cycle state read: %s.' % state)}
@@ -3336,6 +3370,7 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
         'block_version': '1.0.0',
         'scored': False,
         'cycle_state': state,
+        'cycle_source': source,
         'days_in_state': cycle.get('days_in_state'),
         'decision_freeze': bool(cycle.get('decision_freeze')),
         'results_status': results.get('status', 'unavailable'),
@@ -3728,7 +3763,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.2.0-israel-formation',
+        'version': '1.2.1-israel-formation',
     }
 
     # Cache
@@ -3963,7 +3998,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.2.0-israel-formation',
+            'version': '1.2.1-israel-formation',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])

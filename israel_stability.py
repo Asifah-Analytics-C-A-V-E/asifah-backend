@@ -55,12 +55,25 @@ except ImportError:
 # CONFIGURATION
 # ========================================
 
-UPSTASH_URL   = os.environ.get('UPSTASH_REDIS_REST_URL')
-UPSTASH_TOKEN = os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+# v2.4.1 (Oct 28 2026) -- accept BOTH naming conventions. This module only
+# read the *_REST_* names; every other ME-backend module (me_regional_bluf,
+# rhetoric_tracker_israel, ...) reads UPSTASH_REDIS_URL / UPSTASH_REDIS_TOKEN.
+# If Render only carries the short names, this file has been running with
+# Redis silently OFF: no cache, no history, no rhetoric penalty, and no
+# election-cycle state for the rhetoric tracker to read.
+UPSTASH_URL   = (os.environ.get('UPSTASH_REDIS_REST_URL')
+                 or os.environ.get('UPSTASH_REDIS_URL'))
+UPSTASH_TOKEN = (os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+                 or os.environ.get('UPSTASH_REDIS_TOKEN'))
 ACLED_API_KEY = os.environ.get('ACLED_API_KEY')       # Optional — falls back to RSS
 ACLED_EMAIL   = os.environ.get('ACLED_EMAIL')          # Required with ACLED key
 TASE_API_KEY  = os.environ.get('TASE_API_KEY')         # TASE Data Hub — indices online
 REDIS_CACHE_KEY = 'israel_cache'
+# v2.4.1 -- the 90-day history used to share REDIS_CACHE_KEY with the payload
+# cache, so each one overwrote the other (and the history inherited the 4-hour
+# payload TTL). Separate key, long TTL.
+REDIS_HISTORY_KEY = 'israel_history'
+HISTORY_TTL_SECONDS = 120 * 24 * 3600
 CACHE_TTL_SECONDS = 4 * 60 * 60  # 4 hours
 
 # Political figures — status is semi-static, updated via news scan heuristics.
@@ -189,7 +202,7 @@ def _redis_set(key, value, ex=None):
 
 def load_israel_cache():
     if _redis_available():
-        data = _redis_get(REDIS_CACHE_KEY)
+        data = _redis_get(REDIS_HISTORY_KEY)
         if data:
             print(f"[Cache] ✅ Loaded israel_cache from Redis")
             return data
@@ -202,7 +215,7 @@ def load_israel_cache():
 def save_israel_cache(cache_data):
     cache_data['last_updated'] = datetime.now(timezone.utc).isoformat()
     if _redis_available():
-        _redis_set(REDIS_CACHE_KEY, cache_data, ex=CACHE_TTL_SECONDS)
+        _redis_set(REDIS_HISTORY_KEY, cache_data, ex=HISTORY_TTL_SECONDS)
         return
     # /tmp fallback (ephemeral on Render — warns)
     print("[Cache] ⚠️ Redis not available — data will not persist across deploys")
@@ -2762,7 +2775,7 @@ def scan_israel_stability():
             'leadership_reviewed': POLITICAL_FIGURES_REVIEWED,
             'all_articles': conflict.get('all_articles', [])[:30],
             'last_updated': datetime.now(timezone.utc).isoformat(),
-            'version': '2.4.0-israel',
+            'version': '2.4.1-israel',
             'from_cache': False
         }
 
