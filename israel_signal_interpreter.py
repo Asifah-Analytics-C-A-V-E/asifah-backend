@@ -737,13 +737,23 @@ def _extract_formation_signals(scan_data):
     hinge = [p for p in ('B1', 'B2') if p in leading and paths.get(p, {}).get('blocked_by')]
     if hinge:
         who = ', '.join(paths[hinge[0]]['blocked_by'])
+        _pn = gf.get('path_names') or {}
         indicator = ('Formation: the leading path (%s) faces a public refusal from %s this cycle -- '
                      'a stated position, reported beside the path rather than netted against it.'
-                     % (' / '.join(hinge), who))
+                     % (' / '.join(_pn.get(h, h) for h in hinge), who))
     elif any(paths.get(p, {}).get('state') == 'committed' for p in paths):
         done = [p for p in paths if paths[p].get('state') == 'committed']
-        indicator = ('Formation: Path %s is reported as AGREED in firsthand coverage. Until the Knesset '
-                     'confidence vote, an agreement is formation, not a government.' % ' / '.join(done))
+        _pn = gf.get('path_names') or {}
+        indicator = ('Formation: %s is reported as AGREED in firsthand coverage. Until the Knesset '
+                     'confidence vote, an agreement is formation, not a government.'
+                     % ' / '.join(_pn.get(d, 'Path %s' % d) for d in done))
+
+    _cs = ((gf.get('prices') or {}).get('contradictions') or [])
+    if _cs and not indicator:
+        _x = _cs[0]
+        indicator = ('Formation: %s carries a reported contradiction -- %s on %s vs. %s on %s.'
+                     % ((gf.get('path_names') or {}).get(_x['path'], _x['path']),
+                        ', '.join(_x['a_parties']), _x['a_topic'], ', '.join(_x['b_parties']), _x['b_topic']))
 
     watch = (gf.get('watch_list') or [])[:1]
     return {
@@ -1018,7 +1028,7 @@ def interpret_signals(scan_data):
                 'highest_severity': max((r['severity'] for r in red_lines), default=0),
             },
             'historical_matches':  historical,
-            'interpreter_version': '1.2.1',
+            'interpreter_version': '1.2.2',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
 
@@ -1498,7 +1508,10 @@ def build_top_signals(scan_data):
         _gp = _gf.get('paths') or {}
         _lead = _gf.get('leading_paths') or []
         _d_hot = (_gp.get('D') or {}).get('state') in ('negotiating', 'committed')
-        _lead_txt = (' / '.join('Path %s' % p for p in _lead)) if _lead else 'no path yet'
+        _pn = _gf.get('path_names') or {}
+        # v1.2.2 -- names, not letters: the ME BLUF and GPI never see this page's legend.
+        _pt = _gf.get('path_tiny_names') or {}
+        _lead_txt = (' / '.join(_pt.get(p, 'Path %s' % p) for p in _lead)) if _lead else 'no path yet'
         _freeze_txt = (' Decision freeze ON: Lebanon/Gaza frameworks read PARKED, not failing.'
                        if _gf.get('decision_freeze') else '')
         _fr = ((_gf.get('so_what') or {}).get('israel') or [''])[0]

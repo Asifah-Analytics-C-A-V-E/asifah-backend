@@ -65,6 +65,8 @@ CHANGELOG:
   v1.1.0 (2026-10-03): Palestinian financial access lanes + actor
   v1.2.0 (2026-10-28): Government formation path detector (A/B1/B2/C/D),
                        stance read, assembled So What, formation RSS feeds
+  v1.3.0 (2026-10-28): Named paths upstream, coalition prices + contradictions,
+                       caretaker-restraint fragment, Financial Pulse market read
 
 COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
 """
@@ -2963,6 +2965,244 @@ PATH_LABELS = {
 # Which ELECTION_RESULTS arithmetic row backs each path.
 PATH_SEAT_ROW = {'A': 'A', 'B1': 'B', 'B2': 'B', 'C': 'C', 'D': None}
 
+# ── v1.3.0 (Oct 28 2026) PATH NAMES FOR EVERY READER ────────────────────────
+# Rachel: "does the Stability, Rhetoric, and thus BLUF and GPI understand what
+# A, B, B1, B2 is?" They did not. The letters lived on this page; the ME BLUF
+# and GPI only ever saw "Path A / Path C". Every string that leaves this module
+# now carries the NAME with the letter in brackets.
+PATH_SHORT_NAMES = {
+    'A':  'Netanyahu-led coalition',
+    'B1': 'Eisenkot-led, Arab parties inside',
+    'B2': 'Eisenkot-led, Arab outside support',
+    'C':  'Netanyahu-Eisenkot unity',
+    'D':  'repeat election',
+}
+
+
+# Compact form for 80-character signal headlines upstream.
+PATH_TINY_NAMES = {'A': 'Netanyahu-led', 'B1': 'Eisenkot+Arab inside', 'B2': 'Eisenkot+Arab outside',
+                   'C': 'unity', 'D': 'repeat election'}
+
+
+def _path_name(pid):
+    return '%s (%s)' % (PATH_SHORT_NAMES.get(pid, pid), pid)
+
+
+# ── v1.3.0 THE PRICE: gives, demands, horse-trading ─────────────────────────
+# Rachel: "what would it take to bring together a coalition? What are the
+# prices, the gives, the back-door horse-trading?"
+#
+# HOW IT WORKS, AND WHY NOTHING IS HARDCODED ABOUT ANY PARTY'S POSITION:
+# A demand is attributed to a party only when ONE firsthand item names the
+# party AND a demand topic AND demand language ("demands", "condition",
+# "in exchange", "red line"...). The platform never asserts what a party
+# wants; it reports what coverage says the party is demanding, this cycle.
+#
+# CONTRADICTIONS are the unasked question. If two parties that a path NEEDS
+# are reported demanding opposite things (draft exemption vs. equal service),
+# that path carries an internal contradiction -- the way coalitions fail
+# before they form. Pairs live in PRICE_CONTRADICTIONS and are editable.
+
+PRICE_VERBS = [
+    'demand', 'demands', 'insists', 'insisting', 'condition', 'conditions', 'precondition',
+    'in exchange', 'in return for', 'price', 'red line', 'will not join unless', 'only if',
+    'ultimatum', 'non-negotiable', 'wants the', 'seeks the', 'asked for', 'calls for',
+    'דורש', 'דורשת', 'דורשים', 'דרישה', 'דרישות', 'תנאי', 'בתמורה', 'קו אדום', 'מחיר',
+    'يطالب', 'تطالب', 'مطالب', 'شرط', 'شروط', 'مقابل', 'خط أحمر', 'ثمن',
+]
+
+PRICE_TOPICS = {
+    'draft_exemption': {'label': 'draft exemption for yeshiva students', 'kw': [
+        'draft exemption', 'conscription exemption', 'exemption from military service',
+        'yeshiva students', 'haredi exemption',
+        'פטור מגיוס', 'בני ישיבות', 'חוק הגיוס', 'פטור לבני ישיבות',
+        'إعفاء من التجنيد', 'طلاب المدارس الدينية']},
+    'draft_equality': {'label': 'equal service / Haredi conscription', 'kw': [
+        'equal service', 'share the burden', 'sharing the burden', 'draft for all',
+        'haredi conscription', 'universal conscription', 'conscript the haredim',
+        'שוויון בנטל', 'גיוס לכולם', 'גיוס חרדים',
+        'المساواة في العبء', 'تجنيد الحريديم']},
+    'arab_crime_policing': {'label': 'crime and policing in Arab towns', 'kw': [
+        'crime in arab', 'violence in arab', 'crime in the arab', 'arab community crime',
+        'criminal organizations', 'murders in arab', 'policing in arab',
+        'הפשיעה בחברה הערבית', 'האלימות בחברה הערבית', 'ארגוני פשיעה',
+        'الجريمة في المجتمع العربي', 'العنف في المجتمع العربي', 'منظمات الإجرام']},
+    'arab_budgets': {'label': 'Arab-sector budgets / five-year plan', 'kw': [
+        'five-year plan', 'arab sector budget', 'budgets for arab', 'funding for arab',
+        'resolution 550', 'resolution 922',
+        'תוכנית החומש', 'תקציבים לחברה הערבית', 'החלטה 550',
+        'الخطة الخماسية', 'ميزانيات للمجتمع العربي', 'ميزانيات المجتمع العربي']},
+    'nation_state_law': {'label': 'Nation-State Law', 'kw': [
+        'nation-state law', 'nation state law', 'חוק הלאום', 'قانون القومية']},
+    'negev_planning': {'label': 'unrecognized villages / planning and demolitions', 'kw': [
+        'unrecognized villages', 'kaminitz', 'home demolitions', 'house demolitions',
+        'הכפרים הלא מוכרים', 'חוק קמיניץ', 'הריסת בתים',
+        'القرى غير المعترف بها', 'قانون كامينتس', 'هدم البيوت']},
+    'judicial': {'label': 'judicial overhaul / attorney general', 'kw': [
+        'judicial overhaul', 'judicial reform', 'override clause', 'attorney general',
+        'הרפורמה המשפטית', 'פסקת ההתגברות', 'היועמ"שית',
+        'الإصلاح القضائي', 'المستشارة القضائية']},
+    'sovereignty_settlement': {'label': 'West Bank sovereignty / settlements', 'kw': [
+        'sovereignty', 'annexation', 'settlement expansion', 'settlements',
+        'ריבונות', 'סיפוח', 'התנחלויות',
+        'السيادة', 'الضم', 'الاستيطان']},
+    'religion_state': {'label': 'religion and state (civil marriage, Shabbat transport, conversion)', 'kw': [
+        'civil marriage', 'public transport on shabbat', 'conversion law', 'chief rabbinate',
+        'נישואים אזרחיים', 'תחבורה ציבורית בשבת', 'חוק הגיור',
+        'الزواج المدني']},
+    'hostages_gaza': {'label': 'Gaza / hostages policy', 'kw': [
+        'hostage deal', 'end the war', 'gaza policy', 'day after in gaza',
+        'עסקת חטופים', 'סיום המלחמה', 'اليوم التالي في غزة']},
+}
+
+# Opposite demands that cannot both be met in one coalition. Editable.
+PRICE_CONTRADICTIONS = [
+    ('draft_exemption', 'draft_equality'),
+]
+
+PORTFOLIOS = {
+    'Defense': ['defense ministry', 'defence ministry', 'defense minister', 'defence minister',
+                'משרד הביטחון', 'שר הביטחון', 'وزارة الأمن', 'وزير الأمن', 'وزارة الدفاع'],
+    'Finance': ['finance ministry', 'finance minister', 'treasury portfolio',
+                'משרד האוצר', 'שר האוצר', 'وزارة المالية', 'وزير المالية'],
+    'Foreign': ['foreign ministry', 'foreign minister', 'משרד החוץ', 'שר החוץ',
+                'وزارة الخارجية', 'وزير الخارجية'],
+    'Justice': ['justice ministry', 'justice minister', 'משרד המשפטים', 'שר המשפטים',
+                'وزارة العدل', 'وزير العدل'],
+    'National Security': ['national security ministry', 'national security minister',
+                          'המשרד לביטחון לאומי', 'השר לביטחון לאומי', 'وزير الأمن القومي'],
+    'Interior': ['interior ministry', 'interior minister', 'משרד הפנים', 'שר הפנים',
+                 'وزارة الداخلية'],
+    'Rotation / PM seat': ['rotation', 'rotating premiership', 'first in rotation', 'רוטציה', 'تناوب'],
+}
+
+# Extra names per party key (the results table supplies English + Hebrew).
+PARTY_ALIASES = {
+    'likud':     ['likud', 'netanyahu', 'הליכוד', 'נתניהו', 'الليكود', 'نتنياهو'],
+    'shas':      ['shas', 'aryeh deri', 'ש"ס', 'דרעי', 'شاس', 'درعي'],
+    'utj':       ['united torah judaism', 'utj', 'gafni', 'goldknopf', 'יהדות התורה', 'يهدوت هتوراه'],
+    'otzma':     ['otzma', 'ben gvir', 'עוצמה יהודית', 'בן גביר', 'عوتسما', 'بن غفير'],
+    'rzp':       ['religious zionis', 'smotrich', 'הציונות הדתית', 'סמוטריץ', 'الصهيونية الدينية', 'سموتريتش'],
+    'yashar':    ['yashar', 'eisenkot', 'ישר!', 'איזנקוט', 'يشار', 'آيزنكوت', 'ايزنكوت'],
+    'byachad':   ["b'yachad", 'byachad', 'bennett', 'lapid', 'ביחד', 'בנט', 'לפיד', 'بينيت', 'لابيد'],
+    'democrats': ['the democrats', 'democrats party', 'yair golan', 'הדמוקרטים', 'גולן', 'الديمقراطيون'],
+    'yb':        ['yisrael beytenu', 'yisrael beiteinu', 'liberman', 'lieberman', 'ישראל ביתנו', 'ליברמן',
+                  'يسرائيل بيتينو', 'ليبرمان'],
+    'joint':     ['joint list', 'hadash', 'ta\'al', 'tibi', 'balad', 'הרשימה המשותפת', 'חד"ש', 'טיבי', 'בל"ד',
+                  'القائمة المشتركة', 'الجبهة الديمقراطية', 'الطيبي', 'التجمع الوطني'],
+    'raam':      ["ra'am", 'raam', 'united arab list', 'mansour abbas', 'רע"ם', 'עבאס',
+                  'القائمة الموحدة', 'القائمة العربية الموحدة', 'منصور عباس'],
+}
+
+
+def _detect_prices(scoped, results, paths):
+    """Demands attributed to parties from firsthand coverage, portfolios in
+    play, and contradictions inside each path. Reported as 'demanded', never
+    as 'will get'."""
+    names = {}
+    for p in (results.get('parties') or []):
+        k = p.get('key')
+        names[k] = {'name': p.get('name', k),
+                    'aliases': list(PARTY_ALIASES.get(k, [])) + [p.get('name', ''), p.get('name_he', '')]}
+    for k, al in PARTY_ALIASES.items():
+        names.setdefault(k, {'name': k, 'aliases': list(al)})
+
+    prices = {}
+    portfolios = {}
+    for a in scoped:
+        raw = _formation_blob(a)
+        if _fin_is_commentary(raw, a.get('source', '')):
+            continue
+        for port, kws in PORTFOLIOS.items():
+            if _formation_hit(raw, kws):
+                portfolios[port] = portfolios.get(port, 0) + 1
+        if not _formation_hit(raw, PRICE_VERBS):
+            continue
+        topics = [t for t, spec in PRICE_TOPICS.items() if _formation_hit(raw, spec['kw'])]
+        if not topics:
+            continue
+        for pk, meta in names.items():
+            if not _formation_hit(raw, [x for x in meta['aliases'] if x]):
+                continue
+            entry = prices.setdefault(pk, {'party': meta['name'], 'topics': {}, 'examples': []})
+            for t in topics:
+                entry['topics'][t] = entry['topics'].get(t, 0) + 1
+            if len(entry['examples']) < 2:
+                entry['examples'].append({'title': (a.get('title') or '')[:120],
+                                          'url': a.get('url', ''), 'source': a.get('source', '')})
+
+    # Contradictions inside each path (party lists come from the seat table).
+    path_parties = {}
+    for row in (results.get('paths') or []):
+        path_parties[row.get('id')] = set(row.get('parties') or [])
+    row_for = {'A': 'A', 'B1': 'B', 'B2': 'B', 'C': 'C'}
+    contradictions = []
+    for pid, rid in row_for.items():
+        members = path_parties.get(rid, set())
+        for t1, t2 in PRICE_CONTRADICTIONS:
+            side1 = [pk for pk in members if t1 in (prices.get(pk, {}).get('topics') or {})]
+            side2 = [pk for pk in members if t2 in (prices.get(pk, {}).get('topics') or {})]
+            side1 = [pk for pk in side1 if pk not in side2]
+            side2 = [pk for pk in side2 if pk not in side1]
+            if side1 and side2:
+                contradictions.append({
+                    'path': pid,
+                    'a_parties': [prices[x]['party'] for x in side1], 'a_topic': PRICE_TOPICS[t1]['label'],
+                    'b_parties': [prices[x]['party'] for x in side2], 'b_topic': PRICE_TOPICS[t2]['label'],
+                })
+    return {
+        'by_party': prices,
+        'portfolios_in_play': dict(sorted(portfolios.items(), key=lambda kv: -kv[1])),
+        'contradictions': contradictions,
+        'note': ('A demand is attributed to a party only when one firsthand item names the party, a demand '
+                 'topic and demand language together. Reported as demanded, never as granted.'),
+    }
+
+
+def _price_sentence(c):
+    bp = (c.get('prices') or {}).get('by_party') or {}
+    if not bp:
+        return ''
+    parts = []
+    for pk, e in sorted(bp.items(), key=lambda kv: -sum(kv[1]['topics'].values()))[:4]:
+        tops = sorted(e['topics'].items(), key=lambda kv: -kv[1])[:2]
+        parts.append('%s -- %s' % (e['party'], ', '.join(PRICE_TOPICS[t]['label'] for t, _ in tops)))
+    s = 'Reported prices this cycle: ' + '; '.join(parts) + '.'
+    pf = (c.get('prices') or {}).get('portfolios_in_play') or {}
+    if pf:
+        s += ' Portfolios named in coalition coverage: ' + ', '.join(
+            '%s (%d)' % (k, v) for k, v in list(pf.items())[:4]) + '.'
+    return s + ' These are demands as reported, not concessions.'
+
+
+def _contradiction_sentence(c):
+    cs = (c.get('prices') or {}).get('contradictions') or []
+    if not cs:
+        return ''
+    x = cs[0]
+    return ('%s carries a reported contradiction: %s on %s vs. %s on %s. Opposite prices inside one '
+            'path are how coalitions fail before they form; watch which side softens first.'
+            % (_path_name(x['path']), ', '.join(x['a_parties']), x['a_topic'],
+               ', '.join(x['b_parties']), x['b_topic']))
+
+
+# ── v1.3.0 CARETAKER RESTRAINT ───────────────────────────────────────────────
+# Rachel: a caretaker government means "no new business -- no new negotiations
+# with Syria could begin until a new government forms." Refined, because the
+# precedent matters: Israeli transitional governments operate under a
+# RESTRAINT doctrine (Attorney General guidance, High Court review), not a
+# legal bar. The October 2022 Israel-Lebanon maritime agreement was concluded
+# by the Lapid transitional government and survived High Court petitions. So
+# the honest read is "new tracks face a high bar and legal challenge", and the
+# fragment names the precedent rather than asserting a prohibition.
+FORMATION_NEW_TRACK_KW = [
+    'syria talks', 'talks with syria', 'israel-syria', 'negotiations with syria',
+    'normalization with saudi', 'saudi normalization', 'lebanon talks', 'negotiations with lebanon',
+    'framework agreement', 'peace talks', 'new agreement',
+    'מגעים עם סוריה', 'נורמליזציה עם סעודיה', 'משא ומתן עם לבנון',
+    'مفاوضات مع سوريا', 'التطبيع مع السعودية', 'مفاوضات مع لبنان',
+]
+
 PATH_LEXICON = {
     'A': {
         # v1.2.3 -- PURSUIT language only. Bare bloc names ('Netanyahu bloc',
@@ -3245,12 +3485,22 @@ SO_WHAT_ISRAEL = [
      'Deadlock does not end the decision freeze -- it lengthens it. The caretaker government stays in office. '
      'Repeat-election talk can be leverage as much as a schedule; the formation day count against its '
      'expected envelope is what separates the two.'),
+    (lambda c: bool(_price_sentence(c)), _price_sentence),
+    (lambda c: bool(_contradiction_sentence(c)), _contradiction_sentence),
     (lambda c: not any(_is_live(c, p) for p in PATH_LABELS),
      'No formation path has firsthand coverage this cycle. Before presidential consultations conclude, that is '
      'normal -- an absence of observation, not evidence that talks are stalled.'),
 ]
 
 SO_WHAT_REGION = [
+    (lambda c: c['cycle'].get('state') in ('voted', 'formation'),
+     lambda c: ('Caretaker government: no new business. Israeli transitional governments operate under a '
+                'restraint doctrine (Attorney General guidance, High Court review), so opening a new track -- '
+                'talks with Syria, a Saudi normalization step, a new Lebanon framework -- faces a high bar and '
+                'likely legal challenge until a government is sworn in. It is restraint, not a legal bar: the '
+                'October 2022 Israel-Lebanon maritime agreement was concluded by a transitional government.%s'
+                % ((' This cycle, %d firsthand item(s) reference a new track -- read them against that bar.'
+                    % c['new_track_evidence']) if c.get('new_track_evidence') else ''))),
     (lambda c: c['cycle'].get('decision_freeze'),
      lambda c: ('While formation runs, the Lebanon framework and the Gaza roadmap read as PARKED rather than '
                 'failing: no Israeli government is positioned to take the decisions that gate them.%s'
@@ -3284,6 +3534,12 @@ SO_WHAT_GLOBAL = [
     (lambda c: c['us_deviations'] > 0,
      lambda c: ('US envoy voices are off their own baseline this cycle (%d deviation(s)) -- see the US Voices panel.'
                 % c['us_deviations'])),
+    (lambda c: bool(c.get('pulse')),
+     lambda c: ('Markets (Financial Pulse, 24h): TA-35 %s, USD/ILS %s%s. A rising USD/ILS means a weaker '
+                'shekel. Read these against formation milestones -- mandate, defections, a signed deal -- '
+                'rather than as a verdict on any one path.'
+                % (_fmt_pct(c['pulse'].get('tase')), _fmt_pct(c['pulse'].get('nis')),
+                   ('' if c['pulse'].get('eis') is None else ', EIS ' + _fmt_pct(c['pulse'].get('eis')))))),
     (lambda c: c['market_evidence'] > 0,
      lambda c: ('Israeli asset coverage tied to the result: %d item(s). Shekel and bond moves are the fastest '
                 'public read of how formation uncertainty is being priced.' % c['market_evidence'])),
@@ -3298,7 +3554,35 @@ WATCH_LIBRARY = [
     (lambda c: _is_live(c, 'A'), 'Any opposition party leader softening a stated refusal to join Netanyahu'),
     (lambda c: _is_live(c, 'D') or c['cycle'].get('overrun'),
      'Mandate returned or extended; "third election" language from party leaders'),
+    (lambda c: bool((c.get('prices') or {}).get('contradictions')),
+     'Which side of the reported contradiction softens first -- that decides the path'),
+    (lambda c: bool((c.get('prices') or {}).get('by_party')),
+     'A kingmaker dropping, softening or raising a stated price'),
 ]
+
+
+def _fmt_pct(v):
+    try:
+        return ('%+.2f%%' % float(v))
+    except Exception:
+        return 'n/a'
+
+
+def _read_financial_pulse():
+    """TA-35 / USD-ILS / EIS 24h change from the stability module's cached
+    payload (Redis 'israel_cache'). Missing data returns {} -- the fragment
+    then stays silent rather than printing zeros."""
+    try:
+        cache = _redis_get('israel_cache') or {}
+        tiles = (cache.get('financial_pulse') or {}).get('tiles') or {}
+        out = {}
+        for key, name in (('TASE', 'tase'), ('NIS_USD', 'nis'), ('EIS', 'eis')):
+            t = tiles.get(key) or {}
+            if t.get('value') is not None and t.get('change_pct_24h') is not None:
+                out[name] = t.get('change_pct_24h')
+        return out if ('tase' in out or 'nis' in out) else {}
+    except Exception:
+        return {}
 
 
 def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_gates=None):
@@ -3430,6 +3714,9 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
         'turnout_evidence': _count(FORMATION_TURNOUT_KW),
         'lebanon_gates': _leb,
         'gaza_gates': (gaza_gates or {}).get('headline', '') if isinstance(gaza_gates, dict) else '',
+        'new_track_evidence': _count(FORMATION_NEW_TRACK_KW),
+        'pulse': _read_financial_pulse(),
+        'prices': _detect_prices(scoped, results, paths),
     }
 
     rank = {s: i for i, s in enumerate(_FORMATION_STATE_ORDER)}
@@ -3444,7 +3731,7 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
     else:
         headline = ('Formation day %d: %s %s.' % (
             int(cycle.get('days_in_state', 0) or 0),
-            ' / '.join('Path %s' % p for p in leading),
+            ' / '.join(_path_name(p) for p in leading),
             {1: 'being discussed', 2: 'in active negotiation', 3: 'reported as agreed'}[top_rank]))
 
     so_what = {
@@ -3472,8 +3759,12 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
         'so_what': so_what,
         'watch_list': watch,
         'context': {k: ctx[k] for k in ('iran_level', 'us_deviations', 'us_pressure_evidence',
-                                        'market_evidence', 'turnout_evidence')},
+                                        'market_evidence', 'turnout_evidence', 'new_track_evidence')},
         'by_language': _lang_counts,
+        'path_names': {p: _path_name(p) for p in PATH_LABELS},
+        'path_tiny_names': dict(PATH_TINY_NAMES),
+        'prices': ctx['prices'],
+        'market_pulse': ctx['pulse'],
         'corpus': {'in_scope': len(scoped), 'firsthand': fh_total, 'commentary': cm_total,
                    'commentary_share': round(cm_total / total, 2) if total else 0.0},
         'state_ladder': _FORMATION_STATE_ORDER,
@@ -3854,7 +4145,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.2.4-israel-formation',
+        'version': '1.3.0-israel-formation',
     }
 
     # Cache
@@ -4089,7 +4380,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.2.4-israel-formation',
+            'version': '1.3.0-israel-formation',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])
