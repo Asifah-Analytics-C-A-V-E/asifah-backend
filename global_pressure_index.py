@@ -3,6 +3,23 @@ global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
 v3.7.0 — Jul 25 2026 (NARRATIVE DECAY)
 v3.10.0 add-on — Oct 28 2026: israel_formation_window narrative (caretaker Israel x hot Iran axis)
+v3.12.0 — Oct 28 2026 (SEVERITY vs MOTION):
+  * L5 NOVELTY GATE. Global L5 now means "a NEW L5 front within 14 days" (or a
+    front that went quiet 3+ days and re-ignited). A war that has been at L5
+    for weeks with nothing new added reads L4 SUSTAINED CONFLICT -- day N. The
+    war is not hidden: the kinetic axis and every regional page keep their
+    honest L5. GPI-only (Rachel, Oct 28). L6 red-line breach is NEVER gated.
+  * GOVERNANCE AXIS (5th). Elections, caretaker periods, government formation,
+    successions, coups, legitimacy contests. Non-kinetic butterflies with
+    kinetic consequences -- they were filed under 'diplomatic', which means
+    talks BETWEEN states, not who governs INSIDE one.
+  * STANDING-WATCH TIER for narratives. A structural watch (wheat, diamonds,
+    phosphate, clusters) that is not moving collapses below the toplines and
+    re-opens itself the moment its headline changes.
+  * NARRATIVE DECAY WIRED IN. _apply_narrative_decay() shipped Jul 25 and was
+    never called by anything. It now runs, and counts at most one cycle per
+    11h so a burst of ?force=true rebuilds cannot age a signal in an afternoon.
+  * Payload version reads GPI_VERSION (was a literal '3.0.0' since spring).
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -443,6 +460,17 @@ THEATRE_STATE = {
         5: 'diplomatic rupture',
         6: 'relations severed',
     },
+    # v3.12.0 -- who governs, and on what authority. L3 is the normal reading
+    # of a caretaker / formation window: authority is contested, not broken.
+    'governance': {
+        0: 'quiet',
+        1: 'political signalling',
+        2: 'political friction',
+        3: 'governing authority contested',
+        4: 'governance crisis',
+        5: 'legitimacy rupture',
+        6: 'constitutional order broken',
+    },
 }
 
 # Category overrides. Some signals describe a MECHANISM the level and axis
@@ -460,6 +488,7 @@ CATEGORY_STATE = {
     'bloc_cohesion':          'bloc cohesion tested',
     'market_fragility':       'market fragility elevated',
     'diplomatic_track':       'diplomatic track active',
+    'government_formation':   'government formation underway',
     'displacement':           'mass displacement underway',
     'famine_risk':            'famine conditions emerging',
     'disease_outbreak':       'disease outbreak spreading',
@@ -478,6 +507,7 @@ CATEGORY_AXIS_HINTS = {
     'market_fragility': 'economic', 'commodity_pressure': 'economic',
     'diplomatic_track': 'diplomatic', 'mediation': 'diplomatic',
     'kinetic_tempo': 'kinetic', 'red_line_breached': 'kinetic',
+    'government_formation': 'governance', 'israel_formation_window': 'governance',
 }
 
 
@@ -728,7 +758,8 @@ def _banner(full):
         return {'mode': 'breach', **breach}
 
     narrs = [n for n in (full.get('narratives') or [])
-             if (n.get('category') or '') not in _NON_CONVERGENCE]
+             if (n.get('category') or '') not in _NON_CONVERGENCE
+             and n.get('tier') != 'standing']        # v3.12.0
     narrs.sort(key=lambda n: -int(n.get('priority') or 0))
     lead = narrs[0] if narrs else None
     return {
@@ -802,6 +833,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
+GPI_VERSION     = '3.12.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -1543,6 +1575,7 @@ DECAY_STEPS = (                       # (unchanged_cycles_at_or_above, penalty)
 )
 DECAY_PRIORITY_FLOOR = 5              # never decay below this -- still visible
 DECAY_RESOLUTION_BONUS = 1            # extra penalty once a level has FALLEN
+DECAY_MIN_CYCLE_HOURS = 11            # v3.12.0 -- forced rebuilds do not count as cycles
 
 
 def _decay_fingerprint(sig):
@@ -1590,7 +1623,8 @@ def _apply_narrative_decay(signals):
         prev = state.get(fp) if isinstance(state.get(fp), dict) else None
 
         if prev is None:
-            rec = {'level': lvl, 'cycles': 0, 'first_seen': now_iso, 'fell': False}
+            rec = {'level': lvl, 'cycles': 0, 'first_seen': now_iso, 'fell': False,
+                   'counted_at': now_iso}
         else:
             prev_lvl = _safe_level(prev.get('level', 0))
             if lvl != prev_lvl:
@@ -1598,12 +1632,28 @@ def _apply_narrative_decay(signals):
                 # crises out of decay without naming any of them.
                 rec = {'level': lvl, 'cycles': 0,
                        'first_seen': prev.get('first_seen', now_iso),
-                       'fell': bool(lvl < prev_lvl)}
+                       'fell': bool(lvl < prev_lvl),
+                       'counted_at': now_iso}
             else:
+                # v3.12.0 -- a "cycle" is a scheduled scan, not a build. Every
+                # ?force=true is also a build, and an afternoon of testing used
+                # to be able to age a signal by a week. Count at most one cycle
+                # per DECAY_MIN_CYCLE_HOURS; otherwise carry the count forward.
+                _cnt = int(prev.get('cycles', 0))
+                _last = prev.get('counted_at') or prev.get('first_seen') or now_iso
+                try:
+                    _hrs = (datetime.now(timezone.utc)
+                            - datetime.fromisoformat(_last)).total_seconds() / 3600.0
+                except Exception:
+                    _hrs = DECAY_MIN_CYCLE_HOURS
+                if _hrs >= DECAY_MIN_CYCLE_HOURS:
+                    _cnt += 1
+                    _last = now_iso
                 rec = {'level': lvl,
-                       'cycles': int(prev.get('cycles', 0)) + 1,
+                       'cycles': _cnt,
                        'first_seen': prev.get('first_seen', now_iso),
-                       'fell': bool(prev.get('fell'))}
+                       'fell': bool(prev.get('fell')),
+                       'counted_at': _last}
         new_state[fp] = rec
 
         cycles = rec['cycles']
@@ -1629,9 +1679,18 @@ def _apply_narrative_decay(signals):
 
     # Carry forward records for signals absent this cycle so a signal that
     # blinks out for one scan does not reset its decay clock.
+    # v3.12.0: ...but not forever. Now that decay actually runs, the key is
+    # rewritten every build and its TTL never lapses, so a signal that left for
+    # good would otherwise sit in state indefinitely. 30 days absent = gone.
     for fp, rec in state.items():
         if fp not in seen and isinstance(rec, dict):
-            new_state[fp] = rec
+            try:
+                _age_d = (datetime.now(timezone.utc) - datetime.fromisoformat(
+                    rec.get('counted_at') or rec.get('first_seen') or now_iso)).days
+            except Exception:
+                _age_d = 0
+            if _age_d <= 30:
+                new_state[fp] = rec
 
     try:
         _redis_set(DECAY_STATE_KEY, new_state, ttl=DECAY_STATE_TTL)
@@ -1944,7 +2003,10 @@ NARRATIVE_AXIS_SETS = {
     # A method finding, not a force finding. Diplomatic leads so a policy lean
     # never renders as escalation on the kinetic axis.
     'policy_branch_convergence':       ['diplomatic', 'kinetic'],
-    'israel_formation_window':         ['diplomatic', 'kinetic'],  # formation constraint + live Iran axis
+    # v3.12.0 -- governance leads: the finding is WHO can decide in Jerusalem,
+    # not a negotiation between states. Kinetic second because the Iran axis
+    # is the reason it matters this week.
+    'israel_formation_window':         ['governance', 'kinetic'],
 }
 
 def _axes_for_narrative(n):
@@ -1959,13 +2021,49 @@ def _axes_for_narrative(n):
     return ['kinetic']
 PRESSURE_DIPLOMATIC   = 'diplomatic'
 PRESSURE_HUMANITARIAN = 'humanitarian'
+PRESSURE_GOVERNANCE   = 'governance'   # v3.12.0 -- 5th axis
 
 PRESSURE_AXES = (
     PRESSURE_KINETIC,
     PRESSURE_ECONOMIC,
     PRESSURE_DIPLOMATIC,
     PRESSURE_HUMANITARIAN,
+    PRESSURE_GOVERNANCE,
 )
+
+# ── GOVERNANCE CATEGORIES (v3.12.0, Oct 28 2026) ──────────────────────
+# Substrings matched against signal['category']. These OVERRIDE an explicit
+# pressure_type, deliberately and only for this set: the Israel interpreter
+# (and the ME BLUF axis map) tag government_formation as 'diplomatic' because
+# there was no governance axis when they were written. Re-tagging here means
+# the GPI is correct today without a coordinated fleet-wide migration; the
+# sources can move to pressure_type='governance' whenever they are next touched,
+# and nothing here needs to change when they do.
+#
+# Kept narrow on purpose. 'regime', 'protest' and 'unrest' are NOT here: a
+# crackdown is kinetic and a protest wave can be humanitarian -- the category
+# has to say WHO GOVERNS for it to belong on this axis.
+GOVERNANCE_CATEGORY_HINTS = (
+    'government_formation', 'formation_window', 'caretaker', 'election',
+    'succession', 'coup', 'junta', 'legitimacy', 'governance',
+    'no_confidence', 'parliament_dissolution', 'leadership_transition',
+    'transition_of_power', 'constitutional_crisis',
+)
+
+
+def _axis_level_label(axis, level):
+    """Chip word for an axis level. Governance reads its own ladder: a caretaker
+    government at L3 is 'governing authority contested', and the kinetic chip
+    word CONFRONTATION would put a war word on an election. Other axes keep the
+    canonical chip ladder unchanged."""
+    if axis == PRESSURE_GOVERNANCE:
+        return _theatre_state(level, None, PRESSURE_GOVERNANCE).upper()
+    return GLOBAL_LEVEL_LABELS.get(level, '')
+
+
+def _is_governance_signal(signal):
+    cat = str((signal or {}).get('category') or '').lower()
+    return bool(cat) and any(h in cat for h in GOVERNANCE_CATEGORY_HINTS)
 
 PRESSURE_AXIS_META = {
     PRESSURE_KINETIC: {
@@ -1991,6 +2089,12 @@ PRESSURE_AXIS_META = {
         'icon':  '🆘',
         'color': '#a855f7',  # purple — civilian/displacement
         'description': 'Displacement flows, civilian harm, famine, refugee surges.',
+    },
+    PRESSURE_GOVERNANCE: {
+        'label': 'Governance',
+        'icon':  '🏛️',
+        'color': '#14b8a6',  # teal -- distinct from diplomatic cyan and humanitarian purple
+        'description': 'Elections, caretaker periods, successions, coups, legitimacy contests.',
     },
 }
 
@@ -2075,6 +2179,10 @@ def _infer_pressure_type(signal):
       3. Source-label fallbacks (commodity_tracker, commodity_proxy, etc.)
       4. Default: 'kinetic' (rhetoric trackers — current canonical).
     """
+    # 0. v3.12.0 -- governance categories override (see GOVERNANCE_CATEGORY_HINTS).
+    if _is_governance_signal(signal):
+        return PRESSURE_GOVERNANCE
+
     # 1. Explicit pressure_type wins
     explicit = signal.get('pressure_type')
     if explicit and explicit in PRESSURE_AXES:
@@ -2114,8 +2222,10 @@ def _tag_pressure_axes(signals):
     tagged = []
     for s in signals or []:
         s2 = dict(s)  # shallow copy — don't mutate caller
-        if 'pressure_type' not in s2 or s2['pressure_type'] not in PRESSURE_AXES:
-            s2['pressure_type'] = _infer_pressure_type(s)
+        # v3.12.0: always resolve through _infer_pressure_type. It still trusts a
+        # valid explicit value first, but it also applies the governance override,
+        # which a "keep it if it's already set" check would skip.
+        s2['pressure_type'] = _infer_pressure_type(s)
         tagged.append(s2)
     return tagged
 
@@ -2199,7 +2309,7 @@ def _build_pressure_axes_payload(blufs, narratives):
             'color':         meta['color'],
             'description':   meta['description'],
             'level':         axis_level,
-            'level_label':   GLOBAL_LEVEL_LABELS.get(axis_level, ''),
+            'level_label':   _axis_level_label(axis, axis_level),
             'region_levels': region_levels,
             'signal_count':  len(axis_signals),
             'top_signals':   top_axis_signals_clean,
@@ -4243,6 +4353,345 @@ def _detect_narratives(blufs):
 
 
 # ============================================================
+# L5 NOVELTY GATE  (v3.12.0, Oct 28 2026)
+# ============================================================
+# Rachel, Oct 28: "if our GPI always is L5 -- then it means nothing." A gauge
+# pinned at maximum carries no information and trains readers to stop looking.
+#
+# SEVERITY vs MOTION. Every regional page keeps its honest L5: a war is a war.
+# The GLOBAL index answers a different question -- is the world getting
+# worse THIS fortnight? So global L5 is reserved for a NEW L5 front:
+#
+#   fresh      -- a theatre reached kinetic L5 within L5_NOVELTY_DAYS (14)
+#   re-ignited -- a theatre that was below L5 for L5_EPISODE_GAP_DAYS (3)+
+#                 and came back (a new episode, not flicker)
+#   breach     -- any L6 red-line breach signal bypasses the gate entirely
+#
+# Otherwise global reads L4 with the label SUSTAINED CONFLICT and a day count
+# per theatre. That label is the guard against the OPPOSITE error the
+# L5_ASSERTION_RULE warns about: the reader must never mistake "nothing new"
+# for "nothing happening". L4 here does NOT mean COERCION.
+#
+# Precedent: the Russia "war floor" ruling (Option B) -- L4 is the active-
+# combat baseline, L5 is escalation ABOVE the grind. This generalises it.
+#
+# DAY ZERO. On first deploy there is no onset history. Every theatre already
+# at L5 is SEEDED as sustained ("since at least <deploy date>") rather than
+# treated as new -- otherwise the gate would do nothing for its first 14 days.
+# Seeded day counts are floors and are labelled as such, never as a start date.
+#
+# ABSENCE-HONEST. If Redis cannot be read, the gate does not run and says so:
+# it will not call a front "new" or "sustained" without its history.
+L5_NOVELTY_DAYS     = 14      # Leo's ruling, Oct 28 2026
+L5_EPISODE_GAP_DAYS = 3       # below L5 this long = the episode ended
+L5_ONSET_KEY        = 'gpi:l5_onsets'
+L5_ONSET_TTL        = 400 * 24 * 3600
+L5_FORGET_DAYS      = 60      # drop a theatre's record after 60 days off L5
+SUSTAINED_LABEL     = 'SUSTAINED CONFLICT'
+SUSTAINED_COLOR     = '#ef4444'
+
+# Module-level so the prose builder can read the gate without a signature change
+# rippling through every caller. Reset at the top of each build.
+_LAST_LEVEL_GATE = {}
+
+
+def _redis_get_checked(key):
+    """Like _redis_get, but tells 'key absent' apart from 'Redis failed'.
+    Returns (value_or_None, ok)."""
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return None, False
+    try:
+        resp = requests.get(f'{UPSTASH_REDIS_URL}/get/{key}',
+                            headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'},
+                            timeout=5)
+        if resp.status_code != 200:
+            return None, False
+        result = resp.json().get('result')
+        return (json.loads(result) if result else None), True
+    except Exception as e:
+        print(f'[GPI L5 gate] Redis GET error ({key}): {e}')
+        return None, False
+
+
+def _l5_theatres(blufs):
+    """{theatre: region} for every theatre carrying a KINETIC signal at L5.
+
+    Kinetic only: an L5 humanitarian or economic reading is real, but it is
+    not 'active conflict' and must not hold the conflict gauge open. A region
+    whose BLUF says L5 but exposes no L5 signal is kept as 'region:<r>' so a
+    thin payload can never hide a war from the gate."""
+    out = {}
+    for region, bluf in (blufs or {}).items():
+        if not bluf:
+            continue
+        found = False
+        for s in _signals_of(bluf):
+            if _safe_level(s.get('level', 0)) < 5:
+                continue
+            if _infer_pressure_type(s) != PRESSURE_KINETIC:
+                continue
+            th = str(s.get('theatre') or '').strip().lower()
+            if not th or th in _UNGROUPED_THEATRES or th == region:
+                th = f'region:{region}'
+            out.setdefault(th, region)
+            found = True
+        if not found and _level_of(bluf) >= 5:
+            out.setdefault(f'region:{region}', region)
+    return out
+
+
+def _l6_breach_present(blufs):
+    for region, bluf in (blufs or {}).items():
+        for s in _signals_of(bluf):
+            if _safe_level(s.get('level', 0)) >= 6:
+                return str(s.get('theatre') or region)
+    return None
+
+
+def _theatre_display(th):
+    if th.startswith('region:'):
+        r = th.split(':', 1)[1]
+        return REGION_DISPLAY.get(r, {}).get('name', r.upper())
+    return th.replace('_', ' ').title()
+
+
+def _apply_l5_novelty_gate(level, blufs):
+    """Return (level, gate_info). Only ever LOWERS 5 -> 4; never raises,
+    never touches anything below 5, never touches an L6 breach."""
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    info = {
+        'window_days':   L5_NOVELTY_DAYS,
+        'gap_days':      L5_EPISODE_GAP_DAYS,
+        'available':     True,
+        'applied':       False,
+        'level_in':      level,
+        'level_out':     level,
+        'fresh':         [],
+        'sustained':     [],
+        'breach':        None,
+        'reason':        '',
+    }
+    current = _l5_theatres(blufs)
+
+    state, ok = _redis_get_checked(L5_ONSET_KEY)
+    if not ok:
+        info['available'] = False
+        info['reason'] = ('Novelty gate unavailable this cycle (onset history unreadable) '
+                          '-- level shown without the sustained/new distinction.')
+        return level, info
+
+    first_run = state is None
+    if not isinstance(state, dict):
+        state = {}
+    theatres = state.get('theatres') if isinstance(state.get('theatres'), dict) else {}
+    tracking_began = state.get('tracking_began') or now_iso
+
+    def _days_since(iso):
+        try:
+            return (now - datetime.fromisoformat(iso)).total_seconds() / 86400.0
+        except Exception:
+            return None
+
+    # An episode ends only on an OBSERVED drop. The GPI builds on demand, so a
+    # quiet weekend with no page loads is a gap in OBSERVATION, not a gap in
+    # the war -- treating it as one would fire false "re-ignited" L5s after
+    # every lull in traffic. 'below_since' is stamped only when a build actually
+    # sees the theatre off L5, and cleared when it is seen at L5 again.
+    for th, region in current.items():
+        rec = theatres.get(th) if isinstance(theatres.get(th), dict) else None
+        reignited = False
+        if rec and rec.get('below_since'):
+            below = _days_since(rec['below_since'])
+            if below is not None and below >= L5_EPISODE_GAP_DAYS:
+                rec = None                       # observed off L5 3+ days: new episode
+                reignited = True
+            else:
+                rec.pop('below_since', None)     # a flicker -- same episode continues
+        if rec is None:
+            rec = {'onset': None if first_run else now_iso,
+                   'seeded': bool(first_run),
+                   'reignited': reignited,
+                   'region': region}
+        rec['last_seen'] = now_iso
+        rec['region'] = region
+        theatres[th] = rec
+
+    # Theatres not at L5 this build: stamp the observed drop, and forget ones
+    # long off L5 so the record does not grow without bound.
+    for th in list(theatres.keys()):
+        if th in current:
+            continue
+        rec = theatres[th] if isinstance(theatres[th], dict) else {}
+        rec.setdefault('below_since', now_iso)
+        theatres[th] = rec
+        d = _days_since(rec.get('last_seen') or now_iso)
+        if d is not None and d > L5_FORGET_DAYS:
+            theatres.pop(th, None)
+
+    _redis_set(L5_ONSET_KEY, {'tracking_began': tracking_began, 'theatres': theatres},
+               ttl=L5_ONSET_TTL)
+
+    began_days = _days_since(tracking_began) or 0
+    for th in current:
+        rec = theatres[th]
+        if rec.get('seeded'):
+            days = int(began_days)
+            entry = {'theatre': th, 'display': _theatre_display(th), 'days': days,
+                     'days_is_floor': True, 'since': tracking_began[:10],
+                     'reignited': False}
+        else:
+            days = int(_days_since(rec.get('onset') or now_iso) or 0)
+            entry = {'theatre': th, 'display': _theatre_display(th), 'days': days,
+                     'days_is_floor': False, 'since': (rec.get('onset') or now_iso)[:10],
+                     'reignited': bool(rec.get('reignited'))}
+        if (not rec.get('seeded')) and days < L5_NOVELTY_DAYS:
+            info['fresh'].append(entry)
+        else:
+            info['sustained'].append(entry)
+    info['sustained'].sort(key=lambda e: -e['days'])
+    info['fresh'].sort(key=lambda e: e['days'])
+
+    if level < 5:
+        info['reason'] = 'Below L5 -- gate not engaged.'
+        return level, info
+
+    breach = _l6_breach_present(blufs)
+    if breach:
+        info['breach'] = breach
+        info['reason'] = ('L6 red-line breach present (%s) -- novelty gate bypassed; '
+                          'a breach is new escalation by definition.' % breach)
+        return level, info
+
+    if info['fresh']:
+        names = ', '.join('%s (%s day %d)' % (e['display'],
+                          're-ignited,' if e['reignited'] else 'new,', e['days'])
+                          for e in info['fresh'])
+        info['reason'] = 'New L5 front within %d days: %s.' % (L5_NOVELTY_DAYS, names)
+        return level, info
+
+    # No fresh front: sustained conflict.
+    info['applied'] = True
+    info['level_out'] = 4
+    def _fmt(e):
+        # A seeded theatre has no true start date -- print "ongoing since before
+        # <date>", never a small day number that would read as a NEW conflict.
+        if e['days_is_floor']:
+            return '%s (ongoing since before %s)' % (e['display'], e['since'])
+        return '%s (day %d)' % (e['display'], e['days'])
+    info['label'] = SUSTAINED_LABEL
+    info['summary'] = ('No new L5 front in %d days. Active conflict continues: %s.'
+                       % (L5_NOVELTY_DAYS, ', '.join(_fmt(e) for e in info['sustained'][:6])))
+    info['reason'] = info['summary']
+    print(f"[GPI L5 gate] L5 -> L4 SUSTAINED: {info['summary'][:160]}")
+    return 4, info
+
+
+# ============================================================
+# STANDING-WATCH TIER FOR NARRATIVES  (v3.12.0, Oct 28 2026)
+# ============================================================
+# Rachel, Oct 28: structural watches (wheat, diamonds, phosphate, clusters)
+# collapse by default and pop open when something changes -- or when the
+# reader goes looking.
+#
+# A narrative is STANDING when either:
+#   (a) Layer 2 says its underlying pressure is steady, not rising
+#       (registry entries carry fresh=False), or
+#   (b) its headline has not changed for NARRATIVE_STANDING_DAYS.
+# "Changed" ignores digits, so a refreshed day-count or price does not read as
+# movement -- a new country, a new level word or a new actor does.
+#
+# Rule (b) never applies to a kinetic-primary narrative at priority >= 13:
+# those are war-class reads, and the novelty gate above already handles
+# "sustained" for conflict. Standing is a DISPLAY tier: the narrative is still
+# computed, still in the payload, still one click away. It is just not
+# promoted into the signal feed, the BLUF lead, the banner, or the +1
+# convergence boost while it is standing.
+NARRATIVE_STANDING_KEY  = 'gpi:narrative_standing'
+NARRATIVE_STANDING_TTL  = 60 * 24 * 3600
+NARRATIVE_STANDING_DAYS = 3
+STANDING_EXEMPT_KINETIC_PRIORITY = 13
+_NARRATIVE_NEVER_TIERED = ('global_baseline', 'global_warning')
+
+
+def _narrative_fingerprint(n):
+    head = str(n.get('headline') or '').lower()
+    head = ''.join(c for c in head if c.isalpha() or c == ' ')
+    head = ' '.join(head.split())[:140]
+    regs = ','.join(sorted(str(r) for r in (n.get('regions') or [])))
+    return '%s|%s|%s' % (n.get('category', ''), regs, head)
+
+
+def _tier_narratives(narratives):
+    """Stamp each narrative with tier 'topline' | 'standing'. Toplines first."""
+    if not narratives:
+        return narratives
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    state, ok = _redis_get_checked(NARRATIVE_STANDING_KEY)
+    if not isinstance(state, dict):
+        state = {}
+    new_state = {}
+
+    for n in narratives:
+        cat = n.get('category', '')
+        if cat in _NARRATIVE_NEVER_TIERED:
+            n['tier'] = 'topline'
+            continue
+        fp = _narrative_fingerprint(n)
+        prev = state.get(cat) if isinstance(state.get(cat), dict) else None
+        moved = False
+        if prev and prev.get('fp') == fp:
+            since = prev.get('since') or now_iso
+        else:
+            since = now_iso
+            moved = prev is not None
+        new_state[cat] = {'fp': fp, 'since': since}
+        try:
+            unchanged_days = (now - datetime.fromisoformat(since)).total_seconds() / 86400.0
+        except Exception:
+            unchanged_days = 0.0
+
+        axes = _axes_for_narrative(n)
+        war_class = (axes[:1] == [PRESSURE_KINETIC]
+                     and int(n.get('priority', 0) or 0) >= STANDING_EXEMPT_KINETIC_PRIORITY)
+        reason = None
+        if n.get('fresh') is False:
+            reason = 'Underlying pressure reported steady, not rising.'
+        elif ok and unchanged_days >= NARRATIVE_STANDING_DAYS and not war_class:
+            reason = 'Unchanged for %d days.' % int(unchanged_days)
+
+        n['tier'] = 'standing' if reason else 'topline'
+        n['standing_reason'] = reason
+        n['unchanged_days'] = round(unchanged_days, 1) if ok else None
+        n['moved_this_cycle'] = bool(moved)
+
+    # Cluster members follow their cluster, so an umbrella and its countries
+    # never split across the two tiers.
+    cluster_tier = {n.get('cluster'): n.get('tier') for n in narratives if n.get('is_cluster')}
+    for n in narratives:
+        cid = n.get('clustered_into')
+        if cid and not n.get('is_cluster') and cid in cluster_tier:
+            n['tier'] = cluster_tier[cid]
+            if n['tier'] == 'standing' and not n.get('standing_reason'):
+                n['standing_reason'] = 'Part of a standing regional watch.'
+
+    if ok:
+        # Keep records for narratives absent this cycle so a one-scan blink
+        # does not reset the clock; they age out with the key TTL.
+        for cat, rec in state.items():
+            if cat not in new_state and isinstance(rec, dict):
+                new_state[cat] = rec
+        _redis_set(NARRATIVE_STANDING_KEY, new_state, ttl=NARRATIVE_STANDING_TTL)
+
+    narratives.sort(key=lambda n: (0 if n.get('tier') != 'standing' else 1,
+                                   -int(n.get('priority', 0) or 0)))
+    n_st = sum(1 for n in narratives if n.get('tier') == 'standing')
+    print(f'[GPI tiers] {len(narratives) - n_st} topline / {n_st} standing narratives')
+    return narratives
+
+
+# ============================================================
 # GLOBAL LEVEL ROLLUP
 # ============================================================
 def _compute_global_level(blufs, narratives):
@@ -4262,7 +4711,10 @@ def _compute_global_level(blufs, narratives):
     max_regional = max(regional_levels) if regional_levels else 0
 
     # Cross-theater convergence boost
+    # v3.12.0: a STANDING narrative cannot supply the convergence boost. Static
+    # structural watches were one of the things holding the gauge up.
     high_priority_narratives = [n for n in narratives if n.get('priority', 0) >= 11
+                                 and n.get('tier') != 'standing'
                                  and n.get('category') not in ('global_baseline', 'global_warning')]
     convergence_boost = 1 if high_priority_narratives else 0
 
@@ -4346,7 +4798,11 @@ def _build_global_top_signals(blufs, narratives):
     signals = []
 
     # 1. Promote top narratives to signals
-    for n in narratives[:5]:   # widened from 3 to 5 since tier sort handles ranking
+    # v3.12.0: standing watches are NOT promoted into the signal feed. They
+    # stay on the page in their own collapsed tier; promoting them is how a
+    # static wheat read kept taking headline slots from things that moved.
+    _toplines = [n for n in narratives if n.get('tier') != 'standing']
+    for n in _toplines[:5]:   # widened from 3 to 5 since tier sort handles ranking
         if n.get('category') in ('global_baseline', 'global_warning'):
             continue
         promoted = {
@@ -4387,8 +4843,11 @@ def _build_global_top_signals(blufs, narratives):
         # active conflict -- so the [:3] cut silently dropped it from the feed. Pull
         # any diplomatic signal the cut missed so it reaches the candidate pool; the
         # diplomatic-axis allocation (Phase A) then surfaces it. Never gate-kept.
+        # v3.12.0: governance rides the same pass. A caretaker government or a
+        # formation window ranks below a region's kinetic top 3 by construction
+        # -- that is precisely the non-kinetic butterfly the cut was hiding.
         for sig in region_pool[3:]:
-            if _infer_pressure_type(sig) == PRESSURE_DIPLOMATIC:
+            if _infer_pressure_type(sig) in (PRESSURE_DIPLOMATIC, PRESSURE_GOVERNANCE):
                 pulled.append(sig)
         for sig in pulled:
             signals.append({
@@ -4407,9 +4866,18 @@ def _build_global_top_signals(blufs, narratives):
                 'color':         sig.get('color', '#6b7280'),
                 'short_text':    sig.get('short_text', sig.get('text', ''))[:120],   # v2.3.0: 80→120 (consistency)
                 'long_text':     sig.get('long_text', sig.get('short_text', '')),
-                'pressure_type': sig.get('pressure_type') or _infer_pressure_type(sig),  # lock axis
+                'pressure_type': _infer_pressure_type(sig),  # lock axis
                 # No 'regions' key — single-region signals naturally Tier 2 or 4
             })
+
+    # v3.12.0 -- narrative decay, finally wired in (see _apply_narrative_decay).
+    # Runs BEFORE the sort key so a static signal's lowered priority actually
+    # changes its rank. Tier boosts are untouched: an L5 signal keeps its +20,
+    # it just stops outranking OTHER L5 signals that are moving.
+    try:
+        signals = _apply_narrative_decay(signals)
+    except Exception as _dec_err:
+        print(f'[GPI decay] skipped (non-fatal): {str(_dec_err)[:120]}')
 
     # Compute tier-adjusted sort key for each signal
     for s in signals:
@@ -4493,7 +4961,7 @@ def _build_global_top_signals(blufs, narratives):
     def _cap_diplomatic(lst):
         kept, dip_seen = [], 0
         for _s in lst:
-            if (_s.get('pressure_type') or _infer_pressure_type(_s)) == PRESSURE_DIPLOMATIC:
+            if _infer_pressure_type(_s) == PRESSURE_DIPLOMATIC:
                 if dip_seen >= DIPLOMATIC_SURFACE_CAP:
                     continue
                 dip_seen += 1
@@ -4517,7 +4985,7 @@ def _build_global_top_signals(blufs, narratives):
     axis_counts = {axis: 0 for axis in PRESSURE_AXES}
     for s in headline_block:
         # Use existing pressure_type if tagged; otherwise infer
-        axis = s.get('pressure_type') or _infer_pressure_type(s)
+        axis = _infer_pressure_type(s)
         if axis in axis_counts:
             axis_counts[axis] += 1
 
@@ -4525,7 +4993,7 @@ def _build_global_top_signals(blufs, narratives):
     tail_block = []
     candidates_by_axis = {axis: [] for axis in PRESSURE_AXES}
     for s in candidate_pool:
-        axis = s.get('pressure_type') or _infer_pressure_type(s)
+        axis = _infer_pressure_type(s)
         if axis in candidates_by_axis:
             candidates_by_axis[axis].append(s)
 
@@ -4593,7 +5061,8 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
         return 10
 
     real_narratives = [n for n in narratives
-                       if n.get('category') not in ('global_baseline', 'global_warning')]
+                       if n.get('category') not in ('global_baseline', 'global_warning')
+                       and n.get('tier') != 'standing']   # v3.12.0: standing never leads
     real_narratives.sort(
         key=lambda n: _narrative_tier_boost(n) + int(n.get('priority', 0) or 0),
         reverse=True,
@@ -4653,7 +5122,7 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
                 'theatre':       sig.get('theatre', region_key),
                 'level':         level,
                 'priority':      int(sig.get('priority', 0) or 0),
-                'pressure_type': sig.get('pressure_type') or _infer_pressure_type(sig),
+                'pressure_type': _infer_pressure_type(sig),
                 'icon':          sig.get('icon') or '',
                 'short_text':    stext,
             })
@@ -4755,7 +5224,7 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
         axes_payload = _build_pressure_axes_payload(blufs, narratives)
         axes_inner = (axes_payload or {}).get('axes', {})
         axis_summary_parts = []
-        for ax_name in ('kinetic', 'economic', 'diplomatic', 'humanitarian'):
+        for ax_name in PRESSURE_AXES:   # v3.12.0: includes governance
             ax = axes_inner.get(ax_name, {}) or {}
             ax_level = ax.get('level', 0) or 0
             if ax_level > 0:
@@ -4765,7 +5234,15 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
     except Exception as _e:
         pass  # axes summary is enrichment; never blocks the BLUF
 
-    parts.append(f"Global level: L{global_level} -- {GLOBAL_LEVEL_LABELS.get(global_level, '')}.")
+    # v3.12.0 -- when the novelty gate holds the index at L4, say WHY in the
+    # same breath. "L4 -- COERCION" over a live war would be false.
+    _gate = _LAST_LEVEL_GATE or {}
+    if _gate.get('applied'):
+        parts.append(f"Global level: L{global_level} -- {SUSTAINED_LABEL}. {_gate.get('summary', '')}")
+    else:
+        parts.append(f"Global level: L{global_level} -- {GLOBAL_LEVEL_LABELS.get(global_level, '')}.")
+        if global_level >= 5 and _gate.get('fresh'):
+            parts.append(_gate.get('reason', ''))
 
     return ' '.join(parts)
 
@@ -4809,6 +5286,13 @@ _AXIS_PROSE_PREAMBLES = {
         'lens':     'displacement flows, civilian harm, famine, refugee surges',
         'open':     'Humanitarian pressure view',
         'no_sig':   'No active humanitarian signals — civilian-harm / displacement / famine indicators at baseline.',
+    },
+    'governance': {
+        'label':    'Governance',
+        'icon':     '🏛️',
+        'lens':     'elections, caretaker periods, successions, coups, legitimacy contests',
+        'open':     'Governance pressure view',
+        'no_sig':   'No active governance signals — no election, formation window, succession or legitimacy contest is registering.',
     },
 }
 
@@ -4859,7 +5343,7 @@ def _synthesize_axis_bluf(axis_name, axes_payload, blufs, global_level):
         region_strs.append(f"{region_name} L{lvl}")
     region_summary = ', '.join(region_strs) if region_strs else 'multi-region'
     parts.append(
-        f"Axis at L{axis_level} ({GLOBAL_LEVEL_LABELS.get(axis_level, '')}) -- "
+        f"Axis at L{axis_level} ({_axis_level_label(axis_name, axis_level)}) -- "
         f"{signal_count} active signal(s) across {len(region_levels)} region(s): "
         f"{region_summary}."
     )
@@ -4895,7 +5379,7 @@ def _synthesize_axis_bluf(axis_name, axes_payload, blufs, global_level):
 
 def _synthesize_all_axis_blufs(axes_payload, blufs, global_level):
     """
-    Generate all 4 per-axis BLUFs as a dict keyed by axis name.
+    Generate all per-axis BLUFs (5 since v3.12.0) as a dict keyed by axis name.
     Frontend uses this to swap content when user clicks pressure vector cards.
     """
     return {
@@ -5072,7 +5556,7 @@ _UNGROUPED_THEATRES = frozenset({
     'western hemisphere', 'wha', 'africa', 'the western hemisphere',
 })
 
-_AXIS_ORDER = ['kinetic', 'economic', 'diplomatic', 'humanitarian']
+_AXIS_ORDER = ['kinetic', 'economic', 'diplomatic', 'humanitarian', 'governance']
 
 def _synthesize_theatre_group(theatre, sigs):
     """One dynamic line reading a country's WHOLE story this scan.
@@ -5192,7 +5676,28 @@ def build_gpi(force=False):
             }
 
         narratives    = _detect_narratives(blufs)
+        # v3.12.0 -- tier BEFORE the level: a standing watch may not supply the
+        # convergence boost, so the tiers have to exist when the level is set.
+        try:
+            narratives = _tier_narratives(narratives)
+        except Exception as _tier_err:
+            print(f'[GPI tiers] skipped (non-fatal): {str(_tier_err)[:120]}')
         global_level  = _compute_global_level(blufs, narratives)
+        # v3.12.0 -- severity vs motion. Only ever lowers 5 -> 4.
+        global _LAST_LEVEL_GATE
+        _LAST_LEVEL_GATE = {}
+        try:
+            global_level, _LAST_LEVEL_GATE = _apply_l5_novelty_gate(global_level, blufs)
+        except Exception as _gate_err:
+            _LAST_LEVEL_GATE = {'available': False, 'applied': False,
+                                'reason': 'Novelty gate error -- level shown ungated.'}
+            print(f'[GPI L5 gate] error (non-fatal, ungated): {str(_gate_err)[:160]}')
+        if _LAST_LEVEL_GATE.get('applied'):
+            global_label = SUSTAINED_LABEL
+            global_color = SUSTAINED_COLOR
+        else:
+            global_label = GLOBAL_LEVEL_LABELS.get(global_level, '')
+            global_color = GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280')
         bluf_prose    = _synthesize_global_bluf(blufs, narratives, global_level)
         top_signals   = _build_global_top_signals(blufs, narratives)
         # v2.2 — multi-axis pressure aggregation (kinetic / economic / diplomatic / humanitarian)
@@ -5241,10 +5746,19 @@ def build_gpi(force=False):
             'success':         True,
             'from_cache':      False,
             'generated_at':    datetime.now(timezone.utc).isoformat(),
-            'version':         '3.0.0',
+            'version':         GPI_VERSION,
             'global_level':    global_level,
-            'global_label':    GLOBAL_LEVEL_LABELS.get(global_level, ''),
-            'global_color':    GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
+            'global_label':    global_label,
+            'global_color':    global_color,
+            # v3.12.0 -- why the level reads what it reads (fresh vs sustained
+            # fronts, day counts, breach bypass). The page renders this under
+            # the badge; it is the honesty line for a held L4.
+            'level_gate':      _LAST_LEVEL_GATE,
+            'narrative_tiers': {
+                'topline':  sum(1 for n in narratives if n.get('tier') != 'standing'),
+                'standing': sum(1 for n in narratives if n.get('tier') == 'standing'),
+                'standing_after_days': NARRATIVE_STANDING_DAYS,
+            },
             'bluf':            bluf_prose,
             'bluf_by_axis':    bluf_by_axis,    # v3.0 — per-axis focused prose for click-through UX
             'convergence_panel': _get_convergence_panel(),
@@ -5300,8 +5814,10 @@ def build_gpi(force=False):
         # rather than duplicating the logic, so the two cannot drift again.
         level_payload = {
             'global_level':  global_level,
-            'global_label':  GLOBAL_LEVEL_LABELS.get(global_level, ''),
-            'global_color':  GLOBAL_LEVEL_COLORS.get(global_level, '#6b7280'),
+            'global_label':  global_label,
+            'global_color':  global_color,
+            'level_gate':    {k: _LAST_LEVEL_GATE.get(k) for k in
+                              ('applied', 'summary', 'reason', 'available')},
             'generated_at':  result['generated_at'],
             'headline':      _headline_signal(result),
             'motion':        _motion_line(result),
@@ -5314,9 +5830,9 @@ def build_gpi(force=False):
             f"{ax[0].upper()}{pressure_axes['axes'][ax]['level']}"
             for ax in PRESSURE_AXES
         )
-        print(f'[GPI v2.2] Built: L{global_level} {GLOBAL_LEVEL_LABELS.get(global_level)} '
+        print(f'[GPI v{GPI_VERSION}] Built: L{global_level} {global_label} '
               f'| axes=[{axis_str}] | narratives={len(narratives)} '
-              f'| signals={len(top_signals)} | regions={len(blufs)}/4')
+              f'| signals={len(top_signals)} | regions={len(blufs)}/{len(REGIONAL_BLUF_ENDPOINTS)}')
         return result
 
     except Exception as e:
@@ -5363,6 +5879,8 @@ def build_gpi_level(force=False):
         'global_level':  full.get('global_level', 0),
         'global_label':  full.get('global_label', ''),
         'global_color':  full.get('global_color', '#6b7280'),
+        'level_gate':    {k: (full.get('level_gate') or {}).get(k) for k in
+                          ('applied', 'summary', 'reason', 'available')},
         # Added Jul 27 2026. The landing page displayed ONLY the level, which
         # has been pinned at L5 by sustained global conflict -- a gauge at
         # maximum is a broken gauge. These two fields carry what actually
