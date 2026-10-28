@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Asifah Analytics — Israel Rhetoric & Strike Actor Tracker
-v1.0.0 — March 2026
+v1.2.0 — October 2026 (first built March 2026)
 
 ANALYTICAL FRAME — Two questions for the analyst:
 
@@ -62,6 +62,9 @@ ENDPOINTS:
 
 CHANGELOG:
   v1.0.0 (2026-03-21): Initial build — dual dashboard + three-layer alert system
+  v1.1.0 (2026-10-03): Palestinian financial access lanes + actor
+  v1.2.0 (2026-10-28): Government formation path detector (A/B1/B2/C/D),
+                       stance read, assembled So What, formation RSS feeds
 
 COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
 """
@@ -2294,6 +2297,20 @@ RHETORIC_RSS_FEEDS += [
     ('https://news.google.com/rss/search?q=%22%D7%91%D7%A8%D7%A7+%D7%A8%D7%91%D7%99%D7%93%22&hl=iw&gl=IL&ceid=IL:iw', 1.2),
 ]
 
+# Government formation (v1.2.0, Oct 28 2026). The feeds above are war-shaped;
+# coalition talks run in the political press, Hebrew first. Without these the
+# formation detector would have keywords and no articles -- which reads as
+# 'quiet' forever. Yair Altman and the other Telegram channels ride in via
+# telegram_signals as before.
+RHETORIC_RSS_FEEDS += [
+    ('https://news.google.com/rss/search?q=Israel+coalition+talks+Eisenkot+Netanyahu&hl=en&gl=US&ceid=US:en', 1.1),
+    ('https://news.google.com/rss/search?q=Israel+government+formation+Arab+parties+Raam+Joint+List&hl=en&gl=US&ceid=US:en', 1.1),
+    ('https://news.google.com/rss/search?q=Herzog+mandate+form+government+Israel&hl=en&gl=US&ceid=US:en', 1.0),
+    ('https://news.google.com/rss/search?q=%D7%94%D7%A8%D7%9B%D7%91%D7%AA+%D7%94%D7%9E%D7%9E%D7%A9%D7%9C%D7%94&hl=iw&gl=IL&ceid=IL:iw', 1.2),
+    ('https://news.google.com/rss/search?q=%D7%9E%D7%95%22%D7%9E+%D7%A7%D7%95%D7%90%D7%9C%D7%99%D7%A6%D7%99%D7%95%D7%A0%D7%99&hl=iw&gl=IL&ceid=IL:iw', 1.2),
+    ('https://news.google.com/rss/search?q=%D8%AA%D8%B4%D9%83%D9%8A%D9%84+%D8%A7%D9%84%D8%AD%D9%83%D9%88%D9%85%D8%A9+%D8%A7%D9%84%D8%A5%D8%B3%D8%B1%D8%A7%D8%A6%D9%8A%D9%84%D9%8A%D8%A9&hl=ar&gl=SA&ceid=SA:ar', 1.0),
+]
+
 # NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
 # woodland.cafe) has been dead since X closed guest access; each scan spent
 # accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
@@ -2847,6 +2864,509 @@ def _detect_financial_access_rhetoric(articles):
     }
 
 
+# ============================================================================
+# GOVERNMENT FORMATION — PATH DETECTOR + DYNAMIC SO WHAT  (v1.2.0, Oct 28 2026)
+# ----------------------------------------------------------------------------
+# The Oct 27 2026 election left no bloc at 61. The question the reader has not
+# asked yet is not "who won" but "which government is being assembled, and
+# what does each one change?" -- for Israel, for the region, and for the Iran
+# war and the US relationship.
+#
+# FIVE PATHS (Rachel's taxonomy, Oct 28):
+#   A   Netanyahu bloc + new partner(s)
+#   B1  Opposition bloc with Arab parties INSIDE the coalition
+#   B2  Opposition bloc with Arab parties supporting from OUTSIDE
+#   C   Unity government (Netanyahu bloc + Yashar)
+#   D   Deadlock -> repeat election (caretaker government continues)
+#
+# WHAT IS MEASURED. Per path, an ORDERED evidence state:
+#     quiet -> discussed -> negotiating -> committed
+# moved ONLY by firsthand reporting (the financial-access commentary guard is
+# reused: op-eds about "what a unity government would mean" are counted and
+# shown, never promoted). Plus STANCES: named actors publicly ruling a path in
+# or out. A stance does not change a path's state -- it is reported beside it,
+# because "Liberman says no" and "Liberman is negotiating" can both be true in
+# the same week, and the reader should see both.
+#
+# WHAT IS NOT MEASURED. No probability, no "most likely government", no
+# winner. Seat arithmetic comes from israel_stability.ELECTION_RESULTS via
+# Redis (one source of truth) and is shown as SUMS, never as odds.
+#
+# THE SO WHAT IS ASSEMBLED, NOT WRITTEN. Rachel, Oct 28: "as dynamic as
+# possible ... a choose-your-own-adventure of possible texts based on what the
+# keywords are finding on current factors and factions." So the prose below is
+# a library of FRAGMENTS, each with a condition. A fragment only appears when
+# its condition is met by THIS scan: which paths are live, which stances were
+# taken, whether the freeze is on, how hot the Iran axis reads, whether US
+# voices are off baseline, whether markets are reacting. Change the facts and
+# the paragraph changes. Nothing here asserts what a government WILL do;
+# fragments name the mechanism and the sensor on this platform that would
+# show the test first.
+# ============================================================================
+
+FORMATION_KEY = 'israel:government_formation'
+ELECTION_CYCLE_KEY_RO = 'israel:election_cycle:state'     # written by israel_stability
+ELECTION_RESULTS_KEY_RO = 'israel:election_results'       # written by israel_stability
+
+# Articles must be ABOUT government formation before path terms count. Without
+# this, 'rotation' (troop rotations) and 'deadlock' (Gaza talks) would fire.
+FORMATION_SCOPE = [
+    'coalition', 'knesset', 'government', 'eisenkot', 'netanyahu', 'election',
+    'herzog', 'mandate', 'yashar', "b'yachad", 'byachad', 'liberman', "ra'am", 'raam',
+    'joint list', 'mansour abbas', 'bennett', 'lapid', 'golan',
+    'קואליציה', 'כנסת', 'ממשלה', 'בחירות', 'הרצוג', 'מנדט', 'איזנקוט', 'נתניהו',
+    'ائتلاف', 'الكنيست', 'الحكومة الإسرائيلية', 'انتخابات', 'نتنياهو', 'آيزنكوت',
+]
+
+PATH_LABELS = {
+    'A':  'Netanyahu bloc + new partner(s)',
+    'B1': 'Opposition bloc, Arab parties inside the coalition',
+    'B2': 'Opposition bloc, Arab parties supporting from outside',
+    'C':  'Unity government (Netanyahu bloc + Yashar)',
+    'D':  'Deadlock -> repeat election (caretaker continues)',
+}
+
+# Which ELECTION_RESULTS arithmetic row backs each path.
+PATH_SEAT_ROW = {'A': 'A', 'B1': 'B', 'B2': 'B', 'C': 'C', 'D': None}
+
+PATH_LEXICON = {
+    'A': {
+        'discussed': [
+            'netanyahu bloc', 'right-wing government', 'narrow government', 'defector',
+            'defectors', 'defect to', 'poach', 'join netanyahu', 'netanyahu needs',
+            'seats short', 'missing seats',
+            'גוש נתניהו', 'ממשלת ימין', 'עריקים', 'ערוק', 'להצטרף לנתניהו',
+            'كتلة نتنياهو', 'حكومة يمينية',
+        ],
+        'negotiating': [
+            'likud negotiators', 'talks with likud', 'likud talks', 'netanyahu met with',
+            'netanyahu meets', 'offered a ministry', 'offered the ministry', 'approached by likud',
+            'courting', 'courted by netanyahu',
+            'משא ומתן עם הליכוד', 'נפגש עם נתניהו', 'הוצע לו תיק',
+            'مفاوضات مع الليكود',
+        ],
+        'committed': [
+            'agreed to join netanyahu', 'joins netanyahu', 'signed with likud',
+            'coalition agreement with likud', 'will sit with netanyahu',
+            'הסכם קואליציוני עם הליכוד', 'הצטרף לממשלת נתניהו',
+        ],
+    },
+    'B1': {
+        'discussed': [
+            'arab party in the coalition', 'arab parties in the coalition', 'arab ministers',
+            'arab minister', 'join the coalition', 'inside the coalition', 'part of the government',
+            'רע"ם בקואליציה', 'מפלגה ערבית בקואליציה', 'שרים ערבים', 'ערבים בממשלה',
+            'المشاركة في الائتلاف', 'الانضمام إلى الحكومة', 'وزراء عرب',
+        ],
+        'negotiating': [
+            "ra'am talks", 'raam talks', 'talks with abbas', 'abbas met', 'met with abbas',
+            'joint list talks', 'talks with the joint list', 'eisenkot met abbas',
+            'נפגש עם עבאס', 'מגעים עם רע"ם', 'מגעים עם הרשימה המשותפת',
+            'لقاء مع منصور عباس', 'محادثات مع القائمة',
+        ],
+        'committed': [
+            "ra'am signs", 'raam signs', 'joint list signs', 'arab party signs coalition',
+            'joins the coalition', 'abbas joins', 'agreed to join the government',
+            'רע"ם חתמה', 'הרשימה המשותפת חתמה',
+            'وقّعت القائمة', 'انضمت إلى الحكومة',
+        ],
+    },
+    'B2': {
+        'discussed': [
+            'outside support', 'external support', 'support from outside', 'blocking majority',
+            'support without joining', 'without joining the government', 'safety net',
+            'confidence and supply', 'rabin model', 'abstain in the confidence vote',
+            'גוש חוסם', 'תמיכה מבחוץ', 'רשת ביטחון', 'בלי להצטרף לממשלה',
+            'دعم من الخارج', 'الجسم المانع', 'شبكة أمان', 'دون الانضمام إلى الحكومة',
+        ],
+        'negotiating': [
+            'talks on outside support', 'negotiating outside support', 'support in exchange for',
+            'demands in exchange for support', 'list of demands',
+            'דרישות בתמורה לתמיכה', 'מגעים על תמיכה מבחוץ',
+            'مطالب مقابل الدعم',
+        ],
+        'committed': [
+            'will support from outside', 'pledged outside support', 'agreed to support the government from outside',
+            'will vote for the government without joining',
+            'תתמוך מבחוץ', 'התחייבה לתמוך מבחוץ',
+            'ستدعم من الخارج',
+        ],
+    },
+    'C': {
+        'discussed': [
+            'unity government', 'national unity government', 'rotation', 'rotation agreement',
+            'broad government', 'grand coalition', 'emergency government', 'broad coalition',
+            'ממשלת אחדות', 'רוטציה', 'ממשלה רחבה', 'ממשלת חירום',
+            'حكومة وحدة', 'حكومة وحدة وطنية', 'تناوب',
+        ],
+        'negotiating': [
+            'unity talks', 'eisenkot and netanyahu met', 'netanyahu and eisenkot met',
+            'eisenkot met netanyahu', 'netanyahu met eisenkot', 'rotation talks',
+            'מגעים לממשלת אחדות', 'נתניהו ואיזנקוט נפגשו',
+            'محادثات حكومة الوحدة',
+        ],
+        'committed': [
+            'unity government agreed', 'rotation agreed', 'unity deal signed', 'agreed on rotation',
+            'סוכמה רוטציה', 'הסכם אחדות נחתם',
+            'اتفاق على حكومة وحدة',
+        ],
+    },
+    'D': {
+        'discussed': [
+            'third election', 'another election', 'repeat election', 'new elections',
+            'back to the polls', 'return to the polls', 'deadlock', 'stalemate', 'impasse',
+            'no one can form', 'political paralysis',
+            'בחירות חוזרות', 'סבב בחירות נוסף', 'מבוי סתום', 'פלונטר', 'שיתוק פוליטי',
+            'انتخابات جديدة', 'طريق مسدود', 'جمود سياسي',
+        ],
+        'negotiating': [
+            'mandate returned', 'returned the mandate', 'failed to form', 'unable to form',
+            'mandate expires', 'mandate extended',
+            'החזיר את המנדט', 'לא הצליח להרכיב', 'הארכת המנדט',
+            'أعاد التكليف', 'فشل في تشكيل',
+        ],
+        'committed': [
+            'knesset dissolved', 'knesset votes to dissolve', 'election date set',
+            'הכנסת התפזרה', 'נקבע מועד הבחירות',
+            'حل الكنيست',
+        ],
+    },
+}
+
+# STANCES. Named actors ruling a path in or out. 'blocks' / 'enables' never
+# moves a path's state; it rides beside it. Each pattern is narrow on purpose:
+# it must name the actor AND the position, not just co-mention them.
+FORMATION_STANCES = [
+    {'id': 'eisenkot_no_netanyahu', 'actor': 'Eisenkot', 'effect': 'blocks', 'paths': ['C'],
+     'kw': ['eisenkot rules out', 'eisenkot will not sit with netanyahu', 'eisenkot refuses to serve under',
+            'eisenkot rejects rotation', 'eisenkot: no rotation', 'eisenkot will not serve under',
+            'איזנקוט שולל', 'איזנקוט לא ישב עם נתניהו']},
+    {'id': 'eisenkot_open_unity', 'actor': 'Eisenkot', 'effect': 'enables', 'paths': ['C'],
+     'kw': ['eisenkot open to unity', 'eisenkot does not rule out', 'eisenkot willing to consider',
+            'איזנקוט לא שולל']},
+    {'id': 'liberman_no_arab', 'actor': 'Liberman', 'effect': 'blocks', 'paths': ['B1', 'B2'],
+     'kw': ['liberman rules out', 'liberman will not sit with', 'liberman refuses to rely',
+            'liberman rejects reliance', 'yisrael beytenu will not rely', 'liberman: no government with',
+            'ליברמן שולל', 'ליברמן לא ישב עם']},
+    {'id': 'liberman_open_support', 'actor': 'Liberman', 'effect': 'enables', 'paths': ['B2'],
+     'kw': ['liberman open to outside support', 'liberman would accept outside support',
+            'liberman does not rule out', 'ליברמן לא שולל']},
+    {'id': 'joint_no_join', 'actor': 'Joint List', 'effect': 'blocks', 'paths': ['B1'],
+     'kw': ['joint list will not join', 'joint list rules out joining', 'will not join a zionist government',
+            'will not join any zionist government', 'hadash rules out joining',
+            'הרשימה המשותפת לא תצטרף', 'القائمة المشتركة لن تنضم']},
+    {'id': 'raam_ready', 'actor': "Ra'am / Abbas", 'effect': 'enables', 'paths': ['B1', 'B2'],
+     'kw': ['abbas ready to join', 'abbas open to joining', "ra'am ready", 'raam ready', "ra'am willing",
+            'raam willing', 'abbas willing',
+            'עבאס מוכן', 'רע"ם מוכנה', 'منصور عباس مستعد', 'القائمة الموحدة مستعدة']},
+    {'id': 'opposition_no_netanyahu', 'actor': 'Opposition leaders', 'effect': 'blocks', 'paths': ['A'],
+     'kw': ['will not join a netanyahu government', 'rules out joining netanyahu', 'will not sit in a netanyahu',
+            'refuses to join netanyahu', 'לא נצטרף לממשלת נתניהו', 'לא נשב בממשלת נתניהו']},
+    {'id': 'right_no_arab', 'actor': 'Netanyahu bloc', 'effect': 'blocks', 'paths': ['B1', 'B2'],
+     'kw': ['government that relies on arab parties', 'dangerous left-wing government',
+            'stole the election', 'relying on supporters of terror',
+            'ממשלה שנשענת על', 'גנבו את הבחירות']},
+]
+
+# Live context terms (evidence, not prediction).
+FORMATION_MARKET_KW = ['shekel', 'israeli bonds', 'tel aviv stock', 'tase', 'credit rating',
+                       'ta-35', 'השקל', 'אג"ח', 'הבורסה בתל אביב', 'الشيكل']
+FORMATION_US_PRESSURE_KW = ['american pressure', 'us pressure', 'washington pushes', 'trump urges',
+                            'trump pushes', 'trump wants a unity', 'us pushes unity', 'white house urges',
+                            'לחץ אמריקאי', 'ضغط أمريكي']
+FORMATION_TURNOUT_KW = ['arab turnout', 'record turnout', 'highest turnout', 'turnout among arab',
+                        'שיעור ההצבעה בחברה הערבית', 'نسبة التصويت']
+
+_FORMATION_STATE_ORDER = ['quiet', 'discussed', 'negotiating', 'committed']
+
+
+def _formation_blob(a):
+    return ((a.get('title') or '') + ' ' + (a.get('description') or ''))
+
+
+def _formation_hit(raw, kws):
+    low = raw.lower()
+    return [k for k in kws if k.lower() in low]
+
+
+def _pick_fragments(ctx, library):
+    """Return the text of every fragment whose condition holds for ctx."""
+    out = []
+    for cond, text in library:
+        try:
+            if cond(ctx):
+                t = text(ctx) if callable(text) else text
+                if t:
+                    out.append(t)
+        except Exception as _e:
+            print('[Israel Formation] fragment skipped: %s' % str(_e)[:80])
+    return out
+
+
+def _is_live(ctx, pid, at_least='discussed'):
+    st = ctx['paths'].get(pid, {}).get('state', 'quiet')
+    return _FORMATION_STATE_ORDER.index(st) >= _FORMATION_STATE_ORDER.index(at_least)
+
+
+def _blocked_by(ctx, pid):
+    return [s['actor'] for s in ctx['stances'] if s['effect'] == 'blocks' and pid in s['paths']]
+
+
+def _enabled_by(ctx, pid):
+    return [s['actor'] for s in ctx['stances'] if s['effect'] == 'enables' and pid in s['paths']]
+
+
+def _seat_row(ctx, row_id):
+    for r in (ctx['results'].get('paths') or []):
+        if r.get('id') == row_id:
+            return r
+    return None
+
+
+# ── FRAGMENT LIBRARY ─────────────────────────────────────────────────────────
+# (condition, text) pairs. Text may be a function of ctx. Estimative voice
+# only: "consistent with", "has historically", "would be the first test".
+# Rachel reviews this library; edits here change the page without touching
+# any logic.
+
+SO_WHAT_ISRAEL = [
+    (lambda c: c['turnout_evidence'] > 0,
+     lambda c: ('Record Arab-sector turnout is what moved the arithmetic: the Arab parties hold %s '
+                'seats, so neither Zionist bloc reaches 61 without either them or the other bloc.'
+                % ((c['results'].get('blocs') or {}).get('arab', {}).get('seats', '?')))),
+    (lambda c: _is_live(c, 'A'),
+     lambda c: ('Path A needs %s seats from outside the Netanyahu bloc. Whoever supplies them arrives with '
+                'leverage proportional to how scarce those seats are%s.'
+                % (c['results'].get('path_a_gap', '?'),
+                   ('; opposition leaders have publicly ruled out joining (%s)'
+                    % ', '.join(_blocked_by(c, 'A'))) if _blocked_by(c, 'A') else ''))),
+    (lambda c: _is_live(c, 'B1'),
+     lambda c: ('Arab parties inside the cabinet would be the second instance after Ra\'am in 2021. '
+                'The arithmetic needs the Joint List as well as Ra\'am (Ra\'am alone leaves the bloc at %s), '
+                'and the Joint List has never sat in a governing coalition%s.'
+                % ((_seat_row(c, 'B-raam') or {}).get('seats', '?'),
+                   (' -- and has said it will not this time' if 'Joint List' in _blocked_by(c, 'B1') else '')))),
+    (lambda c: _is_live(c, 'B2'),
+     'Outside support follows the 1992-95 Rabin precedent, when Hadash and the Arab Democratic Party sustained '
+     'a government without cabinet seats. Governments built that way have historically depended on partners who '
+     'hold no ministries, which narrows the margin on security-coded Knesset votes.'),
+    (lambda c: (_is_live(c, 'B1') or _is_live(c, 'B2')) and 'Liberman' in _blocked_by(c, 'B1') + _blocked_by(c, 'B2'),
+     lambda c: ('Liberman has publicly ruled out relying on Arab parties. Without Yisrael Beytenu, Path B sits at '
+                '%s -- one seat short -- so his position, not the Arab parties\', is the hinge this cycle.'
+                % (_seat_row(c, 'B-noYB') or {}).get('seats', '?'))),
+    (lambda c: _is_live(c, 'C'),
+     lambda c: ('A unity government is arithmetically the largest option (%s seats)%s.'
+                % ((_seat_row(c, 'C') or {}).get('seats', '?'),
+                   ('; Eisenkot\'s stated refusal to serve under Netanyahu is the obstacle reported this cycle'
+                    if 'Eisenkot' in _blocked_by(c, 'C') else
+                    ('; Eisenkot has signalled openness this cycle' if 'Eisenkot' in _enabled_by(c, 'C') else ''))))),
+    (lambda c: _is_live(c, 'D') or c['cycle'].get('overrun'),
+     'Deadlock does not end the decision freeze -- it lengthens it. The caretaker government stays in office. '
+     'Repeat-election talk can be leverage as much as a schedule; the formation day count against its '
+     'expected envelope is what separates the two.'),
+    (lambda c: not any(_is_live(c, p) for p in PATH_LABELS),
+     'No formation path has firsthand coverage this cycle. Before presidential consultations conclude, that is '
+     'normal -- an absence of observation, not evidence that talks are stalled.'),
+]
+
+SO_WHAT_REGION = [
+    (lambda c: c['cycle'].get('decision_freeze'),
+     lambda c: ('While formation runs, the Lebanon framework and the Gaza roadmap read as PARKED rather than '
+                'failing: no Israeli government is positioned to take the decisions that gate them.%s'
+                % ((' Lebanon gates this cycle: ' + c['lebanon_gates']) if c['lebanon_gates'] else ''))),
+    (lambda c: _is_live(c, 'A'),
+     'A government drawn from the outgoing bloc would start from continuity on Lebanon, Gaza and the West Bank, '
+     'with the new partner\'s price as the variable. The West Bank administrative-tempo and Gaza control-ratchet '
+     'panels on this page would show any change first.'),
+    (lambda c: _is_live(c, 'B1') or _is_live(c, 'B2'),
+     'A government that depends on Arab-party votes would be tested first on the West Bank: the administrative-act '
+     'tempo panel on this page is where a change in pace would register before any declaration.'),
+    (lambda c: _is_live(c, 'C'),
+     'A unity government would put both blocs\' security establishments in one cabinet. Whether that widens '
+     'negotiated tracks or narrows territorial moves is an open question this page measures rather than '
+     'assumes: the Lebanon gate ladder and the West Bank tempo panel would show it first.'),
+    (lambda c: c['gaza_gates'],
+     lambda c: 'Gaza roadmap this cycle: ' + c['gaza_gates']),
+]
+
+SO_WHAT_GLOBAL = [
+    (lambda c: c['iran_level'] >= 3,
+     lambda c: ('With the Iran axis reading L%d, the caretaker government retains full war-making authority. '
+                'Formation length therefore decides whether the next major Iran decision is taken by a '
+                'caretaker cabinet or a new one -- a different political cost structure, not a different '
+                'legal one.' % c['iran_level'])),
+    (lambda c: c['us_pressure_evidence'] > 0,
+     lambda c: ('Coverage reports US pressure on the shape of the next government (%d item(s)). A broad-'
+                'government push from Washington would show here before it shows in coalition terms.'
+                % c['us_pressure_evidence'])),
+    (lambda c: c['us_deviations'] > 0,
+     lambda c: ('US envoy voices are off their own baseline this cycle (%d deviation(s)) -- see the US Voices panel.'
+                % c['us_deviations'])),
+    (lambda c: c['market_evidence'] > 0,
+     lambda c: ('Israeli asset coverage tied to the result: %d item(s). Shekel and bond moves are the fastest '
+                'public read of how formation uncertainty is being priced.' % c['market_evidence'])),
+]
+
+WATCH_LIBRARY = [
+    (lambda c: True, 'Presidential consultations and which candidate receives the first mandate'),
+    (lambda c: _is_live(c, 'B1') or _is_live(c, 'B2') or 'Liberman' in _blocked_by(c, 'B2'),
+     'Liberman on Arab-party reliance -- the one-seat hinge for Path B'),
+    (lambda c: _is_live(c, 'B1'), 'Joint List statements on joining vs. supporting from outside'),
+    (lambda c: _is_live(c, 'C'), 'Eisenkot statements on rotation or serving in a Netanyahu-led cabinet'),
+    (lambda c: _is_live(c, 'A'), 'Any opposition party leader softening a stated refusal to join Netanyahu'),
+    (lambda c: _is_live(c, 'D') or c['cycle'].get('overrun'),
+     'Mandate returned or extended; "third election" language from party leaders'),
+]
+
+
+def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_gates=None):
+    """Formation path read + dynamic So What. See the block comment above."""
+    cycle = _redis_get(ELECTION_CYCLE_KEY_RO) or {}
+    results = _redis_get(ELECTION_RESULTS_KEY_RO) or {}
+    state = cycle.get('state', 'unknown')
+
+    if state not in ('voted', 'formation', 'formed'):
+        return {'active': False, 'cycle_state': state,
+                'headline': 'No government-formation window is open.',
+                'note': ('The path detector runs between an election and a sworn-in government. '
+                         'Cycle state read: %s.' % state)}
+
+    scoped = [a for a in (articles or [])
+              if _formation_hit(_formation_blob(a), FORMATION_SCOPE)]
+
+    paths = {}
+    fh_total = cm_total = 0
+    for pid, lex in PATH_LEXICON.items():
+        counts = {lvl: {'firsthand': 0, 'commentary': 0} for lvl in ('discussed', 'negotiating', 'committed')}
+        examples = []
+        for a in scoped:
+            raw = _formation_blob(a)
+            levels = [lvl for lvl in ('committed', 'negotiating', 'discussed') if _formation_hit(raw, lex[lvl])]
+            if not levels:
+                continue
+            top = levels[0]
+            commentary = _fin_is_commentary(raw, a.get('source', ''))
+            counts[top]['commentary' if commentary else 'firsthand'] += 1
+            if commentary:
+                cm_total += 1
+            else:
+                fh_total += 1
+                if len(examples) < 3:
+                    examples.append({'title': (a.get('title') or '')[:120], 'url': a.get('url', ''),
+                                     'source': a.get('source', ''), 'level': top})
+        st = 'quiet'
+        for lvl in ('committed', 'negotiating', 'discussed'):
+            if counts[lvl]['firsthand']:
+                st = lvl
+                break
+        row = _seat_row({'results': results}, PATH_SEAT_ROW[pid]) if PATH_SEAT_ROW[pid] else None
+        paths[pid] = {
+            'label': PATH_LABELS[pid],
+            'state': st,
+            'counts': counts,
+            'seats': row.get('seats') if row else None,
+            'margin': row.get('margin') if row else None,
+            'arithmetic': row.get('reading') if row else ('No seat arithmetic: this path ends in a new election.'
+                                                          if pid == 'D' else 'Seat table not available.'),
+            'examples': examples,
+        }
+
+    stances = []
+    for spec in FORMATION_STANCES:
+        hits = []
+        for a in scoped:
+            raw = _formation_blob(a)
+            if _formation_hit(raw, spec['kw']) and not _fin_is_commentary(raw, a.get('source', '')):
+                hits.append({'title': (a.get('title') or '')[:120], 'url': a.get('url', ''),
+                             'source': a.get('source', '')})
+        if hits:
+            stances.append({'id': spec['id'], 'actor': spec['actor'], 'effect': spec['effect'],
+                            'paths': spec['paths'], 'count': len(hits), 'examples': hits[:2]})
+    for pid in paths:
+        paths[pid]['blocked_by'] = sorted({s['actor'] for s in stances
+                                           if s['effect'] == 'blocks' and pid in s['paths']})
+        paths[pid]['enabled_by'] = sorted({s['actor'] for s in stances
+                                           if s['effect'] == 'enables' and pid in s['paths']})
+
+    def _count(kws):
+        return sum(1 for a in scoped if _formation_hit(_formation_blob(a), kws)
+                   and not _fin_is_commentary(_formation_blob(a), a.get('source', '')))
+
+    try:
+        _leb = (_redis_get('rhetoric:lebanon:framework_gates') or {}).get('headline', '')
+    except Exception:
+        _leb = ''
+
+    ctx = {
+        'paths': paths, 'stances': stances, 'cycle': cycle, 'results': results,
+        'iran_level': int((inbound_fp or {}).get('iran_level', 0) or 0),
+        'us_deviations': int((us_voice or {}).get('deviation_count', 0) or 0),
+        'us_pressure_evidence': _count(FORMATION_US_PRESSURE_KW),
+        'market_evidence': _count(FORMATION_MARKET_KW),
+        'turnout_evidence': _count(FORMATION_TURNOUT_KW),
+        'lebanon_gates': _leb,
+        'gaza_gates': (gaza_gates or {}).get('headline', '') if isinstance(gaza_gates, dict) else '',
+    }
+
+    rank = {s: i for i, s in enumerate(_FORMATION_STATE_ORDER)}
+    top_rank = max(rank[p['state']] for p in paths.values())
+    leading = sorted(pid for pid, p in paths.items() if top_rank > 0 and rank[p['state']] == top_rank)
+
+    if state == 'formed':
+        headline = ('A government has been sworn in; formation paths are now history. Off-ramp phase: %s.'
+                    % (cycle.get('post_formation_phase') or 'headline'))
+    elif not leading:
+        headline = ('Formation day %d: no path has firsthand coverage yet.' % int(cycle.get('days_in_state', 0) or 0))
+    else:
+        headline = ('Formation day %d: %s %s.' % (
+            int(cycle.get('days_in_state', 0) or 0),
+            ' / '.join('Path %s' % p for p in leading),
+            {1: 'being discussed', 2: 'in active negotiation', 3: 'reported as agreed'}[top_rank]))
+
+    so_what = {
+        'israel': _pick_fragments(ctx, SO_WHAT_ISRAEL),
+        'region': _pick_fragments(ctx, SO_WHAT_REGION),
+        'global': _pick_fragments(ctx, SO_WHAT_GLOBAL),
+    }
+    watch = _pick_fragments(ctx, WATCH_LIBRARY)[:5]
+
+    total = fh_total + cm_total
+    out = {
+        'active': True,
+        'block_version': '1.0.0',
+        'scored': False,
+        'cycle_state': state,
+        'days_in_state': cycle.get('days_in_state'),
+        'decision_freeze': bool(cycle.get('decision_freeze')),
+        'results_status': results.get('status', 'unavailable'),
+        'results_as_of': results.get('as_of'),
+        'headline': headline,
+        'leading_paths': leading,
+        'paths': paths,
+        'stances': stances,
+        'so_what': so_what,
+        'watch_list': watch,
+        'context': {k: ctx[k] for k in ('iran_level', 'us_deviations', 'us_pressure_evidence',
+                                        'market_evidence', 'turnout_evidence')},
+        'corpus': {'in_scope': len(scoped), 'firsthand': fh_total, 'commentary': cm_total,
+                   'commentary_share': round(cm_total / total, 2) if total else 0.0},
+        'state_ladder': _FORMATION_STATE_ORDER,
+        'doctrine_note': ('Ordered evidence states describe how far coverage of each path has got. They are not '
+                          'odds and there is no "most likely government". Seat arithmetic is a sum, provisional '
+                          'until certified. Stances are reported beside paths, never netted against them.'),
+    }
+    try:
+        _summary = {k: out[k] for k in ('active', 'cycle_state', 'headline', 'leading_paths',
+                                        'decision_freeze', 'results_status')}
+        _summary['path_states'] = {p: v['state'] for p, v in paths.items()}
+        _summary['updated'] = datetime.now(timezone.utc).isoformat()
+        _redis_set(FORMATION_KEY, _summary, ttl=3 * 24 * 3600)
+    except Exception as _e:
+        print('[Israel Formation] summary write failed: %s' % str(_e)[:100])
+    return out
+
+
+
 def classify_articles(articles):
     actor_results = {
         actor_id: {
@@ -3119,7 +3639,7 @@ def run_israel_rhetoric_scan(days=3):
     Full Israel rhetoric scan — dual dashboard architecture.
     Reads cross-theater fingerprints + Pikud HaOref alerts as primary inbound input.
     """
-    print(f"\n[Israel Rhetoric] ═══ Starting dual-dashboard scan v1.0 (days={days}) ═══")
+    print(f"\n[Israel Rhetoric] ═══ Starting dual-dashboard scan v1.2 (days={days}) ═══")
     start = datetime.now(timezone.utc)
 
     # Step 1: Read inbound threat from cross-theater fingerprints
@@ -3208,7 +3728,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.0.0-israel-dual-dashboard',
+        'version': '1.2.0-israel-formation',
     }
 
     # Cache
@@ -3327,6 +3847,25 @@ def run_israel_rhetoric_scan(days=3):
             'headline': 'Block failed to build -- this is NOT a reading of quiet.',
             'error': str(_e)[:160], 'lanes': {}}
 
+    # Government formation (v1.2.0, Oct 28 2026) -- five paths (A, B1, B2, C, D),
+    # ordered evidence states, stances, and an assembled So What. Runs only
+    # between an election and a sworn-in government; otherwise reports inactive.
+    try:
+        result['government_formation'] = _detect_government_formation(
+            articles, inbound_fp=inbound_fp,
+            us_voice=result.get('us_voice_signals'),
+            gaza_gates=result.get('gaza_framework_gates'))
+        _gf = result['government_formation']
+        print(f"[Israel Rhetoric] Formation: active={_gf.get('active')} "
+              f"state={_gf.get('cycle_state')} leading={_gf.get('leading_paths')} "
+              f"| {_gf.get('headline', '')[:90]}")
+    except Exception as _e:
+        print(f"[Israel Rhetoric] Formation read failed: {str(_e)[:120]}")
+        result['government_formation'] = {
+            'active': False, 'cycle_state': 'could_not_assess',
+            'headline': 'Formation block failed to build -- this is NOT a reading of quiet.',
+            'error': str(_e)[:160]}
+
     # Signal interpretation — So What, Red Lines, Historical Patterns
     if INTERPRETER_AVAILABLE:
         try:
@@ -3424,7 +3963,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.0.0-israel-dual-dashboard',
+            'version': '1.2.0-israel-formation',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])
