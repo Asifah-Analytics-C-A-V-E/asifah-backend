@@ -1682,6 +1682,16 @@ BACKWARD_MIN_HITS = 2
 # A brand-new government is not "in crisis" because a profile piece says the
 # word. Regression out of 'formed' waits at least this long.
 MIN_DAYS_FORMED_BEFORE_REGRESSION = 14
+# v2.4.3 (Oct 28 2026) -- RETROSPECTIVE DISSOLUTION. Post-election coverage is
+# full of "the Knesset dissolved in June, triggering this vote" and every Hebrew
+# explainer says פיזור הכנסת. Two such articles were enough to drag the machine
+# from 'formation' to 'dissolution' ONE DAY after the vote, which switched the
+# formation detector off and silently removed the formation signal from the
+# ME BLUF and GPI. A newly elected Knesset cannot dissolve before it is sworn in
+# (~2 weeks), and the fastest real collapse (May 2019) came ~7 weeks after the
+# vote, after a full mandate period failed. So a repeat-election move out of
+# voted/formation is refused inside this window, whatever the keywords say.
+MIN_DAYS_AFTER_ELECTION_BEFORE_DISSOLUTION = 28
 
 # ── POST-FORMATION OFF-RAMP (Rachel, Oct 28 2026) ───────────────────────────
 # After a government is sworn in, the page does not snap straight back to
@@ -1703,7 +1713,8 @@ def _post_formation_phase(days_since_formed):
     return 'normal'
 
 
-def _transition_allowed(prior_state, new_state, hits, prior_days_in_state):
+def _transition_allowed(prior_state, new_state, hits, prior_days_in_state,
+                        days_since_election=None):
     """Return (allowed, reason). Pure function so it can be tested offline."""
     if not prior_state or prior_state == new_state:
         return True, 'no prior state'
@@ -1720,6 +1731,12 @@ def _transition_allowed(prior_state, new_state, hits, prior_days_in_state):
     if order.index(new_state) > order.index(prior_state):
         return True, 'forward'
     if (prior_state, new_state) in BACKWARD_TRANSITIONS_ALLOWED:
+        if (prior_state in ('voted', 'formation') and new_state in ('dissolution', 'campaign')
+                and days_since_election is not None
+                and days_since_election < MIN_DAYS_AFTER_ELECTION_BEFORE_DISSOLUTION):
+            return False, ('repeat-election move refused %dd after the vote (minimum %dd): '
+                           'dissolution coverage this early is retrospective'
+                           % (days_since_election, MIN_DAYS_AFTER_ELECTION_BEFORE_DISSOLUTION))
         if n < BACKWARD_MIN_HITS:
             return False, 'backward move needs %d items, saw %d' % (BACKWARD_MIN_HITS, n)
         if prior_state == 'formed' and prior_days_in_state < MIN_DAYS_FORMED_BEFORE_REGRESSION:
@@ -1781,6 +1798,40 @@ def _detect_election_state(articles):
     except Exception:
         pass
 
+    # v2.4.3 -- days since the configured election, for the dissolution guard.
+    try:
+        _ed2 = datetime.fromisoformat(ELECTION_RESULTS['election_date']).replace(tzinfo=timezone.utc)
+        days_since_election = (now - _ed2).days if now >= _ed2 else None
+    except Exception:
+        _ed2, days_since_election = None, None
+
+    # v2.4.3 REPAIR -- undo a repeat-election move that the guard above would now
+    # refuse (the Oct 28 false 'dissolution'). Restores the state the machine was
+    # in before the bad move, with its ORIGINAL start date, and drops the bad
+    # history entry. Self-retiring: it only fires inside the guard window, on a
+    # move that came out of voted/formation for THIS election.
+    try:
+        _hist = list(prior.get('history') or [])
+        if (prior_state in ('dissolution', 'campaign') and _hist
+                and days_since_election is not None
+                and days_since_election < MIN_DAYS_AFTER_ELECTION_BEFORE_DISSOLUTION
+                and _hist[-1].get('to') == prior_state
+                and _hist[-1].get('from') in ('voted', 'formation')
+                and _ed2 is not None
+                and datetime.fromisoformat(_hist[-1]['at']) >= _ed2):
+            _bad = _hist.pop()
+            _restore = _bad['from']
+            _restore_since = next((h.get('at') for h in reversed(_hist)
+                                   if h.get('to') == _restore), None) or _ed2.isoformat()
+            print('[Israel Election] REPAIR: discarding %s -> %s recorded %dd after the vote '
+                  '(retrospective dissolution coverage); restoring %s since %s'
+                  % (_bad['from'], _bad['to'], days_since_election, _restore, _restore_since[:10]))
+            prior_state, prior_since = _restore, _restore_since
+            prior = dict(prior, state=_restore, since=_restore_since, history=_hist,
+                         anchored_election=ELECTION_RESULTS['election_date'])
+    except Exception as _rep_err:
+        print('[Israel Election] repair check skipped: %s' % str(_rep_err)[:120])
+
     try:
         prior_days = (now - datetime.fromisoformat(prior_since)).days if prior_since else 0
     except Exception:
@@ -1790,7 +1841,8 @@ def _detect_election_state(articles):
     for cand in reversed(ELECTION_STATES):
         if cand == 'stable' or cand not in hits or cand == prior_state:
             continue
-        ok, why = _transition_allowed(prior_state, cand, hits, prior_days)
+        ok, why = _transition_allowed(prior_state, cand, hits, prior_days,
+                                      days_since_election=days_since_election)
         if ok:
             accepted = cand
             break
@@ -2780,7 +2832,7 @@ def scan_israel_stability():
             'leadership_reviewed': POLITICAL_FIGURES_REVIEWED,
             'all_articles': conflict.get('all_articles', [])[:30],
             'last_updated': datetime.now(timezone.utc).isoformat(),
-            'version': '2.4.2-israel',
+            'version': '2.4.3-israel',
             'from_cache': False
         }
 
