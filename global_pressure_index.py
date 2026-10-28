@@ -20,6 +20,14 @@ v3.12.0 — Oct 28 2026 (SEVERITY vs MOTION):
     never called by anything. It now runs, and counts at most one cycle per
     11h so a burst of ?force=true rebuilds cannot age a signal in an afternoon.
   * Payload version reads GPI_VERSION (was a literal '3.0.0' since spring).
+v3.13.0 — Oct 28 2026 (L6 DOCTRINE + governance token fix):
+  * L6 = GLOBAL SHOCK: systemic event class (WMD use excl. tests/drills/threats;
+    nuclear-adversary clash; Article-5 attack on NATO; invasion/blockade of a
+    NEW state; head of state killed; coup in a nuclear state; mass casualty at
+    national-trauma scale, per-capita: 9/11 ~10/M, Oct 7 ~122/M) AND observed
+    world reaction (UNSC emergency / NATO Art 4-5 / G7 emergency) naming the
+    country; holds 7 days. Tracker L6 that fails is demoted to L5 in the GPI.
+  * _is_governance_signal is whole-token ('commodity_coupling' matched 'coup').
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -149,7 +157,7 @@ GLOBAL_LEVEL_LABELS = {
     3: 'CONFRONTATION',
     4: 'COERCION',
     5: 'ACTIVE CONFLICT',
-    6: 'RED-LINE BREACH',
+    6: 'GLOBAL SHOCK',      # v3.13.0 -- L6 doctrine; was 'RED-LINE BREACH' (tit-for-tat qualified)
 }
 
 GLOBAL_LEVEL_COLORS = {
@@ -743,7 +751,7 @@ def _breach_line(full):
             txt = _left if len(_left) >= _MIN_USEFUL else (_right or _left)
     return {
         'level': 6,
-        'label': 'RED-LINE BREACH',
+        'label': L6_LABEL,
         'theatre': theatre or 'Global',
         'detail': txt[:90],
         'category': best.get('category'),
@@ -753,6 +761,15 @@ def _breach_line(full):
 def _banner(full):
     """What the landing page shows. L6 breach displaces the level; otherwise
     the level plus the leading convergence tag."""
+    # v3.13.0 -- a CONFIRMED L6 event (held 7 days) leads, even after the
+    # originating signal has scrolled out of the regional feeds.
+    _l6 = full.get('l6') or {}
+    if _l6.get('active') and _l6.get('events'):
+        e = sorted(_l6['events'], key=lambda x: x.get('confirmed_at', ''))[-1]
+        return {'mode': 'breach', 'level': 6, 'label': L6_LABEL,
+                'theatre': str(e.get('theatre') or 'Global').replace('_', ' ').title(),
+                'detail': (e.get('class_label') or '')[:90],
+                'category': e.get('class'), 'day': e.get('day')}
     breach = _breach_line(full)
     if breach:
         return {'mode': 'breach', **breach}
@@ -833,7 +850,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.12.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.13.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -2062,8 +2079,15 @@ def _axis_level_label(axis, level):
 
 
 def _is_governance_signal(signal):
+    """WHOLE-TOKEN match on the category, never substring. v3.12.0 shipped a
+    substring test and 'commodity_coupling' matched 'coup' -- five commodity
+    signals filed as governance on the first live build. '_coup_' must appear
+    between token boundaries: coup, coup_attempt, sahel_coup -- not coupling."""
     cat = str((signal or {}).get('category') or '').lower()
-    return bool(cat) and any(h in cat for h in GOVERNANCE_CATEGORY_HINTS)
+    if not cat:
+        return False
+    cat = '_' + re.sub(r'[^a-z0-9]+', '_', cat).strip('_') + '_'
+    return any(('_' + h + '_') in cat for h in GOVERNANCE_CATEGORY_HINTS)
 
 PRESSURE_AXIS_META = {
     PRESSURE_KINETIC: {
@@ -4455,6 +4479,28 @@ def _theatre_display(th):
     return th.replace('_', ' ').title()
 
 
+def _sustained_theatres_snapshot():
+    """Read-only view of which theatres are at SUSTAINED L5 (seeded, or onset
+    older than the novelty window). Used by the L6 doctrine BEFORE the gate
+    runs: an invasion of a theatre already at sustained war is the next phase,
+    not a new state."""
+    state, ok = _redis_get_checked(L5_ONSET_KEY)
+    if not ok or not isinstance(state, dict):
+        return set()
+    out, now = set(), datetime.now(timezone.utc)
+    for th, rec in (state.get('theatres') or {}).items():
+        if not isinstance(rec, dict) or rec.get('below_since'):
+            continue
+        try:
+            old = rec.get('seeded') or (
+                (now - datetime.fromisoformat(rec.get('onset'))).days >= L5_NOVELTY_DAYS)
+        except Exception:
+            old = False
+        if old:
+            out.add(th.split(':', 1)[-1])
+    return out
+
+
 def _apply_l5_novelty_gate(level, blufs):
     """Return (level, gate_info). Only ever LOWERS 5 -> 4; never raises,
     never touches anything below 5, never touches an L6 breach."""
@@ -4559,8 +4605,8 @@ def _apply_l5_novelty_gate(level, blufs):
     breach = _l6_breach_present(blufs)
     if breach:
         info['breach'] = breach
-        info['reason'] = ('L6 red-line breach present (%s) -- novelty gate bypassed; '
-                          'a breach is new escalation by definition.' % breach)
+        info['reason'] = ('Confirmed L6 event (%s) -- novelty gate bypassed; a world-altering '
+                          'event is new escalation by definition.' % breach)
         return level, info
 
     if info['fresh']:
@@ -4585,6 +4631,376 @@ def _apply_l5_novelty_gate(level, blufs):
     info['reason'] = info['summary']
     print(f"[GPI L5 gate] L5 -> L4 SUSTAINED: {info['summary'][:160]}")
     return 4, info
+
+
+# ============================================================
+# L6 DOCTRINE -- GLOBAL SHOCK  (v3.13.0, Oct 28 2026)
+# ============================================================
+# Rachel's ruling, Oct 28: L6 fires ONLY for an event so big that "the world
+# sits back and goes 'oh shit'" -- one that changes what happens at the UN and
+# how NATO responds. Never for tit-for-tat inside an ongoing war of escalation.
+# Until now, any tracker signal scored level 6 lit the global banner (Iraq did
+# on 4 Sep for a red-line breach that was part of the exchange). Tracker L6 is
+# now a CANDIDATE, not a verdict. Three tests, all required:
+#
+#   1. CLASS. The event belongs to a systemic class (L6_CLASSES below). WMD use
+#      excludes tests, drills, exercises and threats -- the DPRK tests
+#      constantly and none of it is L6. Mass casualty is scaled to the
+#      population (Oct 7 in Israel sits at the 9/11 bar; one van ramming does
+#      not). Invasion / blockade only counts against a theatre that was NOT
+#      already at sustained L5 -- a new state, not the next phase of a war.
+#   2. WORLD REACTION. Observed institutional response naming the event or the
+#      country: an emergency UN Security Council session, NATO Article 4/5, an
+#      emergency G7 / General Assembly session. The NATO class specifically
+#      needs Article 5 -- Article 4 consultations follow drone debris, and
+#      that is not a world-altering event.
+#   3. HOLD. A confirmed L6 holds the global index for L6_HOLD_DAYS (7). After
+#      that it is the new normal and goes through the L5 novelty gate like any
+#      other front. L6 marks the moment; it is not a permanent state.
+#
+# A tracker L6 that fails is DEMOTED to L5 inside the GPI only (the tracker's
+# own page keeps its reading), and the payload says why. Absence-honest: if the
+# reaction check cannot run, a candidate is reported as UNCONFIRMED, never as
+# confirmed and never as nothing.
+L6_HOLD_DAYS      = 7
+L6_EVENTS_KEY     = 'gpi:l6_events'
+L6_EVENTS_TTL     = 400 * 24 * 3600
+L6_REACTION_DAYS  = 3        # reaction must be this recent
+L6_LABEL          = 'GLOBAL SHOCK'
+
+# Event verbs that mean it HAPPENED. A class match also needs one of these.
+_L6_HAPPENED = (r'\b(?:struck|strikes?|attack(?:ed|s)?|hit|detonat\w*|explod\w*|used|'
+                r'deployed|released|fired|launched at|killed|assassinat\w*|seized|'
+                r'invad\w*|crossed into|blockad\w*|massacre\w*|bomb(?:ed|ing)s?|'
+                r'shot down|downed|clash(?:ed|es)?)\b')
+# HARD exclusions -- anywhere in the signal: it was a test, a drill, or history.
+# The DPRK tests constantly; none of it is L6.
+_L6_NOT_EVENT = (r'\b(?:test(?:s|ed|ing)?|test[- ]fir\w*|drills?|military exercises?|'
+                 r'exercises? (?:near|off|around)|simulat\w*|rehears\w*|wargam\w*|'
+                 r'hypothetical|scenario|anniversary|years? ago|commemorat\w*)\b')
+# SOFT exclusions -- only when they sit right before the event itself ("threatens
+# a nuclear strike", "could invade"). Anywhere else they are ordinary analysis
+# ("Tehran may retaliate") and must not veto a real event.
+_L6_HEDGE = (r'\b(?:threat(?:s|en\w*)?|warn(?:s|ed|ing)? (?:of|that)|could|would|might|may|'
+             r'if|plans? to|preparing to|vows? to|pledg\w* to|readiness to|prepared to|'
+             r'considering|option of|risk of|fears? of|capable of|able to carry|'
+             r'carrying|could carry|dual[- ]use)\b')
+
+
+def _l6_hedged(txt, span):
+    """True if hedging language sits in the 45 chars before the matched event."""
+    lo = max(0, span[0] - 45)
+    return bool(re.search(_L6_HEDGE, txt[lo:span[0] + 1]))
+
+_NUCLEAR_STATES = {
+    'us':       r'\b(?:united states|u\.s\.|us|american|pentagon|washington)\b',
+    'russia':   r'\b(?:russia|russian|moscow|kremlin)\b',
+    'china':    r'\b(?:china|chinese|pla|beijing)\b',
+    'uk':       r'\b(?:united kingdom|uk|britain|british)\b',
+    'france':   r'\b(?:france|french)\b',
+    'india':    r'\b(?:india|indian)\b',
+    'pakistan': r'\b(?:pakistan|pakistani)\b',
+    'dprk':     r'\b(?:north korea|north korean|dprk|pyongyang)\b',
+    'israel':   r'\b(?:israel|israeli|idf)\b',
+}
+# Adversarial pairs only. Two allies named in one story (a US-Israel joint
+# strike statement) is not a clash between nuclear states.
+_NUCLEAR_ADVERSARY_PAIRS = {
+    frozenset(p) for p in (('us', 'russia'), ('us', 'china'), ('us', 'dprk'),
+                           ('russia', 'uk'), ('russia', 'france'), ('china', 'india'),
+                           ('india', 'pakistan'), ('china', 'uk'), ('china', 'france'))
+}
+
+# Population in millions, for the mass-casualty scale. Approximate and
+# deliberately coarse -- the threshold is an order of magnitude, not a census.
+# A country missing here falls back to the absolute floor only (and says so).
+_POP_M = {
+    'israel': 9.9, 'palestine': 5.4, 'gaza': 2.1, 'west_bank': 3.3, 'lebanon': 5.8,
+    'syria': 24, 'jordan': 11.5, 'iraq': 46, 'iran': 90, 'yemen': 35,
+    'saudi_arabia': 35, 'uae': 10, 'qatar': 3, 'kuwait': 4.9, 'bahrain': 1.6,
+    'oman': 5.3, 'egypt': 115, 'turkey': 86, 'cyprus': 1.3, 'greece': 10.3,
+    'russia': 144, 'ukraine': 37, 'belarus': 9, 'moldova': 2.4, 'poland': 37,
+    'germany': 84, 'france': 68, 'uk': 69, 'united_kingdom': 69, 'spain': 48,
+    'italy': 59, 'netherlands': 18, 'belgium': 11.8, 'sweden': 10.5, 'finland': 5.6,
+    'norway': 5.5, 'denmark': 6, 'estonia': 1.4, 'latvia': 1.9, 'lithuania': 2.9,
+    'romania': 19, 'serbia': 6.6, 'kosovo': 1.7, 'armenia': 3, 'azerbaijan': 10,
+    'georgia': 3.7, 'kazakhstan': 20, 'afghanistan': 42, 'pakistan': 245,
+    'india': 1440, 'bangladesh': 173, 'china': 1410, 'taiwan': 23, 'japan': 124,
+    'south_korea': 52, 'north_korea': 26, 'philippines': 115, 'vietnam': 100,
+    'indonesia': 280, 'myanmar': 54, 'thailand': 72, 'australia': 27,
+    'us': 340, 'usa': 340, 'united_states': 340, 'canada': 41, 'mexico': 130,
+    'colombia': 53, 'venezuela': 28, 'brazil': 212, 'cuba': 11, 'haiti': 11.8,
+    'nigeria': 230, 'ethiopia': 130, 'sudan': 50, 'south_sudan': 11,
+    'somalia': 19, 'kenya': 56, 'drc': 110, 'mali': 23, 'burkina_faso': 23,
+    'niger': 27, 'chad': 19, 'libya': 7, 'algeria': 46, 'morocco': 38,
+    'tunisia': 12, 'mozambique': 34, 'south_africa': 63, 'uganda': 49,
+}
+# The bar, anchored on Rachel's two reference cases:
+#   9/11:  2,977 dead / 285M  ~ 10 per million
+#   Oct 7: ~1,200 dead / 9.8M ~ 122 per million
+# Either clears 10/M. A vehicle-ramming killing 10 in a country of 60M is 0.17/M.
+# The absolute floor stops a small number in a small country tripping the
+# per-capita test; the absolute ceiling catches a 1,000+ single attack anywhere.
+L6_MASS_CASUALTY_PER_MILLION = 10.0
+L6_MASS_CASUALTY_MIN_DEAD    = 250
+L6_MASS_CASUALTY_ANY_DEAD    = 1000
+
+_DEATH_RX = re.compile(
+    r'(?:(\d[\d,]{1,6})\s+(?:people\s+|civilians\s+|israelis\s+|americans\s+)?'
+    r'(?:killed|dead|murdered|slain|deaths)|death toll (?:of|at|rises to|reaches|climbs to)\s+(\d[\d,]{1,6}))')
+# Cumulative war tolls are not a single event.
+_CUMULATIVE_RX = re.compile(r'\b(?:since (?:the|october|the start|the war|fighting)|total|cumulative|'
+                            r'so far|to date|over the past|throughout|this year|in the war)\b')
+
+# (class_id, label, pattern that must match, extra test name)
+L6_CLASSES = [
+    # 'nuclear-capable', 'nuclear site', 'nuclear programme' never match: the
+    # Iran war produces those words daily and none of it is a weapon being used.
+    ('wmd_use', 'Weapon of mass destruction used',
+     r'\b(?:nuclear (?:weapon|bomb|strike|device|warhead|attack)|atomic bomb|radiological|'
+     r'dirty bomb|chemical (?:weapon|attack)|nerve agent|sarin|novichok|\bvx\b|mustard gas|'
+     r'chlorine (?:gas|attack)|biological (?:weapon|attack)|bioweapon|anthrax attack)\b', None),
+    ('nuclear_plant_release', 'Nuclear plant struck with radiological release',
+     r'\b(?:nuclear (?:power )?plant|reactor|zaporizhzhia|chernobyl|bushehr|dimona)\b.{0,80}'
+     r'\b(?:radiation (?:leak|release)|radiological release|meltdown|radioactive (?:leak|release|plume))\b', None),
+    ('nuclear_state_clash', 'Direct military clash between nuclear-armed adversaries', None, 'nuclear_pair'),
+    ('nato_attacked', 'Armed attack on NATO territory (Article 5)',
+     r'\b(?:nato (?:member|territory|ally)|article 5|article five)\b', None),
+    ('new_invasion', 'Invasion or blockade of a new state',
+     r'\b(?:full[- ]scale invasion|ground invasion|invaded|invasion of|naval blockade|blockade of|'
+     r'quarantine of taiwan|amphibious assault)\b', 'fresh_front'),
+    ('decapitation', 'Head of state or government killed',
+     r'\b(?:president|prime minister|supreme leader|head of state|king|chancellor|premier)\b.{0,60}'
+     r'\b(?:assassinated|killed in|was killed|killed by|dies in (?:an? )?(?:strike|attack|blast))\b', None),
+    ('nuclear_state_coup', 'Coup in a nuclear-armed state',
+     r'\b(?:coup|seized power|military takeover|junta takes)\b', 'nuclear_named'),
+    ('mass_casualty', 'Mass-casualty attack at national-trauma scale',
+     r'\b(?:attack|massacre|bombing|gunmen|militants|terror\w*|rampage|infiltrat\w*)\b', 'mass_casualty'),
+]
+
+# Institutional reaction phrases. ANY satisfies the general test; the NATO
+# class needs one of the article-5 phrases specifically.
+_REACTION_GENERAL = (r'\b(?:security council (?:emergency|urgent)|emergency (?:session|meeting) of the '
+                     r'(?:un )?security council|unsc (?:emergency|urgent)|security council (?:to )?meet|'
+                     r'emergency special session|general assembly emergency|article 4|article four|'
+                     r'article 5|article five|g7 (?:emergency|leaders)|emergency g7|nato emergency)\b')
+_REACTION_NATO = r'\b(?:article 5|article five)\b'
+_REACTION_FEEDS = (
+    'https://news.google.com/rss/search?q=%22Security+Council%22+emergency+when:3d&hl=en-US&gl=US&ceid=US:en',
+    'https://news.google.com/rss/search?q=NATO+%22Article+5%22+OR+%22Article+4%22+when:3d&hl=en-US&gl=US&ceid=US:en',
+    'https://news.google.com/rss/search?q=G7+emergency+statement+when:3d&hl=en-US&gl=US&ceid=US:en',
+)
+
+_LAST_L6 = {}
+
+
+def _l6_text(sig):
+    return ' '.join(str(sig.get(k) or '') for k in ('category', 'short_text', 'long_text', 'text')).lower()
+
+
+def _l6_country_key(sig, region=None):
+    th = str(sig.get('theatre') or '').strip().lower().replace(' ', '_').replace('-', '_')
+    if th in _POP_M:
+        return th
+    txt = _l6_text(sig)
+    for k in sorted(_POP_M, key=len, reverse=True):
+        if re.search(r'\b' + re.escape(k.replace('_', ' ')) + r'\b', txt):
+            return k
+    return th or (region or '')
+
+
+def _l6_mass_casualty(sig, txt):
+    """Return (passes, detail). Scaled to population, single event only."""
+    if _CUMULATIVE_RX.search(txt):
+        return False, 'casualty figure reads as a cumulative war toll, not a single event'
+    dead = 0
+    for m in _DEATH_RX.finditer(txt):
+        raw = m.group(1) or m.group(2)
+        try:
+            dead = max(dead, int(raw.replace(',', '')))
+        except Exception:
+            pass
+    if not dead:
+        return False, 'no casualty figure in the signal'
+    ck = _l6_country_key(sig)
+    pop = _POP_M.get(ck)
+    if dead >= L6_MASS_CASUALTY_ANY_DEAD:
+        return True, '%d killed (above the %d single-attack floor)' % (dead, L6_MASS_CASUALTY_ANY_DEAD)
+    if pop is None:
+        return False, ('%d killed; population for %s unknown, so only the %d absolute bar applies'
+                       % (dead, ck or 'theatre', L6_MASS_CASUALTY_ANY_DEAD))
+    per_m = dead / pop
+    if per_m >= L6_MASS_CASUALTY_PER_MILLION and dead >= L6_MASS_CASUALTY_MIN_DEAD:
+        return True, ('%d killed = %.0f per million in %s (9/11 was ~10/M, Oct 7 ~122/M)'
+                      % (dead, per_m, ck.replace('_', ' ').title(), ))
+    return False, ('%d killed = %.2f per million in %s -- a grave attack, below the national-trauma bar'
+                   % (dead, per_m, ck.replace('_', ' ').title()))
+
+
+def _l6_classify(sig, sustained_theatres):
+    """Return (class_id, label, detail) if the signal is a systemic-class EVENT, else (None, None, why)."""
+    txt = _l6_text(sig)
+    ev = re.search(_L6_HAPPENED, txt)
+    if not ev:
+        return None, None, 'no event verb -- reads as posture or rhetoric'
+    if re.search(_L6_NOT_EVENT, txt):
+        return None, None, 'test, drill, exercise or historical reference -- not an event'
+    for cid, label, pat, extra in L6_CLASSES:
+        m = re.search(pat, txt) if pat else None
+        if pat and not m:
+            continue
+        if _l6_hedged(txt, m.span() if m else ev.span()):
+            return None, None, 'hedged / threatened rather than reported as having happened'
+        if extra == 'nuclear_pair':
+            named = {k for k, rx in _NUCLEAR_STATES.items() if re.search(rx, txt)}
+            pairs = [p for p in _NUCLEAR_ADVERSARY_PAIRS if p <= named]
+            if not pairs:
+                continue
+            return cid, label, 'adversaries named: %s' % ', '.join(
+                ' vs '.join(sorted(p)) for p in pairs)
+        if extra == 'nuclear_named':
+            if not any(re.search(rx, txt) for rx in _NUCLEAR_STATES.values()):
+                continue
+        if extra == 'fresh_front':
+            th = str(sig.get('theatre') or '').strip().lower()
+            if th in sustained_theatres:
+                continue          # next phase of an existing war, not a new state
+        if extra == 'mass_casualty':
+            ok, why = _l6_mass_casualty(sig, txt)
+            if not ok:
+                return None, None, why
+            return cid, label, why
+        return cid, label, ''
+    return None, None, 'no systemic class matched'
+
+
+def _l6_fetch_reactions():
+    """Recent institutional-reaction headlines. Returns (list_of_lowercase_titles, ok).
+    Called ONLY when a class-passing candidate exists -- rare by design."""
+    titles, ok_any = [], False
+    try:
+        import xml.etree.ElementTree as ET
+    except Exception:
+        return [], False
+    for url in _REACTION_FEEDS:
+        try:
+            r = requests.get(url, timeout=8, headers={'User-Agent': 'AsifahAnalytics/1.0 (+https://asifahanalytics.com)'})
+            if r.status_code != 200:
+                continue
+            root = ET.fromstring(r.content)
+            for it in root.iter('item'):
+                t = (it.findtext('title') or '') + ' ' + (it.findtext('description') or '')
+                titles.append(t.lower())
+            ok_any = True
+        except Exception as e:
+            print(f'[GPI L6] reaction feed error: {str(e)[:100]}')
+    return titles, ok_any
+
+
+def _l6_reaction_for(sig, cid, reaction_pool):
+    """Find a reaction line that matches the class requirement AND names the
+    country / theatre (so a Security Council session on Sudan does not
+    confirm an attack in Kuwait)."""
+    need = _REACTION_NATO if cid == 'nato_attacked' else _REACTION_GENERAL
+    ck = _l6_country_key(sig).replace('_', ' ')
+    th = str(sig.get('theatre') or '').replace('_', ' ').lower()
+    names = {n for n in (ck, th) if n and len(n) > 2}
+    for line in reaction_pool:
+        if re.search(need, line) and any(re.search(r'\b' + re.escape(n) + r'\b', line) for n in names):
+            return line[:200]
+    return None
+
+
+def _evaluate_l6_doctrine(blufs, sustained_theatres, fetch_reactions=None):
+    """Classify every tracker L6 / systemic candidate, confirm or demote, and
+    maintain the 7-day hold. Mutates signal levels IN THE GPI'S COPY ONLY.
+    Returns the l6 info dict (also stored on _LAST_L6)."""
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    info = {'active': False, 'events': [], 'candidates': [], 'demoted': [],
+            'hold_days': L6_HOLD_DAYS, 'reaction_check': 'not_needed'}
+
+    # 1. Candidates: tracker L6 signals, plus L5 kinetic signals whose TEXT is
+    #    systemic class (a tracker that under-scores a nuclear detonation must
+    #    not be able to hide it).
+    cands = []
+    for region, bluf in (blufs or {}).items():
+        for s in _signals_of(bluf):
+            lvl = _safe_level(s.get('level', 0))
+            if lvl >= 6 or (lvl >= 5 and _infer_pressure_type(s) == PRESSURE_KINETIC):
+                cands.append((region, s, lvl))
+
+    passing = []
+    for region, s, lvl in cands:
+        cid, label, detail = _l6_classify(s, sustained_theatres)
+        if cid:
+            passing.append((region, s, lvl, cid, label, detail))
+        elif lvl >= 6:
+            s['level'] = 5
+            s['l6_demoted'] = True
+            s['l6_note'] = ('Scored L6 by its tracker; held at L5 in the GPI -- %s. '
+                            'Global L6 is reserved for world-altering events.' % detail)
+            info['demoted'].append({'theatre': s.get('theatre') or region,
+                                    'short_text': (s.get('short_text') or '')[:120],
+                                    'why': detail})
+
+    # 2. World reaction -- fetched only if something passed the class test.
+    reactions, reaction_ok = [], True
+    if passing:
+        fetcher = fetch_reactions or _l6_fetch_reactions
+        reactions, reaction_ok = fetcher()
+        info['reaction_check'] = 'ok' if reaction_ok else 'unavailable'
+
+    state, st_ok = _redis_get_checked(L6_EVENTS_KEY)
+    events = list((state or {}).get('events') or []) if isinstance(state, dict) else []
+
+    for region, s, lvl, cid, label, detail in passing:
+        th = str(s.get('theatre') or region)
+        rx = _l6_reaction_for(s, cid, reactions) if reaction_ok else None
+        cand = {'theatre': th, 'class': cid, 'class_label': label, 'detail': detail,
+                'short_text': (s.get('short_text') or '')[:140], 'tracker_level': lvl,
+                'reaction': rx}
+        if rx:
+            eid = '%s|%s' % (cid, th.lower())
+            if not any(e.get('id') == eid and e.get('confirmed_at') and
+                       (now - datetime.fromisoformat(e['confirmed_at'])).days < L6_HOLD_DAYS
+                       for e in events):
+                events.append({'id': eid, 'theatre': th, 'class': cid, 'class_label': label,
+                               'detail': detail, 'headline': cand['short_text'],
+                               'reaction': rx, 'confirmed_at': now_iso})
+                print(f'[GPI L6] CONFIRMED {label} -- {th}: {cand["short_text"][:100]}')
+            s['level'] = 6
+            s['l6_confirmed'] = True
+            cand['status'] = 'confirmed'
+        else:
+            cand['status'] = ('unconfirmed -- reaction check unavailable this cycle'
+                              if not reaction_ok else
+                              'unconfirmed -- no institutional reaction naming %s yet' % th)
+            if lvl >= 6:
+                s['level'] = 5
+                s['l6_demoted'] = True
+                s['l6_note'] = ('%s: systemic class, but %s. Held at L5 until the world '
+                                'visibly reacts.' % (label, cand['status']))
+        info['candidates'].append(cand)
+
+    # 3. The 7-day hold.
+    live = []
+    for e in events:
+        try:
+            age = (now - datetime.fromisoformat(e['confirmed_at'])).total_seconds() / 86400.0
+        except Exception:
+            continue
+        if age < L6_HOLD_DAYS:
+            e2 = dict(e, day=int(age), expires_in_days=max(0, int(L6_HOLD_DAYS - age)))
+            live.append(e2)
+    info['events'] = live
+    info['active'] = bool(live)
+    if st_ok:
+        keep = [e for e in events if (now - datetime.fromisoformat(e['confirmed_at'])).days < 365]
+        _redis_set(L6_EVENTS_KEY, {'events': keep[-50:]}, ttl=L6_EVENTS_TTL)
+    if info['demoted']:
+        print(f'[GPI L6] demoted {len(info["demoted"])} tracker L6 signal(s) to L5 (not world-altering)')
+    return info
 
 
 # ============================================================
@@ -5237,6 +5653,14 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
     # v3.12.0 -- when the novelty gate holds the index at L4, say WHY in the
     # same breath. "L4 -- COERCION" over a live war would be false.
     _gate = _LAST_LEVEL_GATE or {}
+    _l6 = _LAST_L6 or {}
+    if _l6.get('active'):
+        _e = sorted(_l6.get('events') or [], key=lambda x: x.get('confirmed_at', ''))[-1]
+        parts.append(f"Global level: L6 -- {L6_LABEL}. {_e.get('class_label', '')} "
+                     f"({str(_e.get('theatre', '')).replace('_', ' ').title()}), confirmed by "
+                     f"institutional reaction; day {_e.get('day', 0)} of a {L6_HOLD_DAYS}-day hold, "
+                     f"after which the novelty gate re-assesses.")
+        return ' '.join(parts)
     if _gate.get('applied'):
         parts.append(f"Global level: L{global_level} -- {SUSTAINED_LABEL}. {_gate.get('summary', '')}")
     else:
@@ -5682,6 +6106,16 @@ def build_gpi(force=False):
             narratives = _tier_narratives(narratives)
         except Exception as _tier_err:
             print(f'[GPI tiers] skipped (non-fatal): {str(_tier_err)[:120]}')
+        # v3.13.0 -- L6 doctrine runs FIRST: it demotes tracker L6 signals that
+        # are not world-altering, so neither the level, the gate's breach bypass
+        # nor the banner ever sees an unqualified L6.
+        global _LAST_L6
+        try:
+            _LAST_L6 = _evaluate_l6_doctrine(blufs, _sustained_theatres_snapshot())
+        except Exception as _l6_err:
+            _LAST_L6 = {'active': False, 'events': [], 'candidates': [], 'demoted': [],
+                        'error': str(_l6_err)[:160]}
+            print(f'[GPI L6] doctrine error (non-fatal, nothing promoted): {str(_l6_err)[:160]}')
         global_level  = _compute_global_level(blufs, narratives)
         # v3.12.0 -- severity vs motion. Only ever lowers 5 -> 4.
         global _LAST_LEVEL_GATE
@@ -5692,7 +6126,12 @@ def build_gpi(force=False):
             _LAST_LEVEL_GATE = {'available': False, 'applied': False,
                                 'reason': 'Novelty gate error -- level shown ungated.'}
             print(f'[GPI L5 gate] error (non-fatal, ungated): {str(_gate_err)[:160]}')
-        if _LAST_LEVEL_GATE.get('applied'):
+        if _LAST_L6.get('active'):
+            # A confirmed world-altering event holds the index at L6 for 7 days.
+            global_level = 6
+            global_label = GLOBAL_LEVEL_LABELS[6]
+            global_color = GLOBAL_LEVEL_COLORS[6]
+        elif _LAST_LEVEL_GATE.get('applied'):
             global_label = SUSTAINED_LABEL
             global_color = SUSTAINED_COLOR
         else:
@@ -5754,6 +6193,10 @@ def build_gpi(force=False):
             # fronts, day counts, breach bypass). The page renders this under
             # the badge; it is the honesty line for a held L4.
             'level_gate':      _LAST_LEVEL_GATE,
+            # v3.13.0 -- L6 doctrine: confirmed events (7-day hold), candidates
+            # that passed the class test but lack world reaction, and tracker
+            # L6 signals demoted to L5 with the reason.
+            'l6':              _LAST_L6,
             'narrative_tiers': {
                 'topline':  sum(1 for n in narratives if n.get('tier') != 'standing'),
                 'standing': sum(1 for n in narratives if n.get('tier') == 'standing'),
@@ -5818,6 +6261,8 @@ def build_gpi(force=False):
             'global_color':  global_color,
             'level_gate':    {k: _LAST_LEVEL_GATE.get(k) for k in
                               ('applied', 'summary', 'reason', 'available')},
+            'l6':            {'active': _LAST_L6.get('active', False),
+                              'events': _LAST_L6.get('events', [])},
             'generated_at':  result['generated_at'],
             'headline':      _headline_signal(result),
             'motion':        _motion_line(result),
