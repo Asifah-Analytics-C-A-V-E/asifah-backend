@@ -439,7 +439,11 @@ THEATRE_STATE = {
         3: 'standoff hardening',
         4: 'armed incident',
         5: 'active war footing',
-        6: 'red line breached',
+        # v3.13.0 -- on the GPI a kinetic L6 exists only as a CONFIRMED global
+        # shock (tracker red-line breaches are demoted to L5), so the phrase
+        # says what that is. Country pages keep 'red line breached' via the
+        # shared shell / theatre_state.py, where L6 still means exactly that.
+        6: 'world-altering escalation',
     },
     'humanitarian': {
         0: 'quiet',
