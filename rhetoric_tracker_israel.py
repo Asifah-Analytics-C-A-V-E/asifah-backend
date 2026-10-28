@@ -2311,6 +2311,25 @@ RHETORIC_RSS_FEEDS += [
     ('https://news.google.com/rss/search?q=%D8%AA%D8%B4%D9%83%D9%8A%D9%84+%D8%A7%D9%84%D8%AD%D9%83%D9%88%D9%85%D8%A9+%D8%A7%D9%84%D8%A5%D8%B3%D8%B1%D8%A7%D8%A6%D9%8A%D9%84%D9%8A%D8%A9&hl=ar&gl=SA&ceid=SA:ar', 1.0),
 ]
 
+# v1.2.4 -- ARAB-PARTY COVERAGE, Hebrew and Arabic. The Saudi-edition Arabic
+# feed above reads Gulf framing of the Israeli election; Ra'am and Joint List
+# positions surface first in the Arab-Israeli press (Arab48, Panet) and in
+# Hebrew political reporting. Built with urlencode, not hand-escaped, so the
+# Hebrew/Arabic queries cannot be mis-typed.
+def _gn(q, hl, gl, ceid):
+    return ('https://news.google.com/rss/search?' +
+            urllib.parse.urlencode({'q': q, 'hl': hl, 'gl': gl, 'ceid': ceid}, safe=':'))
+
+RHETORIC_RSS_FEEDS += [
+    (_gn('רע"ם עבאס קואליציה', 'iw', 'IL', 'IL:iw'), 1.2),
+    (_gn('הרשימה המשותפת קואליציה', 'iw', 'IL', 'IL:iw'), 1.2),
+    (_gn('המפלגות הערביות ממשלה איזנקוט', 'iw', 'IL', 'IL:iw'), 1.1),
+    (_gn('منصور عباس الائتلاف', 'ar', 'EG', 'EG:ar'), 1.2),
+    (_gn('القائمة المشتركة الحكومة الكنيست', 'ar', 'EG', 'EG:ar'), 1.2),
+    (_gn('site:arab48.com الكنيست الحكومة', 'ar', 'EG', 'EG:ar'), 1.2),
+    (_gn('site:panet.co.il الائتلاف الحكومة', 'ar', 'EG', 'EG:ar'), 1.1),
+]
+
 # NITTER -- RETIRED 18 Oct 2026. Every public mirror (poast.org, privacydev.net,
 # woodland.cafe) has been dead since X closed guest access; each scan spent
 # accounts x 3 mirrors x 8s timeouts for zero posts. Removed, not disabled --
@@ -2916,6 +2935,11 @@ FORMATION_SCOPE = [
     'joint list', 'mansour abbas', 'bennett', 'lapid', 'golan',
     'קואליציה', 'כנסת', 'ממשלה', 'בחירות', 'הרצוג', 'מנדט', 'איזנקוט', 'נתניהו',
     'ائتلاف', 'الكنيست', 'الحكومة الإسرائيلية', 'انتخابات', 'نتنياهو', 'آيزنكوت',
+    # v1.2.4 -- the Arab parties are the arithmetic hinge, and their positions
+    # break first in Hebrew and Arabic. Party and leader names in both.
+    'רע"ם', 'הרשימה המשותפת', 'המפלגות הערביות', 'מנסור עבאס', 'עבאס', 'טיבי', 'חד"ש', 'בל"ד',
+    'القائمة الموحدة', 'القائمة العربية الموحدة', 'القائمة المشتركة', 'منصور عباس',
+    'الطيبي', 'الجبهة', 'التجمع', 'الأحزاب العربية', 'الموحدة', 'المشتركة',
 ]
 
 # Words that make a 'negotiating' or 'committed' hit about coalition-building
@@ -2941,12 +2965,17 @@ PATH_SEAT_ROW = {'A': 'A', 'B1': 'B', 'B2': 'B', 'C': 'C', 'D': None}
 
 PATH_LEXICON = {
     'A': {
+        # v1.2.3 -- PURSUIT language only. Bare bloc names ('Netanyahu bloc',
+        # 'seats short') were dropped: they appear in every results headline
+        # ("Netanyahu bloc leads with 54 seats") and made the press reporting
+        # the COUNT look like someone pursuing the PATH.
         'discussed': [
-            'netanyahu bloc', 'right-wing government', 'narrow government', 'defector',
-            'defectors', 'defect to', 'poach', 'join netanyahu', 'netanyahu needs',
-            'seats short', 'missing seats',
-            'גוש נתניהו', 'ממשלת ימין', 'עריקים', 'ערוק', 'להצטרף לנתניהו',
-            'كتلة نتنياهو', 'حكومة يمينية',
+            'netanyahu seeks', 'netanyahu searches', 'seeking defectors', 'defectors',
+            'defect to likud', 'defect to the netanyahu', 'poach', 'lure', 'join netanyahu',
+            'join a netanyahu government', 'narrow right-wing government',
+            'netanyahu courts', 'bring in a partner', 'netanyahu eyes',
+            'עריקים', 'ערוק', 'לפתות', 'להצטרף לנתניהו', 'ממשלת ימין צרה', 'נתניהו מחפש',
+            'نتنياهو يسعى', 'منشقين',
         ],
         'negotiating': [
             'likud negotiators', 'talks with likud', 'likud talks', 'netanyahu met with',
@@ -2966,7 +2995,9 @@ PATH_LEXICON = {
             'arab party in the coalition', 'arab parties in the coalition', 'arab ministers',
             'arab minister', 'join the coalition', 'inside the coalition', 'part of the government',
             'רע"ם בקואליציה', 'מפלגה ערבית בקואליציה', 'שרים ערבים', 'ערבים בממשלה',
+            'המפלגות הערביות בקואליציה', 'רע"ם תצטרף', 'הרשימה המשותפת תצטרף',
             'المشاركة في الائتلاف', 'الانضمام إلى الحكومة', 'وزراء عرب',
+            'المشاركة في الحكومة', 'دخول الائتلاف', 'الانضمام للائتلاف', 'حكومة التغيير',
         ],
         'negotiating': [
             "ra'am talks", 'raam talks', 'talks with abbas', 'abbas met', 'met with abbas',
@@ -2986,8 +3017,9 @@ PATH_LEXICON = {
             'outside support', 'external support', 'support from outside', 'blocking majority',
             'support without joining', 'without joining the government', 'safety net',
             'confidence and supply', 'rabin model', 'abstain in the confidence vote',
-            'גוש חוסם', 'תמיכה מבחוץ', 'רשת ביטחון', 'בלי להצטרף לממשלה',
+            'גוש חוסם', 'תמיכה מבחוץ', 'רשת ביטחון', 'בלי להצטרף לממשלה', 'תמיכה מחוץ לקואליציה',
             'دعم من الخارج', 'الجسم المانع', 'شبكة أمان', 'دون الانضمام إلى الحكومة',
+            'دعم من خارج الائتلاف', 'كتلة مانعة', 'دعم الحكومة من الخارج',
         ],
         'negotiating': [
             'talks on outside support', 'negotiating outside support', 'support in exchange for',
@@ -3022,12 +3054,15 @@ PATH_LEXICON = {
         ],
     },
     'D': {
+        # v1.2.3 -- REPEAT-ELECTION language only. 'Deadlock', 'stalemate' and
+        # 'impasse' were dropped: they describe the RESULT (no bloc at 61),
+        # which is true of every path on day 0, not Path D being pursued.
         'discussed': [
             'third election', 'another election', 'repeat election', 'new elections',
-            'back to the polls', 'return to the polls', 'deadlock', 'stalemate', 'impasse',
-            'no one can form', 'political paralysis',
-            'בחירות חוזרות', 'סבב בחירות נוסף', 'מבוי סתום', 'פלונטר', 'שיתוק פוליטי',
-            'انتخابات جديدة', 'طريق مسدود', 'جمود سياسي',
+            'back to the polls', 'return to the polls', 'snap election again',
+            'heading to another election', 'fresh elections',
+            'בחירות חוזרות', 'סבב בחירות נוסף', 'הולכים לבחירות', 'בחירות נוספות',
+            'انتخابات جديدة', 'انتخابات أخرى', 'العودة إلى صناديق الاقتراع',
         ],
         'negotiating': [
             'mandate returned', 'returned the mandate', 'failed to form', 'unable to form',
@@ -3057,18 +3092,21 @@ FORMATION_STANCES = [
     {'id': 'liberman_no_arab', 'actor': 'Liberman', 'effect': 'blocks', 'paths': ['B1', 'B2'],
      'kw': ['liberman rules out', 'liberman will not sit with', 'liberman refuses to rely',
             'liberman rejects reliance', 'yisrael beytenu will not rely', 'liberman: no government with',
-            'ליברמן שולל', 'ליברמן לא ישב עם']},
+            'ליברמן שולל', 'ליברמן לא ישב עם', 'ליברמן: לא נשען על', 'ליברמן נגד המפלגות הערביות',
+            'ليبرمان يرفض']},
     {'id': 'liberman_open_support', 'actor': 'Liberman', 'effect': 'enables', 'paths': ['B2'],
      'kw': ['liberman open to outside support', 'liberman would accept outside support',
             'liberman does not rule out', 'ליברמן לא שולל']},
     {'id': 'joint_no_join', 'actor': 'Joint List', 'effect': 'blocks', 'paths': ['B1'],
      'kw': ['joint list will not join', 'joint list rules out joining', 'will not join a zionist government',
             'will not join any zionist government', 'hadash rules out joining',
-            'הרשימה המשותפת לא תצטרף', 'القائمة المشتركة لن تنضم']},
+            'הרשימה המשותפת לא תצטרף', 'לא נצטרף לממשלה ציונית',
+            'القائمة المشتركة لن تنضم', 'لن ننضم إلى حكومة صهيونية', 'لن نكون جزءا من الحكومة']},
     {'id': 'raam_ready', 'actor': "Ra'am / Abbas", 'effect': 'enables', 'paths': ['B1', 'B2'],
      'kw': ['abbas ready to join', 'abbas open to joining', "ra'am ready", 'raam ready', "ra'am willing",
             'raam willing', 'abbas willing',
-            'עבאס מוכן', 'רע"ם מוכנה', 'منصور عباس مستعد', 'القائمة الموحدة مستعدة']},
+            'עבאס מוכן', 'רע"ם מוכנה', 'עבאס לא שולל',
+            'منصور عباس مستعد', 'القائمة الموحدة مستعدة', 'عباس لا يستبعد', 'مستعدون للمشاركة']},
     {'id': 'opposition_no_netanyahu', 'actor': 'Opposition leaders', 'effect': 'blocks', 'paths': ['A'],
      'kw': ['will not join a netanyahu government', 'rules out joining netanyahu', 'will not sit in a netanyahu',
             'refuses to join netanyahu', 'לא נצטרף לממשלת נתניהו', 'לא נשב בממשלת נתניהו']},
@@ -3094,9 +3132,42 @@ def _formation_blob(a):
     return ((a.get('title') or '') + ' ' + (a.get('description') or ''))
 
 
+# v1.2.4 -- SCRIPT NORMALISATION. Hebrew and Arabic have no case, so .lower()
+# does nothing for them; the real misses are orthographic:
+#   Hebrew  gershayim U+05F4 (רע״ם) vs ASCII quote (רע"ם); geresh U+05F3 vs '
+#   Arabic  alef variants (أ إ آ -> ا), ta marbuta (ة -> ه), alef maqsura (ى -> ي),
+#           tatweel and short-vowel marks stripped
+# Applied to BOTH the text and the keyword, so a keyword list written one way
+# still matches a headline written the other.
+_AR_DIACRITICS = dict.fromkeys(range(0x064B, 0x0653), None)
+_AR_DIACRITICS[0x0640] = None   # tatweel
+
+
+def _formation_norm(t):
+    t = (t or '').lower()
+    t = t.replace('\u05f4', '"').replace('\u05f3', "'")
+    t = t.replace('\u201c', '"').replace('\u201d', '"').replace('\u2019', "'")
+    t = t.translate(_AR_DIACRITICS)
+    for a, b in (('أ', 'ا'), ('إ', 'ا'), ('آ', 'ا'), ('ة', 'ه'), ('ى', 'ي')):
+        t = t.replace(a, b)
+    return t
+
+
+def _formation_lang(raw):
+    """Script of an item: 'he', 'ar' or 'en'. Measured, so the panel can show
+    whether Hebrew and Arabic coverage is actually arriving."""
+    he = sum(1 for ch in raw if '\u0590' <= ch <= '\u05ff')
+    ar = sum(1 for ch in raw if '\u0600' <= ch <= '\u06ff')
+    if he >= 3 and he >= ar:
+        return 'he'
+    if ar >= 3:
+        return 'ar'
+    return 'en'
+
+
 def _formation_hit(raw, kws):
-    low = raw.lower()
-    return [k for k in kws if k.lower() in low]
+    low = _formation_norm(raw)
+    return [k for k in kws if _formation_norm(k) in low]
 
 
 def _pick_fragments(ctx, library):
@@ -3277,6 +3348,9 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
 
     scoped = [a for a in (articles or [])
               if _formation_hit(_formation_blob(a), FORMATION_SCOPE)]
+    _lang_counts = {'en': 0, 'he': 0, 'ar': 0}
+    for _a in scoped:
+        _lang_counts[_formation_lang(_formation_blob(_a))] += 1
 
     paths = {}
     fh_total = cm_total = 0
@@ -3399,6 +3473,7 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
         'watch_list': watch,
         'context': {k: ctx[k] for k in ('iran_level', 'us_deviations', 'us_pressure_evidence',
                                         'market_evidence', 'turnout_evidence')},
+        'by_language': _lang_counts,
         'corpus': {'in_scope': len(scoped), 'firsthand': fh_total, 'commentary': cm_total,
                    'commentary_share': round(cm_total / total, 2) if total else 0.0},
         'state_ladder': _FORMATION_STATE_ORDER,
@@ -3779,7 +3854,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.2.2-israel-formation',
+        'version': '1.2.4-israel-formation',
     }
 
     # Cache
@@ -4014,7 +4089,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.2.2-israel-formation',
+            'version': '1.2.4-israel-formation',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])
