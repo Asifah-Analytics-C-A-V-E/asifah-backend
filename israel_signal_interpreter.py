@@ -1018,7 +1018,7 @@ def interpret_signals(scan_data):
                 'highest_severity': max((r['severity'] for r in red_lines), default=0),
             },
             'historical_matches':  historical,
-            'interpreter_version': '1.2.0',
+            'interpreter_version': '1.2.1',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
 
@@ -1519,7 +1519,17 @@ def build_top_signals(scan_data):
     # ── 13. Diplomatic active (cross-theater off-ramps) ─────────────
     if dipl_active:
         n_theaters = len(theaters_in_dipl)
-        theater_list = ', '.join(theaters_in_dipl[:3]).title() if theaters_in_dipl else 'multiple'
+        # v1.2.1 -- theaters_in_diplomacy is a list of DICTS (rhetoric tracker
+        # v1.1), not strings. ', '.join() on dicts raised TypeError, which made
+        # the WHOLE emitter fail and Israel ship zero top_signals to the ME BLUF
+        # and GPI whenever any diplomatic track was active.
+        _names = []
+        for _t in theaters_in_dipl[:3]:
+            if isinstance(_t, dict):
+                _names.append(str(_t.get('theater_display') or _t.get('theater') or '?'))
+            else:
+                _names.append(str(_t))
+        theater_list = ', '.join(_names).title() if _names else 'multiple'
         signals.append({
             'priority':   8,
             'category':   'diplomatic_active',

@@ -2918,6 +2918,16 @@ FORMATION_SCOPE = [
     'ائتلاف', 'الكنيست', 'الحكومة الإسرائيلية', 'انتخابات', 'نتنياهو', 'آيزنكوت',
 ]
 
+# Words that make a 'negotiating' or 'committed' hit about coalition-building
+# rather than about anything else the same people do in a week.
+FORMATION_TALKS_CONTEXT = [
+    'coalition', 'join the government', 'join a government', 'join his government',
+    'form a government', 'forming a government', 'ministry', 'portfolio', 'cabinet post',
+    'mandate', 'negotiat', 'partner', 'support the government', 'confidence vote',
+    'קואליציה', 'להצטרף לממשלה', 'הרכבת הממשלה', 'משא ומתן', 'תיק', 'מנדט',
+    'الائتلاف', 'تشكيل الحكومة', 'الانضمام إلى الحكومة', 'مفاوضات', 'حقيبة',
+]
+
 PATH_LABELS = {
     'A':  'Netanyahu bloc + new partner(s)',
     'B1': 'Opposition bloc, Arab parties inside the coalition',
@@ -3276,6 +3286,12 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
         for a in scoped:
             raw = _formation_blob(a)
             levels = [lvl for lvl in ('committed', 'negotiating', 'discussed') if _formation_hit(raw, lex[lvl])]
+            # v1.2.1 -- 'negotiating' / 'committed' need COALITION context in the
+            # same item. "Netanyahu meets" also describes a meeting with a foreign
+            # leader; only coalition-framed meetings are formation evidence.
+            if levels and levels[0] in ('negotiating', 'committed') and \
+                    not _formation_hit(raw, FORMATION_TALKS_CONTEXT):
+                levels = ['discussed'] if 'discussed' in levels else []
             if not levels:
                 continue
             top = levels[0]
@@ -3763,7 +3779,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.2.1-israel-formation',
+        'version': '1.2.2-israel-formation',
     }
 
     # Cache
@@ -3998,7 +4014,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.2.1-israel-formation',
+            'version': '1.2.2-israel-formation',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])
