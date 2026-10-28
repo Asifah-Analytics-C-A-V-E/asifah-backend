@@ -63,37 +63,62 @@ TASE_API_KEY  = os.environ.get('TASE_API_KEY')         # TASE Data Hub — indic
 REDIS_CACHE_KEY = 'israel_cache'
 CACHE_TTL_SECONDS = 4 * 60 * 60  # 4 hours
 
-# Political figures — status is semi-static, updated via news scan heuristics
+# Political figures — status is semi-static, updated via news scan heuristics.
+# Date-stamped so the page can flag the grid as due for review once it ages.
+POLITICAL_FIGURES_REVIEWED = '2026-10-28'
 POLITICAL_FIGURES = {
     'netanyahu': {
         'name': 'Benjamin Netanyahu',
-        'title': 'Prime Minister',
+        'title': 'Prime Minister (caretaker until a new government is sworn in)',
         'party': 'Likud',
         'flag': '🇮🇱',
         'icon': '🏛️',
-        'status': 'ACTIVE',
-        'status_color': '#4ade80',
-        'note': 'On trial (bribery/fraud); coalition dependent on far-right'
+        'status': 'CARETAKER',
+        'status_color': '#fb923c',
+        'note': 'Likud largest party; bloc short of 61. On trial (bribery/fraud)'
     },
     'bennett': {
         'name': 'Naftali Bennett',
-        'title': 'Former PM / Opposition',
-        'party': 'New Right (ind.)',
+        'title': "B'Yachad co-leader (with Lapid)",
+        'party': "B'Yachad",
         'flag': '🇮🇱',
         'icon': '🌟',
-        'status': 'WATCHING',
+        'status': 'OPPOSITION',
         'status_color': '#facc15',
-        'note': 'Dark horse PM candidate; vocal critic of war management'
+        'note': 'Former PM; part of the Eisenkot-led opposition bloc'
     },
-    'gallant': {
-        'name': 'Yoav Gallant',
-        'title': 'Former Defense Minister',
-        'party': 'Likud (dismissed Nov 2024)',
+    # v2.4.0 (Oct 28 2026) -- Gallant retired from the grid (out of office since
+    # Nov 2024). The three figures below are the post-election swing points:
+    # the challenger, the Path-B hinge, and the Arab kingmaker.
+    'eisenkot': {
+        'name': 'Gadi Eisenkot',
+        'title': 'Yashar leader / opposition bloc',
+        'party': 'Yashar',
         'flag': '🇮🇱',
-        'icon': '⚔️',
-        'status': 'DISMISSED',
-        'status_color': '#fb923c',
-        'note': 'Dismissed Nov 2024 over hostage/ceasefire disagreements'
+        'icon': '🎖️',
+        'status': 'CHALLENGER',
+        'status_color': '#a78bfa',
+        'note': 'Has ruled out serving under Netanyahu, including in a rotation'
+    },
+    'liberman': {
+        'name': 'Avigdor Liberman',
+        'title': 'Yisrael Beytenu leader',
+        'party': 'Yisrael Beytenu',
+        'flag': '🇮🇱',
+        'icon': '⚖️',
+        'status': 'SWING',
+        'status_color': '#facc15',
+        'note': 'Opposition bloc; his seats decide whether Path B clears 61'
+    },
+    'abbas': {
+        'name': 'Mansour Abbas',
+        'title': "Ra'am leader",
+        'party': "Ra'am",
+        'flag': '🇮🇱',
+        'icon': '🗝️',
+        'status': 'KINGMAKER',
+        'status_color': '#22c55e',
+        'note': 'Only Arab party leader to have joined a governing coalition (2021)'
     },
     'smotrich': {
         'name': 'Bezalel Smotrich',
@@ -1581,13 +1606,20 @@ FREEZE_STATES = {'dissolution', 'campaign', 'voted', 'formation'}
 PARTIAL_FREEZE_STATES = {'coalition_crisis'}
 
 ELECTION_STATE_TRIGGERS = {
+    # v2.4.0 -- 'formed' now requires the swearing-in / confidence vote itself.
+    # 'new israeli government' and 'coalition deal reached' were removed: both
+    # appear in SPECULATIVE coverage ("a new Israeli government could...") and
+    # would end the freeze weeks early. A signed coalition agreement precedes
+    # the Knesset vote, so it is formation, not formed.
     'formed': [
-        'new government sworn in', 'government sworn in', 'coalition agreement signed',
-        'cabinet sworn in', 'new israeli government', 'coalition deal reached',
-        'government formed israel',
-        'ממשלה חדשה הושבעה', 'הסכם קואליציוני נחתם',
+        'new government sworn in', 'government sworn in', 'cabinet sworn in',
+        'government was sworn in', 'won a confidence vote', 'wins confidence vote',
+        'knesset approved the new government', 'knesset approves new government',
+        'ממשלה חדשה הושבעה', 'הממשלה הושבעה', 'הכנסת אישרה את הממשלה',
+        'أدت الحكومة الإسرائيلية الجديدة اليمين',
     ],
     'formation': [
+        'coalition agreement signed', 'coalition deal reached', 'coalition deal signed',
         'tasked with forming', 'mandate to form a government', 'coalition talks',
         'coalition negotiations', 'president tasks', 'forming a government',
         'mandate extended', 'coalition talks stall', 'unable to form',
@@ -1618,6 +1650,69 @@ ELECTION_STATE_TRIGGERS = {
 }
 
 ELECTION_STATE_KEY = 'israel:election_cycle:state'
+
+# ── v2.4.0 (Oct 28 2026) TRANSITION RULES ───────────────────────────────────
+# The cycle runs FORWARD. v2.3 let any detected stage overwrite the stored one,
+# so a single scan in which formation coverage happened to say "coalition
+# crisis" dropped the machine back a stage and reset the day counter. These are
+# the only backward moves the real cycle makes:
+#   formation -> dissolution / campaign   (formation failed: repeat election)
+#   formed    -> coalition_crisis / dissolution   (the new government wobbles)
+BACKWARD_TRANSITIONS_ALLOWED = {
+    ('formation', 'dissolution'), ('formation', 'campaign'),
+    ('formed', 'coalition_crisis'), ('formed', 'dissolution'),
+}
+# 'formed' ends the freeze, and a backward move rewrites the cycle, so both need
+# corroboration: one stray headline must not do either.
+FORMED_MIN_HITS = 2
+BACKWARD_MIN_HITS = 2
+# A brand-new government is not "in crisis" because a profile piece says the
+# word. Regression out of 'formed' waits at least this long.
+MIN_DAYS_FORMED_BEFORE_REGRESSION = 14
+
+# ── POST-FORMATION OFF-RAMP (Rachel, Oct 28 2026) ───────────────────────────
+# After a government is sworn in, the page does not snap straight back to
+# "normal". Three phases, all derived from formed_at, none hardcoded to a date:
+#   headline   days 0-30   : "new government" leads the page
+#   alignment  days 31-100 : is the government doing what it said it would?
+#   normal     day 100+    : ordinary leadership cards
+NEW_GOVT_HEADLINE_DAYS = 30
+ALIGNMENT_WINDOW_DAYS = 100
+
+
+def _post_formation_phase(days_since_formed):
+    if days_since_formed is None:
+        return None
+    if days_since_formed <= NEW_GOVT_HEADLINE_DAYS:
+        return 'headline'
+    if days_since_formed <= ALIGNMENT_WINDOW_DAYS:
+        return 'alignment'
+    return 'normal'
+
+
+def _transition_allowed(prior_state, new_state, hits, prior_days_in_state):
+    """Return (allowed, reason). Pure function so it can be tested offline."""
+    if not prior_state or prior_state == new_state:
+        return True, 'no prior state'
+    order = ELECTION_STATES
+    if new_state not in order or prior_state not in order:
+        return False, 'unknown state'
+    n = hits.get(new_state, 0)
+    if new_state == 'formed':
+        if prior_state not in ('voted', 'formation'):
+            return False, 'formed only reachable from voted/formation'
+        if n < FORMED_MIN_HITS:
+            return False, 'formed needs %d corroborating items, saw %d' % (FORMED_MIN_HITS, n)
+        return True, 'formed corroborated'
+    if order.index(new_state) > order.index(prior_state):
+        return True, 'forward'
+    if (prior_state, new_state) in BACKWARD_TRANSITIONS_ALLOWED:
+        if n < BACKWARD_MIN_HITS:
+            return False, 'backward move needs %d items, saw %d' % (BACKWARD_MIN_HITS, n)
+        if prior_state == 'formed' and prior_days_in_state < MIN_DAYS_FORMED_BEFORE_REGRESSION:
+            return False, 'government too new to regress (%dd)' % prior_days_in_state
+        return True, 'allowed backward move'
+    return False, 'backward move not permitted (%s -> %s)' % (prior_state, new_state)
 
 
 def _detect_election_state(articles):
@@ -1652,17 +1747,90 @@ def _detect_election_state(articles):
 
     # PERSISTENCE, and the reason for it: absence of election reporting is not
     # evidence the cycle ended. Only a NEW detected stage advances the machine.
-    if detected and detected != prior_state:
-        state, since, changed = detected, now.isoformat(), True
+    #
+    # v2.4.0 -- and only an ALLOWED one. Candidates are tried latest-first; the
+    # first that passes _transition_allowed() wins. So a lone 'sworn in'
+    # headline that fails corroboration does not hide genuine formation
+    # coverage underneath it.
+    # ONE-TIME REPAIR (v2.4.0). The v2.3 'formed' triggers fired on speculative
+    # coverage, so a stored 'formed' WITHOUT a formed_at field (v2.3 never wrote
+    # one) is untrustworthy. If the configured election is recent, treat it as
+    # a false positive and re-anchor at 'voted'. Self-retiring: every state
+    # written by v2.4 carries formed_at when it is genuinely 'formed'.
+    try:
+        _ed = datetime.fromisoformat(ELECTION_RESULTS['election_date']).replace(tzinfo=timezone.utc)
+        if (prior_state == 'formed' and not prior.get('formed_at')
+                and timedelta(0) <= (now - _ed) <= timedelta(days=60)):
+            print('[Israel Election] Discarding v2.3 formed state without formed_at '
+                  '(likely speculative-coverage false positive); re-anchoring to voted.')
+            prior_state, prior_since = 'voted', _ed.isoformat()
+            prior = dict(prior, state='voted', since=prior_since)
+    except Exception:
+        pass
+
+    try:
+        prior_days = (now - datetime.fromisoformat(prior_since)).days if prior_since else 0
+    except Exception:
+        prior_days = 0
+
+    accepted, blocked = None, []
+    for cand in reversed(ELECTION_STATES):
+        if cand == 'stable' or cand not in hits or cand == prior_state:
+            continue
+        ok, why = _transition_allowed(prior_state, cand, hits, prior_days)
+        if ok:
+            accepted = cand
+            break
+        blocked.append({'candidate': cand, 'reason': why})
+
+    # ANCHOR FROM THE RESULTS CONFIG. A vote that has been held and counted is a
+    # fact, not a keyword. If the machine is still upstream of 'voted' once the
+    # configured election date has passed, it moves to 'voted' dated FROM the
+    # election day -- so the day counter is right even if the first scan after
+    # the vote ran late.
+    try:
+        _edate = datetime.fromisoformat(ELECTION_RESULTS['election_date']).replace(tzinfo=timezone.utc)
+        _upstream = (prior_state in (None, 'stable', 'coalition_crisis', 'dissolution', 'campaign'))
+        # One-shot per election: once this election has been anchored (or the
+        # machine has reached voted/formation/formed on its own), a later
+        # dissolution is a NEW cycle and must not be pulled back to 'voted'.
+        _already = prior.get('anchored_election') == ELECTION_RESULTS['election_date']
+        if (_edate <= now and _upstream and not _already
+                and accepted in (None, 'coalition_crisis', 'dissolution', 'campaign')):
+            accepted = 'voted'
+            anchored_since = _edate.isoformat()
+        else:
+            anchored_since = None
+    except Exception:
+        anchored_since = None
+
+    history = list(prior.get('history') or [])
+    formed_at = prior.get('formed_at')
+
+    if accepted and accepted != prior_state:
+        state, changed = accepted, True
+        since = anchored_since or now.isoformat()
+        history.append({'from': prior_state, 'to': state, 'at': since})
+        history = history[-12:]
+        if state == 'formed':
+            formed_at = since
+        elif state in ('dissolution', 'campaign'):
+            formed_at = None      # repeat election: the old formation is void
     elif prior_state:
         state, since, changed = prior_state, (prior_since or now.isoformat()), False
     else:
-        state, since, changed = (detected or 'stable'), now.isoformat(), bool(detected)
+        state, since, changed = 'stable', now.isoformat(), False
 
     try:
         days_in_state = (now - datetime.fromisoformat(since)).days
     except Exception:
         days_in_state, since = 0, now.isoformat()
+
+    try:
+        days_since_formed = (now - datetime.fromisoformat(formed_at)).days if formed_at else None
+    except Exception:
+        days_since_formed = None
+    post_phase = _post_formation_phase(days_since_formed) if state == 'formed' else None
 
     envelope = STATE_ENVELOPE_DAYS.get(state)
     overrun = bool(envelope and days_in_state > envelope)
@@ -1671,10 +1839,17 @@ def _detect_election_state(articles):
     freeze = state in FREEZE_STATES
     partial = state in PARTIAL_FREEZE_STATES
 
+    # TTL raised 90 -> 400 days: the alignment window alone is 100 days, and a
+    # state key that expires mid-cycle would silently restart the machine.
+    anchored_election = prior.get('anchored_election')
+    if state in ('voted', 'formation', 'formed'):
+        anchored_election = ELECTION_RESULTS['election_date']
     _redis_set(ELECTION_STATE_KEY,
                {'state': state, 'since': since, 'detected': detected,
-                'hits': hits, 'updated': now.isoformat()},
-               ex=90 * 24 * 3600)
+                'hits': hits, 'updated': now.isoformat(),
+                'formed_at': formed_at, 'history': history,
+                'anchored_election': anchored_election},
+               ex=400 * 24 * 3600)
 
     if freeze:
         note = ('Israel is between dissolution and a formed government. Large externally-'
@@ -1692,6 +1867,13 @@ def _detect_election_state(articles):
                 'be assumed: a new coalition is a policy discontinuity, and the terms on which '
                 'it was assembled are what determine theatre posture. Prior-government '
                 'positions are not a baseline for the new one.')
+        if post_phase == 'headline':
+            note += (' Day %d of %d of the new-government window.'
+                     % (days_since_formed or 0, NEW_GOVT_HEADLINE_DAYS))
+        elif post_phase == 'alignment':
+            note += (' Day %d: the read now is whether the government\'s actions match '
+                     'its own stated guidelines, through day %d.'
+                     % (days_since_formed or 0, ALIGNMENT_WINDOW_DAYS))
     else:
         note = ('No active electoral cycle detected. Decision-making capacity is nominal.')
 
@@ -1716,6 +1898,14 @@ def _detect_election_state(articles):
         'decision_freeze': freeze,
         'partial_freeze': partial,
         'evidence_hits': hits,
+        # v2.4.0 -- off-ramp + transition audit trail
+        'formed_at': formed_at,
+        'days_since_formed': days_since_formed,
+        'post_formation_phase': post_phase,
+        'headline_days': NEW_GOVT_HEADLINE_DAYS,
+        'alignment_window_days': ALIGNMENT_WINDOW_DAYS,
+        'transitions_blocked': blocked[:4],
+        'history': history,
         'note': note,
         'disclaimer': ('Observational only. This reports which stage of the electoral cycle '
                        'is under way and how long it has run. It does not forecast a result, '
@@ -1847,7 +2037,166 @@ COALITION_DATA = {
     'war_cabinet_active': False,  # Gantz resigned June 2024
     'icc_warrants': ['Netanyahu', 'Gallant (former)'],
     'criminal_trial': 'Netanyahu — bribery, fraud, breach of trust (ongoing)',
+    # v2.4.0 -- this is the OUTGOING government. It stays in office as a
+    # caretaker until the new one is sworn in, which is why it is kept rather
+    # than deleted. The new Knesset lives in ELECTION_RESULTS below.
+    'status': 'outgoing_caretaker',
 }
+
+
+# ============================================================================
+# ELECTION RESULTS — 26th KNESSET  (v2.4.0, Oct 28 2026)
+# ----------------------------------------------------------------------------
+# WHY A CONFIG AND NOT A SCRAPER: seat counts are a published FACT with one
+# authoritative source (the Central Elections Committee). Keyword scanning
+# cannot produce them, and a fragile scraper that silently fails would show
+# stale seats as if they were live. So: a date-stamped table, labelled
+# provisional until certified, with a review clock that nags when it ages.
+#
+# HOW TO UPDATE (Rachel): change the seat numbers, `as_of`, and `source`.
+# When the CEC certifies, set status to 'official'. Everything downstream --
+# bloc totals, path arithmetic, the stability page cards, the rhetoric
+# tracker's path read -- recomputes from this table. Nothing else needs
+# touching.
+#
+# Party `bloc` is how each party campaigned. It is NOT a claim about who will
+# sit with whom; the paths below test exactly that.
+# ============================================================================
+ELECTION_RESULTS = {
+    'knesset': 26,
+    'election_date': '2026-10-27',
+    'status': 'provisional',                  # 'provisional' -> 'official'
+    'as_of': '2026-10-28',
+    'source': 'Central Elections Committee figures as reported by the Jerusalem Post, 28 Oct 2026',
+    'review_every_days': {'provisional': 2, 'official': 60},
+    'majority': 61,
+    'total_seats': 120,
+    'blocs': {
+        'netanyahu': {'label': 'Netanyahu bloc', 'color': '#3b82f6'},
+        'change':    {'label': 'Opposition bloc (Eisenkot)', 'color': '#a78bfa'},
+        'arab':      {'label': 'Arab parties', 'color': '#22c55e'},
+    },
+    'parties': [
+        {'key': 'likud',    'name': 'Likud',                   'name_he': 'הליכוד',            'leader': 'Netanyahu', 'seats': 26, 'bloc': 'netanyahu'},
+        {'key': 'shas',     'name': 'Shas',                    'name_he': 'ש"ס',               'leader': 'Deri',      'seats': 7,  'bloc': 'netanyahu'},
+        {'key': 'utj',      'name': 'United Torah Judaism',    'name_he': 'יהדות התורה',       'leader': '',          'seats': 7,  'bloc': 'netanyahu'},
+        {'key': 'otzma',    'name': 'Otzma Yehudit',           'name_he': 'עוצמה יהודית',      'leader': 'Ben Gvir',  'seats': 7,  'bloc': 'netanyahu'},
+        {'key': 'rzp',      'name': 'Religious Zionist Party', 'name_he': 'הציונות הדתית',     'leader': 'Smotrich',  'seats': 6,  'bloc': 'netanyahu'},
+        {'key': 'yashar',   'name': 'Yashar',                  'name_he': 'ישר!',              'leader': 'Eisenkot',  'seats': 21, 'bloc': 'change'},
+        {'key': 'byachad',  'name': "B'Yachad",                'name_he': 'ביחד',              'leader': 'Bennett / Lapid', 'seats': 12, 'bloc': 'change'},
+        {'key': 'democrats','name': 'The Democrats',           'name_he': 'הדמוקרטים',         'leader': 'Golan',     'seats': 8,  'bloc': 'change'},
+        {'key': 'yb',       'name': 'Yisrael Beytenu',         'name_he': 'ישראל ביתנו',       'leader': 'Liberman',  'seats': 7,  'bloc': 'change'},
+        {'key': 'joint',    'name': 'Joint List',              'name_he': 'הרשימה המשותפת',    'leader': '',          'seats': 12, 'bloc': 'arab'},
+        {'key': 'raam',     'name': "Ra'am",                   'name_he': 'רע"ם',              'leader': 'Abbas',     'seats': 7,  'bloc': 'arab'},
+    ],
+    # Path arithmetic. Each variant is a list of members ('bloc:<k>' or a party
+    # key) minus an optional exclude list. These are SUMS, not forecasts: the
+    # arithmetic says what a structure would add up to, never whether anyone
+    # will agree to it. Path B1 and B2 share arithmetic by design -- they
+    # differ in STRUCTURE (Arab parties inside the cabinet vs. supporting from
+    # outside), which the rhetoric tracker reads from coverage.
+    'paths': [
+        {'id': 'A',  'label': 'Netanyahu bloc + new partner(s)',
+         'members': ['bloc:netanyahu'], 'exclude': []},
+        {'id': 'B',  'label': 'Opposition bloc + Arab parties (B1 inside / B2 outside support)',
+         'members': ['bloc:change', 'bloc:arab'], 'exclude': []},
+        {'id': 'B-raam', 'label': "Opposition bloc + Ra'am only",
+         'members': ['bloc:change', 'raam'], 'exclude': []},
+        {'id': 'B-noYB', 'label': 'Path B if Yisrael Beytenu will not rely on Arab parties',
+         'members': ['bloc:change', 'bloc:arab'], 'exclude': ['yb']},
+        {'id': 'C',  'label': 'Unity: Netanyahu bloc + Yashar',
+         'members': ['bloc:netanyahu', 'yashar'], 'exclude': []},
+    ],
+}
+
+ELECTION_RESULTS_REDIS_KEY = 'israel:election_results'
+
+
+def build_election_results(now=None):
+    """Bloc totals, path arithmetic, and a review clock, from ELECTION_RESULTS.
+
+    Also publishes the result to Redis so the rhetoric tracker (Slice 2) reads
+    one source of truth instead of keeping its own copy of the seat table.
+    """
+    cfg = ELECTION_RESULTS
+    now = now or datetime.now(timezone.utc)
+    parties = cfg['parties']
+    by_key = {p['key']: p for p in parties}
+    majority = cfg['majority']
+
+    bloc_totals = {}
+    for p in parties:
+        bloc_totals[p['bloc']] = bloc_totals.get(p['bloc'], 0) + int(p['seats'])
+
+    def _sum(members, exclude):
+        keys = []
+        for m in members:
+            if m.startswith('bloc:'):
+                keys += [p['key'] for p in parties if p['bloc'] == m[5:]]
+            elif m in by_key:
+                keys.append(m)
+        keys = [k for k in dict.fromkeys(keys) if k not in (exclude or [])]
+        return sum(int(by_key[k]['seats']) for k in keys), keys
+
+    paths = []
+    for spec in cfg.get('paths', []):
+        seats, keys = _sum(spec['members'], spec.get('exclude'))
+        gap = majority - seats
+        paths.append({
+            'id': spec['id'],
+            'label': spec['label'],
+            'seats': seats,
+            'margin': seats - majority,
+            'clears_majority': seats >= majority,
+            'parties': keys,
+            'reading': (('Clears %d by %d.' % (majority, seats - majority)) if gap <= 0
+                        else ('Short of %d by %d.' % (majority, gap))),
+        })
+
+    # Single opposition parties that would close Path A's gap on their own.
+    # Arithmetic only -- listed so the reader sees the size of the ask.
+    a_seats = bloc_totals.get('netanyahu', 0)
+    a_gap = majority - a_seats
+    a_closers = [p['name'] for p in parties
+                 if p['bloc'] != 'netanyahu' and a_gap > 0 and int(p['seats']) >= a_gap]
+
+    total = sum(int(p['seats']) for p in parties)
+    try:
+        age_days = (now.date() - datetime.fromisoformat(cfg['as_of']).date()).days
+    except Exception:
+        age_days = None
+    review_every = (cfg.get('review_every_days') or {}).get(cfg['status'], 30)
+
+    out = {
+        'knesset': cfg['knesset'],
+        'election_date': cfg['election_date'],
+        'status': cfg['status'],
+        'as_of': cfg['as_of'],
+        'source': cfg['source'],
+        'age_days': age_days,
+        'review_due': bool(age_days is not None and age_days > review_every),
+        'majority': majority,
+        'total_seats': total,
+        'seat_total_ok': total == cfg['total_seats'],
+        'blocs': {k: dict(v, seats=bloc_totals.get(k, 0)) for k, v in cfg['blocs'].items()},
+        'parties': sorted(parties, key=lambda p: -int(p['seats'])),
+        'paths': paths,
+        'path_a_gap': max(0, a_gap),
+        'path_a_single_party_closers': a_closers,
+        'largest_party': max(parties, key=lambda p: int(p['seats']))['name'],
+        'note': ('Seat counts are %s as of %s. Path arithmetic shows what each structure '
+                 'would add up to; it does not say whether anyone will agree to it.'
+                 % (cfg['status'].upper(), cfg['as_of'])),
+    }
+    if not out['seat_total_ok']:
+        out['note'] += (' WARNING: party seats sum to %d, not %d -- the table needs checking.'
+                        % (total, cfg['total_seats']))
+    try:
+        if _redis_available():
+            _redis_set(ELECTION_RESULTS_REDIS_KEY, out, ex=400 * 24 * 3600)
+    except Exception as _e:
+        print(f"[Israel] election_results publish failed (non-fatal): {str(_e)[:100]}")
+    return out
 
 
 def scan_knesset_news():
@@ -2407,9 +2756,13 @@ def scan_israel_stability():
                 'articles': knesset.get('articles', [])[:10]
             },
             'leadership': leadership,
+            # v2.4.0 -- 26th Knesset seats + path arithmetic (provisional until
+            # certified), and the date the leadership grid was last reviewed.
+            'election_results': build_election_results(),
+            'leadership_reviewed': POLITICAL_FIGURES_REVIEWED,
             'all_articles': conflict.get('all_articles', [])[:30],
             'last_updated': datetime.now(timezone.utc).isoformat(),
-            'version': '2.3.0-israel',
+            'version': '2.4.0-israel',
             'from_cache': False
         }
 
@@ -2445,6 +2798,8 @@ def api_israel_leadership():
     return jsonify({
         'success': True,
         'figures': POLITICAL_FIGURES,
+        'figures_reviewed': POLITICAL_FIGURES_REVIEWED,
+        'election_results': build_election_results(),
         'coalition': COALITION_DATA,
         'last_updated': datetime.now(timezone.utc).isoformat()
     })
