@@ -69,7 +69,7 @@ import os
 # The marker itself fires at the BOTTOM of this file, because _CANON_AVAILABLE
 # does not exist yet up here -- printing it at import-time would NameError.
 # ════════════════════════════════════════════════════════════════════
-BLUF_VERSION = '2.4.0'
+BLUF_VERSION = '2.5.0'
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -1004,11 +1004,25 @@ def _extract_key_signals(trackers):
         if key in seen:
             continue
 
-        if theatre != 'regional' and theatre_counts.get(theatre, 0) >= MAX_PER_THEATRE:
+        # v2.x (Oct 28 2026) -- quota per (theatre, AXIS), not per theatre.
+        # With a flat 3-per-theatre cap, a theatre with three kinetic signals
+        # (Israel: multi-axis 14, ballistic 13, Iran 11) silently dropped every
+        # diplomatic, economic and humanitarian signal it emitted -- including
+        # government formation -- BEFORE this "full pool" reached the GPI. The
+        # pool is supposed to preserve axis coverage; the cap was defeating it.
+        # Kinetic dominance in the prose is unaffected: the prose reads the
+        # priority-sorted, count-capped slice, where lower-priority axes still
+        # sit below kinetic.
+        try:
+            _ax = (_me_axes_for_signal(s) or ['kinetic'])[0]
+        except Exception:
+            _ax = 'kinetic'
+        qkey = (theatre, _ax)
+        if theatre != 'regional' and theatre_counts.get(qkey, 0) >= MAX_PER_THEATRE:
             continue
 
         seen.add(key)
-        theatre_counts[theatre] = theatre_counts.get(theatre, 0) + 1
+        theatre_counts[qkey] = theatre_counts.get(qkey, 0) + 1
         deduped.append(s)
 
     return deduped
@@ -2371,6 +2385,9 @@ _ME_REGIONAL_AXIS_SETS = {
     # wrong place, which is why this list has to be edited whenever a tracker
     # starts emitting a new one.
     'financial_access_stress': ['economic'],
+    # Oct 28 2026 -- Israeli government formation: a political/diplomatic read,
+    # never kinetic. Explicit here as well as via the signal's pressure_type.
+    'government_formation': ['diplomatic'],
     'diplomatic_track_active': ['diplomatic'], 'diplomatic_active': ['diplomatic'],
     'green_line_active': ['diplomatic'], 'mediation': ['diplomatic'],
     'ceasefire': ['diplomatic'], 'humanitarian': ['humanitarian'],
@@ -2654,7 +2671,7 @@ def build_regional_bluf(force=False):
         'convergence_panel': _build_convergence_panel(),
         'theatre_summary':   theatre_summary,
         'generated_at':      datetime.now(timezone.utc).isoformat(),
-        'version':           '2.2.0',  # bumped for prose_v2 + strike window awareness
+        'version':           BLUF_VERSION,  # Oct 28 2026: one constant (was a stale '2.2.0' literal)
         'region':            'middle_east',  # v2.0: GPI-readable
         'top_signals_count': len(top_signals_capped),
     }

@@ -1861,7 +1861,12 @@ def _detect_election_state(articles):
                {'state': state, 'since': since, 'detected': detected,
                 'hits': hits, 'updated': now.isoformat(),
                 'formed_at': formed_at, 'history': history,
-                'anchored_election': anchored_election},
+                'anchored_election': anchored_election,
+                # v2.4.2 -- the freeze flags travel WITH the state, so readers
+                # (framework_gates, the GPI policy-branch narrative) do not
+                # each have to re-derive which states freeze decisions.
+                'decision_freeze': state in FREEZE_STATES,
+                'partial_freeze': state in PARTIAL_FREEZE_STATES},
                ex=400 * 24 * 3600)
 
     if freeze:
@@ -2775,7 +2780,7 @@ def scan_israel_stability():
             'leadership_reviewed': POLITICAL_FIGURES_REVIEWED,
             'all_articles': conflict.get('all_articles', [])[:30],
             'last_updated': datetime.now(timezone.utc).isoformat(),
-            'version': '2.4.1-israel',
+            'version': '2.4.2-israel',
             'from_cache': False
         }
 

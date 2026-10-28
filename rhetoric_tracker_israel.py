@@ -3776,6 +3776,7 @@ def _detect_government_formation(articles, inbound_fp=None, us_voice=None, gaza_
         _summary = {k: out[k] for k in ('active', 'cycle_state', 'headline', 'leading_paths',
                                         'decision_freeze', 'results_status')}
         _summary['path_states'] = {p: v['state'] for p, v in paths.items()}
+        _summary['path_names'] = {p: _path_name(p) for p in PATH_LABELS}   # GPI reads names, not letters
         _summary['updated'] = datetime.now(timezone.utc).isoformat()
         _redis_set(FORMATION_KEY, _summary, ttl=3 * 24 * 3600)
     except Exception as _e:
@@ -4145,7 +4146,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.3.0-israel-formation',
+        'version': '1.3.1-israel-formation',
     }
 
     # Cache
@@ -4380,7 +4381,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.3.0-israel-formation',
+            'version': '1.3.1-israel-formation',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])

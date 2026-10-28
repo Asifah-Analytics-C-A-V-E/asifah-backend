@@ -2,6 +2,7 @@
 global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
 v3.7.0 — Jul 25 2026 (NARRATIVE DECAY)
+v3.10.0 add-on — Oct 28 2026: israel_formation_window narrative (caretaker Israel x hot Iran axis)
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -573,6 +574,7 @@ CONVERGENCE_TAGS = {
     'food_stress_convergence':         'Food Prices \u00d7 Conflict',
     'emplacement_precursor':           'Red Line \u00d7 Denial',
     'policy_branch_convergence':       'Three Theatres \u00d7 One Method',
+    'israel_formation_window':         'Caretaker Israel \u00d7 Iran Axis',
     'houthi_fragility':                'Houthi Quiet \u00d7 Fragile',
     'market_fragility':                'Market Concentration \u00d7 Fragility',
 }
@@ -1189,6 +1191,77 @@ def _narrative_policy_branch_convergence(blufs):
         'regions': ['me'],
         'icon': '\U0001f500',
         'color': '#9333ea',
+        'headline': headline,
+        'detail': detail,
+    }
+
+
+_FORMATION_KEY = 'israel:government_formation'
+_CROSSTHEATER_KEY = 'rhetoric:crosstheater:fingerprints'
+
+
+def _narrative_israel_formation_window(blufs):
+    """Israel without a formed government WHILE the Iran axis is hot.
+
+    THE UNASKED QUESTION at global altitude: not "who will govern Israel" --
+    the Israel rhetoric page tracks that path by path -- but "who takes the
+    next big decision on the Iran war, and under what constraints?" A
+    caretaker government keeps full war-making authority but operates under a
+    restraint doctrine for NEW business (negotiated tracks, normalization,
+    new frameworks). So during a formation window the asymmetry is
+    structural: kinetic decisions remain available, negotiated ones are
+    parked. No regional BLUF frames it this way, because the formation read
+    lives on Israel's page and the Iran-axis read lives in the cross-theater
+    fingerprints.
+
+    Fires only when BOTH hold: a formation window is open (voted/formation)
+    AND an Iran-axis theatre reads L3+. Ranked below the +11 kinetic boost:
+    this is a constraint read, not force.
+    """
+    gf = _redis_get(_FORMATION_KEY) or {}
+    if not gf.get('active') or gf.get('cycle_state') not in ('voted', 'formation'):
+        return None
+    fp = _redis_get(_CROSSTHEATER_KEY) or {}
+
+    def _lv(t):
+        try:
+            return int((fp.get(t) or {}).get('level', 0) or 0)
+        except Exception:
+            return 0
+
+    axis = {'Iran': _lv('iran'), 'Lebanon': _lv('lebanon'), 'Yemen': _lv('yemen'),
+            'Iraq': _lv('iraq'), 'Syria': _lv('syria')}
+    hot = {k: v for k, v in axis.items() if v >= 3}
+    if not hot:
+        return None
+
+    names = gf.get('path_names') or {}
+    lead = gf.get('leading_paths') or []
+    lead_txt = (_serial([names.get(p, 'Path %s' % p) for p in lead])
+                if lead else 'no formation path yet carrying firsthand coverage')
+    hot_txt = _serial(['%s L%d' % (k, v) for k, v in sorted(hot.items(), key=lambda kv: -kv[1])])
+
+    headline = ('Israel in caretaker formation while %s' % hot_txt)
+    detail = ('Israel has no sworn-in government (%s; seats %s). Coverage of formation: %s. '
+              % (str(gf.get('headline') or 'formation window open').rstrip('. '),
+                 str(gf.get('results_status', 'unavailable')).lower(), lead_txt))
+    detail += ('Meanwhile the Iran axis reads %s. The caretaker government retains full war-making '
+               'authority, but operates under a restraint doctrine for NEW business, so the '
+               'asymmetry is structural: kinetic decisions remain available while negotiated tracks '
+               '(the Lebanon framework, any Syria or Saudi track) are parked until a government can '
+               'sign. That is a constraint on method, not a statement of intent. ' % hot_txt)
+    if gf.get('decision_freeze'):
+        detail += 'The Israeli decision freeze is ON this cycle. '
+    detail += ('Formation length therefore shapes which cabinet takes the next major Iran-axis '
+               'decision. This composite is a CONVERGENCE indicator, NOT a probability of action.')
+
+    return {
+        'priority': 9,
+        'category': 'israel_formation_window',
+        'regions': ['me'],
+        'icon': '\U0001f3db',
+        'color': '#a78bfa',
+        'pressure_type': 'diplomatic',
         'headline': headline,
         'detail': detail,
     }
@@ -1871,6 +1944,7 @@ NARRATIVE_AXIS_SETS = {
     # A method finding, not a force finding. Diplomatic leads so a policy lean
     # never renders as escalation on the kinetic axis.
     'policy_branch_convergence':       ['diplomatic', 'kinetic'],
+    'israel_formation_window':         ['diplomatic', 'kinetic'],  # formation constraint + live Iran axis
 }
 
 def _axes_for_narrative(n):
@@ -4128,6 +4202,7 @@ NARRATIVE_DETECTORS = [
     _narrative_contested_spoke,                          # MANY hubs on ONE node — Abu al-Duhur geometry, Aug 2026
     _narrative_emplacement_precursor,                    # redline tempo × denial tempo — tasking trigger, Aug 2026
     _narrative_policy_branch_convergence,                # Lebanon/Gaza/West Bank branching together — Slice 5, Aug 2026
+    _narrative_israel_formation_window,                  # caretaker Israel x hot Iran axis — Oct 28 2026
     # Fallback always last
     _narrative_global_baseline,
 ]
