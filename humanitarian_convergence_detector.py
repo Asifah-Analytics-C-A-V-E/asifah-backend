@@ -1,6 +1,15 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.12.0 -- October 29, 2026 (DISASTER OUTCOMES EARN THE LEVEL)
+  * Rachel's ruling: modelled alert / magnitude / keyword -> L3 (watch);
+    confirmed outcomes (>=10 dead, >=25k displaced, >=10k homes) -> L4;
+    (>=100 dead, >=100k displaced, >=100k homes) -> L5. Outcomes read from
+    GDACS (disaster_feeds 1.1.0) AND from coverage of the same country+hazard
+    (apply_disaster_outcomes). Evacuations are not displacement.
+  * Spread contiguity remembers countries with cases in the last 21 days
+    (Uganda dropped out of one cycle's coverage and Kenya read "no border").
+  * "1 cases" -> "1 case".
 v1.11.0 -- October 29, 2026 (OUTBREAK SPREAD READ -- Kenya/Nigeria were seen, never connected)
   * The detector saw Ebola in DR Congo, Uganda, Kenya and Nigeria as four
     separate L5 rows; Kenya and Nigeria sat at priority 7, below a Cat-1
@@ -1025,6 +1034,10 @@ _DEATH_RX = [
     re.compile(_NUM + r'\s+(?:confirmed\s+|reported\s+|suspected\s+|probable\s+|people\s+|more\s+)?'
                r'(?:ebola\s+|marburg\s+|cholera\s+|mpox\s+|plague\s+)?'   # v1.11.0
                r'(?:deaths|dead|fatalities|killed|lives)\b', re.I),
+    # v1.12.0 -- verb-first phrasing: "Hurricane kills 230", "Ebola has claimed 40 lives".
+    re.compile(r'\b(?:kill(?:s|ed|ing)?|claim(?:s|ed)?|left)\s+(?:at least\s+|more than\s+|over\s+|'
+               r'nearly\s+|almost\s+|some\s+)?' + _NUM + r'(?:\s+(?:people|lives|dead|persons))?\b'
+               r'(?!\s*(?:%|percent|km|kilometres|miles|metres|meters|homes|houses|cattle|livestock))', re.I),
     re.compile(r'(?:death toll|deaths|dead|fatalities)(?:\s+[^\s.;]+){0,6}?\s+(?:has\s+|have\s+)?'
                r'(?:rises?|rose|climbs?|climbed|reach(?:es|ed)?|pass(?:es|ed)?|tops?|topped|'
                r'surpass(?:es|ed)?|exceeds?|exceeded|hits?|is|at|of|now)\s+'
@@ -1093,9 +1106,9 @@ def _reported_toll(text):
 def _toll_phrase(deaths, cases):
     bits = []
     if deaths:
-        bits.append(f'{deaths:,} deaths')
+        bits.append(f'{deaths:,} death{"" if deaths == 1 else "s"}')
     if cases:
-        bits.append(f'{cases:,} cases')
+        bits.append(f'{cases:,} case{"" if cases == 1 else "s"}')
     return ', '.join(bits)
 
 
@@ -1251,7 +1264,30 @@ def _country_label(code):
     return _COUNTRY_LABELS.get(code) or str(code).replace('_', ' ').title()
 
 
-def mark_outbreak_spread(signals):
+def recently_affected_countries(toll_history, days=21):
+    """Countries with a reported case or death in toll history within `days`.
+
+    v1.12.0 -- contiguity memory. Coverage is uneven cycle to cycle: on Oct 29
+    Uganda's articles carried no confirmation, so Uganda dropped out of the
+    affected set and Kenya was told it borders "no affected country". Used for
+    the CONTIGUITY test only -- a remembered country is never itself reported
+    as a spread node this cycle."""
+    out = set()
+    if not isinstance(toll_history, dict):
+        return out
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%d')
+    except Exception:
+        return out
+    for c, rec in (toll_history.get('countries') or {}).items():
+        for e in (rec or {}).get('daily') or []:
+            if e.get('date', '') >= cutoff and (e.get('deaths') or e.get('cases')):
+                out.add(_parent_country(c))
+                break
+    return out
+
+
+def mark_outbreak_spread(signals, recent_affected=None):
     """Find multi-country outbreaks, tag spread nodes, and return synthesis records.
 
     Mutates node signals in place (growing_concern, spread_node, headline) and
@@ -1279,7 +1315,7 @@ def mark_outbreak_spread(signals):
                     max(int(x.get('severity') or 0) for x in sigs))
         ranked = sorted(per_country, key=_mag, reverse=True)
         epi = ranked[0]
-        affected = set(per_country)
+        affected = set(per_country) | set(recent_affected or ())
         nodes = []
         for c in ranked[1:]:
             others = affected - {c}
@@ -1426,6 +1462,151 @@ def build_outbreak_spread_signals(records):
     return sigs
 
 
+# ══════════════════════════════════════════════════════════════════════
+# DISASTER OUTCOMES EARN THE LEVEL  (v1.12.0, Oct 29 2026)
+# ══════════════════════════════════════════════════════════════════════
+# Rachel's ruling: a Cat-1 typhoon is not a Cat-5, and WHERE it lands matters
+# -- a Cat 5 into mainland US can kill fewer people than a Cat 1 into Honduras
+# or Cambodia. Confirmed death, displacement and destruction bring a disaster
+# to L4/L5; a modelled alert, a magnitude or a keyword ("major earthquake")
+# holds at L3. Outcome figures already carry local vulnerability, so no
+# infrastructure table is invented. Evacuations are NOT displacement -- a
+# precautionary evacuation of millions is evidence of capacity, not of harm.
+_OUT_DISPLACED_RX = re.compile(
+    r'(\d[\d,.]*)\s*(million|thousand|k)?\s+(?:people\s+|residents\s+|families\s+)?'
+    r'(?:(?:have been|were|are|left|now)\s+)?(?:displaced|homeless|made homeless|lost their homes)\b'
+    r'|displac(?:ing|ed)\s+(?:more than\s+|over\s+|nearly\s+|some\s+)?(\d[\d,.]*)\s*(million|thousand|k)?', re.I)
+_OUT_HOMES_RX = re.compile(
+    r'(\d[\d,.]*)\s*(million|thousand|k)?\s+(?:homes|houses|dwellings|buildings)\s+'
+    r'(?:were\s+|have been\s+)?(?:destroyed|damaged|flattened|collapsed|razed|washed away)', re.I)
+OUTCOME_L5 = {'deaths': 100, 'displaced': 100_000, 'homes': 100_000}
+OUTCOME_L4 = {'deaths': 10, 'displaced': 25_000, 'homes': 10_000}
+_HAZ_TOKENS = {
+    'earthquake':       ('earthquake', 'quake', 'seismic', 'aftershock', 'tremor', 'tsunami'),
+    'flood':            ('flood', 'flooding', 'floodwater', 'inundation', 'deluge', 'monsoon'),
+    'tropical cyclone': ('cyclone', 'typhoon', 'hurricane', 'tropical storm', 'storm surge'),
+    'wildfire':         ('wildfire', 'forest fire', 'bushfire'),
+    'volcano':          ('volcan', 'eruption', 'lava', 'ashfall'),
+    'drought':          ('drought', 'dry spell'),
+    'landslide':        ('landslide', 'mudslide', 'rockslide'),
+}
+
+
+_HAZ_ICON = {'earthquake': '\U0001f30b', 'tropical cyclone': '\U0001f300', 'flood': '\U0001f30a',
+             'volcano': '\U0001f30b', 'drought': '\U0001f3dc\ufe0f', 'wildfire': '\U0001f525',
+             'landslide': '\u26f0\ufe0f'}
+
+
+def _hazard_of(*texts):
+    j = ' '.join(str(t or '') for t in texts).lower()
+    for fam, toks in _HAZ_TOKENS.items():
+        if any(t in j for t in toks):
+            return fam
+    return ''
+
+
+def _scaled(num, unit):
+    try:
+        n = float(str(num).replace(',', ''))
+    except (TypeError, ValueError):
+        return 0
+    u = (unit or '').lower()
+    return int(n * (1_000_000 if u == 'million' else 1000 if u in ('thousand', 'k') else 1))
+
+
+def _disaster_outcome(text):
+    """(deaths, displaced, homes) printed in `text`; 0 where absent. Never a
+    negative reading -- absence of a figure is not absence of harm."""
+    deaths, _ = _reported_toll(text)
+    displaced = 0
+    for m in _OUT_DISPLACED_RX.finditer(text or ''):
+        displaced = max(displaced, _scaled(m.group(1) or m.group(3), m.group(2) or m.group(4)))
+    homes = 0
+    for m in _OUT_HOMES_RX.finditer(text or ''):
+        homes = max(homes, _scaled(m.group(1), m.group(2)))
+    return deaths, displaced, homes
+
+
+def _outcome_level(deaths, displaced, homes):
+    vals = {'deaths': deaths, 'displaced': displaced, 'homes': homes}
+    if any(vals[k] >= OUTCOME_L5[k] for k in vals):
+        return 5
+    if any(vals[k] >= OUTCOME_L4[k] for k in vals):
+        return 4
+    return 3
+
+
+def _outcome_phrase(deaths, displaced, homes):
+    bits = []
+    if deaths:
+        bits.append(f'{deaths:,} dead')
+    if displaced:
+        bits.append(f'{displaced:,} displaced')
+    if homes:
+        bits.append(f'{homes:,} homes destroyed/damaged')
+    return ', '.join(bits)
+
+
+def apply_disaster_outcomes(signals, news_outcomes):
+    """Set every natural_disaster signal's level from CONFIRMED outcomes.
+
+    news_outcomes: {(country, hazard): (deaths, displaced, homes)} pooled from
+    coverage, plus {(country, ''): ...} as a country-wide fallback used only
+    when the signal's own hazard is unknown.
+    """
+    for s in signals or []:
+        if s.get('category') != 'natural_disaster':
+            continue
+        c = _parent_country(str(s.get('country') or ''))
+        hz = (s.get('hazard_type') or _hazard_of(' '.join(s.get('matched_keywords') or []))
+              or _hazard_of(s.get('short_text')))
+        nd, ndp, nh = news_outcomes.get((c, hz)) or (news_outcomes.get((c, '')) if not hz else None) \
+            or (0, 0, 0)
+        news_lvl = _outcome_level(nd, ndp, nh) if (nd or ndp or nh) else 3
+        own_lvl = {1: 3, 2: 4, 3: 5}.get(int(s.get('severity') or 1), 3) \
+            if s.get('outcome_escalated') else 3
+        new_lvl = max(3, own_lvl, news_lvl)
+        # News-derived rows carry the category's generic icon (a volcano on a
+        # hurricane). Use the hazard's own where it is known.
+        if not s.get('feed') and hz in _HAZ_ICON:
+            _old_icon = s.get('icon') or ''
+            s['icon'] = _HAZ_ICON[hz]
+            if _old_icon and (s.get('short_text') or '').startswith(_old_icon):
+                s['short_text'] = _HAZ_ICON[hz] + s['short_text'][len(_old_icon):]
+        old_lvl = int(s.get('level') or 3)
+        s['level'] = new_lvl
+        s['severity'] = {3: 1, 4: 2, 5: 3}[new_lvl]
+        s['outcome_level'] = new_lvl
+        if news_lvl > 3 and news_lvl >= own_lvl:
+            s['level_basis'] = 'confirmed_outcome_news'
+            s['outcome_figures'] = {'deaths': nd, 'displaced': ndp, 'homes': nh,
+                                    'basis': 'largest figures printed in coverage of this '
+                                             'country + hazard; not an official count'}
+            if nd:
+                s['reported_deaths'] = max(int(s.get('reported_deaths') or 0), nd)
+            tag = ' — ' + _outcome_phrase(nd, ndp, nh) + ' reported'
+            if s.get('feed') == 'gdacs':
+                # Outcome now leads; the modelled-exposure sentence and the
+                # "(modelled)" marker no longer describe what set the level.
+                s['short_text'] = (f"{s.get('icon', '')} {s.get('country_label', '')}: "
+                                   f"{str(s.get('alert_level', '')).upper()} alert — "
+                                   f"{s.get('hazard_type', 'disaster')}{tag}")[:170]
+            elif tag not in (s.get('short_text') or ''):
+                s['short_text'] = ((s.get('short_text') or '') + tag)[:170]
+            s['long_text'] = ((s.get('long_text') or '') +
+                              f" LEVEL SET BY CONFIRMED OUTCOME in coverage: "
+                              f"{_outcome_phrase(nd, ndp, nh)} (figures as printed, not an "
+                              f"official count).")
+        elif new_lvl == 3:
+            s.setdefault('level_basis', 'modelled_or_keyword_only')
+            if old_lvl > 3:
+                s['long_text'] = ((s.get('long_text') or '') +
+                                  ' HELD AT L3 (WATCH): no confirmed deaths, displacement or '
+                                  'destruction yet -- L4/L5 are earned by outcomes, not by '
+                                  'hazard size or alert colour.')
+    return signals
+
+
 def detect_humanitarian_signals(articles):
     """
     Main detection entry point.
@@ -1461,6 +1642,7 @@ def detect_humanitarian_signals(articles):
     _hx = {}     # country -> {'diseases': set, 'confirmed': bool, 'prep': bool}
     _imports = {}            # disease -> set of non-African destinations
     _bundibugyo = False
+    _dx = {}                 # v1.12.0 (country, hazard) -> (deaths, displaced, homes)
 
     for art in articles:
         title = (art.get('title') or '').strip()
@@ -1480,6 +1662,15 @@ def detect_humanitarian_signals(articles):
             matched, severity, matched_kws = _scan_article_text(text, cat_cfg)
             if not matched:
                 continue
+
+            if cat_key == 'natural_disaster':
+                # v1.12.0 -- confirmed outcomes, pooled per country + hazard.
+                _o = _disaster_outcome(text)
+                if any(_o):
+                    _c0 = _parent_country(country)
+                    for _k in ((_c0, _hazard_of(text)), (_c0, '')):
+                        _prev = _dx.get(_k, (0, 0, 0))
+                        _dx[_k] = tuple(max(a, b) for a, b in zip(_prev, _o))
 
             if cat_key == 'health_emergency':
                 # v1.11.0 -- disease + confirmation evidence for the spread read.
@@ -1699,6 +1890,12 @@ def detect_humanitarian_signals(articles):
         # Non-fatal: news-derived signals stand on their own and a feed outage
         # must not take the humanitarian axis down with it.
         print(f'[Humanitarian] disaster feed merge failed (non-fatal): {str(_e)[:110]}')
+
+    # v1.12.0 -- outcomes earn the level, for structured AND news-derived rows.
+    try:
+        apply_disaster_outcomes(detected, _dx)
+    except Exception as _oe:
+        print(f'[Humanitarian] disaster outcome pass failed (non-fatal): {str(_oe)[:110]}')
 
     return detected
 
@@ -2817,7 +3014,8 @@ def detect_and_build_bluf(articles, extra_signals=None, toll_history=None):
     # headline) and BEFORE aggregation (so spread nodes rank as growing concerns).
     _spread_status, _spread_records = 'ok', []
     try:
-        _spread_records = mark_outbreak_spread(signals)
+        _spread_records = mark_outbreak_spread(
+            signals, recent_affected=recently_affected_countries(toll_history))
     except Exception as _se:
         _spread_status = 'failed: %s' % str(_se)[:100]
         print('[humanitarian] outbreak spread read failed (non-fatal): %s' % str(_se)[:120])
@@ -3283,6 +3481,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.11.0'
+__version__ = '1.12.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')

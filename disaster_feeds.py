@@ -1,5 +1,23 @@
 """
-disaster_feeds.py -- Asifah Analytics -- v1.0.0 Aug 2026
+disaster_feeds.py -- Asifah Analytics -- v1.1.0 Oct 29 2026 (v1.0.0 Aug 2026)
+
+v1.1.0 -- OUTCOMES EARN THE LEVEL (Rachel's ruling, Oct 29 2026)
+  "A Cat 1 typhoon is a bad storm but nothing like a Cat 5 -- and where it
+  occurs matters. A Cat 5 that hits mainland US can have far fewer confirmed
+  deaths than a Cat 1 or 2 that hits Honduras or Cambodia. We need confirmed
+  damage, displacement and death to bring this up to an L4 and L5."
+  GDACS red mapped straight to L5 ("mass-casualty humanitarian disaster") for a
+  Category 1 cyclone with 0.29M exposed. GDACS alerts are MODELLED exposure at
+  onset; USGS is raw magnitude. Neither is a consequence. Now:
+    modelled alert / magnitude only           -> L3  (watch: impact modelled)
+    >=10 deaths, >=25k displaced, >=10k homes  -> L4
+    >=100 deaths, >=100k displaced, >=100k homes -> L5
+  Confirmed outcomes come from GDACS's own outcome field here, and from news
+  coverage of the same country + hazard in the humanitarian detector. Outcome
+  numbers already carry vulnerability -- that is the Florida/Honduras point --
+  so no infrastructure table is needed or invented. Evacuations are NOT
+  displacement: a precautionary evacuation of millions is a sign of capacity,
+  not of harm.
 ============================================================================
 Worldwide structured disaster feed. Feeds the SAME signal list the
 humanitarian convergence detector aggregates -- not a parallel axis.
@@ -44,7 +62,7 @@ import json
 import requests
 from datetime import datetime, timezone, timedelta
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 GDACS_RSS = 'https://www.gdacs.org/xml/rss.xml'
 USGS_FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson'
@@ -66,8 +84,11 @@ GDACS_ALERT_SEVERITY = {'red': 3, 'orange': 2, 'green': 0}
 # Observed casualties therefore override the modelled level. This is not a
 # judgement call layered on top of GDACS; it is reading the outcome field GDACS
 # itself publishes and which its alert level predates.
-DEATH_SEVERITY_FLOOR = [(100, 3), (25, 3), (10, 2)]      # deaths -> minimum severity
+# v1.1.0 -- re-tiered to the outcome ladder (25 deaths no longer reaches L5;
+# "mass-casualty" means what it says).
+DEATH_SEVERITY_FLOOR = [(100, 3), (10, 2)]                # deaths -> minimum severity
 DISPLACED_SEVERITY_FLOOR = [(100000, 3), (25000, 2)]      # displaced -> minimum severity
+MODELLED_ONLY_SEVERITY = 1                                # L3: impact modelled, not confirmed
 
 
 def _outcome_severity(pop_text):
@@ -159,13 +180,16 @@ def fetch_gdacs(min_severity=2):
             return (m.group(1).strip() if m else '')
 
         alert = _tag('gdacs:alertlevel').lower()
-        sev = GDACS_ALERT_SEVERITY.get(alert, 0)
+        modelled = GDACS_ALERT_SEVERITY.get(alert, 0)
         _pop_probe = _tag('gdacs:population')
         _floor, _floor_reason = _outcome_severity(_pop_probe)
-        if _floor > sev:
-            sev = _floor
-        if sev < min_severity:
+        # Admission is on the MODELLED alert (orange/red still enter the pool so
+        # the event is watched) OR on a confirmed outcome. The LEVEL is earned by
+        # outcome only: modelled-only holds at MODELLED_ONLY_SEVERITY (L3).
+        if max(modelled, _floor) < min_severity:
             continue
+        sev = max(MODELLED_ONLY_SEVERITY, _floor)
+        level_basis = 'confirmed_outcome' if _floor else 'modelled_only'
 
         etype = _HAZARD_NORMALISE.get(_tag('gdacs:eventtype').lower(),
                                       _tag('gdacs:eventtype').lower()) or 'disaster'
@@ -198,25 +222,30 @@ def fetch_gdacs(min_severity=2):
             'severity': sev,
             'pressure_type': 'humanitarian',
             'level': {1: 3, 2: 4, 3: 5}.get(sev, 3),
-            'short_text': ('%s %s: %s alert — %s%s'
+            'short_text': ('%s %s: %s alert%s — %s%s'
                            % (HAZARD_ICON.get(etype, '\U0001f30b'), label,
-                              alert.upper(), etype, pop_txt))[:150],
+                              alert.upper(), '' if _floor else ' (modelled)',
+                              etype, pop_txt))[:150],
             'long_text': ('%s: GDACS %s alert for %s. %s '
                           '%sGDACS alert levels are IMPACT estimates incorporating population '
                           'exposure and vulnerability, not raw physical magnitude. '
                           'Structured feed — fires on the event rather than on press coverage, '
                           'so it reaches countries with no tracker and no newsroom presence.'
                           % (label, alert.upper(), etype, desc[:220],
-                             ('SEVERITY RAISED ON CONFIRMED OUTCOME (%s): GDACS assigns an '
-                              'alert level when an event begins, from modelled exposure, and '
-                              'does not re-score it as consequences are confirmed. '
-                              % _floor_reason) if _floor_reason else '')),
+                             ('LEVEL SET BY CONFIRMED OUTCOME (%s). '
+                              % _floor_reason) if _floor_reason else
+                             ('HELD AT L3 (WATCH): this is a MODELLED exposure estimate issued at '
+                              'onset, and no deaths, displacement or destruction are confirmed yet. '
+                              'L4/L5 are earned by confirmed outcomes, which carry the local '
+                              'vulnerability that wind speed and magnitude cannot. '))),
             'source_url': link,
             'source_title': title[:200],
             'source': 'GDACS',
             'matched_keywords': [b for b in [etype, alert] if b],
             'outcome_escalated': bool(_floor_reason),
             'escalation_reason': _floor_reason,
+            'level_basis': level_basis,
+            'modelled_alert_severity': modelled,
             'detected_at': datetime.now(timezone.utc).isoformat(),
             'icon': HAZARD_ICON.get(etype, '\U0001f30b'),
             'theatre': 'global_humanitarian',
@@ -257,8 +286,10 @@ def fetch_usgs(min_magnitude=USGS_MIN_MAGNITUDE, hours=48):
 
         place = p.get('place') or 'unknown location'
         country = place.split(',')[-1].strip() if ',' in place else place
-        # Magnitude bands only. NOT an impact claim.
-        sev = 3 if float(mag) >= 7.5 else (2 if float(mag) >= 7.0 else 1)
+        # Magnitude bands are recorded but do NOT set the level (v1.1.0): a
+        # magnitude is not a consequence. Held at L3 until outcomes confirm.
+        mag_band = 3 if float(mag) >= 7.5 else (2 if float(mag) >= 7.0 else 1)
+        sev = MODELLED_ONLY_SEVERITY
         depth = None
         try:
             depth = (f.get('geometry') or {}).get('coordinates', [None, None, None])[2]
@@ -294,6 +325,8 @@ def fetch_usgs(min_magnitude=USGS_MIN_MAGNITUDE, hours=48):
             'feed': 'usgs',
             'hazard_type': 'earthquake',
             'magnitude': float(mag),
+            'magnitude_band': mag_band,
+            'level_basis': 'magnitude_only',
             'depth_km': depth,
         })
     print(f'[Disaster Feeds] USGS: {len(out)} quake(s) >= M{min_magnitude} in {hours}h')
@@ -354,6 +387,9 @@ def feed_status():
         'version': __version__,
         'sources': {'gdacs': GDACS_RSS, 'usgs': USGS_FEED},
         'gdacs_min_severity': 2,
+        'level_rule': ('modelled alert / magnitude only -> L3; >=10 deaths, >=25k displaced '
+                       'or >=10k homes -> L4; >=100 deaths, >=100k displaced or >=100k homes '
+                       '-> L5 (v1.1.0, outcomes earn the level)'),
         'usgs_min_magnitude': USGS_MIN_MAGNITUDE,
         'note': ('Worldwide catch. Structured feeds fire on the EVENT rather than on press '
                  'coverage, which is how countries with no tracker and no newsroom presence '
@@ -416,8 +452,13 @@ def merge_with_news_signals(news_signals, structured_signals):
         if n.get('category') != 'natural_disaster':
             kept.append(n)
             continue
-        fam = hazard_family(' '.join(n.get('matched_keywords') or []),
-                            n.get('short_text'), n.get('long_text'))
+        # v1.1.0 -- keywords first, then the headline, NEVER long_text: the
+        # detector's long_text ends with the category description ("earthquakes,
+        # floods, cyclones..."), which read every news disaster as an EARTHQUAKE,
+        # so a cyclone row could never collide with its GDACS twin and both
+        # survived side by side.
+        fam = (hazard_family(' '.join(n.get('matched_keywords') or []))
+               or hazard_family(n.get('short_text')))
         if fam and (str(n.get('country', '')).lower(), fam) in keys:
             replaced += 1
             continue
