@@ -46,6 +46,23 @@ v3.15.0 — Oct 29 2026 (COMMODITY WEBS):
   * Registry narratives honour an entry's 'axes' list. Before this, a
     registry narrative with no NARRATIVE_AXIS_SETS row fell through to the
     KINETIC default -- a rice web would have counted as war.
+v3.16.0 — Oct 29 2026 (EVIDENCE GATES ON ECONOMIC NARRATIVES):
+  * Conditions are not events. Market-fragility cards are L3 standing unless
+    the Taiwan-exposed semis instrument actually falls (TSM/SOXX: -15%/30d or
+    -7%/5 sessions) and/or an actual L5 kinetic event hits the Taiwan theatre:
+    one = L4, both = L5. The plain fragility card's priority map ran
+    backwards (elevated band = priority 13 = promoted L5) -- fixed.
+  * Breadth is not news. "Global <commodity> pressure -- N exposed countries"
+    surfaces only when that commodity has earned L4+ on the commodity ladder.
+  * COMMODITY EVIDENCE CAP. Regional "Composite commodity pressure: SURGE"
+    signals (news-volume points) set the economic axis to L5 while every
+    commodity had earned only L3. At GPI altitude a country's commodity
+    signal is capped at what that commodity has earned; country pages keep
+    their own reading, and the payload keeps level_country + level_capped.
+  * The "no cross-theater convergence detected" fallback no longer appears
+    beside convergence narratives (it contradicted the page).
+  * Narratives may carry fresh=False (a condition is standing by definition);
+    _tier_narratives already honours it.
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -872,7 +889,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.15.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.16.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -3606,6 +3623,152 @@ def _narrative_food_stress_convergence(blufs):
     }
 
 
+
+
+# ── COMMODITY EVIDENCE CAP  (v3.16.0, Oct 29 2026) ─────────────────────────
+# Live Oct 29: every commodity in the evidence-earned commodity BLUF read L3
+# (news only), yet the economic AXIS read L5 -- from country-level signals on
+# the regional backends: "Composite commodity pressure: SURGE -- 218 pts"
+# (Saudi Arabia, Qatar, UAE, Afghanistan) and "BELARUS: Commodity Pressure:
+# SURGE -- POTASH (52 signals)". Those are news-volume scores. At GPI altitude
+# a country's commodity signal may not claim more than the commodity itself
+# has EARNED on the evidence ladder (price and/or physical disruption).
+#
+# Altitude principle: the country pages keep their own reading (they are
+# not touched); the GPI recalibrates what it lifts to the global stack, and
+# keeps the original as level_country so the cap is visible, not silent.
+_COMMODITY_SIGNAL_CATS = ('commodity_coupling', 'commodity', 'commodity_pressure',
+                          'commodity_surge', 'commodity_exposure')
+_COMMODITY_CAP_REGION = 'global_commodity'
+
+
+def _apply_commodity_evidence_cap(blufs):
+    """Cap regional commodity-news signals at the commodity's earned level.
+
+    Returns a small report. Never raises; a failure leaves signals untouched.
+    """
+    rep = {'capped': 0, 'earned': {}, 'basis': None}
+    try:
+        cb = (blufs or {}).get(_COMMODITY_CAP_REGION)
+        earned = {}
+        for sg in _signals_of(cb or {}):
+            c = sg.get('commodity')
+            if c and not sg.get('web_carrier'):
+                earned[str(c)] = max(earned.get(str(c), 0), _safe_level(sg.get('level', 0)))
+        rep['earned'] = earned
+        if cb:
+            ceiling_default = max(earned.values()) if earned else 3
+            rep['basis'] = 'commodity BLUF read'
+        else:
+            # Absence-honest: with no evidence ladder to consult, nothing has
+            # EARNED more than watch. Unread is not a licence to read L5.
+            ceiling_default = 3
+            rep['basis'] = 'commodity BLUF unavailable -- unearned, capped at watch'
+        names = sorted(earned.keys(), key=len, reverse=True)
+        for region, bluf in (blufs or {}).items():
+            if region == _COMMODITY_CAP_REGION or not isinstance(bluf, dict):
+                continue
+            pools = [bluf.get('signals'), bluf.get('top_signals')]
+            for pool in pools:
+                for sg in pool or []:
+                    if not isinstance(sg, dict):
+                        continue
+                    cat = str(sg.get('category') or '')
+                    if cat not in _COMMODITY_SIGNAL_CATS:
+                        continue
+                    lvl = _safe_level(sg.get('level', 0))
+                    txt = (sg.get('short_text') or '').lower()
+                    named = next((c for c in names
+                                  if re.search(r'\b%s\b' % re.escape(c.replace('_', ' ')), txt)), None)
+                    cap = earned.get(named, 3) if named else ceiling_default
+                    cap = max(cap, 3)    # never below watch: the country IS exposed
+                    if lvl > cap:
+                        sg.setdefault('level_country', sg.get('level'))
+                        sg['level'] = cap
+                        sg['level_capped'] = (
+                            'GPI evidence cap: country commodity-news reading %s, held at L%d '
+                            'because %s has earned only L%d on the price/disruption ladder'
+                            % (str(sg.get('level_country')).upper(), cap,
+                               (named or 'no tracked commodity'), cap))
+                        if 'GPI-held' not in (sg.get('short_text') or ''):
+                            sg['short_text'] = ('%s · GPI-held at L%d: not price/disruption-confirmed'
+                                                % ((sg.get('short_text') or '').rstrip(), cap))[:200]
+                        rep['capped'] += 1
+    except Exception as e:
+        rep['error'] = str(e)[:160]
+    if rep['capped']:
+        print('[GPI] commodity evidence cap: %d regional commodity signal(s) held at earned level (%s)'
+              % (rep['capped'], rep['basis']))
+    return rep
+
+
+# ════════════════════════════════════════════════════════════════════════
+# EVIDENCE GATES FOR ECONOMIC NARRATIVES  (v3.16.0, Oct 29 2026)
+# ════════════════════════════════════════════════════════════════════════
+# Rachel's commodity ruling, extended GPI-wide: a CONDITION (a fragility
+# reading, a news-volume breadth count) is not an EVENT. Conditions sit at L3
+# and are standing by definition; the level is earned by a market actually
+# moving and/or a physical/kinetic event actually happening.
+#
+# Live Oct 29: "Market fragility HIGH AND Taiwan-Strait kinetic signaling"
+# promoted the economic axis to L5 on priority alone, while every commodity
+# read L3; and "Global oil pressure -- 45 exposed countries off one shared
+# headline" sat in the toplines as if breadth of coverage were news.
+
+SEMIS_MOVE_30D = 15.0   # % fall in the Taiwan-exposed semis instrument over ~30 days
+SEMIS_MOVE_5D  = 7.0    # % fall over five sessions
+_TAIWAN_THEATRES = ('taiwan', 'china', 'taiwan_strait', 'cross_strait')
+_KINETIC_EVENT_CATS = ('red_line_breached', 'kinetic_pressure', 'kinetic_threshold')
+
+
+def _semis_market_move():
+    """Has the Taiwan-exposed semiconductor instrument actually FALLEN?
+
+    Reads the commodity tracker's hourly sparkline cache (TSM, failing over to
+    the SOXX/SMH semis ETFs -- here the equity IS the exposed asset, so a proxy
+    is acceptable, unlike for a raw commodity). Never fetches. Returns
+    {'state': 'move'|'flat'|'unread', ...}; unread is never read as calm.
+    """
+    bundle = _redis_get('commodity_sparkline_bundle') or {}
+    sp = (bundle.get('sparklines') or {}).get('semiconductors') if isinstance(bundle, dict) else None
+    if not isinstance(sp, dict):
+        return {'state': 'unread', 'reason': 'semiconductor price not in the sparkline cache'}
+    closes = []
+    for v in sp.get('spark') or []:
+        v = v.get('value') if isinstance(v, dict) else v
+        try:
+            closes.append(float(v))
+        except (TypeError, ValueError):
+            pass
+    try:
+        c30 = float(sp.get('change_pct_30d')) if sp.get('change_pct_30d') is not None else None
+    except (TypeError, ValueError):
+        c30 = None
+    c5 = ((closes[-1] - closes[-6]) / closes[-6] * 100) if len(closes) >= 6 and closes[-6] else None
+    tk = sp.get('source_ticker_used') or sp.get('ticker') or 'TSM'
+    out = {'ticker': tk, 'change_pct_30d': round(c30, 1) if c30 is not None else None,
+           'change_pct_5d': round(c5, 1) if c5 is not None else None}
+    if c30 is not None and c30 <= -SEMIS_MOVE_30D:
+        out.update(state='move', phrase='%s down %.0f%% over 30 days' % (tk, abs(c30)))
+    elif c5 is not None and c5 <= -SEMIS_MOVE_5D:
+        out.update(state='move', phrase='%s down %.0f%% over five sessions' % (tk, abs(c5)))
+    elif c30 is None and c5 is None:
+        out.update(state='unread', reason='semiconductor price series too short')
+    else:
+        out.update(state='flat', phrase='%s not falling (%s over 30 days)'
+                   % (tk, ('%+.0f%%' % c30) if c30 is not None else 'n/a'))
+    return out
+
+
+def _taiwan_kinetic_event(asia):
+    """An actual L5 kinetic event in the Taiwan/China theatre -- not signaling."""
+    for sg in _signals_of(asia or {}):
+        th = str(sg.get('theatre') or '').lower()
+        if th in _TAIWAN_THEATRES and sg.get('category') in _KINETIC_EVENT_CATS \
+                and _safe_level(sg.get('level', 0)) >= 5:
+            return sg.get('short_text') or th
+    return None
+
 def _narrative_market_fragility(blufs):
     """MARKET FRAGILITY (economic axis) + the FRAGILITY x KINETIC compound read
     (Slice 3, Jun 13 2026). Black Swan #2 integration.
@@ -3698,16 +3861,39 @@ def _narrative_market_fragility(blufs):
     feat_phrase = ', '.join(f.replace('_', ' ') for f in feats[:4]) if feats else 'multiple fragility signals'
 
     if semis_compound:
+        # v3.16.0 -- EARNED LEVEL. Fragility + signaling are CONDITIONS (L3,
+        # standing). A real fall in the Taiwan-exposed semis instrument, or an
+        # actual L5 kinetic event in the Taiwan theatre, lifts it to L4; both
+        # together L5. Priority follows the level, so a condition can no longer
+        # promote into the feed at L5 on priority alone.
+        _mv = _semis_market_move()
+        _ev = _taiwan_kinetic_event(asia)
+        _lvl = 3 + int(_mv.get('state') == 'move') + int(bool(_ev))
+        _basis = []
+        _basis.append('market: ' + (_mv.get('phrase') or _mv.get('reason') or _mv.get('state')))
+        _basis.append('kinetic: ' + ('L5 event -- %s' % _ev if _ev
+                                     else 'signaling only, no L5 event in the Taiwan theatre'))
+        _gate_txt = (' EVIDENCE GATE: L%d -- %s. A fragility reading and cross-strait '
+                     'signaling are conditions, not events; this card earns L4 when the '
+                     'exposed market actually falls or a kinetic event actually happens, '
+                     'and L5 when both do.' % (_lvl, '; '.join(_basis)))
+        _head = {3: 'Standing condition: market fragility %s with Taiwan-Strait signaling -- '
+                    'the AI/semiconductor exposure, no market or kinetic event yet',
+                 4: 'Market fragility %s AND Taiwan-Strait pressure -- the AI/semiconductor '
+                    'convergence is now showing in evidence',
+                 5: 'Market fragility %s AND a Taiwan-Strait event with the semiconductor '
+                    'market falling -- the AI/semiconductor convergence is live'}[_lvl] % band_label
         return {
-            'priority': 13,  # high -- a flagship cross-domain convergence
+            'priority': {3: 8, 4: 11, 5: 13}[_lvl],
+            'level_hint': _lvl,
+            'fresh': False if _lvl == 3 else None,
+            'evidence_gate': {'level': _lvl, 'market': _mv, 'kinetic_event': _ev},
             'category': 'market_fragility_semis_compound',
             'regions':  ['asia', 'global_market'],
             'icon':     '\U0001f9e8',  # 🧨
             'color':    '#dc2626',
             'pressure_type': 'economic',
-            'headline': ('Market fragility %s AND Taiwan-Strait kinetic signaling -- '
-                         'the AI/semiconductor convergence'
-                         % band_label),
+            'headline': _head,
             'detail':   (f'The Market Watch fragility detector reads {band} (composite {composite}), with the '
                          'AI/data-center/semiconductor thematic running hot -- the concentration '
                          'that defines the current market is precisely the sector most exposed to a '
@@ -3719,7 +3905,8 @@ def _narrative_market_fragility(blufs):
                          'aimed at it.' + _analog_phrase() + _sync_phrase() +
                          ' This is a convergence read of present conditions across two '
                          'independent layers, not a prediction that either a drawdown or a Taiwan '
-                         f'contingency will occur. {("Pattern note: " + lag) if lag else ""}'),
+                         f'contingency will occur. {("Pattern note: " + lag) if lag else ""}'
+                         + _gate_txt),
         }
 
     # --- Economic-axis fragility surface (no kinetic co-occurrence yet) ---
@@ -3731,9 +3918,14 @@ def _narrative_market_fragility(blufs):
               'compound read to watch is fragility plus a Taiwan-Strait disruption.%s%s %s'
               % (band, composite, feat_phrase, _analog_phrase(), _sync_phrase(),
                  ('Pattern note: ' + lag) if lag else ''))
-    pr = {'critical': 9, 'high': 11, 'elevated': 13}.get(band, 13)
+    # v3.16.0 -- a fragility reading alone is a CONDITION: L3, standing. The
+    # old map ran backwards ({'critical': 9, 'high': 11, 'elevated': 13}) --
+    # the MILDEST band got the highest priority and promoted into the feed at
+    # L5. The band still leads the headline; it no longer sets the level.
     return {
-        'priority': pr,
+        'priority': 8,
+        'level_hint': 3,
+        'fresh': False,
         'category': 'market_fragility',
         'regions':  ['global_market'],
         'icon':     '\U0001f9a2',  # 🦢
@@ -4071,14 +4263,34 @@ def _narrative_multiaxis_convergence(blufs):
     }
     cards = []
 
-    # (1) Global commodity conditions -- broad and cross-theater by nature
+    # (1) Global commodity conditions -- broad and cross-theater by nature.
+    # v3.16.0 -- BREADTH IS NOT NEWS. One headline registering across N exposed
+    # countries is a coverage count. The card now surfaces only when the
+    # commodity has EARNED L4+ on the commodity tracker's evidence ladder (a
+    # confirmed price move and/or physical disruption), and takes that level.
+    # A news-only commodity (L3) gets no card: its own economic signal already
+    # says "watch, not yet act", and a second card would repeat it.
+    _earned = {}
+    for _sg in _signals_of(blufs.get('global_commodity') or {}):
+        _c = _sg.get('commodity')
+        if _c:
+            _earned[_c] = (_safe_level(_sg.get('level', 0)), _sg.get('level_basis'),
+                           _sg.get('short_text') or '')
     for g in (cax.get('global_conditions') or [])[:2]:
+        _cid = str(g.get('commodity', 'x'))
+        _lv, _lb, _st = _earned.get(_cid, (0, None, ''))
+        if _lv < 4:
+            print('[GPI] breadth card for %s suppressed: commodity reads L%s (%s) -- '
+                  'breadth of coverage is not evidence' % (_cid, _lv, _lb or 'not admitted'))
+            continue
         n = g.get('country_count', 0)
         nm = (g.get('commodity_name') or g.get('commodity') or 'commodity')
         sample = ', '.join((g.get('countries') or [])[:6])
         cards.append({
-            'priority': 9,
-            'category': 'global_commodity_' + str(g.get('commodity', 'x')),
+            'priority': {4: 10, 5: 12}.get(_lv, 10),
+            'level_hint': _lv,
+            'evidence_gate': {'commodity_level': _lv, 'level_basis': _lb},
+            'category': 'global_commodity_' + _cid,
             'regions':  ['global_commodity'],
             'icon':     '\U0001f6e2\ufe0f',  # oil drum
             'color':    '#f59e0b',
@@ -4089,7 +4301,9 @@ def _narrative_multiaxis_convergence(blufs):
                          f'reporting -- it is NOT a price move and NOT a country-specific supply shock. It '
                          f'surfaces at the global altitude precisely because it is broad: a market-wide '
                          f'condition rather than convergence on any one country. Driving headline: '
-                         f'"{(g.get("headline") or "")[:140]}".'),
+                         f'"{(g.get("headline") or "")[:140]}". EVIDENCE GATE: surfaced because '
+                         f'{nm.lower()} has earned L{_lv} on the commodity ladder '
+                         f'({(_lb or "").replace("_", " ")}) -- {_st[:120]}'),
         })
 
     # (2) Strongest genuine per-country multi-axis convergences
@@ -4537,6 +4751,13 @@ def _detect_narratives(blufs):
         except Exception as e:
             print(f'[GPI v2.0] Narrative detector error ({detector.__name__}): {str(e)[:120]}')
     narratives.sort(key=lambda n: n.get('priority', 0), reverse=True)
+    # v3.16.0 -- the fallback says "no cross-theater convergence detected".
+    # Live Oct 29 it sat in the toplines beside 12 convergence narratives,
+    # contradicting the page. It now appears only when it is true.
+    if any(n.get('category') not in ('global_baseline', 'global_warning') for n in narratives):
+        narratives = [n for n in narratives
+                      if n.get('category') not in ('global_baseline', 'global_warning')]
+
     # Deduplicate categories (in case fallback fires alongside others)
     seen = set()
     deduped = []
@@ -4589,6 +4810,7 @@ SUSTAINED_COLOR     = '#ef4444'
 # Module-level so the prose builder can read the gate without a signature change
 # rippling through every caller. Reset at the top of each build.
 _LAST_LEVEL_GATE = {}
+_LAST_COMMODITY_CAP = {}   # v3.16.0 -- commodity evidence cap report
 
 
 def _redis_get_checked(key):
@@ -6332,6 +6554,11 @@ def build_gpi(force=False):
                 'regional_cards': [],
             }
 
+        # v3.16.0 -- before anything reads a level: a country's commodity-news
+        # SURGE may not claim more than the commodity has earned.
+        global _LAST_COMMODITY_CAP
+        _LAST_COMMODITY_CAP = _apply_commodity_evidence_cap(blufs)
+
         # v3.14.0 -- fresh motion state per build (a failed build must not leave
         # a half-loaded state behind for the next one).
         _AXIS_MOTION_STATE.update(loaded=False, ok=False, data=None, dirty=False, first_run=False)
@@ -6433,6 +6660,7 @@ def build_gpi(force=False):
             # fronts, day counts, breach bypass). The page renders this under
             # the badge; it is the honesty line for a held L4.
             'level_gate':      _LAST_LEVEL_GATE,
+            'commodity_cap':   _LAST_COMMODITY_CAP,     # v3.16.0
             # v3.13.0 -- L6 doctrine: confirmed events (7-day hold), candidates
             # that passed the class test but lack world reaction, and tracker
             # L6 signals demoted to L5 with the reason.
