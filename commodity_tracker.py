@@ -52,6 +52,16 @@ CHANGELOG:
            Nigeria; Guinea notes refreshed post-election; keyword nets
            extended (gold/diamonds/lithium/natural_gas/coal); 8 African
            commodity-jawboning leaders added to KNOWN_SPEAKERS.
+  v1.7.0 - Oct 29 2026 Evidence-earned economic level (GPI emitter v2.0.0).
+           News pressure now only ADMITS a commodity to the GPI economic
+           axis; the level is earned: news only L3, + confirmed price move
+           or physical disruption L4, both L5. Direct disruption = driver
+           headline (export ban, force majeure, shut-in, closure, embargo)
+           or a dependent corridor impaired/blocked. Indirect (new war
+           front / confirmed disaster in a top producer) counts only when
+           the price is rising. Fixed _get_24h_price_reaction reading the
+           sparkline cache root (always None). Cleared an undefined-name
+           warning in the scan's sparkline call.
 
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
@@ -4129,8 +4139,12 @@ def _get_24h_price_reaction(commodity_id):
         bundle = load_sparkline_cache()
         if not bundle:
             return None
-        entry = bundle.get(commodity_id) or {}
-        return entry.get('change_pct_1d')
+        # Oct 29 2026 fix: the cache is {'sparklines': {cid: {...}}, 'cached_at'}.
+        # Reading the root always missed, so this returned None for every
+        # commodity since the day it was written.
+        root = bundle.get('sparklines') if isinstance(bundle.get('sparklines'), dict) else bundle
+        entry = root.get(commodity_id) or {}
+        return entry.get('change_pct_1d') if isinstance(entry, dict) else None
     except Exception:
         return None
 
@@ -4608,7 +4622,7 @@ def _run_full_scan(days=7):
 
     # Phase 2: fetch sparklines (cheap, 11 Yahoo calls, cached separately)
     print("[Commodity Tracker] Phase 2: Fetching sparklines...")
-    sparklines = fetch_all_sparklines(force=force_refresh if False else False)
+    sparklines = fetch_all_sparklines(force=False)   # Oct 29: was `force_refresh if False else False` (always False; undefined name)
     # Note: sparklines have their own 1hr TTL; main scan respects that
 
     # Phase 3: analyze articles
@@ -5523,17 +5537,274 @@ def _commodity_country_label(cid):
     c = str(cid).strip().lower()
     return _COUNTRY_LABEL_OVERRIDES.get(c, c.replace('_', ' ').title())
 
+
+# ════════════════════════════════════════════════════════════════════════
+# EVIDENCE-EARNED ECONOMIC LEVEL  (emitter v2.0.0, Oct 29 2026)
+# ════════════════════════════════════════════════════════════════════════
+# Rachel's ruling, Oct 29 2026: "just because it hits the news doesn't ALWAYS
+# make it an economic rupture -- pricing changes, availability of the
+# commodity, war or natural disaster in the region of the commodity preventing
+# its mining, access, or shipment ... all need to be considered."
+#
+# Before v2.0.0 the level WAS the news alert: surge -> L5, high -> L4. A burst
+# of coverage alone could put a commodity at the top of the economic axis.
+#
+# Now news only ADMITS a commodity (high/surge + a hard, non-contaminated
+# driver). The level is earned from two independent kinds of evidence:
+#
+#   news only                                   -> L3  "news pressure"
+#   + a CONFIRMED price move                     -> L4
+#   + PHYSICAL disruption evidence               -> L4
+#   price move AND disruption                    -> L5  "supply rupture"
+#
+# PRICE MOVE: read from the hourly sparkline cache (no new fetch). 30-day
+# change past the commodity's threshold, OR a 5-session move past the short
+# threshold. Either direction counts -- a spike hits importers, a collapse
+# hits producers -- and the text says which.
+#
+# PHYSICAL DISRUPTION (any one):
+#   a) disruption language in a hard driver headline (export ban, force
+#      majeure, shut-in, halted output, mine/port closure, embargo, blockade),
+#      not vetoed by easing ("lifts ban") or hedging ("could halt");
+#   (b) and (c) are INDIRECT: they count only when the price is RISING --
+#   the market confirming a shortfall. Otherwise they are listed as
+#   'exposure noted' and earn no level.
+#   b) a top-5 producer at a NEW kinetic L5 front (gpi:l5_onsets, inside the
+#      14-day novelty window). A SUSTAINED war is already priced in and is
+#      not, by itself, fresh disruption -- the corridor read below catches it
+#      when it actually bites;
+#   c) a top-5 producer hit by a natural disaster the humanitarian detector
+#      reads at L4+ (confirmed deaths/displacement, not modelled exposure);
+#   d) a dependent shipping corridor reading impaired or blocked.
+#
+# ABSENCE-HONEST: a commodity with no spot price (potash, phosphate, ...) or a
+# failed price read is "price unread", never "price flat". It can still reach
+# L4 on disruption, but not L5 -- L5 needs both kinds of evidence.
+
+_PRICE_MOVE_DEFAULT = (15.0, 7.0)          # (30-day %, 5-session %)
+_PRICE_MOVE_THRESHOLDS = {
+    # Naturally jumpy markets need a bigger move before it means anything.
+    'natural_gas': (30.0, 15.0),
+    'lithium':     (25.0, 12.0),
+    'uranium':     (20.0, 10.0),
+    'coffee':      (20.0, 10.0),
+    'silver':      (20.0, 10.0),
+    'rare_earths': (20.0, 10.0),
+}
+
+# Shipping corridors a commodity's flow depends on. Only corridors that the
+# Europe backend's corridor_registry actually writes (corridor:<id>:latest).
+# Add here as more corridors are sensed -- an id with no Redis record reads
+# as 'unknown' and never counts as disruption.
+_COMMODITY_CORRIDORS = {
+    'wheat':         ['black_sea_grain_corridor'],
+    'corn':          ['black_sea_grain_corridor'],
+    'sunflower_oil': ['black_sea_grain_corridor'],
+}
+
+_DIRECT_DISRUPTION = ('headline', 'corridor')
+
+_DISRUPTION_RX = re.compile(
+    r"\b(export bans?|bans? (?:on )?(?:\w+ ){0,2}exports?|export (?:curbs?|restrictions?|halts?|suspension)"
+    r"|(?:halts?|halted|suspends?|suspended|stops?|stopped) (?:\w+ ){0,2}(?:exports?|shipments?|production|output|mining|operations)"
+    r"|force majeure|shut[- ]?ins?"
+    r"|(?:shuts?|shut|closes?|closed) (?:down )?(?:the |its |a )?(?:\w+ )?(?:mines?|refinery|refineries|plants?|ports?|pipelines?|terminals?)"
+    r"|production (?:halts?|halted|suspended|stoppage|collapse)"
+    r"|(?:mines?|ports?|terminals?|refinery|pipelines?) (?:closures?|closed|shut|blockaded|attacked|struck|hit)"
+    r"|embargo(?:es)?|blockades?|output (?:collapses?|plunges?|slumps?))\b",
+    re.I)
+# Easing anywhere in the headline means the disruption is ending, not starting.
+_DISRUPTION_EASING_RX = re.compile(
+    r"\b(lift(?:s|ed|ing)?|eas(?:e|es|ed|ing)|scrap(?:s|ped)?|relax(?:es|ed)?|reopen(?:s|ed|ing)?"
+    r"|resum(?:e|es|ed|ing)|end(?:s|ed)? (?:the |its )?(?:\w+ ){0,2}(?:ban|embargo|blockade)|after .{0,30} ends)\b", re.I)
+# Hedges vetoes only when they sit just BEFORE the disruption phrase.
+_DISRUPTION_HEDGE_RX = re.compile(
+    r"\b(could|may|might|considers?|considering|mulls?|weighs?|threatens?|threatened|warns? of"
+    r"|fears?|risk of|proposed?|plans? to|seeks?|calls? for|urged?)\b", re.I)
+
+
+def _spark_closes(spark):
+    """Sparkline closes as floats. Tolerates [70.1, ...] and [{'value': ..}]."""
+    out = []
+    for p in spark or []:
+        v = p.get('value') if isinstance(p, dict) else p
+        try:
+            if v is not None:
+                out.append(float(v))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _commodity_price_evidence(cid, summ):
+    """Return {'state': 'move'|'flat'|'unread', ...}. Never invents a number."""
+    sp = summ.get('sparkline')
+    if not summ.get('has_spot_price') and not sp:
+        return {'state': 'unread', 'reason': 'no spot price for this commodity'}
+    if not isinstance(sp, dict):
+        return {'state': 'unread', 'reason': 'price read failed or not yet cached'}
+    th30, th5 = _PRICE_MOVE_THRESHOLDS.get(cid, _PRICE_MOVE_DEFAULT)
+    closes = _spark_closes(sp.get('spark'))
+    ch30 = sp.get('change_pct_30d')
+    try:
+        ch30 = float(ch30) if ch30 is not None else None
+    except (TypeError, ValueError):
+        ch30 = None
+    if ch30 is None and len(closes) >= 2 and closes[0]:
+        ch30 = (closes[-1] - closes[0]) / closes[0] * 100
+    ch5 = None
+    if len(closes) >= 6 and closes[-6]:
+        ch5 = (closes[-1] - closes[-6]) / closes[-6] * 100
+    if ch30 is None and ch5 is None:
+        return {'state': 'unread', 'reason': 'sparkline too short to measure a move'}
+    out = {'change_pct_30d': round(ch30, 1) if ch30 is not None else None,
+           'change_pct_5d': round(ch5, 1) if ch5 is not None else None,
+           'threshold_30d': th30, 'threshold_5d': th5}
+    if ch30 is not None and abs(ch30) >= th30:
+        out.update(state='move', window='30d', pct=round(ch30, 1))
+    elif ch5 is not None and abs(ch5) >= th5:
+        out.update(state='move', window='5d', pct=round(ch5, 1))
+    else:
+        out['state'] = 'flat'
+    return out
+
+
+def _price_phrase(ev):
+    if ev.get('state') == 'move':
+        pct = ev['pct']
+        span = '30 days' if ev['window'] == '30d' else 'five sessions'
+        return f"price {'up' if pct > 0 else 'down'} {abs(pct):.0f}% over {span}"
+    if ev.get('state') == 'flat':
+        bits = []
+        if ev.get('change_pct_30d') is not None:
+            bits.append(f"{ev['change_pct_30d']:+.0f}% over 30 days")
+        return 'price not confirming' + (f" ({bits[0]})" if bits else '')
+    return 'price unread'
+
+
+def _headline_disruption(title):
+    """Disruption phrase in a driver headline, or None."""
+    t = title or ''
+    if _DISRUPTION_EASING_RX.search(t):
+        return None
+    for m in _DISRUPTION_RX.finditer(t):
+        window = t[max(0, m.start() - 45):m.start()]
+        if _DISRUPTION_HEDGE_RX.search(window):
+            continue
+        return m.group(0)
+    return None
+
+
+def _ctx_redis_get(key):
+    """Read one JSON value from Upstash. None on absence or failure."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        return None
+    try:
+        r = requests.get(f"{UPSTASH_REDIS_URL}/get/{key}",
+                         headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                         timeout=5)
+        res = r.json().get('result') if r.status_code == 200 else None
+        return json.loads(res) if res else None
+    except Exception:
+        return None
+
+
+def _load_disruption_context():
+    """One read of each cross-module store per build. Every store that cannot
+    be read is named in 'unread' so the payload says what it could not see."""
+    ctx = {'new_fronts': {}, 'disasters': {}, 'corridors': {}, 'unread': []}
+
+    onsets = _ctx_redis_get('gpi:l5_onsets')
+    if isinstance(onsets, dict) and isinstance(onsets.get('theatres'), dict):
+        for th, rec in onsets['theatres'].items():
+            if not isinstance(rec, dict) or rec.get('below_since') or rec.get('seeded'):
+                continue
+            onset = rec.get('onset')
+            try:
+                age = (datetime.now(timezone.utc) - datetime.fromisoformat(onset)).days
+            except Exception:
+                continue
+            if age <= 14:                       # GPI novelty window
+                ctx['new_fronts'][str(th).lower()] = age
+    else:
+        ctx['unread'].append('kinetic fronts (gpi:l5_onsets)')
+
+    hum = _ctx_redis_get('humanitarian_convergence:bluf:latest')
+    if isinstance(hum, dict):
+        for s in (hum.get('signals') or hum.get('top_signals') or []):
+            if not isinstance(s, dict) or s.get('category') != 'natural_disaster':
+                continue
+            try:
+                lvl = int(s.get('level') or 0)
+            except (TypeError, ValueError):
+                lvl = 0
+            c = str(s.get('country') or '').strip().lower().replace(' ', '_')
+            if lvl >= 4 and c and lvl > ctx['disasters'].get(c, {}).get('level', 0):
+                ctx['disasters'][c] = {'level': lvl, 'text': (s.get('short_text') or '')[:120]}
+    else:
+        ctx['unread'].append('natural disasters (humanitarian detector)')
+
+    wanted = sorted({c for ids in _COMMODITY_CORRIDORS.values() for c in ids})
+    for cor in wanted:
+        rec = _ctx_redis_get(f'corridor:{cor}:latest')
+        if isinstance(rec, dict) and rec.get('live_state'):
+            ctx['corridors'][cor] = str(rec['live_state']).lower()
+        else:
+            ctx['corridors'][cor] = 'unknown'
+    return ctx
+
+
+def _producer_in_theatre(producer, theatre_key):
+    p = producer.lower()
+    th = theatre_key.lower()
+    if th.startswith('region:'):
+        return False
+    return p == th or p in th.split('_') or (('_' in p) and p in th)
+
+
+def _commodity_disruption_evidence(cid, summ, hard_sigs, ctx):
+    """List of {'kind', 'text'} disruption findings. Empty = none seen."""
+    found = []
+    for sig in hard_sigs[:8]:
+        phrase = _headline_disruption(sig.get('article_title'))
+        if phrase:
+            found.append({'kind': 'headline',
+                          'text': f"“{phrase.lower()}” in reporting: "
+                                  f"{(sig.get('article_title') or '').strip()[:110]}"})
+            break
+    producers = [str(p).lower() for p in (summ.get('top_producers') or [])[:5]]
+    for p in producers:
+        for th, age in ctx['new_fronts'].items():
+            if _producer_in_theatre(p, th):
+                found.append({'kind': 'new_front',
+                              'text': f"{_commodity_country_label(p)} (top producer) at a new "
+                                      f"active-conflict front ({th.replace('_', ' ')}, day {age})"})
+                break
+        d = ctx['disasters'].get(p)
+        if d:
+            found.append({'kind': 'disaster',
+                          'text': f"{_commodity_country_label(p)} (top producer) under a confirmed-"
+                                  f"impact natural disaster (L{d['level']})"})
+    for cor in _COMMODITY_CORRIDORS.get(cid, []):
+        st = ctx['corridors'].get(cor, 'unknown')
+        if st in ('impaired', 'blocked'):
+            found.append({'kind': 'corridor',
+                          'text': f"{cor.replace('_', ' ')} reads {st.upper()}"})
+    return found
+
+
 def build_commodity_economic_bluf(bundle=None):
     """Build a GPI-consumable BLUF from current commodity pressure.
 
-    Surfaces only high/surge commodities whose surge passes the relevance gate,
-    each anchored with a plain-language So-What naming the exposed importers.
+    News pressure (high/surge + a hard driver) ADMITS a commodity. Its level is
+    EARNED from price and physical-disruption evidence -- see the block above.
     All signals tagged pressure_type='economic'.
     """
     if bundle is None:
         bundle = scan_commodity_pressure(days=7, force_refresh=False)
     summaries = (bundle or {}).get('commodity_summaries', {}) or {}
 
+    ctx = None
     signals = []
     for cid, summ in summaries.items():
         alert = summ.get('alert_level', 'normal')
@@ -5543,38 +5814,78 @@ def build_commodity_economic_bluf(bundle=None):
         hard = [s for s in top_sigs if _is_hard_commodity_signal(s)]
         if not hard:
             continue                                   # gate 2: relevance (drop contamination)
+        if ctx is None:
+            ctx = _load_disruption_context()           # lazy: no reads when nothing admits
 
-        # v1.3.2 (Oct 6 2026) -- severity_canon owns this translation now.
-        # Parity-checked before migrating: 4 of 4 rungs agree, zero behaviour
-        # change. What the canon ADDS is the 'monitor' rung, which this table
-        # never had and which therefore hit the `, 0` default -- a MONITORED
-        # commodity reading as NORMAL. Soft import: no canon, old table stands.
-        level = None
-        try:
-            import severity_canon as _canon
-            level = _canon.to_platform('commodity_alert', alert)
-        except Exception:
-            level = None
-        if level is None:
-            level = _COMMODITY_BLUF_LEVEL.get(alert, 0)
+        price = _commodity_price_evidence(cid, summ)
+        found = _commodity_disruption_evidence(cid, summ, hard, ctx)
+        has_price = price.get('state') == 'move'
+        # DIRECT evidence (a disruption reported in the commodity's own driver
+        # headline, or a dependent corridor impaired) counts on its own.
+        # INDIRECT evidence (a war front or disaster somewhere in a top
+        # producer) only says supply COULD be hit -- India at war does not mean
+        # Indian wheat stopped moving. It counts only when the price is rising,
+        # i.e. when the market is confirming a supply shortfall.
+        rising = has_price and price.get('pct', 0) > 0
+        disruption = [d for d in found
+                      if d['kind'] in _DIRECT_DISRUPTION or rising]
+        exposure_only = [d for d in found if d not in disruption]
+        has_disr = bool(disruption)
+        level = 3 + int(has_price) + int(has_disr)
+
+        if has_price and has_disr:
+            basis, basis_label = 'price_and_disruption', 'supply rupture'
+        elif has_price:
+            basis, basis_label = 'price_confirmed', 'price-confirmed pressure'
+        elif has_disr:
+            basis, basis_label = 'physical_disruption', 'physical disruption'
+        else:
+            basis, basis_label = 'news_only', 'news pressure'
+
         color = _COMMODITY_BLUF_COLOR.get(level, '#6b7280')
         name  = summ.get('name', cid)
         icon  = summ.get('icon', '\U0001F4C8')
         driver = (hard[0].get('article_title') or '').strip()
         consumers = [_commodity_country_label(c) for c in (summ.get('top_consumers') or [])[:3]]
+        producers = [_commodity_country_label(c) for c in (summ.get('top_producers') or [])[:3]]
         cons_txt = ', '.join(consumers) if consumers else 'import-dependent economies'
 
-        short_text = (f"{icon} {name} news-signal pressure {alert.upper()} "
-                      f"-- exposed importers: {cons_txt}")[:150]
+        pphrase = _price_phrase(price)
+        short_text = (f"{icon} {name} {basis_label} -- {pphrase}"
+                      + (f"; {disruption[0]['text'].split(':')[0]}" if has_disr else '')
+                      + f" (news {alert})")[:160]
+
         long_parts = []
         if driver:
             long_parts.append(f"Driver: {driver}.")
         long_parts.append(
-            f"{name} news-signal pressure ({alert}) reflects weighted volume/severity "
-            f"of matched commodity reporting -- not price.")
-        long_parts.append(
-            "SO WHAT: supply stress here transmits to import-dependent economies"
-            + (f" -- most exposed: {cons_txt}." if consumers else "."))
+            f"Level basis: {basis_label.upper()}. News pressure ({alert}) admitted {name}; "
+            f"the level is earned by evidence, not coverage volume. Price: {pphrase}"
+            + (" -- no spot price is tracked, so this can reach L4 on disruption but not L5"
+               if price.get('state') == 'unread' else '') + ".")
+        if has_disr:
+            long_parts.append("Disruption: " + '; '.join(d['text'] for d in disruption[:3]) + ".")
+        else:
+            long_parts.append("No physical disruption seen (no export ban, shut-in, closure, "
+                              "new war front or confirmed disaster in a top producer"
+                              + (", dependent corridor not impaired" if cid in _COMMODITY_CORRIDORS else '')
+                              + ").")
+        if exposure_only:
+            long_parts.append("Exposure noted, not counted (price not rising to confirm it): "
+                              + '; '.join(d['text'] for d in exposure_only[:2]) + ".")
+        # SO WHAT -- direction matters: a spike hits importers, a collapse producers.
+        if has_price and price['pct'] < 0:
+            so_what = (f"SO WHAT: a falling {name.lower()} price squeezes producer revenue"
+                       + (f" -- most exposed: {', '.join(producers)}." if producers else "."))
+        elif level >= 4:
+            so_what = ("SO WHAT: supply stress is reaching the physical market and will "
+                       "transmit to import-dependent economies"
+                       + (f" -- most exposed: {cons_txt}." if consumers else "."))
+        else:
+            so_what = ("SO WHAT: watch, not yet act -- coverage is up but neither prices nor "
+                       "physical supply confirm it. If either moves, exposure falls on "
+                       + (f"{cons_txt}." if consumers else "import-dependent economies."))
+        long_parts.append(so_what)
         long_text = ' '.join(long_parts)
 
         signals.append({
@@ -5591,11 +5902,17 @@ def build_commodity_economic_bluf(bundle=None):
             'priority':          level * 3,
             'exposed_consumers': consumers,
             'score':             summ.get('total_score'),
+            'news_alert':        alert,
+            'level_basis':       basis,
+            'price_evidence':    price,
+            'disruption_evidence': disruption,
+            'exposure_noted':    exposure_only,
         })
 
-    signals.sort(key=lambda s: -s['level'])
+    signals.sort(key=lambda s: (-s['level'], -(s.get('score') or 0)))
     max_level = signals[0]['level'] if signals else 0
-    posture_label = {5: 'Surge', 4: 'High'}.get(max_level, 'Monitoring')
+    posture_label = {5: 'Supply rupture', 4: 'Confirmed pressure',
+                     3: 'News pressure'}.get(max_level, 'Monitoring')
     posture_color = _COMMODITY_BLUF_COLOR.get(max_level, '#6b7280')
 
     return {
@@ -5607,14 +5924,17 @@ def build_commodity_economic_bluf(bundle=None):
         'top_signals':   signals[:5],
         'signals':       signals,
         'updated_at':    datetime.now(timezone.utc).isoformat(),
-        'disclaimer':    ('Economic CONVERGENCE/EXPOSURE indicator built from news-signal '
-                          'pressure (weighted reporting volume/severity), NOT a price forecast. '
-                          'Surfaces only commodities with a supply-relevant driver and '
-                          'import-dependent exposure.'),
+        'disclaimer':    ('Economic CONVERGENCE/EXPOSURE indicator, NOT a price forecast. '
+                          'News pressure admits a commodity; its level is earned from a '
+                          'confirmed price move and/or physical disruption evidence '
+                          '(news only = L3, one kind of evidence = L4, both = L5).'),
         'meta': {
             'commodities_surfaced': [s['commodity'] for s in signals],
-            'emitter_version':      'commodity_economic_bluf v1.0.0',
-            'gate':                 'high/surge + specific-phrase relevance',
+            'emitter_version':      'commodity_economic_bluf v2.0.0',
+            'gate':                 'high/surge + specific-phrase relevance admits; '
+                                    'price + disruption evidence earns the level',
+            'context_unread':       (ctx or {}).get('unread', []),
+            'corridors_read':       (ctx or {}).get('corridors', {}),
         },
     }
 

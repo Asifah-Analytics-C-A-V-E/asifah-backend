@@ -1,6 +1,11 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.13.0 -- October 29, 2026 (FEED NOISE FILTER)
+  * GDACS GREEN alerts and sub-M6.0 quake items ingested as ARTICLES no longer
+    become natural_disaster rows (the Africa "forest fire" and Pacific "quake
+    struck" L3 rows). Any item reporting harm is kept. Counts and examples in
+    meta.disaster_noise_filtered.
 v1.12.0 -- October 29, 2026 (DISASTER OUTCOMES EARN THE LEVEL)
   * Rachel's ruling: modelled alert / magnitude / keyword -> L3 (watch);
     confirmed outcomes (>=10 dead, >=25k displaced, >=10k homes) -> L4;
@@ -558,6 +563,12 @@ SIGNAL_CATEGORIES = {
             'flooding', 'flash flood', 'flash floods', 'severe flooding',
             'catastrophic flooding', 'monsoon floods', 'flood waters', 'floodwaters',
             'deadly floods', 'record flooding', 'dam collapse', 'dam burst',
+            # v1.13.0: bare "floods" is contamination-prone ("floods the market"),
+            # but headline verbs after it are not. "Floods displace 40,000 in
+            # Nigeria" matched nothing before this.
+            'floods displace', 'floods displaced', 'floods kill', 'floods killed',
+            'floods hit', 'floods sweep', 'floods swept', 'floods submerge',
+            'flood victims', 'flood-hit', 'flood-affected', 'flood-ravaged',
             'dam failure', 'levee breach', 'glacial lake outburst', 'inundation',
             # ── Tropical storm / cyclone ──
             'cyclone', 'tropical cyclone', 'hurricane', 'typhoon', 'super typhoon',
@@ -1475,7 +1486,7 @@ def build_outbreak_spread_signals(records):
 _OUT_DISPLACED_RX = re.compile(
     r'(\d[\d,.]*)\s*(million|thousand|k)?\s+(?:people\s+|residents\s+|families\s+)?'
     r'(?:(?:have been|were|are|left|now)\s+)?(?:displaced|homeless|made homeless|lost their homes)\b'
-    r'|displac(?:ing|ed)\s+(?:more than\s+|over\s+|nearly\s+|some\s+)?(\d[\d,.]*)\s*(million|thousand|k)?', re.I)
+    r'|displac(?:es?|ing|ed)\s+(?:more than\s+|over\s+|nearly\s+|some\s+|about\s+)?(\d[\d,.]*)\s*(million|thousand|k)?', re.I)
 _OUT_HOMES_RX = re.compile(
     r'(\d[\d,.]*)\s*(million|thousand|k)?\s+(?:homes|houses|dwellings|buildings)\s+'
     r'(?:were\s+|have been\s+)?(?:destroyed|damaged|flattened|collapsed|razed|washed away)', re.I)
@@ -1607,6 +1618,62 @@ def apply_disaster_outcomes(signals, news_outcomes):
     return signals
 
 
+# ── v1.13.0 (Oct 29 2026): feed-article noise filter ─────────────────────
+# The article gatherer ingests the GDACS and USGS feeds AS ARTICLES. Every
+# GDACS GREEN alert (a routine forest fire in Angola) and every USGS M4.5+
+# item (a quake 200 km off Tonga) became a natural_disaster row, and because
+# rows dedupe on (country, category) the first such item could own a
+# country's row. The structured path (disaster_feeds.py) already admits only
+# orange/red GDACS and PAGER-graded USGS; this keeps the keyword path from
+# re-admitting through the side door what the front door turned away.
+#
+# DROPPED (natural_disaster keyword path only):
+#   * a GDACS item that is not ORANGE or RED;
+#   * an earthquake item (USGS or news) printing a magnitude below 6.0, with
+#     no PAGER orange/red, no tsunami warning, no damage language and no
+#     confirmed outcome (deaths / displaced / homes).
+# An item that reports harm is never dropped -- outcome evidence outranks the
+# alert colour, exactly as in apply_disaster_outcomes.
+_MINOR_QUAKE_MAG = 6.0
+_GDACS_RX       = re.compile(r'\bgdacs\b', re.I)
+_GDACS_SERIOUS_RX = re.compile(r'\b(orange|red)\b', re.I)
+_USGS_RX        = re.compile(r'\busgs\b|earthquake\.usgs\.gov', re.I)
+_MAG_RX         = re.compile(r'\b(?:(?i:magnitude|mag\.?)|M\s?w?)\s*[-:]?\s*(\d(?:\.\d)?)\b')
+_QUAKE_RX       = re.compile(r'\b(earthquake|quake|tremor|seismic)\b', re.I)
+_QUAKE_HARM_RX  = re.compile(r'\b(pager (?:orange|red)|tsunami warning|collapsed?|destroyed|'
+                             r'damaged?|injur(?:ed|ies)|rubble|rescue)\b', re.I)
+
+_NO_HARM_RX     = re.compile(r'\b(?:no|without|little|minimal)\s+(?:immediate\s+)?(?:reports?\s+of\s+)?'
+                             r'(?:major\s+)?(?:damage|injur(?:y|ies)|casualties)(?:\s+(?:was\s+|were\s+)?reported)?', re.I)
+
+_LAST_NOISE_FILTERED = {'gdacs_minor': 0, 'minor_quake': 0, 'examples': []}
+
+
+def _minor_feed_disaster(title, desc, source, url):
+    """Reason string if this natural-disaster article is feed noise, else None."""
+    text = f"{title} {desc}"
+    origin = f"{source} {url}"
+    if any(_disaster_outcome(text)):
+        return None                                    # harm reported: never noise
+    if _GDACS_RX.search(origin) or _GDACS_RX.search(text) or 'gdacs.org' in (url or '').lower():
+        if not _GDACS_SERIOUS_RX.search(text):
+            return 'gdacs_minor'
+    is_usgs = bool(_USGS_RX.search(origin) or _USGS_RX.search(text)
+                   or re.match(r'^\s*M\s?\d(?:\.\d)?\s+-\s', title or ''))
+    if is_usgs or _QUAKE_RX.search(text):
+        mags = []
+        for m in _MAG_RX.finditer(text):
+            try:
+                mags.append(float(m.group(1)))
+            except ValueError:
+                pass
+        # "No damage reported" is the OPPOSITE of harm language; strip it first.
+        _t = _NO_HARM_RX.sub(' ', text)
+        if mags and max(mags) < _MINOR_QUAKE_MAG and not _QUAKE_HARM_RX.search(_t):
+            return 'minor_quake'
+    return None
+
+
 def detect_humanitarian_signals(articles):
     """
     Main detection entry point.
@@ -1643,6 +1710,7 @@ def detect_humanitarian_signals(articles):
     _imports = {}            # disease -> set of non-African destinations
     _bundibugyo = False
     _dx = {}                 # v1.12.0 (country, hazard) -> (deaths, displaced, homes)
+    _LAST_NOISE_FILTERED.update(gdacs_minor=0, minor_quake=0, examples=[])   # v1.13.0
 
     for art in articles:
         title = (art.get('title') or '').strip()
@@ -1664,6 +1732,13 @@ def detect_humanitarian_signals(articles):
                 continue
 
             if cat_key == 'natural_disaster':
+                # v1.13.0 -- GDACS green / minor-quake feed items are noise.
+                _noise = _minor_feed_disaster(title, desc, source, url)
+                if _noise:
+                    _LAST_NOISE_FILTERED[_noise] += 1
+                    if len(_LAST_NOISE_FILTERED['examples']) < 5:
+                        _LAST_NOISE_FILTERED['examples'].append(title[:100])
+                    continue
                 # v1.12.0 -- confirmed outcomes, pooled per country + hazard.
                 _o = _disaster_outcome(text)
                 if any(_o):
@@ -3040,6 +3115,12 @@ def detect_and_build_bluf(articles, extra_signals=None, toll_history=None):
         bluf['top_signals'] = (_spread_sigs + bluf.get('top_signals', []))[:5]
         bluf['max_level'] = max(bluf.get('max_level', 0), 5)
         bluf['peak_level'] = bluf['max_level']
+    bluf['meta']['disaster_noise_filtered'] = {
+        'gdacs_minor': _LAST_NOISE_FILTERED['gdacs_minor'],
+        'minor_quake': _LAST_NOISE_FILTERED['minor_quake'],
+        'examples':    list(_LAST_NOISE_FILTERED['examples']),
+        'rule':        'GDACS items below ORANGE and quakes below M6.0 dropped unless harm is reported',
+    }
     bluf['meta']['outbreak_spread'] = {
         'status': _spread_status,
         'outbreaks': [dict({k: r[k] for k in ('disease_name', 'epicentre_label', 'epicentre_deaths',
@@ -3481,6 +3562,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.12.0'
+__version__ = '1.13.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
