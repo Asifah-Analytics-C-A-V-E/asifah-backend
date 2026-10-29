@@ -1,7 +1,7 @@
 """
 ═══════════════════════════════════════════════════════════════════════
   ASIFAH ANALYTICS — CONVERGENCE REGISTRY
-  v1.1.0 (May 23 2026)
+  v1.1.0 (May 23 2026)  ·  REGISTRY_VERSION 1.4.0 (Oct 29 2026): commodity webs
 ═══════════════════════════════════════════════════════════════════════
 
 Single source of truth for cross-axis / cross-regional convergence narratives.
@@ -1131,6 +1131,67 @@ CONVERGENCE_REGISTRY = [
     },
 
     # ───────────────────────────────────────────────────────────────
+    # COMMODITY WEBS  (v1.4.0, Oct 29 2026)
+    # ───────────────────────────────────────────────────────────────
+    # A web reads BOTH directions around one commodity: what world events
+    # move it (inbound) and what it moves (outbound). It is NOT fired by
+    # Layer 2. commodity_web.py (ME backend, commodities) stamps the flag
+    # and convergence_states -- including a LIVE headline and detail, which
+    # the GPI (v3.15.0+) prefers over the templates below -- onto the
+    # commodity's own economic signal, or an L3 carrier, in the
+    # global_commodity BLUF. The templates are the fallback only.
+    #
+    # commodity is None on purpose: Layer 2's commodity gate must never
+    # touch this entry (the web has its own gate). trigger_region is the
+    # global_commodity pseudo-region, which no Layer 2 iterates.
+    #
+    # Freshness: the web is FRESH only when a link appeared in the last 72h
+    # or its level rose; otherwise the GPI shows it as a closed standing
+    # watch. Rachel, Oct 29: "it will need to default to a closed box unless
+    # there is new info, so it doesn't trick the reader into thinking THIS
+    # IS NEW BIG NEWS."
+    {
+        'id':                      'commodity_web_rice',
+        'commodity':               None,
+        'country':                 'global',
+        'trigger_signal_category': 'commodity_web_rice',
+        'trigger_signal_categories': ['commodity_rice', 'commodity_web_rice'],
+        'trigger_region':          'global_commodity',
+        'commodity_threshold':     None,
+        'regions':                 ['global_commodity', 'asia', 'africa', 'me'],
+        'axes':                    ['economic', 'humanitarian'],
+        'priority':                13,
+        'watch_priority':          6,
+        'icon':                    '\U0001f35a',          # rice bowl
+        'color':                   '#f59e0b',
+        'headline_template':       'Rice web -- {alert}',
+        'watch_headline_template': 'Rice web standing watch -- {alert}, nothing new this cycle',
+        'detail': (
+            "Rice's chokepoint is a policy, not a strait: India supplies roughly 40% of "
+            'world rice trade and its export notifications set the world price. The web '
+            'reads inbound pressure (India and substitute-exporter policy, harvest '
+            'weather, war or disaster in an exporter confirmed by a rising price, the '
+            'world price itself) against outbound response and stress in the exposed '
+            'importers (Philippines, Indonesia, Nigeria, Iran, Saudi Arabia, Bangladesh, '
+            'the West African broken-rice belt). Convergence = an inbound stress AND an '
+            'importer lit at the same time. Not a forecast of shortage, price or unrest.'
+        ),
+        'facts': {
+            'chokepoint':        'policy -- India ~40% of world rice trade',
+            'precedents':        'Sep 2022 broken-rice ban; Jul 2023 non-basmati ban, eased in stages through 2024',
+            'substitutes':       'Thailand, Vietnam, Pakistan -- gain share when India restricts',
+            'unverified_nodes':  'bangladesh, senegal (Claude research, awaiting Rachel)',
+        },
+        'enrichment_text_template': '\U0001f35a RICE WEB at {alert} ({signals} live link(s)).',
+        'notes': (
+            'Stamped by commodity_web.py, not Layer 2. Adding a commodity = a profile '
+            'in commodity_web.COMMODITY_WEBS + an entry like this one with id '
+            'commodity_web_<commodity>. Deploy this registry byte-identical to every '
+            'backend that carries it: the fingerprint changes and Layer 2 logs it.'
+        ),
+    },
+
+    # ───────────────────────────────────────────────────────────────
     # FUTURE CONVERGENCES — uncomment / adapt as new ones get identified.
     # Examples sketched below show how broad the pattern can stretch.
     # ───────────────────────────────────────────────────────────────
@@ -1782,8 +1843,8 @@ CLUSTER_LABELS = {
 # remove or rename an entry and it changes by itself. Layer 2 logs both, so a
 # fork shows up in the Render log on the first scan after it happens rather
 # than being discovered months later by someone grepping two clones.
-REGISTRY_VERSION = '1.3.0'
-REGISTRY_AS_OF = '2026-10-06'
+REGISTRY_VERSION = '1.4.0'      # Oct 29 2026 -- commodity_web_rice
+REGISTRY_AS_OF = '2026-10-29'
 
 
 def registry_fingerprint():

@@ -52,6 +52,14 @@ CHANGELOG:
            Nigeria; Guinea notes refreshed post-election; keyword nets
            extended (gold/diamonds/lithium/natural_gas/coal); 8 African
            commodity-jawboning leaders added to KNOWN_SPEAKERS.
+  v1.8.0 - Oct 29 2026 COMMODITY WEBS + ZINC. build_commodity_economic_bluf
+           now runs commodity_web.py (what moves a commodity, what it moves;
+           rice first) and stamps registry flags so the GPI renders each web
+           as a convergence narrative, standing unless something is new.
+           /api/commodity-web serves every web for commodities.html. Zinc
+           added (potash mode: no spot price). Rice had no GDELT query --
+           three added. A proxy-ticker sparkline (often a miner's equity) no
+           longer counts as the commodity's own price move.
   v1.7.0 - Oct 29 2026 Evidence-earned economic level (GPI emitter v2.0.0).
            News pressure now only ADMITS a commodity to the GPI economic
            axis; the level is earned: news only L3, + confirmed price move
@@ -979,6 +987,28 @@ COMMODITY_TYPES = {
         'top_producers':  ['ukraine', 'russia', 'argentina'],
         'top_consumers':  ['india', 'eu', 'china', 'turkey', 'egypt'],
     },
+    # Oct 29 2026 -- ZINC (Peter's flag, via a Commodities Institute episode).
+    # No public spot price on Yahoo (LME zinc is not carried), so it runs in
+    # potash mode: news + policy signals, price UNREAD -- which also means the
+    # GPI economic emitter can lift it to L4 on disruption but never to L5.
+    # Claude research, data_as_of 2026-10 -- verify the shares.
+    'zinc': {
+        'name': 'Zinc',
+        'icon': '🔩',
+        'tier': 3,
+        'category': 'industrial',            # same family as copper and nickel
+        'has_spot_price': False,
+        'yahoo_ticker': None,
+        'yahoo_proxies': [],
+        'unit': 'USD/MT (LME)',
+        'description': 'Galvanizing metal: roughly half of demand protects steel from corrosion (construction, autos, grids), the rest die-casting, brass and batteries -- and zinc is a fertilizer micronutrient for zinc-deficient soils. China mines about a third of world zinc and refines about half; Peru, Australia, India (Hindustan Zinc), the US (Red Dog) and Mexico follow. Smelting is energy-intensive: European smelters (Nyrstar, Glencore) curtailed during the 2022 gas-price spike, so European gas prices are an upstream driver. Korea Zinc is the largest single refiner outside China. data_as_of 2026-10 (Claude research, verify).',
+        'chokepoints': [
+            'antamina', 'red dog mine', 'rampura agucha', 'onsan smelter',
+            'budel smelter', 'balen smelter', 'callao port',
+        ],
+        'top_producers':  ['china', 'peru', 'australia', 'india', 'usa', 'mexico', 'bolivia'],
+        'top_consumers':  ['china', 'usa', 'india', 'eu', 'south_korea', 'japan'],
+    },
 }
 # ========================================
 # COMMODITY KEYWORD SETS
@@ -1543,6 +1573,13 @@ COMMODITY_KEYWORDS = {
         'conflict minerals', '3tg', 'coltan drc', 'rwanda coltan',
         'tantalum supply', 'tantalum prices', 'columbite-tantalite',
         'kivu mining', 'artisanal coltan',
+    ],
+    'zinc': [
+        'zinc', 'zinc prices', 'zinc price', 'zinc smelter', 'zinc smelters',
+        'zinc mine', 'zinc mining', 'zinc output', 'zinc production', 'zinc supply',
+        'zinc concentrate', 'zinc treatment charges', 'refined zinc', 'lme zinc',
+        'galvanized steel', 'galvanizing', 'korea zinc', 'nyrstar', 'hindustan zinc',
+        'antamina', 'red dog mine', 'rampura agucha', 'zinc exports',
     ],
     'sunflower_oil': [
         'sunflower oil', 'sunflower seed', 'sunflower oil exports',
@@ -2606,6 +2643,23 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'note': "Ambatovy (Sumitomo-led) is one of the world's largest lateritic nickel-cobalt operations -- top-10-tier producer of class-1 nickel with cobalt byproduct feeding battery chains -- but chronically financially distressed (debt restructuring 2024) amid the Indonesian-supply nickel price collapse. A solvency failure would be a meaningful class-1 supply event AND a Malagasy fiscal/employment shock in an already fragile transition. Watch: Ambatovy solvency/output guidance, Sumitomo commitment signals, nickel-price threshold behavior."},
     },
 }
+# Oct 29 2026 -- zinc exposure. Claude research, NOT yet Rachel-verified: each
+# note says so, so an unchecked number never passes as settled.
+_ZINC_EXPOSURE = {
+    'china':       {'role': 'producer', 'weight': 1.4, 'rank': 1, 'data_as_of': '2026-10',
+                    'note': "World's #1 zinc miner (~a third of mine output) and refiner (~half of refined metal) and the largest consumer via galvanized steel. Smelter output responds to treatment-charge economics and power rationing. Watch: Chinese smelter curtailments, treatment-charge benchmarks, property/infrastructure steel demand. (Claude research -- verify.)"},
+    'peru':        {'role': 'producer', 'weight': 1.2, 'rank': 2, 'data_as_of': '2026-10',
+                    'note': "Top-3 zinc miner (Antamina, Cerro Lindo) and a major concentrate exporter via Callao; output is exposed to mining-corridor blockades and community conflict, which have halted concentrate trucking before. Watch: Antamina guidance, corridor blockades, political turnover. (Claude research -- verify.)"},
+    'australia':   {'role': 'producer', 'weight': 1.0, 'rank': 3, 'data_as_of': '2026-10',
+                    'note': "Top-3 zinc miner (Queensland's Mount Isa region, McArthur River) and a stable Western-aligned supplier of concentrate. Watch: mine-life announcements and closures. (Claude research -- verify.)"},
+    'india':       {'role': 'producer', 'weight': 0.9, 'data_as_of': '2026-10',
+                    'note': "Hindustan Zinc (Vedanta) runs Rampura Agucha, one of the world's largest zinc mines, and is a top integrated producer; domestic galvanizing demand rising with infrastructure build-out. Watch: Hindustan Zinc output, Vedanta corporate restructuring. (Claude research -- verify.)"},
+    'south_korea': {'role': 'consumer', 'weight': 0.8, 'data_as_of': '2026-10',
+                    'note': "Home of Korea Zinc (Onsan), the largest single zinc refiner outside China -- a concentrate importer and refined-metal exporter, and since 2024 the subject of a high-profile control contest. Watch: Korea Zinc governance and concentrate sourcing. (Claude research -- verify.)"},
+}
+for _zc, _ze in _ZINC_EXPOSURE.items():
+    COUNTRY_COMMODITY_EXPOSURE.setdefault(_zc, {})['zinc'] = _ze
+
 # ============================================================================
 # LEADER COMMODITY INTERVENTIONS — v1.0
 # ============================================================================
@@ -3400,6 +3454,13 @@ def fetch_all_gdelt_commodity(days=7):
         'peru silver antamina mining',
         'silver solar photovoltaic demand',
         'china silver imports refining',
+        # Rice (Oct 29 2026) -- the commodity web needs India's export switch and
+        # the importers' responses in view; rice had no GDELT query at all.
+        'india rice export ban duty',
+        'rice imports philippines indonesia prices',
+        'vietnam thailand rice export prices',
+        # Zinc (Oct 29 2026)
+        'zinc smelter supply prices',
     ]
 
     russian_queries = [
@@ -5511,6 +5572,7 @@ def get_ffpi(force=False):
 # Bare single-word commodity names that collide with everyday English / names.
 # A surge driven ONLY by these (no specific phrase) is likely contamination.
 _CONTAMINATION_PRONE_BARE = {
+    'zinc',   # Oct 29 2026: "zinc supplements" health coverage is not a metals story
     'sugar', 'gold', 'silver', 'copper', 'diamond', 'diamonds',
     'nickel', 'oil', 'corn', 'tin', 'lead', 'platinum',
     'rice',   # Jul 18 2026: bare 'rice' substring-matches "p(rice)s" -- e.g. a
@@ -5603,12 +5665,13 @@ _COMMODITY_CORRIDORS = {
 }
 
 _DIRECT_DISRUPTION = ('headline', 'corridor')
+_LAST_WEB_REPORT = None   # last commodity-web report, served by /api/commodity-web
 
 _DISRUPTION_RX = re.compile(
-    r"\b(export bans?|bans? (?:on )?(?:\w+ ){0,2}exports?|export (?:curbs?|restrictions?|halts?|suspension)"
-    r"|(?:halts?|halted|suspends?|suspended|stops?|stopped) (?:\w+ ){0,2}(?:exports?|shipments?|production|output|mining|operations)"
+    r"\b(export bans?|bans? (?:on )?(?:[\w'-]+ ){0,2}exports?|export (?:curbs?|restrictions?|halts?|suspension)"
+    r"|(?:halts?|halted|suspends?|suspended|stops?|stopped) (?:[\w'-]+ ){0,2}(?:exports?|shipments?|production|output|mining|operations)"
     r"|force majeure|shut[- ]?ins?"
-    r"|(?:shuts?|shut|closes?|closed) (?:down )?(?:the |its |a )?(?:\w+ )?(?:mines?|refinery|refineries|plants?|ports?|pipelines?|terminals?)"
+    r"|(?:shuts?|shut|closes?|closed) (?:down )?(?:the |its |a )?(?:[\w'-]+ )?(?:mines?|refinery|refineries|plants?|ports?|pipelines?|terminals?)"
     r"|production (?:halts?|halted|suspended|stoppage|collapse)"
     r"|(?:mines?|ports?|terminals?|refinery|pipelines?) (?:closures?|closed|shut|blockaded|attacked|struck|hit)"
     r"|embargo(?:es)?|blockades?|output (?:collapses?|plunges?|slumps?))\b",
@@ -5616,7 +5679,7 @@ _DISRUPTION_RX = re.compile(
 # Easing anywhere in the headline means the disruption is ending, not starting.
 _DISRUPTION_EASING_RX = re.compile(
     r"\b(lift(?:s|ed|ing)?|eas(?:e|es|ed|ing)|scrap(?:s|ped)?|relax(?:es|ed)?|reopen(?:s|ed|ing)?"
-    r"|resum(?:e|es|ed|ing)|end(?:s|ed)? (?:the |its )?(?:\w+ ){0,2}(?:ban|embargo|blockade)|after .{0,30} ends)\b", re.I)
+    r"|resum(?:e|es|ed|ing)|end(?:s|ed)? (?:the |its )?(?:[\w'-]+ ){0,2}(?:ban|embargo|blockade)|after .{0,30} ends)\b", re.I)
 # Hedges vetoes only when they sit just BEFORE the disruption phrase.
 _DISRUPTION_HEDGE_RX = re.compile(
     r"\b(could|may|might|considers?|considering|mulls?|weighs?|threatens?|threatened|warns? of"
@@ -5643,6 +5706,13 @@ def _commodity_price_evidence(cid, summ):
         return {'state': 'unread', 'reason': 'no spot price for this commodity'}
     if not isinstance(sp, dict):
         return {'state': 'unread', 'reason': 'price read failed or not yet cached'}
+    if sp.get('fallback_used'):
+        # The primary contract failed and a proxy answered -- often an EQUITY
+        # (FCX for copper, GLNCY for cobalt). A miner's share price is not the
+        # metal's price, so it cannot confirm a commodity move.
+        return {'state': 'unread',
+                'reason': f"only a proxy ({sp.get('source_ticker_used') or 'substitute'}) "
+                          f"answered; a proxy cannot confirm the commodity's own price"}
     th30, th5 = _PRICE_MOVE_THRESHOLDS.get(cid, _PRICE_MOVE_DEFAULT)
     closes = _spark_closes(sp.get('spark'))
     ch30 = sp.get('change_pct_30d')
@@ -5709,10 +5779,40 @@ def _ctx_redis_get(key):
         return None
 
 
+def _ctx_redis_get_strict(key):
+    """Like _ctx_redis_get, but RAISES when Redis cannot be read, so a caller
+    can tell 'key absent' (None) from 'store unreadable' (exception). The
+    commodity web needs that difference: treating a failed read as an empty
+    store would overwrite its whole freshness history."""
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        raise RuntimeError('Redis not configured')
+    r = requests.get(f"{UPSTASH_REDIS_URL}/get/{key}",
+                     headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                     timeout=5)
+    if r.status_code != 200:
+        raise RuntimeError(f'Redis HTTP {r.status_code}')
+    res = r.json().get('result')
+    return json.loads(res) if res else None
+
+
+def _ctx_redis_set(key, value, ttl=None):
+    if not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN):
+        raise RuntimeError('Redis not configured')
+    r = requests.post(f"{UPSTASH_REDIS_URL}/set/{key}",
+                      headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}",
+                               "Content-Type": "application/json"},
+                      data=json.dumps(value, default=str),
+                      params=({'EX': int(ttl)} if ttl else {}), timeout=5)
+    if r.status_code != 200:
+        raise RuntimeError(f'Redis HTTP {r.status_code}')
+    return True
+
+
 def _load_disruption_context():
     """One read of each cross-module store per build. Every store that cannot
     be read is named in 'unread' so the payload says what it could not see."""
-    ctx = {'new_fronts': {}, 'disasters': {}, 'corridors': {}, 'unread': []}
+    ctx = {'new_fronts': {}, 'disasters': {}, 'corridors': {}, 'unread': [],
+           'hum_by_country': None}   # None = unread; {} = read, nothing there
 
     onsets = _ctx_redis_get('gpi:l5_onsets')
     if isinstance(onsets, dict) and isinstance(onsets.get('theatres'), dict):
@@ -5731,14 +5831,20 @@ def _load_disruption_context():
 
     hum = _ctx_redis_get('humanitarian_convergence:bluf:latest')
     if isinstance(hum, dict):
+        ctx['hum_by_country'] = {}
         for s in (hum.get('signals') or hum.get('top_signals') or []):
-            if not isinstance(s, dict) or s.get('category') != 'natural_disaster':
+            if not isinstance(s, dict):
                 continue
             try:
                 lvl = int(s.get('level') or 0)
             except (TypeError, ValueError):
                 lvl = 0
             c = str(s.get('country') or '').strip().lower().replace(' ', '_')
+            if c:
+                ctx['hum_by_country'].setdefault(c, []).append(
+                    (str(s.get('category') or ''), lvl, (s.get('short_text') or '')[:160]))
+            if s.get('category') != 'natural_disaster':
+                continue
             if lvl >= 4 and c and lvl > ctx['disasters'].get(c, {}).get('level', 0):
                 ctx['disasters'][c] = {'level': lvl, 'text': (s.get('short_text') or '')[:120]}
     else:
@@ -5909,6 +6015,27 @@ def build_commodity_economic_bluf(bundle=None):
             'exposure_noted':    exposure_only,
         })
 
+    # ── Commodity webs (Oct 29 2026) ──────────────────────────────────
+    # What moves each watched commodity and what it moves. Stamps registry
+    # flags onto the commodity's own signal (or an L3 carrier) so the GPI can
+    # render the web as a convergence narrative -- standing unless new.
+    web_report = None
+    try:
+        import commodity_web as _cw
+        if ctx is None:
+            ctx = _load_disruption_context()
+        carriers, web_report = _cw.build_webs(
+            summaries, signals, ctx, price_fn=_commodity_price_evidence,
+            redis_get=_ctx_redis_get_strict, redis_set=_ctx_redis_set)
+        signals.extend(carriers)
+        _cw.log_report(web_report)
+        global _LAST_WEB_REPORT
+        _LAST_WEB_REPORT = web_report
+    except ImportError:
+        web_report = {'error': 'commodity_web.py not deployed on this backend'}
+    except Exception as e:
+        web_report = {'error': str(e)[:200]}
+
     signals.sort(key=lambda s: (-s['level'], -(s.get('score') or 0)))
     max_level = signals[0]['level'] if signals else 0
     posture_label = {5: 'Supply rupture', 4: 'Confirmed pressure',
@@ -5934,6 +6061,15 @@ def build_commodity_economic_bluf(bundle=None):
             'gate':                 'high/surge + specific-phrase relevance admits; '
                                     'price + disruption evidence earns the level',
             'context_unread':       (ctx or {}).get('unread', []),
+            'commodity_web':        {
+                'version': (web_report or {}).get('version'),
+                'store':   (web_report or {}).get('store'),
+                'error':   (web_report or {}).get('error'),
+                'webs':    [{'commodity': w.get('commodity'), 'level': w.get('level'),
+                             'state': w.get('state'), 'fresh': w.get('fresh'),
+                             'fresh_basis': w.get('fresh_basis')}
+                            for w in (web_report or {}).get('webs', [])],
+            },
             'corridors_read':       (ctx or {}).get('corridors', {}),
         },
     }
@@ -6029,6 +6165,26 @@ def register_commodity_endpoints(app, start_background=True):
                     'error': str(e)[:200],
                 }),
                 status=200, mimetype='application/json')   # 200 so GPI treats as baseline
+
+    @app.route('/api/commodity-web', methods=['GET', 'OPTIONS'])
+    def api_commodity_web():
+        """Every commodity web, quiet ones included, for commodities.html.
+
+        Rebuilds from the CACHED scan (no new fetches, no Claude calls). Each
+        web carries fresh/standing so the page can keep standing webs closed.
+        """
+        from flask import request as flask_request
+        if flask_request.method == 'OPTIONS':
+            return '', 200
+        try:
+            build_commodity_economic_bluf()
+            rep = _LAST_WEB_REPORT or {'webs': [], 'error': 'web report not built'}
+            return app.response_class(response=json.dumps(rep, default=str),
+                                      status=200, mimetype='application/json')
+        except Exception as e:
+            return app.response_class(
+                response=json.dumps({'webs': [], 'error': str(e)[:200]}),
+                status=200, mimetype='application/json')
 
     @app.route('/api/commodity-prices', methods=['GET', 'OPTIONS'])
     def api_commodity_prices():

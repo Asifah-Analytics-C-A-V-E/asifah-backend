@@ -34,6 +34,18 @@ v3.14.0 — Oct 29 2026 (SEVERITY vs MOTION on the axes):
     the prose explains why an axis can sit above the index.
   * Axis chip words come from each axis's own ladder -- humanitarian L5 no
     longer reads "ACTIVE CONFLICT" (L5 assertion rule).
+v3.15.0 — Oct 29 2026 (COMMODITY WEBS):
+  * Registry narratives take a LIVE headline and detail when the stamping
+    layer supplies one (convergence_states[id].live_headline / live_detail).
+    commodity_web.py does: "Rice convergence -- India restricting exports and
+    the world price rising while Nigeria is already under stress" instead of
+    a static template. Every other entry is unchanged (no live text -> template).
+  * A stamped level_hint/priority (the web's own L3/L4/L5) is used when a
+    narrative is promoted into the signal feed; before, any priority >= 13
+    promoted at L5, so a fresh L3 watch would have read as L5.
+  * Registry narratives honour an entry's 'axes' list. Before this, a
+    registry narrative with no NARRATIVE_AXIS_SETS row fell through to the
+    KINETIC default -- a rice web would have counted as war.
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -860,7 +872,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.14.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.15.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -2042,6 +2054,10 @@ def _axes_for_narrative(n):
     cat = n.get('category', '')
     if cat in NARRATIVE_AXIS_SETS:
         return list(NARRATIVE_AXIS_SETS[cat])
+    # v3.15.0 -- a registry entry may declare its own axes; without this a
+    # registry narrative with no row above defaulted to KINETIC.
+    if isinstance(n.get('axes'), (list, tuple)) and n['axes']:
+        return [a for a in n['axes'] if a in PRESSURE_AXES] or ['kinetic']
     pt = n.get('pressure_type')
     if pt and pt in PRESSURE_AXES:
         return [pt]
@@ -3208,14 +3224,25 @@ def _detect_convergences_from_registry(blufs):
                         if (is_fresh or not opted_in)
                         else [found_in_region or entry.get('trigger_region')])
 
+        # v3.15.0 -- a stamping layer may grade its own reading (the commodity
+        # web stamps L3 watch / L4 convergence / L5 compound). Without this a
+        # fresh L3 watch promoted into the feed at priority 13 -> L5.
+        _lvl_hint = state.get('web_level')
+        _prio = (state.get('priority') if (is_fresh and state.get('priority'))
+                 else convergence_priority(entry, is_fresh))
         matches.append({
-            'priority':         convergence_priority(entry, is_fresh),
+            'priority':         _prio,
+            'level_hint':       _lvl_hint,
             'category':         entry['id'],
             'regions':          conv_regions,
             'icon':             entry['icon'],
             'color':            entry['color'],
-            'headline':         format_headline(entry, alert_level, is_fresh),
-            'detail':           entry['detail'],
+            # v3.15.0 -- a stamping layer that composes its own text (the
+            # commodity web) supplies it; otherwise the registry template.
+            'headline':         (state.get('live_headline')
+                                 or format_headline(entry, alert_level, is_fresh)),
+            'detail':           state.get('live_detail') or entry['detail'],
+            'axes':             entry.get('axes'),
             'detected_via':     found_in_region,   # diagnostic: which region's signal triggered detection
             'fresh':            is_fresh,           # diagnostic: topline vs watch tier
             # v3.10.0 -- False means Layer 2 never stamped a pressure level for
@@ -5372,7 +5399,8 @@ def _build_global_top_signals(blufs, narratives):
             'priority':   n['priority'],
             'category':   n['category'],
             'theatre':    'global',
-            'level':      5 if n['priority'] >= 13 else 4,
+            'level':      (int(n['level_hint']) if n.get('level_hint')
+                           else (5 if n['priority'] >= 13 else 4)),
             'icon':       n['icon'],
             'color':      n['color'],
             'short_text': n['headline'][:120],     # v2.3.0: 80→120 — fits "Wheat-Lebanon convergence ... ELEVATED" (85 chars)
