@@ -59,6 +59,12 @@ v3.16.0 — Oct 29 2026 (EVIDENCE GATES ON ECONOMIC NARRATIVES):
     commodity had earned only L3. At GPI altitude a country's commodity
     signal is capped at what that commodity has earned; country pages keep
     their own reading, and the payload keeps level_country + level_capped.
+  * v3.16.1 -- "Containment shock in <country> against a fragility reading"
+    needs SPECIFIC market evidence or it is not built at all: a trade-touching
+    measure (border/port closure, export or mining suspension, cargo halt)
+    and/or a channel commodity that earned L4+ (DRC -> cobalt, copper,
+    tantalum). One = L4, both = L5. The band no longer sets priority (its map
+    ran backwards here too: elevated = 13).
   * The "no cross-theater convergence detected" fallback no longer appears
     beside convergence narratives (it contradicted the page).
   * Narratives may carry fresh=False (a condition is standing by definition);
@@ -889,7 +895,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.16.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.16.1'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -4056,6 +4062,63 @@ EXO_EXPORT_CHANNELS = {
 }
 
 
+# v3.16.1 (Oct 29 2026) -- the instrumented commodities behind each channel, so
+# the card can check the CHANNEL, not just name it. Ids match commodity_tracker.
+EXO_CHANNEL_COMMODITIES = {
+    'russia':    ['wheat', 'nitrogen', 'potash', 'oil', 'natural_gas', 'nickel', 'pgm'],
+    'ukraine':   ['wheat', 'corn', 'sunflower_oil'],
+    'china':     ['rare_earths', 'semiconductors', 'graphite'],
+    'india':     ['rice'],
+    'brazil':    ['soybeans', 'iron_ore', 'coffee', 'sugar'],
+    'drc':       ['cobalt', 'copper', 'tantalum'],
+    'chile':     ['copper', 'lithium'],
+    'indonesia': ['nickel', 'coal'],
+}
+# Measures that touch TRADE, not just people. Contact tracing, quarantine wards
+# and travel advisories are public-health actions; they are not evidence that
+# goods stopped moving.
+_EXO_TRADE_MEASURE_RX = re.compile(
+    r'\b(border (?:closure|closures|closed|shut)|clos(?:e|es|ed|ing) (?:the |its )?borders?|'
+    r'(?:port|ports|terminal) (?:closure|closed|shut)|air cargo|cargo flights? (?:suspended|halted)|'
+    r'exports? (?:suspended|halted|banned|ban)|(?:mine|mines|mining) (?:closure|closed|shut|suspended|halted)|'
+    r'suspend(?:s|ed)? (?:\w+ ){0,2}(?:mining|exports?|shipments?)|trucks? (?:stranded|halted|blocked))\b',
+    re.I)
+
+
+def _exo_channel_evidence(country, blufs, hum_sigs):
+    """SPECIFIC evidence that a containment shock is reaching a market channel.
+
+    Returns (evidence_list, checked_list). Two kinds count:
+      trade_measure  -- a reported measure that touches goods (border/port
+                        closure, export or mining suspension, cargo halts);
+      commodity      -- a channel commodity that has EARNED L4+ on the
+                        commodity ladder (price and/or physical disruption).
+    A fragility reading is never evidence: it describes the forest.
+    """
+    c = str(country or '').lower()
+    ev, checked = [], []
+    for sg in hum_sigs or []:
+        if not isinstance(sg, dict) or str(sg.get('country') or '').lower() != c:
+            continue
+        blob = ' '.join([' '.join(sg.get('matched_keywords') or []),
+                         sg.get('short_text') or '', sg.get('long_text') or ''])
+        m = _EXO_TRADE_MEASURE_RX.search(blob)
+        if m:
+            ev.append({'kind': 'trade_measure', 'text': 'reported measure touches goods: "%s"' % m.group(0)})
+            break
+    earned = {}
+    for sg in _signals_of(blufs.get('global_commodity') or {}):
+        if sg.get('commodity') and not sg.get('web_carrier'):
+            earned[sg['commodity']] = (_safe_level(sg.get('level', 0)), sg.get('level_basis'))
+    for cid in EXO_CHANNEL_COMMODITIES.get(c, []):
+        lv, basis = earned.get(cid, (0, None))
+        checked.append('%s L%s' % (cid, lv or '-'))
+        if lv >= 4:
+            ev.append({'kind': 'commodity', 'text': '%s has earned L%d (%s)'
+                       % (cid.replace('_', ' '), lv, (basis or '').replace('_', ' '))})
+    return ev, checked
+
+
 def _narrative_fragility_exogenous_watch(blufs):
     """A containment shock underway, read against measured market fragility.
 
@@ -4090,9 +4153,30 @@ def _narrative_fragility_exogenous_watch(blufs):
     shock = sorted(containment or health,
                    key=lambda x: -int(x.get('level') or 0))[0]
     country = shock.get('country') or 'an unnamed country'
-    c_label = str(country).replace('_', ' ').title()
+    c_label = ({'drc': 'DR Congo', 'usa': 'USA', 'uae': 'UAE', 'car': 'Central African Republic'}
+               .get(str(country).lower()) or str(country).replace('_', ' ').title())
     actions = [k for k in (shock.get('matched_keywords') or [])][:4]
     action_phrase = ('; '.join(actions)) if actions else 'containment measures'
+
+    # ── v3.16.1 EVIDENCE GATE (Rachel, Oct 29): "without evidence, should it
+    # EVEN be on the tracker at all? ... we should be able to point to specific
+    # evidence of WHY it's reading across a market fragility equation."
+    # No evidence -> no card. The outbreak still lives where it belongs, on the
+    # humanitarian axis; it just does not get an ECONOMIC card on the strength
+    # of a fragility reading that describes the market, not the outbreak.
+    _ev, _checked = _exo_channel_evidence(country, blufs, sigs)
+    if not _ev:
+        print('[GPI] fragility x containment card suppressed for %s: no specific market '
+              'evidence (no trade-touching measure; channel commodities %s)'
+              % (c_label, ', '.join(_checked) or 'not instrumented'))
+        return None
+    _kinds = {e['kind'] for e in _ev}
+    _exo_lvl = 5 if len(_kinds) >= 2 else 4
+    _exo_prio = {4: 11, 5: 13}[_exo_lvl]
+    _ev_clause = (' EVIDENCE that this reaches markets: ' + '; '.join(e['text'] for e in _ev)
+                  + '. Level L%d: one kind of evidence = L4, a trade-touching measure AND a '
+                    'channel commodity confirmed = L5. The fragility band is context and sets '
+                    'nothing.' % _exo_lvl)
 
     # ── THE CLAIM GAP, when the humanitarian layer published one ──
     gap_clause = ''
@@ -4124,7 +4208,8 @@ def _narrative_fragility_exogenous_watch(blufs):
     frag = _redis_get(MARKET_FRAGILITY_BUNDLE_KEY)
     if not frag or not frag.get('band'):
         return {
-            'priority': 12,
+            'priority': _exo_prio,
+            'level_hint': _exo_lvl,
             'category': 'exogenous_shock_unmeasured_market',
             'regions':  ['global_humanitarian', 'global_market'],
             'icon':     '\U0001f32b\ufe0f',
@@ -4136,9 +4221,9 @@ def _narrative_fragility_exogenous_watch(blufs):
                          'Watch fragility bundle could not be read this cycle, so this '
                          'platform cannot say how much absorptive capacity the market '
                          'has. UNREAD IS NOT CALM: no fragility reading is being '
-                         'reported here, and none should be inferred.%s%s '
+                         'reported here, and none should be inferred.%s%s%s '
                          'Convergence, not prediction.'
-                         % (c_label, action_phrase, gap_clause, export_clause)),
+                         % (c_label, action_phrase, gap_clause, export_clause, _ev_clause)),
             'alert_stamped': False,
         }
 
@@ -4154,14 +4239,12 @@ def _narrative_fragility_exogenous_watch(blufs):
                        'on its own measures the market is not in a brittle state, so a '
                        'shock of this kind arrives into ordinary conditions. '
                        % composite)
-        pr = 14
     else:
         detail_open = ('The Market Watch fragility detector reads %s (composite %s), '
                        'driven by %s -- a measure of how much absorptive capacity the '
                        'market has, not of what is about to happen to it. A shock '
                        'arriving into that state is a different event from the same '
                        'shock arriving into a calm one. ' % (band.upper(), composite, feat_phrase))
-        pr = {'critical': 10, 'high': 11, 'elevated': 13}.get(band, 13)
 
     null_clause = (
         ' The fragility module states its own limit here and this card repeats it '
@@ -4173,14 +4256,19 @@ def _narrative_fragility_exogenous_watch(blufs):
         'kind by design; its reading describes the forest, never the lightning.')
 
     return {
-        'priority': pr,
+        'priority': _exo_prio,      # v3.16.1 -- set by evidence, not by the band
+        'level_hint': _exo_lvl,
+        'evidence_gate': {'level': _exo_lvl, 'evidence': _ev, 'channel_checked': _checked},
         'category': 'fragility_exogenous_watch',
         'regions':  ['global_humanitarian', 'global_market'],
         'icon':     '\U0001f9a0',    # microbe
         'color':    '#ef4444' if band in ('high', 'critical') else '#f59e0b',
         'pressure_type': 'economic',
-        'headline': ('Containment shock underway in %s against a %s market-fragility '
-                     'reading' % (c_label, str(band).upper())),
+        'headline': ('Containment in %s reaching markets (%s) against a %s market-fragility '
+                     'reading' % (c_label,
+                                  ' + '.join(sorted({'trade measure' if e['kind'] == 'trade_measure'
+                                                     else 'commodity confirmed' for e in _ev})),
+                                  str(band).upper())),
         'detail':   (detail_open +
                      'Simultaneously, %s is carrying out observable containment: %s. '
                      'These are two independent layers -- one endogenous and measured '
@@ -4188,8 +4276,8 @@ def _narrative_fragility_exogenous_watch(blufs):
                      'reporting -- and neither forecasts the other.%s%s%s '
                      'The question this card raises is about ABSORPTION, not '
                      'direction: how much capacity is there if these measures widen. '
-                     'Convergence, not prediction.'
-                     % (c_label, action_phrase, null_clause, gap_clause, export_clause)),
+                     'Convergence, not prediction.%s'
+                     % (c_label, action_phrase, null_clause, gap_clause, export_clause, _ev_clause)),
         'alert_stamped': True,
     }
 
