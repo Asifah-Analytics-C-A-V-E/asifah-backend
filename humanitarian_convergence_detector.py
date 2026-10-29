@@ -1,6 +1,22 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.11.0 -- October 29, 2026 (OUTBREAK SPREAD READ -- Kenya/Nigeria were seen, never connected)
+  * The detector saw Ebola in DR Congo, Uganda, Kenya and Nigeria as four
+    separate L5 rows; Kenya and Nigeria sat at priority 7, below a Cat-1
+    cyclone and three ANNUAL UNHCR statistics, so none reached the GPI.
+    New: mark_outbreak_spread() + build_outbreak_spread_signals() -- one
+    synthesis row per spreading disease (epicentre, spread nodes, contiguity
+    from a border table, country/region/global So What), placed first.
+  * CONFIRMED vs PREPAREDNESS: "on alert / screening / tests negative" with no
+    confirmation holds a country at WATCH (L2), never a spread node.
+  * Ordinal tolls: "ninth Ebola case" now reads 9.
+  * TREND: a zero baseline is missing coverage, not zero -- the live card read
+    "+5,000 deaths since Oct 21" (the whole toll as one week's growth).
+    Each metric now measures from the oldest day on which it was read.
+  * UNHCR YoY deltas -> class structured_annual, ranked after live events.
+  * Imported cases beyond Africa read from health headlines only (France,
+    US, UK...), never added to COUNTRY_PATTERNS (would misattribute aid stories).
 v1.10.0 -- October 19, 2026 (EBOLA MISS: country aliases, earliest-mention attribution,
            filovirus vocabulary, reported-toll magnitude + ranking -- see below)
 v1.8.0 -- September 21, 2026 (BACKGROUND WARMER -- the cold-cache fix, see below)
@@ -1007,6 +1023,7 @@ HEALTH_DEATHS_HIGH = 100        # reported deaths that make a health signal seve
 _NUM = r'(\d{1,3}(?:,\d{3})+|\d+)'
 _DEATH_RX = [
     re.compile(_NUM + r'\s+(?:confirmed\s+|reported\s+|suspected\s+|probable\s+|people\s+|more\s+)?'
+               r'(?:ebola\s+|marburg\s+|cholera\s+|mpox\s+|plague\s+)?'   # v1.11.0
                r'(?:deaths|dead|fatalities|killed|lives)\b', re.I),
     re.compile(r'(?:death toll|deaths|dead|fatalities)(?:\s+[^\s.;]+){0,6}?\s+(?:has\s+|have\s+)?'
                r'(?:rises?|rose|climbs?|climbed|reach(?:es|ed)?|pass(?:es|ed)?|tops?|topped|'
@@ -1014,14 +1031,45 @@ _DEATH_RX = [
                r'(?:to\s+)?(?:over\s+|more than\s+|nearly\s+|almost\s+|about\s+)?' + _NUM, re.I),
 ]
 _CASE_RX = [
-    re.compile(_NUM + r'\s+(?:confirmed\s+|reported\s+|suspected\s+|probable\s+|new\s+)?cases\b', re.I),
+    re.compile(_NUM + r'\s+(?:confirmed\s+|reported\s+|suspected\s+|probable\s+|new\s+)?'
+               r'(?:ebola\s+|marburg\s+|cholera\s+|mpox\s+|plague\s+)?cases\b', re.I),   # v1.11.0
     re.compile(r'cases\s+(?:rise|rose|climb|reach|pass|top|surpass|exceed|hit)\w*\s+'
                r'(?:to\s+)?(?:over\s+|more than\s+)?' + _NUM, re.I),
 ]
 
 
+# v1.11.0 (Oct 29 2026) -- ordinal case counts. Spread-country coverage is
+# written "Kenya confirms ninth Ebola case" / "Nigeria confirms first case",
+# which no numeric pattern reads, so the very countries that matter most for
+# spread carried NO toll at all.
+_ORDINALS = {'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5,
+             'sixth': 6, 'seventh': 7, 'eighth': 8, 'ninth': 9, 'tenth': 10,
+             'eleventh': 11, 'twelfth': 12, 'thirteenth': 13, 'fourteenth': 14,
+             'fifteenth': 15, 'sixteenth': 16, 'seventeenth': 17,
+             'eighteenth': 18, 'nineteenth': 19, 'twentieth': 20}
+_ORDINAL_CASE_RX = re.compile(
+    r'\b(' + '|'.join(_ORDINALS) + r')\s+(?:confirmed\s+|new\s+|imported\s+|positive\s+)?'
+    r'(?:[a-z]+\s+)?(?:case|patient|infection)\b', re.I)
+_CARDINALS = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7,
+              'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13,
+              'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17,
+              'eighteen': 18, 'nineteen': 19, 'twenty': 20}
+_CARDINAL_CASE_RX = re.compile(
+    r'\b(' + '|'.join(_CARDINALS) + r')\s+(?:new\s+|confirmed\s+|more\s+)?(?:[a-z]+\s+)?cases\b', re.I)
+_CARDINAL_DEATH_RX = re.compile(
+    r'\b(' + '|'.join(_CARDINALS) + r')\s+(?:new\s+|confirmed\s+|more\s+)?(?:[a-z]+\s+)?(?:deaths|dead)\b', re.I)
+_ORDINAL_DEATH_RX = re.compile(
+    r'\b(' + '|'.join(_ORDINALS) + r')\s+(?:[a-z]+\s+)?(?:death|fatality)\b', re.I)
+
+
 def _reported_toll(text):
     """(deaths, cases) printed in `text`, as the largest figure found; 0 if none."""
+    def _ordinal(rx, table=_ORDINALS):
+        best = 0
+        for m in rx.finditer(text or ''):
+            best = max(best, table.get(m.group(1).lower(), 0))
+        return best
+
     def _best(rxs):
         best = 0
         for rx in rxs:
@@ -1036,7 +1084,10 @@ def _reported_toll(text):
                 if n < 10_000_000:
                     best = max(best, n)
         return best
-    return _best(_DEATH_RX), _best(_CASE_RX)
+    return (max(_best(_DEATH_RX), _ordinal(_ORDINAL_DEATH_RX),
+                _ordinal(_CARDINAL_DEATH_RX, _CARDINALS)),
+            max(_best(_CASE_RX), _ordinal(_ORDINAL_CASE_RX),
+                _ordinal(_CARDINAL_CASE_RX, _CARDINALS)))
 
 
 def _toll_phrase(deaths, cases):
@@ -1046,6 +1097,333 @@ def _toll_phrase(deaths, cases):
     if cases:
         bits.append(f'{cases:,} cases')
     return ', '.join(bits)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# OUTBREAK SPREAD READ  (v1.11.0, Oct 29 2026)
+# ══════════════════════════════════════════════════════════════════════
+# Rachel, Oct 29: "growing headlines of what's happening in Kenya on Ebola but
+# NOTHING popping into the GPI." The detector DID see Kenya -- and Uganda, and
+# Nigeria -- each as its own L5 health row at priority 7, below a cyclone and
+# three annual UNHCR statistics. What it could not do was CONNECT them.
+#
+# Four countries with the same disease is not four stories, it is one: an
+# outbreak leaving its epicentre. And WHERE it went is the finding. Spread to a
+# bordering country is the expected next step of any outbreak; spread to a
+# country that borders NO affected country (Nigeria, from a traveller out of
+# Uganda) is importation along travel routes -- the pattern that turns a
+# regional outbreak into a corridor outbreak. That distinction is the unasked
+# question a reader needs answered.
+#
+# Two honesty rules built in:
+#   * CONFIRMED vs PREPAREDNESS. "Kenya on alert", "suspected cases test
+#     negative", "screening at the border" are not cases. A country whose
+#     coverage is preparedness-only is held at WATCH and never counted as a
+#     spread node. Confirmation language wins when both appear.
+#   * Contiguity is only claimed from the table below. A pair not in it is
+#     'unknown', never assumed either way.
+DISEASE_FAMILIES = {
+    'ebola':     ('Ebola',            r'\b(?:ebola\w*|bundibugyo|sudan virus)\b'),
+    'marburg':   ('Marburg',          r'\bmarburg\b'),
+    'cholera':   ('cholera',          r'\bcholera\b'),
+    'mpox':      ('mpox',             r'\b(?:mpox|monkeypox)\b'),
+    'plague':    ('plague',           r'\b(?:plague|yersinia|black death)\b'),
+    'avian_flu': ('avian influenza',  r'\b(?:h5n1|h5n5|h7n9|avian (?:flu|influenza)|bird flu)\b'),
+    'lassa':     ('Lassa fever',      r'\blassa\b'),
+    'nipah':     ('Nipah',            r'\bnipah\b'),
+    'anthrax':   ('anthrax',          r'\banthrax\b'),
+    'rvf':       ('Rift Valley fever', r'\brift valley fever\b'),
+    'cchf':      ('Crimean-Congo haemorrhagic fever', r'\bcrimean[- ]congo\b'),
+}
+_DISEASE_RX = {k: re.compile(v[1], re.I) for k, v in DISEASE_FAMILIES.items()}
+# Person-to-person or no-countermeasure pathogens: a confirmed new country is
+# high intensity by itself. Cholera / mpox / avian flu spread is MEDIUM.
+HIGH_CONSEQUENCE_DISEASES = {'ebola', 'marburg', 'plague', 'nipah', 'cchf', 'lassa'}
+
+_LOCAL_CONFIRM_RX = re.compile(
+    r'\b(?:confirm(?:s|ed)?|record(?:s|ed)?|report(?:s|ed)?|detect(?:s|ed)?|register(?:s|ed)?|'
+    r'identif(?:y|ies|ied))\b[^.;]{0,60}\b(?:case|cases|death|deaths|infection|infections|patient)\b'
+    r'|\b(?:died|dies|death) (?:of|from) (?:ebola|marburg|plague|cholera)\b'
+    r'|\btest(?:s|ed)? positive\b|\bfirst (?:confirmed )?case\b', re.I)
+_PREPAREDNESS_RX = re.compile(
+    r'\b(?:on (?:high )?alert|heighten\w* (?:vigilance|surveillance|alert)|'
+    r'step(?:s|ped)? up (?:surveillance|screening|preparedness)|screening|preparedness|'
+    r'test(?:s|ed)? negative|ruled out|no (?:new |confirmed |local )?(?:ebola |marburg )?cases?|'
+    r'has no ebola|free of ebola|quarantine centres?)\b', re.I)
+
+# Africa sub-regions, for "cases now span East and West Africa".
+AFRICA_SUBREGION = {}
+for _sr, _cs in {
+        'East Africa':     ('kenya', 'uganda', 'tanzania', 'rwanda', 'burundi', 'south_sudan',
+                            'ethiopia', 'somalia', 'somaliland', 'eritrea'),
+        'Central Africa':  ('drc', 'congo_brazzaville', 'car', 'cameroon', 'gabon', 'chad',
+                            'equatorial_guinea'),
+        'West Africa':     ('nigeria', 'ghana', 'senegal', 'guinea', 'guinea_bissau', 'liberia',
+                            'sierra_leone', 'cote_divoire', 'mali', 'burkina_faso', 'niger',
+                            'benin', 'togo', 'gambia', 'mauritania'),
+        'Southern Africa': ('south_africa', 'zambia', 'zimbabwe', 'malawi', 'mozambique',
+                            'botswana', 'namibia', 'angola', 'lesotho', 'eswatini', 'madagascar'),
+        'North Africa':    ('egypt', 'libya', 'tunisia', 'algeria', 'morocco', 'sudan')}.items():
+    for _c in _cs:
+        AFRICA_SUBREGION[_c] = _sr
+
+# Land borders, for the contiguity read. Symmetric; built from the pairs below.
+# Coverage is the outbreak belt and its neighbours -- a pair absent here reads
+# 'unknown', never 'non-contiguous'.
+_BORDER_PAIRS = [
+    ('drc', 'uganda'), ('drc', 'rwanda'), ('drc', 'burundi'), ('drc', 'south_sudan'),
+    ('drc', 'car'), ('drc', 'congo_brazzaville'), ('drc', 'angola'), ('drc', 'zambia'),
+    ('drc', 'tanzania'), ('uganda', 'kenya'), ('uganda', 'south_sudan'), ('uganda', 'rwanda'),
+    ('uganda', 'tanzania'), ('kenya', 'tanzania'), ('kenya', 'ethiopia'), ('kenya', 'somalia'),
+    ('kenya', 'south_sudan'), ('rwanda', 'burundi'), ('rwanda', 'tanzania'),
+    ('burundi', 'tanzania'), ('south_sudan', 'sudan'), ('south_sudan', 'ethiopia'),
+    ('south_sudan', 'car'), ('ethiopia', 'somalia'), ('ethiopia', 'sudan'),
+    ('ethiopia', 'eritrea'), ('tanzania', 'zambia'), ('tanzania', 'malawi'),
+    ('tanzania', 'mozambique'), ('zambia', 'angola'), ('zambia', 'malawi'),
+    ('zambia', 'zimbabwe'), ('zambia', 'mozambique'), ('car', 'chad'), ('car', 'cameroon'),
+    ('car', 'sudan'), ('car', 'congo_brazzaville'), ('congo_brazzaville', 'gabon'),
+    ('congo_brazzaville', 'cameroon'), ('congo_brazzaville', 'angola'),
+    ('cameroon', 'nigeria'), ('cameroon', 'chad'), ('cameroon', 'gabon'),
+    ('cameroon', 'equatorial_guinea'), ('nigeria', 'niger'), ('nigeria', 'chad'),
+    ('nigeria', 'benin'), ('benin', 'togo'), ('togo', 'ghana'), ('ghana', 'cote_divoire'),
+    ('ghana', 'burkina_faso'), ('cote_divoire', 'liberia'), ('cote_divoire', 'guinea'),
+    ('cote_divoire', 'mali'), ('liberia', 'sierra_leone'), ('liberia', 'guinea'),
+    ('sierra_leone', 'guinea'), ('guinea', 'senegal'), ('guinea', 'mali'),
+    ('senegal', 'mali'), ('senegal', 'gambia'), ('sudan', 'chad'), ('sudan', 'egypt'),
+    ('sudan', 'libya'),
+]
+_BORDERS = {}
+for _a, _b in _BORDER_PAIRS:
+    _BORDERS.setdefault(_a, set()).add(_b)
+    _BORDERS.setdefault(_b, set()).add(_a)
+
+# Why a spread country matters beyond its case count. Editorial, kept short, and
+# phrased as exposure -- never as a prediction of what will happen there.
+SPREAD_HUB_PROFILE = {
+    'kenya':     ("East Africa's main air hub (Nairobi) and the Mombasa port that feeds the "
+                  "Northern Corridor to Uganda, Rwanda, South Sudan and eastern DR Congo"),
+    'nigeria':   ("Africa's most populous country, with Lagos and Abuja as West Africa's "
+                  "largest air gateways"),
+    'uganda':    "Entebbe's air links and the inland end of the Northern Corridor",
+    'tanzania':  ("Dar es Salaam port and the Central Corridor into Rwanda, Burundi and "
+                  "eastern DR Congo"),
+    'rwanda':    "Kigali, a regional air and conference hub",
+    'ethiopia':  "Addis Ababa, the continent's largest connecting air hub",
+    'south_sudan': "a near-collapsed health system and refugee flows across porous borders",
+    'burundi':   "one of the region's weakest health systems",
+    'south_africa': "Johannesburg, southern Africa's air and financial hub",
+    'egypt':     "Cairo, the hinge between Africa, the Gulf and Europe",
+    'ghana':     "Accra, a West African air and trade hub",
+    'senegal':   "Dakar, West Africa's Atlantic air gateway",
+    'cote_divoire': "Abidjan, West Africa's largest port economy",
+    'zambia':    "the Copperbelt freight routes to southern African ports",
+    'angola':    "Luanda's oil-economy air links to Europe and Brazil",
+    'sudan':     "a war-shattered health system and mass displacement",
+}
+
+# Imported cases OUTSIDE Africa. NOT added to COUNTRY_PATTERNS on purpose: a
+# headline like "France pledges aid to Sudan" would then attribute Sudan's
+# famine to France under the earliest-mention rule. Read here only, only from
+# health articles, and only as "X confirms/reports a case".
+_IMPORT_DESTINATIONS = {
+    'France': r'\b(?:france|french)\b', 'United States': r'\b(?:united states|u\.s\.|us|american)\b',
+    'United Kingdom': r'\b(?:united kingdom|uk|britain|british)\b', 'Belgium': r'\bbelgi(?:um|an)\b',
+    'Germany': r'\bgerman(?:y)?\b', 'Italy': r'\bital(?:y|ian)\b', 'Spain': r'\bspa(?:in|nish)\b',
+    'India': r'\bindia(?:n)?\b', 'China': r'\bchin(?:a|ese)\b', 'UAE': r'\b(?:uae|emirati|dubai)\b',
+    'Saudi Arabia': r'\bsaudi\b', 'Turkey': r'\b(?:turkey|turkish|türkiye)\b',
+}
+_IMPORT_VERB_RX = re.compile(r'\b(?:confirm|report|record|detect|identif)\w*\b[^.;]{0,50}'
+                             r'\b(?:case|patient|infection)\b', re.I)
+
+# Filled by detect_humanitarian_signals each run; read by the spread builder.
+_LAST_HEALTH_CONTEXT = {}
+
+
+def _diseases_in(text):
+    return sorted(k for k, rx in _DISEASE_RX.items() if rx.search(text or ''))
+
+
+def _parent_country(code):
+    return SUBREGION_PARENT.get(code, code)
+
+
+def _country_label(code):
+    return _COUNTRY_LABELS.get(code) or str(code).replace('_', ' ').title()
+
+
+def mark_outbreak_spread(signals):
+    """Find multi-country outbreaks, tag spread nodes, and return synthesis records.
+
+    Mutates node signals in place (growing_concern, spread_node, headline) and
+    returns [{disease, epicentre, nodes, ...}] for build_outbreak_spread_signals.
+    """
+    ctx = _LAST_HEALTH_CONTEXT or {}
+    by_disease = {}
+    for s in signals or []:
+        if s.get('category') != 'health_emergency' or s.get('watch_only'):
+            continue
+        if not (s.get('local_cases') or s.get('reported_deaths') or s.get('reported_cases')):
+            continue
+        for dz in s.get('diseases') or []:
+            by_disease.setdefault(dz, {}).setdefault(_parent_country(s['country']), []).append(s)
+
+    out = []
+    for dz, per_country in by_disease.items():
+        if len(per_country) < 2:
+            continue
+
+        def _mag(c):
+            sigs = per_country[c]
+            return (max(int(x.get('reported_deaths') or 0) for x in sigs),
+                    max(int(x.get('reported_cases') or 0) for x in sigs),
+                    max(int(x.get('severity') or 0) for x in sigs))
+        ranked = sorted(per_country, key=_mag, reverse=True)
+        epi = ranked[0]
+        affected = set(per_country)
+        nodes = []
+        for c in ranked[1:]:
+            others = affected - {c}
+            if c in _BORDERS:
+                contiguous = bool(_BORDERS[c] & others)
+            else:
+                contiguous = None                      # not in table: do not claim
+            d, cs, _sv = _mag(c)
+            nodes.append({'country': c, 'label': _country_label(c), 'deaths': d, 'cases': cs,
+                          'contiguous': contiguous,
+                          'subregion': AFRICA_SUBREGION.get(c)})
+            name = DISEASE_FAMILIES[dz][0]
+            toll = _toll_phrase(d, cs)
+            route = ('borders an affected country' if contiguous
+                     else 'no shared border with any affected country' if contiguous is False
+                     else 'route unclear')
+            for s in per_country[c]:
+                # A CONFIRMED spread of a high-consequence pathogen into a new
+                # country is high intensity on its own merits; the keyword path
+                # only ever saw the word "ebola" and scored Kenya at L3.
+                _floor = SEVERITY_HIGH if dz in HIGH_CONSEQUENCE_DISEASES else SEVERITY_MEDIUM
+                if s.get('severity', 0) < _floor:
+                    s['severity'] = _floor
+                    s['level'] = _severity_to_level(_floor)
+                s['growing_concern'] = True
+                s['spread_node'] = {'disease': dz, 'epicentre': epi, 'contiguous': contiguous}
+                s['short_text'] = (f"\U0001f9a0 {_country_label(c)}: {name} SPREAD beyond "
+                                   f"{_country_label(epi)} — {toll + ' reported, ' if toll else ''}"
+                                   f"{route}")[:150]
+                s['long_text'] = ((s.get('long_text') or '') +
+                                  f" SPREAD NODE: confirmed {name} coverage outside the "
+                                  f"{_country_label(epi)} epicentre ({route}).")
+        ed, ec, _ = _mag(epi)
+        out.append({
+            'disease': dz, 'disease_name': DISEASE_FAMILIES[dz][0],
+            'epicentre': epi, 'epicentre_label': _country_label(epi),
+            'epicentre_deaths': ed, 'epicentre_cases': ec,
+            'nodes': nodes,
+            'imports_beyond_africa': sorted((ctx.get('imports') or {}).get(dz, [])),
+            'bundibugyo': bool(dz == 'ebola' and ctx.get('bundibugyo')),
+        })
+    return out
+
+
+def build_outbreak_spread_signals(records):
+    """One synthesis signal per spreading disease, with the So What at three
+    altitudes. Canonical shape, inserted at the head of the BLUF pool."""
+    sigs = []
+    for r in records or []:
+        name = r['disease_name']
+        nodes = r['nodes']
+        n_countries = 1 + len(nodes)
+        node_names = ', '.join(n['label'] for n in nodes)
+        noncontig = [n['label'] for n in nodes if n['contiguous'] is False]
+        subregions = sorted({AFRICA_SUBREGION.get(r['epicentre'])} |
+                            {n['subregion'] for n in nodes} - {None})
+        epi_toll = _toll_phrase(r['epicentre_deaths'], r['epicentre_cases'])
+
+        short = (f"\U0001f9a0 {name.upper()} SPREAD: {n_countries} countries — "
+                 f"{r['epicentre_label']} epicentre; {node_names} confirmed"
+                 + (f"; {len(noncontig)} with no border to an affected country" if noncontig else ''))
+
+        # COUNTRY altitude -- why the spread countries matter beyond their counts.
+        country_bits = []
+        for n in nodes:
+            prof = SPREAD_HUB_PROFILE.get(n['country'])
+            cnt = _toll_phrase(n['deaths'], n['cases'])
+            line = f"{n['label']}" + (f" ({cnt})" if cnt else '')
+            if prof:
+                line += f": {prof}"
+            if n['cases'] and n['cases'] >= 3:
+                line += (" -- beyond a single imported case, so whether local transmission "
+                         "chains are forming is the question")
+            country_bits.append(line)
+
+        # REGION altitude -- the spread geometry.
+        region_bits = []
+        if noncontig:
+            region_bits.append(
+                f"Spread to {', '.join(noncontig)}, which border{'s' if len(noncontig) == 1 else ''} "
+                f"no affected country, is consistent with importation along travel routes rather "
+                f"than border spread -- the pattern that turns a regional outbreak into a "
+                f"corridor outbreak.")
+        if len(subregions) >= 2:
+            _sr = [x.replace(' Africa', '') for x in subregions]
+            _txt = (', '.join(_sr[:-1]) + ' and ' + _sr[-1]) if len(_sr) > 1 else _sr[0]
+            region_bits.append(f"Confirmed coverage now spans {_txt} Africa.")
+        if any(n['country'] in ('kenya', 'tanzania', 'uganda') for n in nodes):
+            region_bits.append(
+                "The exposure to watch is logistics as much as health: the East African "
+                "corridors that carry fuel and food into landlocked neighbours -- and the "
+                "humanitarian pipeline into eastern DR Congo -- run through the countries now "
+                "reporting cases. In 2014, much of West Africa's economic damage came from "
+                "fear-driven restrictions (flight suspensions, border closures, market "
+                "shutdowns) rather than the disease burden itself.")
+
+        # GLOBAL altitude.
+        global_bits = []
+        if r['imports_beyond_africa']:
+            global_bits.append(f"Imported cases reported beyond Africa: "
+                               f"{', '.join(r['imports_beyond_africa'])} -- the air-travel "
+                               f"channel is open.")
+        if r['bundibugyo']:
+            global_bits.append("The circulating species is Bundibugyo, for which there is no "
+                               "licensed vaccine or therapeutic -- the tool that shortened "
+                               "recent Zaire-species outbreaks is not available.")
+
+        watch = ("Watch: contact-tracing outcomes in the spread countries (contained imports vs "
+                 "second-generation cases), airline and border measures, WHO travel advice or "
+                 "PHEIC language, and freight delays on the Northern and Central Corridors.")
+
+        long_text = ' '.join(filter(None, [
+            f"{name} is no longer a single-country outbreak: {r['epicentre_label']} "
+            f"({epi_toll or 'epicentre'}) plus {len(nodes)} countr{'y' if len(nodes) == 1 else 'ies'} "
+            f"with confirmed coverage.",
+            'Country: ' + '; '.join(country_bits) + '.' if country_bits else '',
+            'Region: ' + ' '.join(region_bits) if region_bits else '',
+            'Global: ' + ' '.join(global_bits) if global_bits else '',
+            watch,
+            "Convergence read of reporting and figures as printed in coverage -- not an "
+            "epidemiological forecast or an official count."]))
+
+        sigs.append({
+            'category':      'outbreak_spread',
+            'country':       r['epicentre'],
+            'theatre':       'global_humanitarian',
+            'region':        'global_humanitarian',
+            'level':         5,
+            'pressure_type': 'humanitarian',
+            'icon':          '\U0001f9a0',
+            'color':         '#dc2626',
+            'short_text':    short[:180],
+            'long_text':     long_text,
+            'priority':      9,
+            'signal_class':  0,
+            'growing_concern': True,
+            'outbreak_spread': {k: r[k] for k in ('disease', 'disease_name', 'epicentre',
+                                                  'epicentre_label',
+                                                  'epicentre_deaths', 'epicentre_cases',
+                                                  'nodes', 'imports_beyond_africa',
+                                                  'bundibugyo')},
+            'source':        'humanitarian_convergence_detector (cross-signal synthesis)',
+        })
+    return sigs
 
 
 def detect_humanitarian_signals(articles):
@@ -1077,6 +1455,12 @@ def detect_humanitarian_signals(articles):
     detected = []
     seen_country_category = set()  # dedupe per country+category
     _toll = {}   # (country, 'health_emergency') -> {deaths, cases, title, url, source}
+    # v1.11.0 -- per-country health evidence, pooled across EVERY article (not
+    # just the one that set severity): which diseases, and whether any article
+    # confirms local cases or only describes preparedness.
+    _hx = {}     # country -> {'diseases': set, 'confirmed': bool, 'prep': bool}
+    _imports = {}            # disease -> set of non-African destinations
+    _bundibugyo = False
 
     for art in articles:
         title = (art.get('title') or '').strip()
@@ -1098,6 +1482,29 @@ def detect_humanitarian_signals(articles):
                 continue
 
             if cat_key == 'health_emergency':
+                # v1.11.0 -- disease + confirmation evidence for the spread read.
+                _dz = _diseases_in(text)
+                _h = _hx.setdefault(country, {'diseases': set(), 'confirmed': False, 'prep': False})
+                _h['diseases'].update(_dz)
+                if _LOCAL_CONFIRM_RX.search(text):
+                    _h['confirmed'] = True
+                if _PREPAREDNESS_RX.search(text):
+                    _h['prep'] = True
+                if 'bundibugyo' in text.lower():
+                    _bundibugyo = True
+                if _dz and _IMPORT_VERB_RX.search(title):
+                    _t_low = title.lower()
+                    _first_african = min([m.start() for p, _cc in _COUNTRY_TOKENS_SORTED
+                                          for m in [_COUNTRY_RX[p].search(_t_low)] if m] or [10**6])
+                    for _dest, _rx in _IMPORT_DESTINATIONS.items():
+                        _m = re.search(_rx, _t_low)
+                        # The destination must LEAD the headline ("France confirms
+                        # imported Ebola case"), not trail it ("...returned from
+                        # Uganda to France" is still usually a France story, but
+                        # "Uganda ebola: US sends team" is not a US case).
+                        if _m and _m.start() < _first_african and _m.start() < 40:
+                            for _d1 in _dz:
+                                _imports.setdefault(_d1, set()).add(_dest)
                 _d, _c = _reported_toll(text)
                 if _d or _c:
                     t = _toll.setdefault((country, cat_key), {'deaths': 0, 'cases': 0})
@@ -1229,6 +1636,34 @@ def detect_humanitarian_signals(articles):
                f"({t.get('cases_source') or 'source unknown'})" if t['cases'] else '')
             + ". Figures as printed in coverage, not an official count."
         )
+
+    # ── Health evidence (v1.11.0) ───────────────────────────────────────
+    # Confirmed local cases vs preparedness-only coverage. A country whose
+    # entire coverage is "on alert / screening / tests negative" is held at
+    # WATCH (L2): the outbreak is real, but it is not THERE, and an L5 row
+    # saying it is would be the overclaim the platform exists to avoid.
+    for d in detected:
+        if d.get('category') != 'health_emergency':
+            continue
+        h = _hx.get(d['country']) or {}
+        d['diseases'] = sorted(h.get('diseases') or [])
+        local = bool(h.get('confirmed') or d.get('reported_deaths') or d.get('reported_cases'))
+        d['local_cases'] = local
+        if not local and h.get('prep'):
+            d['watch_only'] = True
+            d['severity'] = SEVERITY_BASELINE
+            d['level'] = 2
+            _names = ', '.join(DISEASE_FAMILIES[z][0] for z in d['diseases']) or 'outbreak'
+            d['short_text'] = (f"\U0001f9a0 {d['country_label']}: {_names} preparedness / "
+                               f"surveillance — no confirmed local cases in coverage")[:150]
+            d['long_text'] = (f"{d['country_label']} coverage this cycle describes preparedness "
+                              f"(alerts, screening, negative tests) for {_names}, with no confirmed "
+                              f"local case. Held at WATCH: the outbreak is real elsewhere, not "
+                              f"confirmed here. Source: {d.get('source', 'unknown')}.")
+
+    global _LAST_HEALTH_CONTEXT
+    _LAST_HEALTH_CONTEXT = {'imports': {k: sorted(v) for k, v in _imports.items()},
+                            'bundibugyo': _bundibugyo}
 
     # ── WORLDWIDE STRUCTURED DISASTER CATCH ─────────────────────────────
     # RELOCATED HERE Aug 2026. This merge previously sat in
@@ -1471,6 +1906,13 @@ SIGNAL_CLASS_WEIGHT = {
     'structured_acute_casualties': 0,   # GDACS/USGS with confirmed deaths
     'structured_acute':            1,   # GDACS alert, USGS significant, UNHCR YoY surge
     'news_acute':                  2,   # keyword-matched outbreak or disaster
+    # v1.11.0 (Oct 29 2026) -- UNHCR year-over-year deltas. Structured and real,
+    # but published ANNUALLY: "+381,467 refugees YoY" says the same thing every
+    # day of the year. It ranked as structured_acute and held three of the five
+    # GPI humanitarian slots while Ebola spread to two new countries. Same
+    # weight as news_acute (so priorities stay in band), but the sort below
+    # places live events ahead of it.
+    'structured_annual':           2,
     'structural_chronic':          3,   # World Bank indicators — true for years
 }
 
@@ -1505,7 +1947,9 @@ def _signal_class(sig):
     # exposure figure. Matching on the source string would promote those to
     # structured and defeat the whole distinction. Only disaster_feeds.py sets
     # `feed`; only the UNHCR detector sets signal_origin='unhcr_structured'.
-    structured = bool(feed) or origin == 'unhcr_structured'
+    if origin == 'unhcr_structured':
+        return SIGNAL_CLASS_WEIGHT['structured_annual']
+    structured = bool(feed)
     if structured:
         if sig.get('outcome_escalated') or _casualty_count(sig) > 0:
             return SIGNAL_CLASS_WEIGHT['structured_acute_casualties']
@@ -1594,6 +2038,7 @@ def build_humanitarian_bluf(signals, aggregation=None):
             -s.get('severity', 0),
             _signal_class(s),
             0 if s.get('growing_concern') else 1,     # v1.10.0
+            1 if s.get('signal_origin') == 'unhcr_structured' else 0,   # v1.11.0: annual after live
             -_casualty_count(s),
             0 if not s.get('is_tracked_country') else 1,
             -s.get('level', 0),
@@ -1625,7 +2070,8 @@ def build_humanitarian_bluf(signals, aggregation=None):
             # v1.10.0 -- magnitude, provenance and trend ride along when present.
             **{k: s[k] for k in ('reported_deaths', 'reported_cases', 'toll_source',
                                  'trend', 'growing_concern', 'new_outbreak_signal',
-                                 'first_seen') if k in s},
+                                 'first_seen', 'diseases', 'local_cases', 'watch_only',
+                                 'spread_node') if k in s},
         })
 
     return {
@@ -2261,6 +2707,8 @@ def apply_toll_trend(signals, history, now=None):
     for s in signals or []:
         if s.get('category') != 'health_emergency' or not s.get('country'):
             continue
+        if s.get('watch_only'):
+            continue      # v1.11.0 -- preparedness is not an outbreak; no NEW tag, no history
         rec = countries.setdefault(s['country'], {'first_seen': today, 'daily': []})
         daily = rec.setdefault('daily', [])
         d = int(s.get('reported_deaths') or 0)
@@ -2280,13 +2728,28 @@ def apply_toll_trend(signals, history, now=None):
         trend = None
         growing = False
         if cur and base:
-            dd = cur['deaths'] - base['deaths']
-            dc = cur['cases'] - base['cases']
-            grow_d = dd >= GROWTH_MIN_DEATHS and dd >= base['deaths'] * GROWTH_MIN_PCT
-            grow_c = dc >= GROWTH_MIN_CASES and dc >= base['cases'] * GROWTH_MIN_PCT
+            # v1.11.0 (Oct 29 2026) -- A ZERO BASELINE IS MISSING COVERAGE, NOT ZERO.
+            # The doctrine above already says a LOWER figure means missing coverage,
+            # never decline -- and then measured growth against a stored 0. On Oct 21
+            # DR Congo's coverage printed cases but no death figure, so the base held
+            # 0 deaths and the card read "+5,000 deaths since Oct 21": the entire
+            # cumulative toll reported as one week's growth. A metric only produces
+            # a delta when its baseline was actually READ (> 0).
+            # Each metric measures from the OLDEST day on which IT was read, so a
+            # day that printed cases but no deaths can still anchor the case trend.
+            base_d = next((e for e in older if e.get('deaths', 0) > 0), None)
+            base_c = next((e for e in older if e.get('cases', 0) > 0), None)
+            dd = (cur['deaths'] - base_d['deaths']) if base_d else 0
+            dc = (cur['cases'] - base_c['cases']) if base_c else 0
+            grow_d = bool(base_d) and dd >= GROWTH_MIN_DEATHS and dd >= base_d['deaths'] * GROWTH_MIN_PCT
+            grow_c = bool(base_c) and dc >= GROWTH_MIN_CASES and dc >= base_c['cases'] * GROWTH_MIN_PCT
             growing = bool(grow_d or grow_c)
-            trend = {'since': base['date'], 'deaths_delta': max(0, dd), 'cases_delta': max(0, dc),
-                     'deaths_then': base['deaths'], 'cases_then': base['cases'],
+            _since = min([e['date'] for e in (base_d, base_c) if e] or [base['date']])
+            trend = {'since': _since, 'deaths_delta': max(0, dd), 'cases_delta': max(0, dc),
+                     'deaths_since': base_d['date'] if base_d else None,
+                     'cases_since': base_c['date'] if base_c else None,
+                     'deaths_then': base_d['deaths'] if base_d else None,
+                     'cases_then': base_c['cases'] if base_c else None,
                      'growing': growing,
                      'basis': 'largest figure seen per day in coverage; a lower figure is '
                               'treated as missing coverage, never as decline'}
@@ -2303,13 +2766,14 @@ def apply_toll_trend(signals, history, now=None):
             if is_new:
                 bits.append('NEW this week')
             if growing:
-                when = datetime.strptime(trend['since'], '%Y-%m-%d').strftime('%b %d').replace(' 0', ' ')
+                def _when(dstr):
+                    return datetime.strptime(dstr, '%Y-%m-%d').strftime('%b %d').replace(' 0', ' ')
                 delta = []
-                if trend['deaths_delta'] >= GROWTH_MIN_DEATHS:
-                    delta.append(f"+{trend['deaths_delta']:,} deaths")
-                if trend['cases_delta'] >= GROWTH_MIN_CASES:
-                    delta.append(f"+{trend['cases_delta']:,} cases")
-                bits.append('▲ ' + ' / '.join(delta) + f' since {when}')
+                if trend['deaths_delta'] >= GROWTH_MIN_DEATHS and trend.get('deaths_since'):
+                    delta.append(f"+{trend['deaths_delta']:,} deaths since {_when(trend['deaths_since'])}")
+                if trend['cases_delta'] >= GROWTH_MIN_CASES and trend.get('cases_since'):
+                    delta.append(f"+{trend['cases_delta']:,} cases since {_when(trend['cases_since'])}")
+                bits.append('▲ ' + ' / '.join(delta))
             tag = ' — ' + '; '.join(bits)
             head = s.get('short_text') or ''
             # Keep the trend visible inside the 150-char budget: drop the
@@ -2349,11 +2813,44 @@ def detect_and_build_bluf(articles, extra_signals=None, toll_history=None):
     # detect_humanitarian_signals() so that EVERY caller receives it --
     # /details calls that function directly and was bypassing this path.
 
+    # v1.11.0 -- outbreak spread read. Runs AFTER the trend (so node tags win the
+    # headline) and BEFORE aggregation (so spread nodes rank as growing concerns).
+    _spread_status, _spread_records = 'ok', []
+    try:
+        _spread_records = mark_outbreak_spread(signals)
+    except Exception as _se:
+        _spread_status = 'failed: %s' % str(_se)[:100]
+        print('[humanitarian] outbreak spread read failed (non-fatal): %s' % str(_se)[:120])
+
     if extra_signals:
         signals = signals + list(extra_signals)
     aggregation = aggregate_convergence(signals)
     bluf = build_humanitarian_bluf(signals, aggregation)
     bluf.setdefault('meta', {})['trend_status'] = _trend_status
+
+    # The synthesis rows go at the HEAD of the pool and of top_signals: the GPI
+    # pulls the first three rows of this "region", and a disease crossing borders
+    # is the finding that should be first in line. Added after aggregation so a
+    # synthesis row is never counted as an extra country.
+    try:
+        _spread_sigs = build_outbreak_spread_signals(_spread_records)
+    except Exception as _se2:
+        _spread_sigs = []
+        _spread_status = 'failed: %s' % str(_se2)[:100]
+    if _spread_sigs:
+        bluf['signals'] = _spread_sigs + bluf.get('signals', [])
+        bluf['top_signals'] = (_spread_sigs + bluf.get('top_signals', []))[:5]
+        bluf['max_level'] = max(bluf.get('max_level', 0), 5)
+        bluf['peak_level'] = bluf['max_level']
+    bluf['meta']['outbreak_spread'] = {
+        'status': _spread_status,
+        'outbreaks': [dict({k: r[k] for k in ('disease_name', 'epicentre_label', 'epicentre_deaths',
+                                              'epicentre_cases', 'imports_beyond_africa')},
+                           nodes=[{'country': n['label'], 'cases': n['cases'],
+                                   'deaths': n['deaths'], 'contiguous': n['contiguous']}
+                                  for n in r['nodes']])
+                      for r in _spread_records],
+    }
     bluf['meta']['growing_concerns'] = [
         s['short_text'] for s in bluf.get('signals', []) if s.get('growing_concern')][:10]
 
@@ -2786,6 +3283,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.10.0'
+__version__ = '1.11.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')

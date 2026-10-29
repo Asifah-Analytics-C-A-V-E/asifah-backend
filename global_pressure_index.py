@@ -28,6 +28,12 @@ v3.13.0 — Oct 28 2026 (L6 DOCTRINE + governance token fix):
     world reaction (UNSC emergency / NATO Art 4-5 / G7 emergency) naming the
     country; holds 7 days. Tracker L6 that fails is demoted to L5 in the GPI.
   * _is_governance_signal is whole-token ('commodity_coupling' matched 'coup').
+v3.14.0 — Oct 29 2026 (SEVERITY vs MOTION on the axes):
+  * Each axis carries motion: new / sustained / unread (gpi:axis_motion; kinetic
+    reads the L5 gate's onsets). Tabs and prose show "L5 · sustained" etc., and
+    the prose explains why an axis can sit above the index.
+  * Axis chip words come from each axis's own ladder -- humanitarian L5 no
+    longer reads "ACTIVE CONFLICT" (L5 assertion rule).
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -854,7 +860,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.13.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.14.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -2073,12 +2079,15 @@ GOVERNANCE_CATEGORY_HINTS = (
 
 
 def _axis_level_label(axis, level):
-    """Chip word for an axis level. Governance reads its own ladder: a caretaker
-    government at L3 is 'governing authority contested', and the kinetic chip
-    word CONFRONTATION would put a war word on an election. Other axes keep the
-    canonical chip ladder unchanged."""
-    if axis == PRESSURE_GOVERNANCE:
-        return _theatre_state(level, None, PRESSURE_GOVERNANCE).upper()
+    """Chip word for an axis level, from THAT axis's own ladder.
+
+    v3.14.0 (Oct 29 2026) -- every non-kinetic axis, not just governance. The
+    humanitarian tab read "L5 · ACTIVE CONFLICT" over a Category-1 typhoon and
+    three UNHCR statistics: the kinetic chip word on a non-kinetic axis, which
+    is exactly what the L5 assertion rule (Oct 6) forbids. Kinetic keeps the
+    canonical chip ladder."""
+    if axis and axis != PRESSURE_KINETIC and axis in THEATRE_STATE:
+        return _theatre_state(level, None, axis).upper()
     return GLOBAL_LEVEL_LABELS.get(level, '')
 
 
@@ -2258,6 +2267,128 @@ def _tag_pressure_axes(signals):
     return tagged
 
 
+# ============================================================
+# AXIS MOTION  (v3.14.0, Oct 29 2026)
+# ============================================================
+# The index went to L4 SUSTAINED while Kinetic, Economic and Humanitarian each
+# still read L5 -- correctly, because an axis level is SEVERITY (how bad is the
+# worst reading on this axis) while the index level is MOTION (is the world
+# getting worse this fortnight). Both are true; the page only showed one of
+# them. Each axis now carries its own motion read:
+#
+#   new        something at the axis's top level appeared, or moved to that
+#              level, within AXIS_MOTION_NEW_HOURS
+#   sustained  every top-level reading has held longer than that
+#   unread     no history to judge (Redis unreadable) -- said, not guessed
+#
+# Identity is category|theatre|country|LEVEL, never the prose: figures in the
+# text refresh every scan and would make everything look new forever. A level
+# change IS motion, so it is part of the key.
+#
+# Kinetic uses the L5 novelty gate's per-theatre onsets when the gate ran, so
+# the kinetic tab and the index can never disagree about whether a front is new.
+#
+# DAY ZERO: readings present on the first run are seeded as sustained
+# ("pre-dates tracking"), the same rule the L5 gate uses -- otherwise every axis
+# would shout NEW for three days after deploy.
+AXIS_MOTION_KEY        = 'gpi:axis_motion'
+AXIS_MOTION_TTL        = 60 * 24 * 3600
+AXIS_MOTION_NEW_HOURS  = 72
+AXIS_MOTION_FORGET_DAYS = 14
+_AXIS_MOTION_STATE = {'loaded': False, 'ok': False, 'data': None, 'dirty': False, 'first_run': False}
+
+
+def _axis_motion_fp(sig):
+    return '|'.join(str(sig.get(k) or '').lower() for k in ('category', 'theatre', 'country')) \
+        + '|L%d' % _safe_level(sig.get('level', 0))
+
+
+def _axis_motion_load():
+    st = _AXIS_MOTION_STATE
+    if not st['loaded']:
+        data, ok = _redis_get_checked(AXIS_MOTION_KEY)
+        st.update(loaded=True, ok=ok,
+                  first_run=bool(ok and not isinstance(data, dict)),
+                  data=(data if isinstance(data, dict) else ({} if ok else None)))
+    return st
+
+
+def _axis_motion(axis, axis_level, axis_signals):
+    """Return {'motion','label','note','new'} for one axis."""
+    if axis_level <= 0:
+        return {'motion': 'quiet', 'label': '', 'note': '', 'new': []}
+    gate = _LAST_LEVEL_GATE or {}
+    # A confirmed L6 Global Shock is new escalation by definition.
+    if axis == PRESSURE_KINETIC and (_LAST_L6 or {}).get('active'):
+        _ev = sorted((_LAST_L6.get('events') or []), key=lambda e: e.get('confirmed_at', ''))
+        _lbl = (_ev[-1].get('class_label') if _ev else '') or 'Global shock'
+        return {'motion': 'new', 'label': 'new',
+                'note': '%s -- confirmed world-altering event (L6 hold).' % _lbl,
+                'new': [_lbl]}
+    if axis == PRESSURE_KINETIC and axis_level >= 5 and gate.get('available', True) and (
+            gate.get('fresh') or gate.get('sustained')):
+        fresh = gate.get('fresh') or []
+        if fresh:
+            return {'motion': 'new', 'label': 'new',
+                    'note': 'New L5 front within %d days: %s.' % (
+                        L5_NOVELTY_DAYS, ', '.join(e['display'] for e in fresh)),
+                    'new': [e['display'] for e in fresh]}
+        return {'motion': 'sustained', 'label': 'sustained',
+                'note': 'Every L5 front has held more than %d days -- severe, but nothing new '
+                        'added.' % L5_NOVELTY_DAYS, 'new': []}
+
+    st = _axis_motion_load()
+    if not st['ok'] or st['data'] is None:
+        return {'motion': 'unread', 'label': 'motion unread',
+                'note': 'Motion history unreadable this cycle -- severity shown without the '
+                        'new/sustained distinction.', 'new': []}
+    data = st['data']
+    first_run = bool(st.get('first_run'))      # applies to EVERY axis on the seeding run
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    book = data.setdefault(axis, {})
+    top = [s for s in axis_signals if _safe_level(s.get('level', 0)) == axis_level]
+    new_items = []
+    for s in top:
+        fp = _axis_motion_fp(s)
+        rec = book.get(fp)
+        if rec is None:
+            rec = {'first_seen': now_iso, 'seeded': first_run}
+            book[fp] = rec
+        rec['last_seen'] = now_iso
+        if not rec.get('seeded'):
+            try:
+                hrs = (now - datetime.fromisoformat(rec['first_seen'])).total_seconds() / 3600.0
+            except Exception:
+                hrs = AXIS_MOTION_NEW_HOURS + 1
+            if hrs < AXIS_MOTION_NEW_HOURS:
+                new_items.append((s.get('short_text') or s.get('category') or '')[:90])
+    for fp in list(book.keys()):
+        try:
+            if (now - datetime.fromisoformat(book[fp].get('last_seen', now_iso))).days > AXIS_MOTION_FORGET_DAYS:
+                book.pop(fp, None)
+        except Exception:
+            book.pop(fp, None)
+    st['dirty'] = True
+    if new_items:
+        return {'motion': 'new', 'label': 'new',
+                'note': '%d reading%s reached L%d within %dh: %s' % (
+                    len(new_items), '' if len(new_items) == 1 else 's', axis_level,
+                    AXIS_MOTION_NEW_HOURS, '; '.join(new_items[:3])),
+                'new': new_items[:5]}
+    return {'motion': 'sustained', 'label': 'sustained',
+            'note': 'Every L%d reading on this axis has held more than %dh -- %s, but not '
+                    'new this cycle.' % (axis_level, AXIS_MOTION_NEW_HOURS,
+                                         'severe' if axis_level >= 4 else 'standing'), 'new': []}
+
+
+def _axis_motion_save():
+    st = _AXIS_MOTION_STATE
+    if st.get('dirty') and st.get('ok') and isinstance(st.get('data'), dict):
+        _redis_set(AXIS_MOTION_KEY, st['data'], ttl=AXIS_MOTION_TTL)
+    st.update(loaded=False, ok=False, data=None, dirty=False, first_run=False)
+
+
 def _build_pressure_axes_payload(blufs, narratives):
     """
     Build the per-axis aggregation payload that the frontend will consume.
@@ -2330,7 +2461,17 @@ def _build_pressure_axes_payload(blufs, narratives):
             })
 
         meta = PRESSURE_AXIS_META[axis]
+        try:
+            _mo = _axis_motion(axis, axis_level, axis_signals)
+        except Exception as _mo_err:
+            _mo = {'motion': 'unread', 'label': 'motion unread',
+                   'note': 'Motion read failed: %s' % str(_mo_err)[:80], 'new': []}
         axes[axis] = {
+            # v3.14.0 -- severity (level) and motion, side by side.
+            'motion':        _mo['motion'],
+            'motion_label':  _mo['label'],
+            'motion_note':   _mo['note'],
+            'motion_new':    _mo['new'],
             'axis':          axis,
             'label':         meta['label'],
             'icon':          meta['icon'],
@@ -4463,7 +4604,9 @@ def _l5_theatres(blufs):
                 th = f'region:{region}'
             out.setdefault(th, region)
             found = True
-        if not found and _level_of(bluf) >= 5:
+        # Geographic regions only: a pseudo-region (humanitarian, commodity,
+        # food) at L5 is severity on a NON-kinetic axis, never a war front.
+        if not found and region in CARD_ORDER and _level_of(bluf) >= 5:
             out.setdefault(f'region:{region}', region)
     return out
 
@@ -5299,6 +5442,34 @@ def _build_global_top_signals(blufs, narratives):
     except Exception as _dec_err:
         print(f'[GPI decay] skipped (non-fatal): {str(_dec_err)[:120]}')
 
+    # 2b. v3.14.0 (Oct 29 2026) -- PSEUDO-REGION MOVERS. Only CARD_ORDER regions
+    # were ever pulled into this list, so a global feed (humanitarian, commodity,
+    # food) could reach the axis tabs and the narratives but never All Vectors --
+    # which is how Ebola leaving DR Congo for Kenya and Nigeria stayed off the
+    # front page. Narrow by design: only a cross-border spread synthesis or a row
+    # the feed itself flags as a GROWING concern, at most two per feed. Standing
+    # feed rows (annual statistics, steady prices) stay on their tabs.
+    for region, bluf in (blufs or {}).items():
+        if region in CARD_ORDER or not bluf:
+            continue
+        movers = [sg for sg in _signals_of(bluf)
+                  if sg.get('category') == 'outbreak_spread'
+                  or (sg.get('growing_concern') and not sg.get('watch_only'))][:2]
+        for sig in movers:
+            signals.append({
+                'priority':      int(sig.get('priority', 5) or 5) - 2,
+                'category':      sig.get('category', 'regional'),
+                'theatre':       sig.get('theatre') or region,
+                'region':        region,
+                'level':         sig.get('level', 0),
+                'icon':          sig.get('icon', '\u2022'),
+                'color':         sig.get('color', '#6b7280'),
+                'short_text':    (sig.get('short_text') or sig.get('text') or '')[:180],
+                'long_text':     sig.get('long_text', sig.get('short_text', '')),
+                'pressure_type': _infer_pressure_type(sig),
+                'pseudo_region_mover': True,
+            })
+
     # Compute tier-adjusted sort key for each signal
     for s in signals:
         s['_tier_boost'] = _tier_boost(s)
@@ -5648,7 +5819,9 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
             ax = axes_inner.get(ax_name, {}) or {}
             ax_level = ax.get('level', 0) or 0
             if ax_level > 0:
-                axis_summary_parts.append(f"{ax_name.capitalize()} L{ax_level}")
+                _ml = ax.get('motion_label') if ax_level >= 4 else ''
+                axis_summary_parts.append(f"{ax_name.capitalize()} L{ax_level}"
+                                          + (f" ({_ml})" if _ml else ''))
         if axis_summary_parts:
             parts.append('Pressure axes: ' + ', '.join(axis_summary_parts) + '.')
     except Exception as _e:
@@ -5658,6 +5831,24 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
     # same breath. "L4 -- COERCION" over a live war would be false.
     _gate = _LAST_LEVEL_GATE or {}
     _l6 = _LAST_L6 or {}
+    # v3.14.0 -- when the index is held below its own axes, explain it once.
+    try:
+        if _gate.get('applied'):
+            _hi = [ax for ax, d in ((axes_payload or {}).get('axes') or {}).items()
+                   if (d or {}).get('level', 0) > global_level]
+            if _hi:
+                _new_hi = [ax for ax in _hi
+                           if ((axes_payload or {}).get('axes') or {}).get(ax, {}).get('motion') == 'new']
+                parts.append(
+                    'Severity vs motion: the %s ax%s read%s higher than the index because axis '
+                    'levels measure how severe the worst reading is, while the index measures '
+                    'whether the world got worse this fortnight.%s' % (
+                        ', '.join(a.title() for a in _hi), 'es' if len(_hi) > 1 else 'is',
+                        '' if len(_hi) > 1 else 's',
+                        (' New this cycle on: %s.' % ', '.join(a.title() for a in _new_hi))
+                        if _new_hi else ''))
+    except Exception:
+        pass
     if _l6.get('active'):
         _e = sorted(_l6.get('events') or [], key=lambda x: x.get('confirmed_at', ''))[-1]
         parts.append(f"Global level: L6 -- {L6_LABEL}. {_e.get('class_label', '')} "
@@ -5770,8 +5961,10 @@ def _synthesize_axis_bluf(axis_name, axes_payload, blufs, global_level):
         region_name = REGION_DISPLAY.get(region, {}).get('name', region)
         region_strs.append(f"{region_name} L{lvl}")
     region_summary = ', '.join(region_strs) if region_strs else 'multi-region'
+    _mo_note = axis_data.get('motion_note') or ''
     parts.append(
-        f"Axis at L{axis_level} ({_axis_level_label(axis_name, axis_level)}) -- "
+        f"Axis at L{axis_level} ({_axis_level_label(axis_name, axis_level)}"
+        f"{', ' + axis_data.get('motion_label') if axis_data.get('motion_label') else ''}) -- "
         f"{signal_count} active signal(s) across {len(region_levels)} region(s): "
         f"{region_summary}."
     )
@@ -5785,6 +5978,14 @@ def _synthesize_axis_bluf(axis_name, axes_payload, blufs, global_level):
             top_lines.append(f"{icon} {stext}")
     if top_lines:
         parts.append('Driving signals: ' + '; '.join(top_lines) + '.')
+    # v3.14.0 -- say what the motion read means, and why this axis can sit above
+    # the headline index without either number being wrong.
+    if _mo_note:
+        parts.append('Motion: ' + _mo_note)
+    if axis_level > (global_level or 0) and axis_level >= 4:
+        parts.append(f"Why this axis reads L{axis_level} while the index reads L{global_level}: "
+                     f"an axis level is SEVERITY (how bad the worst reading is); the index "
+                     f"level is MOTION (whether the world got worse this fortnight).")
 
     # Analytical lens reminder + cross-axis context
     other_axes_high = []
@@ -6103,6 +6304,9 @@ def build_gpi(force=False):
                 'regional_cards': [],
             }
 
+        # v3.14.0 -- fresh motion state per build (a failed build must not leave
+        # a half-loaded state behind for the next one).
+        _AXIS_MOTION_STATE.update(loaded=False, ok=False, data=None, dirty=False, first_run=False)
         narratives    = _detect_narratives(blufs)
         # v3.12.0 -- tier BEFORE the level: a standing watch may not supply the
         # convergence boost, so the tiers have to exist when the level is set.
@@ -6146,6 +6350,10 @@ def build_gpi(force=False):
         # v2.2 — multi-axis pressure aggregation (kinetic / economic / diplomatic / humanitarian)
         # Headline level remains kinetic-driven; pressure_axes is additive payload for frontend.
         pressure_axes = _build_pressure_axes_payload(blufs, narratives)
+        try:
+            _axis_motion_save()
+        except Exception as _ms_err:
+            print(f'[GPI motion] save failed (non-fatal): {str(_ms_err)[:100]}')
 
         # Regional cards in alphabetical order
         regional_cards = []
