@@ -45,12 +45,13 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
 VOICE_MIN_GAP_SEC = int(os.environ.get('VOICE_MIN_GAP_SEC', '900'))     # 15 min
 VOICE_MAX_TOKENS  = 4000
+VOICE_THINKING_OFF = os.environ.get('VOICE_THINKING_OFF', 'between_tools')
 VOICE_TIMEOUT_SEC = 120
 VOICE_KEY         = 'gpi:voice:latest'
 VOICE_TTL         = 14 * 24 * 3600
@@ -346,7 +347,10 @@ def _call_claude(facts):
     msg = client.messages.create(
         model=VOICE_MODEL,
         max_tokens=VOICE_MAX_TOKENS,
-        thinking={'type': 'disabled'},
+        # Oct 30 2026 -- first live call: Sonnet 5.5 rejects {'type': 'disabled'}
+        # ("To turn thinking off on this model, send {'type': 'between_tools'}").
+        # With no tools in this request, between_tools means no thinking at all.
+        thinking={'type': VOICE_THINKING_OFF},
         system=[{'type': 'text', 'text': SYSTEM_PROMPT,
                  'cache_control': {'type': 'ephemeral'}}],
         messages=[{'role': 'user', 'content': json.dumps(facts, separators=(',', ':'),
@@ -399,7 +403,9 @@ def refresh(gpi_payload, allow_call=True, reason='organic'):
     try:
         now = time.time()
         last = latest.get('last_attempt_epoch') or 0
-        if now - last < VOICE_MIN_GAP_SEC:
+        # The gap guards against automatic retries hammering the API. A manual
+        # refresh (Rachel's secret link) skips it; the daily cap still applies.
+        if reason != 'manual' and now - last < VOICE_MIN_GAP_SEC:
             return {'status': 'min_gap', 'retry_after_sec': int(VOICE_MIN_GAP_SEC - (now - last))}
         calls_key = VOICE_CALLS_KEY + _today()
         calls = int((_rget(calls_key) or {}).get('n', 0))
