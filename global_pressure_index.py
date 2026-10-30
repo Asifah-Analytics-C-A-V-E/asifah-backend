@@ -69,6 +69,13 @@ v3.16.0 — Oct 29 2026 (EVIDENCE GATES ON ECONOMIC NARRATIVES):
     beside convergence narratives (it contradicted the page).
   * Narratives may carry fresh=False (a condition is standing by definition);
     _tier_narratives already honours it.
+v3.18.0 — Oct 30 2026 (HOW OLD IS THIS?):
+  * Signal age memory (gpi:signal_ages): every top signal and axis signal
+    carries first_seen / age_days / is_new. Day zero seeds as "before <date>"
+    -- old, age unknown, never new. A level rise is a new signal. Prompted by
+    "Rejected by Hizballah" (a June event) reading as this week's news.
+  * Narratives carry first_seen / age_days, which never reset when a headline
+    is reworded (unchanged_days still does).
 v3.17.0 — Oct 30 2026 (ALIGNMENT IS DIPLOMATIC):
   * alignment_drift (and kin) always map to the DIPLOMATIC axis, overriding
     the source tracker's stamp. Peru's drift had been leading the economic
@@ -907,7 +914,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.17.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.18.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -5579,6 +5586,84 @@ def _narrative_fingerprint(n):
     return '%s|%s|%s' % (n.get('category', ''), regs, head)
 
 
+# ════════════════════════════════════════════════════════════════════════
+# SIGNAL AGE MEMORY  (v3.18.0, Oct 30 2026)
+# ════════════════════════════════════════════════════════════════════════
+# Rachel, Oct 30, on the second plain-language run: "Hizballah rejected the
+# Lebanon Framework back in June -- this is the end of October!" A tracker
+# re-reports a STATE every cycle ("FRAMEWORK SIGNED -- Rejected by Hizballah")
+# with no date on it, so every build looks like news to a reader -- and to a
+# writer.
+#
+# This remembers when Asifah FIRST saw each signal. Fingerprint =
+# category | theatre | level | headline letters (digits dropped, so "(1)" ->
+# "(2)" is the same signal). A LEVEL change is a new fingerprint -- a rise is
+# news. Day zero (no store yet) seeds everything as a FLOOR: "first seen before
+# <date>", which honestly means "old, age unknown", never "new".
+#
+# Absence-honest: if the store cannot be read, signals carry age_unread=True
+# and nothing is written (a failed read must not wipe the history).
+SIGNAL_AGE_KEY = 'gpi:signal_ages'
+SIGNAL_AGE_TTL = 120 * 24 * 3600
+SIGNAL_AGE_FORGET_DAYS = 30
+SIGNAL_NEW_HOURS = 72
+
+
+def _signal_age_fp(sg):
+    txt = re.sub(r'[^a-z ]+', ' ', str(sg.get('short_text') or '').lower())
+    txt = ' '.join(txt.split())[:90]
+    return '%s|%s|%s|%s' % (sg.get('category') or '', str(sg.get('theatre') or '').lower(),
+                            _safe_level(sg.get('level', 0)), txt)
+
+
+def _annotate_signal_ages(signal_lists):
+    """Stamp first_seen / age_days / is_new on every signal dict in the lists."""
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    store, ok = _redis_get_checked(SIGNAL_AGE_KEY)
+    if not ok:
+        for lst in signal_lists:
+            for sg in lst or []:
+                if isinstance(sg, dict):
+                    sg['age_unread'] = True
+        return {'ok': False}
+    first_run = not isinstance(store, dict) or not store.get('signals')
+    store = store if isinstance(store, dict) else {}
+    began = store.get('tracking_began') or now_iso
+    recs = store.get('signals') if isinstance(store.get('signals'), dict) else {}
+    seen_now = set()
+    for lst in signal_lists:
+        for sg in lst or []:
+            if not isinstance(sg, dict):
+                continue
+            fp = _signal_age_fp(sg)
+            rec = recs.get(fp)
+            if rec is None:
+                rec = {'first_seen': began if first_run else now_iso, 'floor': bool(first_run)}
+                recs[fp] = rec
+            rec['last_seen'] = now_iso
+            seen_now.add(fp)
+            try:
+                age_h = (now - datetime.fromisoformat(rec['first_seen'])).total_seconds() / 3600.0
+            except Exception:
+                age_h = 0.0
+            sg['first_seen'] = rec['first_seen'][:10]
+            sg['first_seen_is_floor'] = bool(rec.get('floor'))
+            sg['age_days'] = round(age_h / 24.0, 1)
+            sg['is_new'] = (not rec.get('floor')) and age_h <= SIGNAL_NEW_HOURS
+    for fp in list(recs.keys()):
+        if fp in seen_now:
+            continue
+        try:
+            gone = (now - datetime.fromisoformat(recs[fp].get('last_seen') or now_iso)).days
+        except Exception:
+            gone = 0
+        if gone > SIGNAL_AGE_FORGET_DAYS:
+            recs.pop(fp, None)
+    _redis_set(SIGNAL_AGE_KEY, {'tracking_began': began, 'signals': recs}, ttl=SIGNAL_AGE_TTL)
+    return {'ok': True, 'first_run': first_run, 'tracked': len(recs)}
+
+
 def _tier_narratives(narratives):
     """Stamp each narrative with tier 'topline' | 'standing'. Toplines first."""
     if not narratives:
@@ -5603,11 +5688,29 @@ def _tier_narratives(narratives):
         else:
             since = now_iso
             moved = prev is not None
-        new_state[cat] = {'fp': fp, 'since': since}
+        # v3.18.0 -- FIRST SEEN, kept separately from 'since'. 'since' resets
+        # whenever the headline text changes (a reworded headline is not news),
+        # so it cannot say how OLD a story is. first_seen never resets. Records
+        # that predate this field are marked as a floor ("before <date>").
+        if prev and prev.get('first_seen'):
+            first_seen, fs_floor = prev['first_seen'], bool(prev.get('first_seen_floor'))
+        elif prev:
+            first_seen, fs_floor = now_iso, True
+        else:
+            first_seen, fs_floor = now_iso, (not ok) or (not state)
+        new_state[cat] = {'fp': fp, 'since': since,
+                          'first_seen': first_seen, 'first_seen_floor': fs_floor}
         try:
             unchanged_days = (now - datetime.fromisoformat(since)).total_seconds() / 86400.0
         except Exception:
             unchanged_days = 0.0
+        try:
+            _age = (now - datetime.fromisoformat(first_seen)).total_seconds() / 86400.0
+        except Exception:
+            _age = 0.0
+        n['first_seen'] = first_seen[:10]
+        n['first_seen_is_floor'] = fs_floor
+        n['age_days'] = round(_age, 1)
 
         axes = _axes_for_narrative(n)
         war_class = (axes[:1] == [PRESSURE_KINETIC]
@@ -6793,11 +6896,22 @@ def build_gpi(force=False):
             'regions_expected':   len(_card_regions),
         }
 
+        # v3.18.0 -- how OLD is each signal? (see SIGNAL AGE MEMORY)
+        try:
+            _age_lists = [top_signals]
+            for _axd in ((pressure_axes or {}).get('axes') or {}).values():
+                _age_lists.append(_axd.get('top_signals') or [])
+            _signal_age_report = _annotate_signal_ages(_age_lists)
+        except Exception as _age_err:
+            _signal_age_report = {'ok': False, 'error': str(_age_err)[:160]}
+            print(f'[GPI ages] skipped (non-fatal): {str(_age_err)[:120]}')
+
         result = {
             'success':         True,
             'from_cache':      False,
             'generated_at':    datetime.now(timezone.utc).isoformat(),
             'version':         GPI_VERSION,
+            'signal_ages':     _signal_age_report,     # v3.18.0
             'global_level':    global_level,
             'global_label':    global_label,
             'global_color':    global_color,
