@@ -69,6 +69,11 @@ v3.16.0 — Oct 29 2026 (EVIDENCE GATES ON ECONOMIC NARRATIVES):
     beside convergence narratives (it contradicted the page).
   * Narratives may carry fresh=False (a condition is standing by definition);
     _tier_narratives already honours it.
+v3.19.0 — Oct 30 2026 (THE PLAIN-LANGUAGE VOICE):
+  * After each build, gpi_voice.py (background thread) rewrites the
+    plain-language write-up IF the facts changed. ?force rebuilds never call
+    Claude. New endpoint /api/gpi/voice (read-only; ?refresh=<secret> for a
+    manual run). Soft import: without gpi_voice.py nothing changes.
 v3.18.0 — Oct 30 2026 (HOW OLD IS THIS?):
   * Signal age memory (gpi:signal_ages): every top signal and axis signal
     carries first_seen / age_days / is_new. Day zero seeds as "before <date>"
@@ -914,7 +919,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.18.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.19.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -6967,6 +6972,19 @@ def build_gpi(force=False):
 
         _redis_set(GPI_CACHE_KEY, result)
 
+        # v3.19.0 -- the plain-language voice (gpi_voice.py). Runs in the
+        # background so this response never waits for the writer. A ?force
+        # rebuild may NOT call Claude (Rachel's cost rule): it only reuses the
+        # last write-up. Soft import: no module, no voice, no change here.
+        try:
+            import gpi_voice as _gv
+            _gv.refresh_async(result, allow_call=not force,
+                              reason='force_rebuild' if force else 'organic')
+        except ImportError:
+            pass
+        except Exception as _ve:
+            print(f'[GPI voice] hook skipped (non-fatal): {str(_ve)[:120]}')
+
         # Also cache the lightweight level-only payload.
         #
         # BUG FIXED Sep 2026 -- TWO WRITERS, ONE KEY, DIFFERENT SHAPES.
@@ -7086,6 +7104,35 @@ def register_gpi_routes(app):
         result = build_gpi_level(force=force)
         return jsonify(result)
 
+    @app.route('/api/gpi/voice', methods=['GET'])
+    def get_gpi_voice():
+        """The plain-language write-up (v3.19.0). Reading it never calls Claude.
+
+        ?refresh=<VOICE_REFRESH_TOKEN> runs the writer once against the CACHED
+        GPI (no rebuild) -- Rachel's manual button. Without the secret, or with
+        the wrong one, it is ignored: the endpoint is public and the credits
+        are not. The daily cap and the change-only rule still apply.
+        """
+        try:
+            import gpi_voice as _gv
+        except ImportError:
+            return jsonify({'available': False, 'note': 'gpi_voice.py not deployed'})
+        status = None
+        token = os.environ.get('VOICE_REFRESH_TOKEN') or ''
+        given = flask_request.args.get('refresh') or ''
+        if token and given:
+            import hmac
+            if hmac.compare_digest(token, given):
+                cached = _redis_get(GPI_CACHE_KEY)
+                status = (_gv.refresh(cached, allow_call=True, reason='manual')
+                          if isinstance(cached, dict) else {'status': 'no_cached_gpi'})
+            else:
+                status = {'status': 'refresh_token_rejected'}
+        out = _gv.latest()
+        if status:
+            out['refresh'] = status
+        return jsonify(out)
+
     @app.route('/api/gpi/debug', methods=['GET'])
     def get_gpi_debug():
         cached_full  = _redis_get(GPI_CACHE_KEY)
@@ -7098,7 +7145,7 @@ def register_gpi_routes(app):
             'configured_endpoints': REGIONAL_BLUF_ENDPOINTS,
         })
 
-    print('[GPI v2.0] Routes registered: /api/gpi, /api/gpi/level, /api/gpi/debug')
+    print('[GPI v2.0] Routes registered: /api/gpi, /api/gpi/level, /api/gpi/voice, /api/gpi/debug')
 
 
 # ============================================================
