@@ -69,6 +69,22 @@ v3.16.0 — Oct 29 2026 (EVIDENCE GATES ON ECONOMIC NARRATIVES):
     beside convergence narratives (it contradicted the page).
   * Narratives may carry fresh=False (a condition is standing by definition);
     _tier_narratives already honours it.
+v3.20.0 — Oct 30 2026 (REGIONAL VOICE + "A KEYWORD IS NOT A WAR"):
+  * Rachel's ruling: "a key word alert does NOT automatically equate active
+    conflict -- active conflict is a key word alert that actual kinetic
+    activity has resumed, started, etc." The L5 gate now counts a theatre as
+    an L5 front only when one of its L5 kinetic signals REPORTS fighting
+    (gpi_voice.is_fighting_signal: ground operations, ballistic alerts,
+    clashes, territorial advance, war tempo...). Keyword tripwires ("Hajj Mass
+    Casualty"), rhetoric surges ("TTP -- SURGE-level rhetoric") and signaling
+    reads ("Operation True Promise -- Wave Acceleration", whose own text says
+    "retaliation signaling") no longer hold a front open. The region-level
+    fallback now fires only for a THIN payload (no L5 signal exposed at all),
+    not for one whose L5 signals are all non-combat.
+  * After each build, regional_voice.py writes the plain-language read for the
+    five regions (background thread, only when a region's facts changed,
+    2 calls/region/day). New endpoint /api/regional/voice (?region=me|asia|
+    europe|wha|africa; &refresh=<secret> for a manual run of one region).
 v3.19.0 — Oct 30 2026 (THE PLAIN-LANGUAGE VOICE):
   * After each build, gpi_voice.py (background thread) rewrites the
     plain-language write-up IF the facts changed. ?force rebuilds never call
@@ -919,7 +935,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.19.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.20.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -4990,14 +5006,27 @@ def _l5_theatres(blufs):
     thin payload can never hide a war from the gate."""
     out = {}
     _L5_DRIVERS.clear()
+    try:                                   # v3.20.0 -- Rachel's ruling (see header)
+        from gpi_voice import is_fighting_signal as _fights
+    except ImportError:
+        def _fights(s):
+            k = str(s.get('type') or '').lower()
+            t = str(s.get('short_text') or '')
+            return isinstance(s.get('level'), int) and k not in (
+                'tripwire', 'actor_signal', 'commodity_coupling') and not re.search(
+                r'tripwire|rhetoric|surge-level', t, re.I)
     for region, bluf in (blufs or {}).items():
         if not bluf:
             continue
         found = False
+        exposed = False                    # any L5 kinetic signal at all (thin-payload test)
         for s in _signals_of(bluf):
             if _safe_level(s.get('level', 0)) < 5:
                 continue
             if _infer_pressure_type(s) != PRESSURE_KINETIC:
+                continue
+            exposed = True
+            if not _fights(s):
                 continue
             th = str(s.get('theatre') or '').strip().lower()
             if not th or th in _UNGROUPED_THEATRES or th == region:
@@ -5011,7 +5040,9 @@ def _l5_theatres(blufs):
             found = True
         # Geographic regions only: a pseudo-region (humanitarian, commodity,
         # food) at L5 is severity on a NON-kinetic axis, never a war front.
-        if not found and region in CARD_ORDER and _level_of(bluf) >= 5:
+        # v3.20.0 -- only a THIN payload (no L5 signal exposed at all) falls
+        # back to the region; L5 signals that are all non-combat do not.
+        if not found and not exposed and region in CARD_ORDER and _level_of(bluf) >= 5:
             out.setdefault(f'region:{region}', region)
     return out
 
@@ -6985,6 +7016,17 @@ def build_gpi(force=False):
         except Exception as _ve:
             print(f'[GPI voice] hook skipped (non-fatal): {str(_ve)[:120]}')
 
+        # v3.20.0 -- the plain-language voice for the five regional BLUFs.
+        # Same rules: background thread, change-only, ?force never calls Claude.
+        try:
+            import regional_voice as _rv
+            _rv.refresh_async(blufs, allow_call=not force,
+                              reason='force_rebuild' if force else 'organic')
+        except ImportError:
+            pass
+        except Exception as _rve:
+            print(f'[Regional voice] hook skipped (non-fatal): {str(_rve)[:120]}')
+
         # Also cache the lightweight level-only payload.
         #
         # BUG FIXED Sep 2026 -- TWO WRITERS, ONE KEY, DIFFERENT SHAPES.
@@ -7133,6 +7175,34 @@ def register_gpi_routes(app):
             out['refresh'] = status
         return jsonify(out)
 
+    @app.route('/api/regional/voice', methods=['GET'])
+    def get_regional_voice():
+        """Plain-language regional reads (v3.20.0). Reading never calls Claude.
+
+        ?region=me|asia|europe|wha|africa -> one region; no region -> all five.
+        &refresh=<VOICE_REFRESH_TOKEN> (with a region) rewrites that region once
+        from its last packed facts. Wrong or missing secret: ignored.
+        """
+        try:
+            import regional_voice as _rv
+        except ImportError:
+            return jsonify({'available': False, 'note': 'regional_voice.py not deployed'})
+        region = (flask_request.args.get('region') or '').strip().lower() or None
+        if region and region not in _rv.REGIONS:
+            return jsonify({'available': False, 'error': 'unknown region',
+                            'regions': list(_rv.REGIONS)}), 400
+        status = None
+        token = os.environ.get('VOICE_REFRESH_TOKEN') or ''
+        given = flask_request.args.get('refresh') or ''
+        if token and given and region:
+            import hmac
+            status = (_rv.refresh_from_stored(region) if hmac.compare_digest(token, given)
+                      else {'status': 'refresh_token_rejected'})
+        out = _rv.latest(region)
+        if status:
+            out['refresh'] = status
+        return jsonify(out)
+
     @app.route('/api/gpi/debug', methods=['GET'])
     def get_gpi_debug():
         cached_full  = _redis_get(GPI_CACHE_KEY)
@@ -7145,7 +7215,8 @@ def register_gpi_routes(app):
             'configured_endpoints': REGIONAL_BLUF_ENDPOINTS,
         })
 
-    print('[GPI v2.0] Routes registered: /api/gpi, /api/gpi/level, /api/gpi/voice, /api/gpi/debug')
+    print('[GPI v2.0] Routes registered: /api/gpi, /api/gpi/level, /api/gpi/voice, '
+          '/api/regional/voice, /api/gpi/debug')
 
 
 # ============================================================

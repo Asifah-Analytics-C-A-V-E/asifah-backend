@@ -32,6 +32,20 @@ accident; ?force must never trigger a Claude call)
 The key is read from the ANTHROPIC_API_KEY environment variable on Render.
 It is never in this file and never in the repo.
 
+v1.1.0 (Oct 30 2026)
+  * Hizballah spelling fixed in EVERY field (was headline only).
+  * Style check: phrases that leak plumbing ("fact sheet", "first seen",
+    "72 hours", "tracking began") are FLAGGED in the stored write-up
+    (style_flags) and logged. Flag, never block: a rejected write-up would
+    have been paid for and thrown away.
+  * Background list also catches the humanitarian detector's v1.14.0
+    "(retrospective, background)" and annual-comparison rows.
+  * New rule in the writer's instructions (Rachel, Oct 30): a keyword alert
+    or a rhetoric surge is not active conflict; only a report that fighting
+    has actually started or resumed is.
+  * _call_claude() takes the system prompt, schema and validator as
+    arguments, so regional_voice.py reuses the same call, budget and logging.
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -45,7 +59,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.0.1'
+__version__ = '1.1.0'
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -113,6 +127,7 @@ HONESTY
 - No disclaimer lines in the prose ("Asifah reports convergence, not prediction", "this is not a forecast"). The page carries that label; say it through careful wording instead.
 - Read figures for WHEN and HOW they were counted. A report or study estimating past deaths (for example, deaths from smoke last month) is a retrospective estimate: say so ("a report estimates...in September"). Never present it as an event happening now, and never lead with it.
 - A continuing front marked "NOT CONFIRMED AS FIGHTING" is not a war. Leave it out of any list of conflicts. If it matters, describe it as what it is (a rhetoric surge, a flagged trigger) in a clause.
+- A keyword alert or a surge in rhetoric is never "active conflict" on its own. Call something active conflict only when the evidence reports actual fighting starting, resuming or continuing (strikes, clashes, ground operations).
 
 TERMS
 - Spell it "Hizballah", including when correcting a misspelling in the source.
@@ -159,8 +174,39 @@ _ROLLUP_PREFIX_RX = re.compile(r'^[\w .\'-]+ humanitarian L\d\s*[—-]\s*', re.I
 
 PRIORITY_CATS = ('outbreak_spread', 'red_line_breached', 'red_line',
                  'fragility_exogenous_watch', 'commodity_web')
-BACKGROUND_RX = re.compile(r'\bYoY\b|year[- ]on[- ]year|\(modelled\)|Population affected by',
-                           re.I)
+BACKGROUND_RX = re.compile(r'\bYoY\b|year[- ]on[- ]year|\(modelled\)|Population affected by'
+                           r'|retrospective|\bbackground\b|annual comparison', re.I)
+
+
+# FIGHTING is decided by what the signal REPORTS, not by its category name
+# (Rachel, Oct 30: a keyword alert is active conflict only when it reports that
+# kinetic activity has started or resumed). Tested on the Oct 30 payloads:
+#   counts:  "5 ballistic missile alert(s) in 24h", "Active ground operations",
+#            "Russian Major Territorial Advance", "War tempo L4 (active)"
+#   doesn't: "Tripwire: Hajj Mass Casualty", "TTP -- SURGE-level rhetoric",
+#            "Operation True Promise -- Wave Acceleration" (its own text calls it
+#            "retaliation signaling"), "PLA coercion at incident-level tempo",
+#            "Houthi maritime threat at L4"
+# Bare "missile" / "drone" / "strike" are NOT enough: "missile/drone retaliation
+# signaling" is talk about strikes, not a strike.
+NON_COMBAT_RX = re.compile(r'tripwire|rhetoric|surge-level|silence|quiet|alignment drift'
+                            r'|commodity|approaching:', re.I)
+KINETIC_EVENT_RX = re.compile(
+    r'\b(airstrikes?|air strikes?|strikes? (?:on|against|hit)|struck|attack(?:s|ed)? on'
+    r'|clash(?:es|ed)?|shelling|ballistic(?: missile)? alerts?|rocket (?:fire|alerts?)'
+    r'|killed|offensive|incursion|ground (?:operations?|L[45])|siege|fighting'
+    r'|war tempo|territorial (?:advance|gain)|cross-border (?:fire|L[45]))', re.I)
+def is_fighting_signal(s):
+    """Does this signal REPORT actual fighting? (Rachel, Oct 30 2026.) Shared by
+    the GPI L5 gate, the GPI packer and regional_voice.py."""
+    kind = str(s.get('type') or '').lower()
+    short = str(s.get('short_text') or '')
+    lvl = s.get('level')
+    if not isinstance(lvl, int) or lvl < 4:
+        return False                     # word levels ("surge") are volume readings
+    if kind in ('tripwire', 'actor_signal', 'commodity_coupling') or NON_COMBAT_RX.search(short):
+        return False
+    return bool(KINETIC_EVENT_RX.search(short + ' ' + str(s.get('long_text') or '')))
 
 
 def clean(t):
@@ -230,9 +276,12 @@ def pack(d):
                 row['first_seen'] = (('before ' if s.get('first_seen_is_floor') else '')
                                      + s['first_seen'])
                 row['is_new'] = bool(s.get('is_new'))
-            if BACKGROUND_RX.search(txt):
-                row['why_background'] = ('annual comparison' if re.search(r'YoY|year', txt, re.I)
-                                         else 'modelled exposure estimate, no confirmed outcome')
+            if BACKGROUND_RX.search(txt) or s.get('background'):
+                row['why_background'] = (
+                    'retrospective estimate of a past period, not an event now'
+                    if re.search(r'retrospective', txt, re.I) or s.get('retrospective')
+                    else 'annual comparison' if re.search(r'YoY|year|annual', txt, re.I)
+                    else 'modelled exposure estimate, no confirmed outcome')
                 background.append(row)
             else:
                 main.append(row)
@@ -331,14 +380,49 @@ def _validate(obj):
             rec[f] = t
         if len(rec['headline'].split()) > 30:
             raise ValueError('%s headline too long' % v)
-        rec['headline'] = rec['headline'].replace('Hezbollah', 'Hizballah').replace('Hezbolla', 'Hizballah')
         rec['watch'] = [' '.join(str(w).split()) for w in (x.get('watch') or []) if str(w).strip()][:3]
-        out[v] = rec
+        out[v] = fix_terms(rec)
     return out
 
 
-def _call_claude(facts):
-    """One Messages API call. Returns (writeup, usage) or raises."""
+_HEZ_RX = re.compile(r'\bHezboll?ah?\b|\bHizbollah\b|\bHezbolla\b', re.I)
+
+
+def fix_terms(rec):
+    """House spellings in every field of one view (v1.1.0)."""
+    def f(t):
+        return _HEZ_RX.sub('Hizballah', t) if isinstance(t, str) else t
+    return {k: ([f(w) for w in v] if isinstance(v, list) else f(v)) for k, v in rec.items()}
+
+
+# Phrases that mean the writer is describing Asifah's plumbing instead of the
+# world. Flagged, not blocked (see v1.1.0).
+_PLUMBING_RX = re.compile(
+    r'fact[- ]sheet|first[- ]seen|tracking (?:began|start)|age tracking|\b72[- ]hours?\b'
+    r'|\bis_new\b|calibration[_ ]note|\bthe sheet\b|\bfield\b|\bpayload\b|\bdetector\b'
+    r'|\btripwire\b|\bTCI\b|\bcomposite score\b', re.I)
+
+
+def style_flags(views):
+    """[(view, phrase), ...] for plumbing phrases found anywhere in the write-up."""
+    out = []
+    for name, rec in (views or {}).items():
+        blob = ' '.join([rec.get('headline', ''), rec.get('so_what', ''), rec.get('read', '')]
+                        + list(rec.get('watch') or []))
+        for m in _PLUMBING_RX.finditer(blob):
+            out.append([name, m.group(0)])
+    return out[:20]
+
+
+def _call_claude(facts, system=None, schema=None, validate=None, max_tokens=None):
+    """One Messages API call. Returns (writeup, usage) or raises.
+
+    v1.1.0 -- the prompt, schema and validator are arguments (defaults: the
+    GPI's), so regional_voice.py shares this call, its pricing log and its
+    thinking-off setting rather than keeping a second copy."""
+    system = system or SYSTEM_PROMPT
+    schema = schema or OUTPUT_SCHEMA
+    validate = validate or _validate
     import anthropic                       # lazy: a missing package must not break the GPI
     key = os.environ.get('ANTHROPIC_API_KEY')
     if not key:
@@ -346,19 +430,19 @@ def _call_claude(facts):
     client = anthropic.Anthropic(api_key=key, timeout=VOICE_TIMEOUT_SEC, max_retries=1)
     msg = client.messages.create(
         model=VOICE_MODEL,
-        max_tokens=VOICE_MAX_TOKENS,
+        max_tokens=max_tokens or VOICE_MAX_TOKENS,
         # Oct 30 2026 -- first live call: Sonnet 5.5 rejects {'type': 'disabled'}
         # ("To turn thinking off on this model, send {'type': 'between_tools'}").
         # With no tools in this request, between_tools means no thinking at all.
         thinking={'type': VOICE_THINKING_OFF},
-        system=[{'type': 'text', 'text': SYSTEM_PROMPT,
+        system=[{'type': 'text', 'text': system,
                  'cache_control': {'type': 'ephemeral'}}],
         messages=[{'role': 'user', 'content': json.dumps(facts, separators=(',', ':'),
                                                          ensure_ascii=False, default=str)}],
-        output_config={'format': {'type': 'json_schema', 'schema': OUTPUT_SCHEMA}},
+        output_config={'format': {'type': 'json_schema', 'schema': schema}},
     )
     text = ''.join(getattr(b, 'text', '') for b in msg.content if getattr(b, 'type', '') == 'text')
-    writeup = _validate(json.loads(text))
+    writeup = validate(json.loads(text))
     u = msg.usage
     usage = {'input_tokens': getattr(u, 'input_tokens', 0) or 0,
              'output_tokens': getattr(u, 'output_tokens', 0) or 0,
@@ -431,7 +515,10 @@ def refresh(gpi_payload, allow_call=True, reason='organic'):
             'last_attempt_epoch': now,
             'calls_today': calls + 1,
             'label': 'Plain-language read, AI-drafted from Asifah signals',
+            'style_flags': style_flags(writeup),
         }
+        if rec['style_flags']:
+            print('[GPI voice] style flags (published anyway): %s' % rec['style_flags'][:6])
         _rset(VOICE_KEY, rec, VOICE_TTL)
         print('[GPI voice] wrote %s via %s in %.0fs -- %s in / %s out, ~$%.3f (%d/%d today)'
               % (fp, VOICE_MODEL, rec['seconds'], usage['input_tokens'], usage['output_tokens'],
