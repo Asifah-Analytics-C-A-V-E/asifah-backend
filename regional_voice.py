@@ -50,6 +50,32 @@ RACHEL'S RULING (Oct 30 2026)
   tempo, red-line breach) is present for it. Otherwise its level words say
   "high pressure, no confirmed fighting" and the writer is told what drives it.
 
+v1.1.0 (Oct 30 2026, after the first five live write-ups)
+  * Each country carries the regional builder's own sentence about it
+    (tracker_read) and its hottest vectors -- Cuba's jump to L4 was written up
+    as "no lead signal explains the jump" while the BLUF said "regime fracture
+    -- armed incident (L4)".
+  * Headlines in a signal's sources that REPORT fighting (e.g. "Afghanistan-
+    Pakistan border clashes continue" under the TTP rhetoric signal) are passed
+    as reported_fighting_headlines. They do NOT flip fighting_confirmed (that
+    takes a fighting signal from the tracker) but the writer may say reporting
+    includes clashes. Rachel's ruling read both ways: a keyword alert that
+    reports kinetic activity is evidence.
+  * Dated data: a signal with data_staleness (Lebanon humanitarian: figures as
+    of Aug 30, 61 days old) carries data_as_of + the warning, and the writer
+    must give the date ("as of late August"). The write-up had said "about
+    1.0 million people are displaced" in the present tense.
+  * Standing structural exposures (Hormuz oil-import dependence of China,
+    Taiwan, Japan, Vietnam) go in their own list; they may explain WHY
+    something matters, never lead as news. Asia's So What had led with them.
+  * A tracker's own-scale label in a text ("Turkey axis at Rupture (L5)" --
+    the Greece ladder, whose top rung maps to platform L4) is marked as the
+    tracker's own scale.
+  * Vocabulary: "red line breached" is a serious threshold crossed, not a
+    "warning trigger"; no "fighting-class"; no speculating where something
+    could spread next. PROMPT_VERSION in the fingerprint so this upgrade
+    rewrites each region once.
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -65,7 +91,8 @@ import requests
 
 import gpi_voice as _gv
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
+PROMPT_VERSION = 'regional-v2'   # part of the fingerprint: a prompt upgrade rewrites once
 
 REGIONS = ('me', 'asia', 'europe', 'wha', 'africa')
 REGION_NAMES = {
@@ -121,12 +148,18 @@ WHAT THE LEVELS MEASURE
 - Country levels here come from rhetoric trackers: weighted volume and severity of statements by officials, state media, armed groups and open sources -- not counts of events, and not probabilities. Say "rhetoric and reporting point to..." rather than presenting a level as a measured fact on the ground.
 - In prose, say a level in words first, with the number in parentheses the first time it appears in the write-up, e.g. "standoff hardening (L3)". After that, words only. Use the "level_words" given for each theatre.
 - Ladder, for your own use: L0 quiet; L1 rhetorical signalling; L2 pressure building; L3 standoff hardening; L4 armed incident; L5 active war footing.
-- ACTIVE CONFLICT RULE: a keyword alert or a surge in rhetoric is never "active conflict" or "fighting" on its own. Use those words only for a theatre whose "fighting_confirmed" is true. A theatre at L4 or L5 with "fighting_confirmed": false is high pressure without confirmed fighting: say what drives it (its "driver_note" and lead signals) in a clause, or leave it out.
+- ACTIVE CONFLICT RULE: a keyword alert or a surge in rhetoric is never "active conflict" or "fighting" on its own. Use those words only for a country whose "fighting_confirmed" is true. A country at L4 or L5 with "fighting_confirmed": false is high pressure without confirmed fighting: say what drives it (its "tracker_read", "hot_vectors" and lead signals) in a clause, or leave it out. If it has "reported_fighting_headlines", you may say that reporting includes those clashes, but not that Asifah's trackers confirm fighting.
+- A level change is only worth reporting with its driver. Use the country's "tracker_read" and "hot_vectors" to say WHAT moved; never write that nothing explains a change when those fields do.
+- "tracker_read" is the regional tracker's own sentence and uses its band names ("armed incident", "active war footing"). When "fighting_confirmed" is false, do not repeat those band names for that country; use "level_words".
+- "hot_vectors" are readings on a country tracker's own dashboard, not Asifah levels: use them to say what is moving, not to restate a level.
+- A label with its own scale inside a signal text (marked "own_scale" or "own_scale_note") belongs to that country's tracker, not to Asifah's L0-L5 ladder. Do not repeat its L-number or its strongest word ("rupture", "crisis") as if it were the regional level.
 
 FRESHNESS -- THE MOST IMPORTANT RULE
 - What is new is decided by AGE, not by prominence. A signal is new only if "is_new" is true. A theatre's level is new only if its "level_change" is present. "since": "before <date>" means OLD -- already present when Asifah began keeping this record, exact age unknown. A state that persists (a framework signed and rejected, talks under way, a siege line) is old unless marked new. Describe old items as long-running, briefly.
 - A high level or a prominent story is NOT the same as new. Never write "tightening", "rising", "escalating" or "worsening" unless a level_change or a new signal shows it.
 - Items in "background_not_news" (annual comparisons, modelled or retrospective estimates) are context only. Never lead with them; if you mention one, say what it is.
+- Items in "standing_exposures" (for example, a country's dependence on oil shipped through the Strait of Hormuz) are permanent structural facts. Use one only to explain why a development matters; never make one the So What or the lead, and never call it news.
+- DATED FIGURES: when a signal carries "data_as_of", give that date with the figure ("as of late August, about 1.0 million were displaced") and never state it in the present tense. If "data_warning" says the figures are stale, say they may be out of date.
 - If nothing in the region is new, say so plainly in the headline. That is a finding, not a failure.
 
 SELECTION
@@ -138,7 +171,7 @@ SELECTION
 HONESTY
 - Use only facts in the fact sheet. Do not add events, numbers, names, history or context from outside it, even if you believe them true.
 - "Unread", "not reporting", "missing" or "stale" means Asifah could not see it. Never turn it into "calm" or "no risk". Name a missing tracker when it matters to the read.
-- Asifah reports convergence, not prediction. Do not forecast outcomes or recommend any action (buying, selling, travel, policy).
+- Asifah reports convergence, not prediction. Do not forecast outcomes or recommend any action (buying, selling, travel, policy). Do not speculate about where something could spread or escalate next ("could move beyond the continent") unless the fact sheet itself says so.
 - PATTERN RECOGNITION IS WELCOME. When the fact sheet supplies a historical pattern or precedent, say what today matches, what happened then and on what timeline, and say plainly that it describes what happened then, not what will happen now. Never introduce a precedent the fact sheet does not supply.
 - If the fact sheet seems internally inconsistent, write around it conservatively. Do not resolve it by inventing.
 - Never mention the fact sheet, its fields, or Asifah's tracking mechanics ("first seen", "is_new", "72 hours", "the record began", "composite score", "spoke", "wheel", "tripwire", "theatre"). Say what they MEAN instead: "long-running", "not new", "recently reported", "a warning trigger based on keywords", "country".
@@ -147,7 +180,9 @@ HONESTY
 
 TERMS
 - Spell it "Hizballah", including when correcting a misspelling in the source.
-- Avoid Asifah's internal shorthand ("TCI", "red line BREACHED", "OTP wave", "deterrence gap L3", "absorber-class"). If a term of art genuinely helps, use it once and explain it in the same sentence.
+- Avoid Asifah's internal shorthand ("TCI", "red line BREACHED", "OTP wave", "deterrence gap L3", "absorber-class", "fighting-class", "news-volume reading"). If a term of art genuinely helps, use it once and explain it in the same sentence.
+- "Red line breached" means a threshold the tracker treats as serious has been crossed (say what it is, e.g. "Hizballah's armed presence south of the Litani, a line the ceasefire terms rule out" only if the fact sheet says so). A "warning trigger" is ONLY a keyword alert; never call a red line a warning trigger.
+- Write "confirmed fighting", never "fighting-class signal".
 - Hype words ("unprecedented", "crisis", "collapse") only when the facts support them at L5, and never as the first word of a headline.
 
 OUTPUT
@@ -226,6 +261,53 @@ def _txt(t, n=None):
 
 def _is_fighting(s):
     return _gv.is_fighting_signal(s)
+
+
+_OWN_SCALE_RX = re.compile(r'\((?:L\d)\)|\bRupture\b', re.I)
+_STANDING_RX = re.compile(r'^hormuz_.*_dependency$|_oil_dependency$|_energy_dependency$', re.I)
+_VECTOR_HOT = {'surge': 'surge', 'high': 'high'}
+
+
+def _tracker_read(bluf, name):
+    """The regional builder's own sentence about this country (bluf_v2 first)."""
+    texts = [str(x.get('text') or '') for x in (bluf.get('bluf_v2') or []) if isinstance(x, dict)]
+    texts.append(str(bluf.get('bluf') or ''))
+    nm = name.lower()
+    for t in texts:
+        sents = re.split(r'(?<=[.!?])\s+', _txt(t))
+        for i, sent in enumerate(sents):
+            pos = sent.lower().find(nm)
+            # The sentence must be ABOUT the country (named near its start),
+            # not merely mention it ("...absorbed pressure from Pakistan").
+            if 0 <= pos <= 35 and len(sent) > len(name) + 12:
+                out = sent
+                nxt = sents[i + 1] if i + 1 < len(sents) else ''
+                if re.match(r'(Active vectors|Vectors|Driven by|Lead signal)', nxt, re.I):
+                    out += ' ' + nxt
+                return out[:280]
+    return None
+
+
+def _hot_vectors(t):
+    """Vectors at L4+ (or surge/high) on a country's own dashboard, in words."""
+    out = []
+    for k, v in (t.get('vector_levels') or {}).items():
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 4:
+            out.append('%s at L%d' % (k.replace('_', ' '), int(v)))
+        elif str(v).lower() in _VECTOR_HOT:
+            out.append('%s: %s (volume reading)' % (k.replace('_', ' '), str(v).lower()))
+    return out[:3]
+
+
+def _fighting_headlines(s):
+    """Source headlines under a signal that themselves REPORT fighting."""
+    out = []
+    for src in (s.get('sources') or [])[:6]:
+        title = _txt((src or {}).get('title') if isinstance(src, dict) else '', 140)
+        if title and _gv.KINETIC_EVENT_RX.search(title) and not re.search(
+                r'\b(could|may|might|warns?|threatens?|risk of)\b', title, re.I):
+            out.append(title)
+    return out
 
 
 def _allowed_theatres(region, bluf):
@@ -352,6 +434,8 @@ def pack(region, bluf, ages=None, levels=None, now=None):
         words = LEVEL_WORDS.get(lvl, '')
         if lvl >= 4 and not fighting:
             words = 'high pressure, no confirmed fighting'
+        if lvl >= 4 and not fighting and any(_fighting_headlines(x) for x in own):
+            words = 'high pressure; reporting includes clashes, not confirmed by the tracker'
         rec = {'country': name, 'level': lvl, 'level_words': words,
                'fighting_confirmed': fighting}
         lv = levels.get(th)
@@ -368,12 +452,24 @@ def pack(region, bluf, ages=None, levels=None, now=None):
             rec['level_change'] = '%s from L%d (since the previous reading)' % ch
         if lvl >= 4 and not fighting:
             rec['driver_note'] = ('level carried by rhetoric volume, keyword alerts or '
-                                  'non-combat signals; no fighting-class signal this cycle')
+                                  'non-combat signals; no confirmed-fighting signal this cycle')
         rec['lead_signals'] = [_txt(s.get('short_text'), 130) for s in own[:2]]
+        tr = _tracker_read(bluf, name)
+        if tr:
+            rec['tracker_read'] = tr
+            if re.search(r'\bRupture\b', tr):
+                rec['own_scale_note'] = ('"Rupture (L5)" is this country tracker\'s own top rung; '
+                                         'on Asifah\'s scale the country reads L%d' % lvl)
+        hv = _hot_vectors(t)
+        if hv:
+            rec['hot_vectors'] = hv
+        rf = [h for s in own for h in _fighting_headlines(s)][:2]
+        if rf and not fighting:
+            rec['reported_fighting_headlines'] = rf
         theatres.append(rec)
     theatres.sort(key=lambda r: -r['level'])
 
-    main, background, seen = [], [], set()
+    main, background, standing, seen = [], [], [], set()
     ranked = sorted(sigs, key=lambda s: (-(_num_level(s.get('level')) or 2), -(s.get('priority') or 0)))
     for s in ranked:
         text = _gv._ROLLUP_PREFIX_RX.sub('', _txt(s.get('short_text')))[:170]
@@ -392,9 +488,23 @@ def pack(region, bluf, ages=None, levels=None, now=None):
             row['reading'] = 'commodity news volume, not a confirmed price or supply disruption'
         if s.get('category') in ('tripwire',) or str(s.get('type') or '') == 'tripwire':
             row['reading'] = 'a warning trigger based on keywords, not a confirmed event'
+        if row['level'] is None and _OWN_SCALE_RX.search(text):
+            row['own_scale'] = ("this country tracker's own scale, not Asifah's L-ladder "
+                                "(the country's Asifah level is in 'countries')")
         lt = _txt(s.get('long_text'), 260)
         if lt and lt[:60].lower() != key:
             row['context'] = lt
+        st = s.get('data_staleness') or {}
+        if isinstance(st, dict) and (st.get('last_manual_update') or st.get('age_days')):
+            row['data_as_of'] = st.get('last_manual_update') or ('%s days old' % st.get('age_days'))
+            if st.get('tier') in ('stale', 'expired') or (st.get('age_days') or 0) > 30:
+                row['data_warning'] = ('figures %s days old: direction only, not current magnitude'
+                                       % st.get('age_days'))
+        if _STANDING_RX.search(str(s.get('category') or '')):
+            standing.append({'where': row['where'], 'text': text,
+                             'note': 'standing structural dependence; sharpens only if the '
+                                     'route or supplier is actually disrupted'})
+            continue
         if ages_read:
             row.update(_age(ages.get(_sig_fp(s)), now))
         if _BACKGROUND_RX.search(text) or _STRUCTURAL_RX.search(text) or s.get('background'):
@@ -438,6 +548,7 @@ def pack(region, bluf, ages=None, levels=None, now=None):
         'quiet_or_baseline': quiet,
         'signals': main[:10],
         'background_not_news': background[:3],
+        'standing_exposures': standing[:4],
         'network_reads': network[:2],
         'linked_cross_region_watches': linked[:4],
     }
@@ -455,6 +566,7 @@ def fingerprint(facts):
     """What MATTERS: levels, fighting, changes, which signals and what is new.
     Not scores, counts, contexts or dates (they drift every build)."""
     core = {
+        'v': PROMPT_VERSION,
         'p': [facts['posture'].get(k) for k in ('label', 'peak_level', 'trackers_missing',
                                                  'trackers_stale')],
         'c': [(c['country'], c['level'], c['fighting_confirmed'], c.get('level_change'))

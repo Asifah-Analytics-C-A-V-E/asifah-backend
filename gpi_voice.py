@@ -400,7 +400,7 @@ def fix_terms(rec):
 _PLUMBING_RX = re.compile(
     r'fact[- ]sheet|first[- ]seen|tracking (?:began|start)|age tracking|\b72[- ]hours?\b'
     r'|\bis_new\b|calibration[_ ]note|\bthe sheet\b|\bfield\b|\bpayload\b|\bdetector\b'
-    r'|\btripwire\b|\bTCI\b|\bcomposite score\b', re.I)
+    r'|\btripwire\b|\bTCI\b|\bcomposite score\b|fighting-class', re.I)
 
 
 def style_flags(views):
