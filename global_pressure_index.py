@@ -69,6 +69,18 @@ v3.16.0 — Oct 29 2026 (EVIDENCE GATES ON ECONOMIC NARRATIVES):
     beside convergence narratives (it contradicted the page).
   * Narratives may carry fresh=False (a condition is standing by definition);
     _tier_narratives already honours it.
+v3.17.0 — Oct 30 2026 (ALIGNMENT IS DIPLOMATIC):
+  * alignment_drift (and kin) always map to the DIPLOMATIC axis, overriding
+    the source tracker's stamp. Peru's drift had been leading the economic
+    axis; Afghanistan's and Saudi Arabia's had put both on the index's
+    "active conflict continues" list. Found by the first plain-language
+    sandbox run, which faithfully headlined the error.
+  * Commodity-anchored registry convergences (hormuz_*_oil_dependency, wheat_*,
+    phosphate, cobalt...) are capped at the level their commodity has EARNED
+    and default to the economic axis (they had defaulted to kinetic). Live:
+    a news-only oil read promoted "China oil supply convergence" at L5 kinetic.
+  * Every L5 front in level_gate carries 'driver' -- the category and text of
+    the signal holding it at L5 -- so a listed war is checkable.
 (prior: v3.6.0 May 23 2026 AFRICA-READY; v3.5.0 May 21 2026 ENRICHED OUTPUT; v2.0.0 April 2026 baseline)
 
 NARRATIVE DECAY (v3.7.0): the GPI surfaces what is CHANGING. A signal that has
@@ -895,7 +907,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.16.1'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.17.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -2246,6 +2258,10 @@ _CATEGORY_AXIS_HINTS = {
 }
 
 
+ALIGNMENT_CATEGORIES = ('alignment_drift', 'alignment_shift', 'hedge_tilt',
+                        'bloc_alignment', 'pole_alignment')
+
+
 def _infer_pressure_type(signal):
     """
     Determine pressure_type for a signal.
@@ -2258,6 +2274,15 @@ def _infer_pressure_type(signal):
     # 0. v3.12.0 -- governance categories override (see GOVERNANCE_CATEGORY_HINTS).
     if _is_governance_signal(signal):
         return PRESSURE_GOVERNANCE
+
+    # 0b. v3.17.0 (Oct 30 2026) -- ALIGNMENT IS DIPLOMATIC, whatever the source
+    # says. Trackers stamp alignment_drift with their own axis: Peru's arrived
+    # as 'economic' (and led the economic axis), Afghanistan's and Saudi
+    # Arabia's as 'kinetic' -- which put both on the index's list of "active
+    # conflict continues". A state leaning toward a bloc is an alignment
+    # finding, not a war and not a market shock.
+    if str(signal.get('category') or '').lower() in ALIGNMENT_CATEGORIES:
+        return PRESSURE_DIPLOMATIC
 
     # 1. Explicit pressure_type wins
     explicit = signal.get('pressure_type')
@@ -3253,6 +3278,28 @@ def _detect_convergences_from_registry(blufs):
         _lvl_hint = state.get('web_level')
         _prio = (state.get('priority') if (is_fresh and state.get('priority'))
                  else convergence_priority(entry, is_fresh))
+        # v3.17.0 -- a COMMODITY-anchored registry convergence may not claim more
+        # than its commodity has earned on the evidence ladder. Live Oct 30:
+        # "China oil supply convergence -- Iran/Hormuz pressure compounded by
+        # China import dependency" promoted into the feed at L5 KINETIC (priority
+        # >= 13, no axes) while oil read L3 news-only -- and dragged Saudi Arabia
+        # into the conflict rollup. The other side of the convergence (the
+        # humanitarian or kinetic trigger) is already counted on its own axis.
+        _entry_axes = entry.get('axes')
+        if _lvl_hint is None and entry.get('commodity'):
+            _earned = None
+            for _cs in _signals_of(blufs.get('global_commodity') or {}):
+                if _cs.get('commodity') == entry['commodity'] and not _cs.get('web_carrier'):
+                    _earned = max(_earned or 0, _safe_level(_cs.get('level', 0)))
+            _lvl_hint = max(3, min(_earned if _earned is not None else 3,
+                                   {'elevated': 3, 'high': 4, 'surge': 5}.get(
+                                       str(alert_level).lower(), 3)))
+            if _lvl_hint <= 3:
+                _prio = min(_prio, 9)
+            elif _lvl_hint == 4:
+                _prio = min(_prio, 12)
+            if not _entry_axes and entry['id'] not in NARRATIVE_AXIS_SETS:
+                _entry_axes = ['economic']
         matches.append({
             'priority':         _prio,
             'level_hint':       _lvl_hint,
@@ -3265,7 +3312,7 @@ def _detect_convergences_from_registry(blufs):
             'headline':         (state.get('live_headline')
                                  or format_headline(entry, alert_level, is_fresh)),
             'detail':           state.get('live_detail') or entry['detail'],
-            'axes':             entry.get('axes'),
+            'axes':             _entry_axes,
             'detected_via':     found_in_region,   # diagnostic: which region's signal triggered detection
             'fresh':            is_fresh,           # diagnostic: topline vs watch tier
             # v3.10.0 -- False means Layer 2 never stamped a pressure level for
@@ -4919,6 +4966,9 @@ def _redis_get_checked(key):
         return None, False
 
 
+_L5_DRIVERS = {}   # v3.17.0 -- theatre -> 'category: text' of the signal holding it at L5
+
+
 def _l5_theatres(blufs):
     """{theatre: region} for every theatre carrying a KINETIC signal at L5.
 
@@ -4927,6 +4977,7 @@ def _l5_theatres(blufs):
     whose BLUF says L5 but exposes no L5 signal is kept as 'region:<r>' so a
     thin payload can never hide a war from the gate."""
     out = {}
+    _L5_DRIVERS.clear()
     for region, bluf in (blufs or {}).items():
         if not bluf:
             continue
@@ -4940,6 +4991,11 @@ def _l5_theatres(blufs):
             if not th or th in _UNGROUPED_THEATRES or th == region:
                 th = f'region:{region}'
             out.setdefault(th, region)
+            # v3.17.0 -- remember WHICH signal holds each front open, so the
+            # gate can show it. "Active conflict continues: Saudi Arabia" must
+            # be checkable, not taken on trust.
+            _L5_DRIVERS.setdefault(th, '%s: %s' % (s.get('category') or '?',
+                                                   str(s.get('short_text') or '')[:120]))
             found = True
         # Geographic regions only: a pseudo-region (humanitarian, commodity,
         # food) at L5 is severity on a NON-kinetic axis, never a war front.
@@ -5075,6 +5131,7 @@ def _apply_l5_novelty_gate(level, blufs):
             entry = {'theatre': th, 'display': _theatre_display(th), 'days': days,
                      'days_is_floor': False, 'since': (rec.get('onset') or now_iso)[:10],
                      'reignited': bool(rec.get('reignited'))}
+        entry['driver'] = _L5_DRIVERS.get(th) or 'region-level L5 with no L5 signal exposed'
         if (not rec.get('seeded')) and days < L5_NOVELTY_DAYS:
             info['fresh'].append(entry)
         else:
