@@ -1,6 +1,15 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.14.0 -- October 30, 2026 (NOT "MASS" YET -- three rulings from Rachel)
+  * OUTBREAKS EARN THE LEVEL. L5 = 100+ deaths with change this week; L4 = new
+    spread into a country (7 days) or 10+ deaths with a leap; L3 = confirmed but
+    no new spread or death leap for a week+. Kenya/Nigeria had read L5
+    "mass-casualty" on 9 and 1 cases. The EBOLA SPREAD card takes the highest
+    country level instead of a fixed L5.
+  * RETROSPECTIVE ESTIMATES ("killed 3,500 ... in September: report") are
+    background at L3, labelled, and never pooled as a live outcome.
+  * UNHCR annual year-on-year rows are background at L3.
 v1.13.0 -- October 29, 2026 (FEED NOISE FILTER)
   * GDACS GREEN alerts and sub-M6.0 quake items ingested as ARTICLES no longer
     become natural_disaster rows (the Africa "forest fire" and Pacific "quake
@@ -1454,10 +1463,10 @@ def build_outbreak_spread_signals(records):
             'country':       r['epicentre'],
             'theatre':       'global_humanitarian',
             'region':        'global_humanitarian',
-            'level':         5,
+            'level':         int(r.get('level') or 5),   # v1.14.0 -- from the outbreak ladder
             'pressure_type': 'humanitarian',
             'icon':          '\U0001f9a0',
-            'color':         '#dc2626',
+            'color':         {5: '#dc2626', 4: '#f97316'}.get(int(r.get('level') or 5), '#f59e0b'),
             'short_text':    short[:180],
             'long_text':     long_text,
             'priority':      9,
@@ -1674,6 +1683,103 @@ def _minor_feed_disaster(title, desc, source, url):
     return None
 
 
+# ── v1.14.0 (Oct 30 2026): RETROSPECTIVE ESTIMATES ARE BACKGROUND ───────
+# Rachel's ruling. "Smoke from wildfires killed 3,500 people in Indonesia in
+# September: report" became an L5 "confirmed outcome" -- a study's estimate of
+# LAST MONTH's deaths read as a disaster unfolding now. A report/study/estimate
+# about a past period is tagged retrospective, never pooled as a live outcome,
+# and held at L3 as background.
+_MONTHS = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+           'september', 'october', 'november', 'december')
+_RETRO_SOURCE_RX = re.compile(
+    r'\b(report|reports|study|studies|research|researchers|analysis|estimate[sd]?|'
+    r'survey|data show|according to (?:a |new )?(?:report|study|data))\b', re.I)
+_RETRO_PERIOD_RX = re.compile(
+    r'\b(?:in|during|over|throughout|last)\s+(?:the\s+)?(' + '|'.join(_MONTHS) +
+    r'|last (?:year|month)|20\d\d|the past (?:year|decade|two years))\b|\blast (year|month)\b', re.I)
+
+
+def _retrospective_period(text):
+    """'September' / 'last year' / '2025' if the text is a report about a PAST
+    period, else None. The current month is not 'past': a report on this
+    month may describe something still unfolding."""
+    t = text or ''
+    if not _RETRO_SOURCE_RX.search(t):
+        return None
+    now = datetime.now(timezone.utc)
+    for m in _RETRO_PERIOD_RX.finditer(t):
+        tok = (m.group(1) or m.group(2) or '').lower()
+        if tok in _MONTHS:
+            if _MONTHS.index(tok) + 1 != now.month:
+                return tok.capitalize()
+        elif tok.isdigit():
+            if int(tok) < now.year:
+                return tok
+        elif tok:
+            return tok if tok.startswith('last') else 'the ' + tok
+    return None
+
+
+# ── v1.14.0 (Oct 30 2026): OUTBREAKS EARN THE LEVEL ──────────────────────
+# Rachel's ruling: "it's simply not 'mass' yet -- so we shouldn't overblow."
+# Kenya (9 cases, 2 deaths) and Nigeria (1 case) read L5 "mass-casualty
+# humanitarian disaster" because any spread of a high-consequence pathogen was
+# floored at L5. Now, per country:
+#   L5  100+ deaths AND something changed this week (new spread or a death leap)
+#   L4  a NEW spread into this country (first seen within 7 days), or 10+ deaths
+#       with a leap this week; also 100+ deaths that held flat for a week
+#   L3  confirmed but no new spread and no leap in deaths for a week+
+# A "leap" = deaths up by at least 5 AND 25% over the week (trend from toll
+# history). If the history could not be read, nothing is demoted on its
+# account -- absence of history is not evidence of a quiet week.
+OUTBREAK_L5_DEATHS = 100
+OUTBREAK_L4_DEATHS = 10
+OUTBREAK_LEAP_MIN = 5
+OUTBREAK_LEAP_PCT = 0.25
+
+
+def _death_leap(s):
+    tr = s.get('trend') or {}
+    then = tr.get('deaths_then')
+    if not then:
+        return False
+    dd = int(tr.get('deaths_delta') or 0)
+    return dd >= OUTBREAK_LEAP_MIN and dd >= then * OUTBREAK_LEAP_PCT
+
+
+def apply_outbreak_ladder(signals, history_ok=True):
+    """Set each health_emergency signal's level from outcomes and change.
+    Mutates in place; returns {country: level}."""
+    out = {}
+    for s in signals or []:
+        if s.get('category') != 'health_emergency' or s.get('watch_only'):
+            continue
+        d = int(s.get('reported_deaths') or 0)
+        new_spread = bool(s.get('new_outbreak_signal'))
+        leap = _death_leap(s)
+        changed = new_spread or leap or not history_ok
+        if d >= OUTBREAK_L5_DEATHS:
+            lvl, why = (5, ('mass casualties (%d deaths) with change this week' % d) if history_ok
+                        else ('%d deaths; toll history unread -- held, not demoted' % d)) if changed \
+                else (4, '%d deaths, no new spread or leap in deaths for a week' % d)
+        elif new_spread:
+            lvl, why = 4, 'new spread into this country within 7 days'
+        elif d >= OUTBREAK_L4_DEATHS and (leap or not history_ok):
+            lvl, why = 4, '%d deaths and rising this week' % d
+        elif not history_ok and (s.get('spread_node') or d >= OUTBREAK_L4_DEATHS):
+            lvl, why = 4, 'toll history unread -- held at L4, not demoted'
+        else:
+            lvl, why = 3, ('confirmed, but no new spread and no leap in deaths for a week'
+                           if (s.get('spread_node') or d or s.get('reported_cases'))
+                           else 'outbreak reporting without confirmed toll')
+        s['level'] = lvl
+        s['severity'] = {3: SEVERITY_BASELINE, 4: SEVERITY_MEDIUM, 5: SEVERITY_HIGH}[lvl]
+        s['level_basis'] = 'outbreak_ladder: ' + why
+        c = _parent_country(str(s.get('country') or ''))
+        out[c] = max(out.get(c, 0), lvl)
+    return out
+
+
 def detect_humanitarian_signals(articles):
     """
     Main detection entry point.
@@ -1710,6 +1816,7 @@ def detect_humanitarian_signals(articles):
     _imports = {}            # disease -> set of non-African destinations
     _bundibugyo = False
     _dx = {}                 # v1.12.0 (country, hazard) -> (deaths, displaced, homes)
+    _retro = {}              # v1.14.0 country -> retrospective estimate (background)
     _LAST_NOISE_FILTERED.update(gdacs_minor=0, minor_quake=0, examples=[])   # v1.13.0
 
     for art in articles:
@@ -1741,6 +1848,12 @@ def detect_humanitarian_signals(articles):
                     continue
                 # v1.12.0 -- confirmed outcomes, pooled per country + hazard.
                 _o = _disaster_outcome(text)
+                # v1.14.0 -- a report about a PAST period is not a live outcome.
+                _rp = _retrospective_period(text) if any(_o) else None
+                if _rp:
+                    _retro.setdefault(_parent_country(country), {
+                        'deaths': _o[0], 'period': _rp, 'title': title[:160], 'url': url})
+                    _o = (0, 0, 0)
                 if any(_o):
                     _c0 = _parent_country(country)
                     for _k in ((_c0, _hazard_of(text)), (_c0, '')):
@@ -1772,6 +1885,12 @@ def detect_humanitarian_signals(articles):
                             for _d1 in _dz:
                                 _imports.setdefault(_d1, set()).add(_dest)
                 _d, _c = _reported_toll(text)
+                if (_d or _c) and _retrospective_period(text):
+                    # v1.14.0 -- a study of past deaths is not this week's toll.
+                    _retro.setdefault(_parent_country(country), {
+                        'deaths': _d, 'period': _retrospective_period(text),
+                        'title': title[:160], 'url': url})
+                    _d, _c = 0, 0
                 if _d or _c:
                     t = _toll.setdefault((country, cat_key), {'deaths': 0, 'cases': 0})
                     # Each figure keeps its OWN provenance: the largest death
@@ -1969,6 +2088,26 @@ def detect_humanitarian_signals(articles):
     # v1.12.0 -- outcomes earn the level, for structured AND news-derived rows.
     try:
         apply_disaster_outcomes(detected, _dx)
+        # v1.14.0 -- retrospective estimates: background at L3, labelled.
+        for _s in detected:
+            _r = _retro.get(_parent_country(str(_s.get('country') or '')))
+            if not _r or _s.get('category') not in ('natural_disaster', 'health_emergency'):
+                continue
+            if int(_s.get('level') or 3) > 3 and _s.get('level_basis') not in (None, 'retrospective_estimate'):
+                continue                      # a LIVE outcome also exists: it wins
+            _s['level'], _s['severity'] = 3, SEVERITY_BASELINE
+            _s['level_basis'] = 'retrospective_estimate'
+            _s['background'] = True
+            _s['retrospective'] = _r
+            _tag = (' — report estimates %s deaths in %s (retrospective, background)'
+                    % (format(_r['deaths'], ','), _r['period'])) if _r.get('deaths') else \
+                   (' — retrospective report on %s (background)' % _r['period'])
+            if 'retrospective' not in (_s.get('short_text') or ''):
+                _s['short_text'] = ((_s.get('short_text') or '') + _tag)[:180]
+            _s['long_text'] = ((_s.get('long_text') or '') +
+                               ' RETROSPECTIVE ESTIMATE: "%s" is a report about %s, not an event '
+                               'unfolding now. Held at L3 as background (Rachel, Oct 30 2026).'
+                               % (_r['title'], _r['period']))
     except Exception as _oe:
         print(f'[Humanitarian] disaster outcome pass failed (non-fatal): {str(_oe)[:110]}')
 
@@ -2343,7 +2482,10 @@ def build_humanitarian_bluf(signals, aggregation=None):
             **{k: s[k] for k in ('reported_deaths', 'reported_cases', 'toll_source',
                                  'trend', 'growing_concern', 'new_outbreak_signal',
                                  'first_seen', 'diseases', 'local_cases', 'watch_only',
-                                 'spread_node') if k in s},
+                                 'spread_node',
+                                 # v1.14.0 -- why the level is what it is
+                                 'level_basis', 'background', 'retrospective',
+                                 'annual_surge_severity') if k in s},
         })
 
     return {
@@ -2457,11 +2599,17 @@ def detect_unhcr_displacement_signals(unhcr_payload):
             'category':           'displacement_surge',
             'country':            cid,
             'country_label':      label,
-            'severity':           sev,
+            # v1.14.0 (Rachel, Oct 30 2026) -- annual comparisons are BACKGROUND:
+            # held at L3 whatever their size. The surge severity is kept for
+            # ranking and context; it no longer drives the humanitarian level.
+            'severity':           SEVERITY_BASELINE,
+            'annual_surge_severity': sev,
+            'background':         True,
+            'level_basis':        'annual_comparison',
             'pressure_type':      'humanitarian',
-            'level':              _severity_to_level(sev),
+            'level':              3,
             'short_text':         short_text[:150],
-            'long_text':          long_text,
+            'long_text':          long_text + ' Annual comparison: background, held at L3.',
             'source_url':         'https://www.unhcr.org/refugee-statistics/',
             'source_title':       'UNHCR Refugee Data Finder (YoY displacement delta)',
             'source':             'UNHCR Refugee Data Finder',
@@ -3095,6 +3243,16 @@ def detect_and_build_bluf(articles, extra_signals=None, toll_history=None):
         _spread_status = 'failed: %s' % str(_se)[:100]
         print('[humanitarian] outbreak spread read failed (non-fatal): %s' % str(_se)[:120])
 
+    # v1.14.0 -- outbreaks earn the level (after spread marking, which tags
+    # nodes, and after the trend, which supplies the death leaps).
+    try:
+        _lad = apply_outbreak_ladder(signals, history_ok=(_trend_status == 'ok'))
+        for _r in _spread_records:
+            _cs = [_r['epicentre']] + [n['country'] for n in _r['nodes']]
+            _r['level'] = max([_lad.get(c, 3) for c in _cs] or [3])
+    except Exception as _le:
+        print('[humanitarian] outbreak ladder failed (non-fatal): %s' % str(_le)[:120])
+
     if extra_signals:
         signals = signals + list(extra_signals)
     aggregation = aggregate_convergence(signals)
@@ -3113,7 +3271,7 @@ def detect_and_build_bluf(articles, extra_signals=None, toll_history=None):
     if _spread_sigs:
         bluf['signals'] = _spread_sigs + bluf.get('signals', [])
         bluf['top_signals'] = (_spread_sigs + bluf.get('top_signals', []))[:5]
-        bluf['max_level'] = max(bluf.get('max_level', 0), 5)
+        bluf['max_level'] = max([bluf.get('max_level', 0)] + [int(x.get('level') or 0) for x in _spread_sigs])
         bluf['peak_level'] = bluf['max_level']
     bluf['meta']['disaster_noise_filtered'] = {
         'gdacs_minor': _LAST_NOISE_FILTERED['gdacs_minor'],
@@ -3562,6 +3720,6 @@ def register_humanitarian_convergence_routes(app, redis_client=None, json_module
 # ============================================================
 # MODULE METADATA
 # ============================================================
-__version__ = '1.13.0'
+__version__ = '1.14.0'
 __module_id__ = 'humanitarian_convergence_detector'
 print(f'[Humanitarian Convergence Detector] Module loaded -- v{__version__}')
