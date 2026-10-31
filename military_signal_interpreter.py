@@ -1,6 +1,7 @@
 """
-Asifah Analytics — Military Signal Interpreter v1.0.0
-May 11, 2026
+Asifah Analytics — Military Signal Interpreter v1.1.1
+May 11, 2026 (v1.1.1 Oct 31 2026: CENTCOM/AFRICOM baselines no longer assert
+an unmeasured calm or a dated May-2026 situation report)
 
 Analytical prose layer for the Military Tracker. Consumes scan_result data
 (target_postures, theatre_groupings, chokepoint data, evacuation_alerts) and
@@ -49,9 +50,13 @@ COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
 REGIONAL_BASELINE_TEMPLATES = {
     'middle_east': {
         'display': 'Middle East / CENTCOM',
+        # Oct 31 2026 -- this used to say "Routine ME naval-air posture",
+        # asserting a calm the scan never measured (it printed through the US
+        # blockade and the Hormuz mine strikes). A baseline line now says only
+        # what the scan saw: no theatre-wide escalation signal this scan.
         'baseline': (
-            'CENTCOM AOR baseline. Routine ME naval-air posture across the '
-            'Gulf, Levant, and Red Sea corridors with no theatre-wide escalation signal.'
+            'CENTCOM AOR: no theatre-wide escalation signal in this scan. Chokepoint and '
+            'actor-level readings below may still be elevated.'
         ),
         'context_actors': ['iran', 'israel', 'iraq', 'saudi_arabia', 'uae', 'jordan'],
     },
@@ -91,22 +96,13 @@ REGIONAL_BASELINE_TEMPLATES = {
     # ── AFRICA THEATER (May 22 2026) ──
     'africa': {
         'display': 'Africa / AFRICOM',
+        # Oct 31 2026 -- the baseline here was a hand-written May 2026 situation
+        # report (El Obeid siege, Machar detained, Ebola PHEIC "May 2026" ...)
+        # served as if current. Those facts belong to the trackers that date
+        # them; the baseline only states what this scan measured.
         'baseline': (
-            'AFRICOM AOR baseline. Sudan civil war (SAF vs RSF) at sustained high-intensity '
-            'tempo: El Fasher under RSF control since Oct 2025, the RSF siege of El Obeid '
-            'in Kordofan now the critical frontline, famine spread beyond Darfur, and a '
-            'US-brokered peace track (Boulos plan) live but unresolved. South Sudan '
-            'teeters on renewed civil war with Machar detained and pipeline oil revenue '
-            'collapsed. Sahel jihadist '
-            'pressure (JNIM, ISGS) elevated across Mali, Burkina Faso, and Niger, with AES '
-            'confederation consolidating against ECOWAS. Eastern DRC under M23/AFC pressure '
-            'following Goma fall (Jan 2025); Romanian and Wagner/Africa Corps mercenary '
-            'presence widespread. Russia Africa Corps formalized under GRU Unit 29155 / '
-            'Yevkurov command; Wagner footprint stable across Mali, Burkina Faso, Libya, CAR, '
-            'Sudan, and now Niger. Al-Shabaab and ISIS-Somalia operations sustained; AUSSOM '
-            'transition from ATMIS underway. Ebola Bundibugyo PHEIC (May 2026, DRC origin) '
-            'creates cross-border military quarantine zones. No theatre-wide escalation '
-            'signal beyond ongoing baseline humanitarian and security pressures.'
+            'AFRICOM AOR: no theatre-wide escalation signal in this scan. Country-level '
+            'armed-group and humanitarian readings are carried by the Africa trackers.'
         ),
         'context_actors': ['nigeria', 'somalia', 'sudan', 'south_sudan', 'libya', 'mali',
                            'djibouti', 'drc', 'wagner_africa', 'niger',

@@ -1,6 +1,6 @@
 """
 iran_financial_pulse.py -- Iran Financial Pulse module (ME backend)
-v1.0.0 -- June 12, 2026
+v1.0.1 -- Oct 31, 2026 (fallback IRR no longer recorded as live); v1.0.0 -- June 12, 2026
 
 Powers the Financial Pulse card on the Iran stability page. Canonical
 financial_pulse contract (Russia/Nigeria/Mexico pattern):
@@ -58,7 +58,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 from flask import request, jsonify
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 CACHE_KEY = 'pulse:iran:financial'
 HIST_KEY_TEDPIX = 'pulse:iran:hist:tedpix'
 HIST_KEY_IRR = 'pulse:iran:hist:irr'
@@ -229,6 +229,13 @@ def _fetch_irr():
     try:
         from iran_protests import get_exchange_rate
         ex = get_exchange_rate() or {}
+        # v1.0.1 (Oct 31 2026) -- a FALLBACK rate is not a reading. It used to be
+        # appended to the sparkline history as if live, corrupting the chart,
+        # the 24h change and the 7-day capital-flight test. None -> the tile
+        # serves last-known history marked stale, which is the honest state.
+        if ex.get('is_fallback'):
+            print('[Iran Pulse] IRR source returned its static fallback -- not recorded')
+            return None
         rate = ex.get('usd_to_irr')
         if rate:
             return {'value': float(rate),
