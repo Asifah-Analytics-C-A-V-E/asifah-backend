@@ -4,6 +4,10 @@ Asifah Analytics -- ME Backend Module
 v2.4.1  (Oct 11 2026; v2.4.0 Oct 5 2026)
 
 VERSION HISTORY AT A GLANCE
+  v2.6.0 Oct 31 2026 -- Lebanon humanitarian signal quotes CURRENT displacement
+                       (OCHA ~300K, dated), not the April PEAK (1.0M) as if
+                       current; every figure carries its date; a lapsed IPC
+                       projection is replaced by its successor outlook.
   v2.4.0 Oct 5 2026 -- country_ids canon applied to humanitarian country ids;
                        _report_convergence_audit() says WHY each registry node
                        is lit or dark; signals carry convergences_active.
@@ -69,7 +73,7 @@ import os
 # The marker itself fires at the BOTTOM of this file, because _CANON_AVAILABLE
 # does not exist yet up here -- printing it at import-time would NameError.
 # ════════════════════════════════════════════════════════════════════
-BLUF_VERSION = '2.5.0'
+BLUF_VERSION = '2.6.0'
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -1569,10 +1573,18 @@ def _build_lebanon_humanitarian_signal(force=False):
     hw_killed   = healthcare.get('health_workers_killed_since_mar2') or 0
     hc_attacks  = healthcare.get('healthcare_attacks_since_mar2') or 0
 
-    # Live DTM total preferred over static when available
-    live_total = (live_idps
-                  or displacement.get('total_displaced_registered')
-                  or 0)
+    # Oct 31 2026 -- CURRENT, not PEAK. This used to fall back to
+    # total_displaced_registered (the April high-water mark, 1.0M) and print it
+    # as "displaced" -- the plain-language voice then told readers 1.0M were
+    # displaced when OCHA's figure was ~300,000. Prefer the dated headline
+    # figure from lebanon_humanitarian v1.2.0; DTM only if no headline exists.
+    _head        = displacement.get('headline') or {}
+    current      = _head.get('currently_displaced') or displacement.get('currently_displaced')
+    current_asof = _head.get('as_of') or displacement.get('as_of') or last_update
+    peak         = displacement.get('total_displaced_registered') or 0
+    returned     = displacement.get('returned_to_areas_of_origin')
+    live_total   = current or live_idps or peak or 0
+    killed_asof  = casualties.get('as_of') or last_update
 
     print(f'[ME BLUF MARKER] Humanitarian metrics: killed={killed}, injured={injured}, live_total={live_total}, hc_attacks={hc_attacks}')
 
@@ -1582,25 +1594,27 @@ def _build_lebanon_humanitarian_signal(force=False):
         return None
     print('[ME BLUF MARKER] Salience filter passed — building signal')
 
+    def _fmt_n(n):
+        return f'{n/1_000_000:.1f}M' if n >= 1_000_000 else f'{n:,}'
+
     # Format numbers for display
     killed_fmt   = f'{killed:,}'  if killed   else '?'
     injured_fmt  = f'{injured:,}' if injured  else '?'
-    idp_fmt      = f'{live_total/1_000_000:.1f}M' if live_total >= 1_000_000 else f'{live_total:,}'
-    appeal_pct   = appeal.get('funded_pct')
+    idp_fmt      = _fmt_n(live_total)
+    appeal_pct   = appeal.get('funded_pct') if appeal.get('status') != 'closed' else None
 
     # Compose human-readable signal text
     short_text = (
-        f'LEBANON humanitarian crisis: {idp_fmt} displaced, '
-        f'{killed_fmt} killed, {injured_fmt} injured'
+        f'LEBANON humanitarian: {idp_fmt} still displaced ({current_asof}), '
+        f'{killed_fmt} killed since 2 March'
     )
-    if hc_attacks and hw_killed:
-        short_text += f' ({hc_attacks} healthcare attacks, {hw_killed} health workers killed)'
 
-    # Compose long_text with full context
+    # Compose long_text with full context -- every figure carries its own date
     long_text_parts = [
-        f'Lebanon humanitarian situation as of {last_update}: '
-        f'{idp_fmt} people displaced ({displacement.get("total_displaced_pct_population", "?")}% of population), '
-        f'{killed_fmt} killed and {injured_fmt} injured since 2 March 2026.',
+        f'Lebanon humanitarian situation: {idp_fmt} people still displaced as of {current_asof}'
+        + (f' (peak {_fmt_n(peak)}; {_fmt_n(returned)} returned, many to damaged or demolished homes)'
+           if peak and returned else '')
+        + f'; {killed_fmt} killed and {injured_fmt} injured since 2 March 2026 (as of {killed_asof}).',
     ]
     if hc_attacks:
         long_text_parts.append(
@@ -1608,11 +1622,17 @@ def _build_lebanon_humanitarian_signal(force=False):
             f'{hw_killed} health workers killed, '
             f'{healthcare.get("hospitals_closed", "?")} hospitals closed.'
         )
-    if food.get('people_in_ipc_phase3_or_above'):
+    _outlook = food.get('current_outlook') or {}
+    if food.get('status') == 'lapsed' and _outlook.get('summary'):
+        long_text_parts.append(
+            f'Food security outlook ({_outlook.get("period", "")}, {_outlook.get("source", "")}): '
+            f'{_outlook["summary"]}'
+        )
+    elif food.get('people_in_ipc_phase3_or_above'):
         food_count = food['people_in_ipc_phase3_or_above']
         long_text_parts.append(
             f'{food_count/1_000_000:.2f}M people projected to face acute food insecurity '
-            f'(IPC Phase 3+) through August 2026.'
+            f'(IPC Phase 3+) ({food.get("period", "")}).'
         )
     if appeal_pct is not None and appeal_pct < 60:
         long_text_parts.append(

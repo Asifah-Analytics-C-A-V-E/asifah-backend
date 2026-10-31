@@ -1,6 +1,25 @@
 """
-Lebanon Humanitarian Data Module v1.1.0
-March 2026
+Lebanon Humanitarian Data Module v1.2.0
+March 2026 (v1.2.0: October 31 2026)
+
+v1.2.0 -- Oct 31 2026 (REFRESH + "CURRENT" vs "PEAK")
+  * Figures refreshed from OCHA / UN (30 Oct 2026), IOM via Al Jazeera
+    (13 Sep 2026), Lebanese MoPH (19 Jul 2026) and FEWS NET (Sep 2026 -
+    Jan 2027). The block had sat at 30 Aug (61 days, "stale").
+  * NEW displacement['headline'] = the number a consumer should quote NOW
+    (currently displaced, with its date). The ME BLUF had been quoting
+    total_displaced_registered -- the April PEAK (1.0M) -- as if current,
+    and the plain-language voice repeated it. Peak and current are now
+    separate, labelled fields.
+  * The April-August IPC projection and the March-August Flash Appeal have
+    LAPSED: each block now carries status 'lapsed' / 'closed' plus its
+    successor (FEWS NET outlook; Lebanon Humanitarian Fund allocation), so a
+    consumer can stop quoting the old numbers in the present tense.
+  * Return is not recovery: ~970,000 returned by late October, many to
+    demolished or occupied villages (50+ villages held beyond the ceasefire
+    line; demolitions ongoing). The "returned" count measures location, not
+    housing -- the note says so.
+  All keys from v1.1.0 are kept (the stability page reads them).
 
 Fetches humanitarian crisis data from:
   - IOM DTM API v3 (displacement/IDP tracking - DYNAMIC)
@@ -21,7 +40,7 @@ import os
 import json
 import requests
 from flask import request, jsonify
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 # ========================================
 # CONFIGURATION
@@ -226,13 +245,14 @@ def fetch_reliefweb_updates():
 #   IOM global displacement update, March 2026
 
 STATIC_HUMANITARIAN = {
-    'last_manual_update': '2026-08-30',
-    'data_period': 'March 2 – August 2026 (ceasefire nominally holding since Apr 17; near-daily Israeli strikes and airspace violations continue)',
+    'last_manual_update': '2026-10-31',
+    'data_period': 'March 2 – October 2026 (ceasefire nominally in effect since Apr 17; Israeli forces hold 50+ villages in the south, with strikes and house demolitions continuing)',
     'note': 'Static figures compiled from OCHA Flash Update #22 (30 April 2026), Lebanese MoPH, WHO, IOM DTM, UN Women, UNIFIL, French MoD reporting. Ceasefire effective April 17 has held but UNIFIL peacekeeper attacks continue (April 18 Hezbollah-attributed ambush killed 2 French peacekeepers; April 24 Indonesian death from March wounds). Updated manually.',
 
     'casualties': {
-        'killed': 4319,                      # MoPH via OCHA Flash Update #41, 6 July 2026
-        'injured': 12203,
+        'killed': 4328,                      # MoPH PHEOC, 19 July 2026 (latest dated MoPH total found Oct 31)
+        'injured': 12229,
+        'killed_latest_reported': 'more than 4,380 (Al Jazeera, 13 Sep 2026)',
         'children_killed': 253,
         'children_injured': 1036,
         'women_killed': 392,
@@ -243,16 +263,28 @@ STATIC_HUMANITARIAN = {
         'april8_single_day_wounded': 1150,
         'idf_soldiers_killed_in_lebanon': 16,
         'civilians_killed_in_israel': 2,
-        'source': 'Lebanese Ministry of Public Health / OCHA Flash Update #41 (6 July 2026)',
-        'source_url': 'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
-        'as_of': '2026-04-30',
+        'source': 'Lebanese Ministry of Public Health (PHEOC), 19 July 2026; Al Jazeera, 13 Sep 2026 (>4,380). Sub-totals (children, women, rescue workers) from OCHA Flash Update #41, 6 July 2026',
+        'source_url': 'https://live.libnanews.com/event/ev-1784476891511-6b8a',
+        'as_of': '2026-07-19',
         'note': 'Cumulative since March 2, 2026. April 8 was the deadliest single day of the war — 203 killed, 1,150+ wounded in strikes on central Beirut without warning. April 29: 3 civil defence rescue workers killed in Tyre District (consecutive strikes on same building during rescue operation). 28 March: 9 rescue workers killed in single ambulance strike in Bint Jbeil; 3 journalists killed in Jezzine same day. Two civilians killed in Israel by Hezbollah attacks; 16 IDF soldiers died in Lebanon per Israel.'
     },
 
     'displacement': {
-        'total_displaced_registered': 1000000,        # PEAK figure — retained as the crisis high-water mark
-        'currently_displaced': 360000,                # UNHCR, mid-August 2026
-        'returned_to_areas_of_origin': 860000,        # UNHCR/UN News, mid-August 2026
+        # v1.2.0 -- THE NUMBER TO QUOTE NOW. Consumers: use this, not the peak.
+        'headline': {
+            'currently_displaced': 300000,            # "more than 300,000" -- OCHA, 30 Oct 2026
+            'label': 'more than 300,000 still displaced',
+            'as_of': '2026-10-30',
+            'source': 'OCHA via UN News, 30 Oct 2026',
+            'source_url': 'https://news.un.org/en/story/2026/10/1168713',
+        },
+        'total_displaced_registered': 1000000,        # PEAK figure (registered) — the crisis high-water mark, NOT current
+        'peak_displaced_iom_estimate': 1200000,       # IOM estimate, April 2026 (via Al Jazeera, 13 Sep 2026)
+        'currently_displaced': 300000,                # OCHA, 30 Oct 2026 ("more than 300,000"); was 360K mid-Aug
+        'returned_to_areas_of_origin': 970000,        # UN Spokesperson, 30 Oct 2026 ("close to 970,000"); was 860K mid-Aug
+        'returned_as_of': '2026-10-30',
+        'villages_held_by_israel': '50+ (Al Jazeera, 13 Sep 2026)',
+        'collective_sites': '17,566 people in 184 sites (IOM, Sep 2026)',
         'total_displaced_pct_population': 20,          # at peak
         'in_government_shelters': 22000,              # mid-Aug — collapsed from 119K in April
         'shelters_opened': 430,                       # OCHA FU#41, 6 July
@@ -268,15 +300,23 @@ STATIC_HUMANITARIAN = {
             'infrastructure and is cited by OCHA as a major impediment to safe, voluntary and '
             'sustainable return. A returnee counted as no-longer-displaced may be living on their '
             'land rather than in their house. The return figure measures location, not shelter.'),
-        'source': 'UNHCR / UN News (mid-Aug 2026) / OCHA Flash Update #41-42 / IOM DTM',
+        'source': 'OCHA / UN News (30 Oct 2026); IOM via Al Jazeera (13 Sep 2026); UNHCR (mid-Aug 2026)',
         'source_urls': [
+            'https://news.un.org/en/story/2026/10/1168713',
+            'https://www.aljazeera.com/features/2026/9/13/how-israels-destruction-of-south-lebanon-is-making-displacement-permanent',
             'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-22-escalation-hostilities-lebanon-30-april-2026',
             'https://dtm.iom.int/lebanon',
             'https://www.unocha.org/publications/report/lebanon/lebanon-flash-update-19-escalation-hostilities-lebanon-20-april-2026',
         ],
-        'as_of': '2026-08-18',
+        'as_of': '2026-10-30',
         'note': (
-            'Peak displacement exceeded 1M (~20% of population). By mid-August ~860,000 had returned '
+            'OCT 30 2026: OCHA says more than 300,000 people displaced since early March remain '
+            'displaced and the crisis is "far from over"; close to 970,000 have returned. '
+            'RETURN IS NOT RECOVERY: Israeli forces hold more than 50 villages in the south and '
+            'house demolitions continue (UN human rights chief called for them to end), so many '
+            'returnees are back on their land with no house to return to -- displacement in all but '
+            'the count, and increasingly permanent (Al Jazeera, 13 Sep 2026). '
+            'EARLIER: Peak displacement exceeded 1M (~20% of population). By mid-August ~860,000 had returned '
             'to areas of origin and ~360,000 remained displaced, of whom only ~22,000 are in collective '
             'shelters — meaning roughly 94% of the still-displaced are outside formal shelter, absorbed '
             'by host families, in unfinished buildings, or in informal sites. That absorption is invisible '
@@ -362,6 +402,18 @@ STATIC_HUMANITARIAN = {
     },
 
     'food_security': {
+        # v1.2.0 -- the April-August projection below has LAPSED. 'current_outlook'
+        # is the successor; consumers must not quote 1.24M in the present tense.
+        'status': 'lapsed',
+        'current_outlook': {
+            'summary': ('Crisis (IPC Phase 3) expected in South, El-Nabatieh, Bekaa, '
+                        'Baalbek-El Hermel, Akkar and Beirut; Stressed (Phase 2) in most of '
+                        'North and Mount Lebanon. No population figure published.'),
+            'period': 'September 2026 – January 2027',
+            'source': 'FEWS NET Key Message Update, September 2026',
+            'source_url': 'https://fews.net/middle-east-and-europe/lebanon',
+            'as_of': '2026-09-30',
+        },
         'people_in_ipc_phase3_or_above': 1240000,
         'people_ipc_phase3': 1140000,
         'people_ipc_phase4': 101000,
@@ -396,6 +448,16 @@ STATIC_HUMANITARIAN = {
     },
 
     'flash_appeal': {
+        # v1.2.0 -- the revised appeal's period ended 31 Aug 2026.
+        'status':                  'closed',
+        'successor': {
+            'lebanon_humanitarian_fund_allocated_usd': 91000000,
+            'note': ('OCHA Lebanon Humanitarian Fund has allocated $91M for displaced people, '
+                     'returnees, refugees and other affected communities.'),
+            'source': 'UN News, 30 Oct 2026',
+            'source_url': 'https://news.un.org/en/story/2026/10/1168713',
+            'as_of': '2026-10-30',
+        },
         'amount_usd':              639900000,           # REVISED appeal, launched 5 June 2026
         'period':                  'March – August 2026 (revised)',
         'period_expires':          '2026-08-31',
@@ -419,6 +481,9 @@ STATIC_HUMANITARIAN = {
 
     'ceasefire': {
         'in_effect':         True,
+        'status_oct_2026':   ('Nominally in effect since 17 April. Israeli forces hold 50+ villages '
+                              'in the south; strikes and house demolitions continue (Al Jazeera, '
+                              '13 Sep 2026; UN human rights chief).'),
         'effective_date':    '2026-04-17',
         'initial_duration':  '10 days',
         'extension':         'Further 3 weeks (as of late April)',
@@ -527,8 +592,13 @@ def humanitarian_staleness():
     lapsed = []
     for blk, key in (('food_security', 'projection_expires'),
                      ('flash_appeal', 'period_expires')):
-        exp = (STATIC_HUMANITARIAN.get(blk) or {}).get(key)
+        blk_d = STATIC_HUMANITARIAN.get(blk) or {}
+        exp = blk_d.get(key)
         if not exp:
+            continue
+        # v1.2.0 -- a lapsed window that already carries its successor is
+        # acknowledged, not a warning (consumers read the successor instead).
+        if blk_d.get('current_outlook') or blk_d.get('successor'):
             continue
         try:
             if datetime.strptime(exp, '%Y-%m-%d').replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
@@ -539,6 +609,20 @@ def humanitarian_staleness():
         warn += (' LAPSED PROJECTION WINDOW: ' + '; '.join(lapsed) + '. These figures are no '
                  'longer forward-looking and must not be reported present-tense until a '
                  'successor analysis is published.')
+
+    # v1.2.0 -- the block date is not the age of every figure. The casualty
+    # total is the field most often quoted and the one most likely to lag.
+    try:
+        cas = STATIC_HUMANITARIAN.get('casualties') or {}
+        c_age = (datetime.now(timezone.utc) -
+                 datetime.strptime(cas.get('as_of', ''), '%Y-%m-%d').replace(tzinfo=timezone.utc)).days
+        if c_age > STALENESS_AGING_DAYS:
+            warn = (warn + ' ' if warn else '') + (
+                'The casualty total (%s killed) was last confirmed on %s (%d days ago) and is '
+                'rising: quote it with its date.' % (format(cas.get('killed', 0), ','),
+                                                     cas.get('as_of'), c_age))
+    except Exception:
+        pass
 
     return {'age_days': age, 'tier': tier, 'confidence': conf, 'warning': warn,
             'lapsed_windows': lapsed,

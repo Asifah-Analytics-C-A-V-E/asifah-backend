@@ -1,7 +1,7 @@
 """
 lebanon_signal_interpreter.py
 Asifah Analytics -- ME Backend Module
-v1.2.0
+v1.3.0
 
 Signal interpretation engine for the Lebanon Rhetoric Tracker.
 
@@ -49,6 +49,17 @@ Key contextual factors baked in:
     Acceptance by Hezbollah + Iran is the gate that precedes disarmament.
 
 CHANGELOG:
+  v1.3.0 (2026-10-31):
+    - Diplomatic scenario labels now carry the date the state began and fit
+      the ME BLUF's 40-character slot. "FRAMEWORK SIGNED -- Rejected by
+      Hezbollah/Amal, ..." was cut to "...Rejected by Hezbolla" and, undated,
+      read as this week's news four months after the June rejection. Now:
+      "Signed Jun 26; Hizballah still rejects" (house spelling), with the full
+      sentence kept as scenario_detail.
+    - framework_signals carries posture_basis: 'reported' when acceptance
+      language was actually seen, 'standing since <date>' when the posture is
+      the baseline carried forward from signing. Absence of new reporting is
+      not new rejection.
   v1.2.0 (2026-06-30):
     - Added _detect_framework_signals() -- Trilateral Framework detection spine
       (signed event + Hezbollah/Iran/Berri acceptance-vs-rejection postures +
@@ -685,6 +696,17 @@ def _detect_framework_signals(scan_data):
         'berri_posture':         berri_posture,       # accept | reject
         'treasury_sticks':       treasury_sticks,
         'acceptance_gate_open':  acceptance_gate_open,
+        # v1.3.0 -- WHY each posture reads as it does. 'reported' = acceptance
+        # (or, for Iran, rejection) language seen this cycle; otherwise the
+        # baseline posture carried forward unchanged since signing.
+        'posture_basis': {
+            'hezbollah': ('reported' if hezb_accept
+                          else 'standing since %s, no acceptance reported' % _FRAMEWORK_SIGNED_DATE),
+            'berri':     ('reported' if berri_positive
+                          else 'standing since %s, no shift reported' % _FRAMEWORK_SIGNED_DATE),
+            'iran':      ('reported' if (iran_accept or iran_reject)
+                          else 'no clear reporting since %s' % _FRAMEWORK_SIGNED_DATE),
+        },
         'source': ('U.S. Dept of State, signed 2026-06-26; corroborated Al Jazeera, '
                    'Times of Israel, Arab News'),
         'data_as_of': _FRAMEWORK_SIGNED_DATE,
@@ -883,17 +905,30 @@ def _score_diplomatic_track(scan_data, green_lines_triggered):
     # signed phase + the acceptance gate; the full sovereignty-vs-interference band
     # is the Slice 2 implementation read.
     framework = scan_data.get('framework_signals') or {}
+    scenario_detail = ''
     if framework.get('framework_signed'):
         _hez = framework.get('hezbollah_posture', 'reject')
         _irn = framework.get('iran_posture', 'unclear')
+        # v1.3.0 -- short (<=40 chars: the ME BLUF slices there) and DATED.
+        try:
+            _sd = datetime.strptime(framework.get('framework_signed_date') or _FRAMEWORK_SIGNED_DATE,
+                                    '%Y-%m-%d').strftime('%b %d').replace(' 0', ' ')
+        except Exception:
+            _sd = 'Jun 26'
         if _hez == 'accept' and _irn == 'accept':
-            scenario       = 'FRAMEWORK SIGNED -- Compliance Gate Opening, Implementation Ahead'
+            scenario       = 'Signed %s; acceptance gate opening' % _sd
+            scenario_detail = 'FRAMEWORK SIGNED -- Compliance Gate Opening, Implementation Ahead'
             scenario_color = '#10b981'
         elif _hez == 'accept' or _irn == 'accept':
-            scenario       = 'FRAMEWORK SIGNED -- Partial Acceptance, Compliance Incomplete'
+            scenario       = 'Signed %s; partial acceptance' % _sd
+            scenario_detail = 'FRAMEWORK SIGNED -- Partial Acceptance, Compliance Incomplete'
             scenario_color = '#22c55e'
         else:
-            scenario       = 'FRAMEWORK SIGNED -- Rejected by Hezbollah/Amal, Implementation Contested'
+            scenario       = 'Signed %s; Hizballah still rejects' % _sd
+            scenario_detail = ('FRAMEWORK SIGNED %s -- Hizballah/Amal rejection standing (%s); '
+                               'implementation contested'
+                               % (_sd, (framework.get('posture_basis') or {}).get(
+                                   'hezbollah', 'no acceptance reported since signing')))
             scenario_color = '#f59e0b'
     elif score >= 75:
         scenario       = 'BREAKTHROUGH — Direct Talks Active, Framework Possible'
@@ -923,6 +958,7 @@ def _score_diplomatic_track(scan_data, green_lines_triggered):
     return {
         'score':               score,
         'scenario':            scenario,
+        'scenario_detail':     scenario_detail or scenario,
         'scenario_color':      scenario_color,
         'hezbollah_disrupting': hezbollah_disrupting,
         'active_count':        len(active_lines),
