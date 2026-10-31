@@ -1,6 +1,25 @@
 """
 iran_stability.py - Iran Stability Index & Protests Analytics
-Asifah Analytics v3.1.0 - February 2026
+Asifah Analytics v3.3.0 - October 31, 2026 (v3.1.0 February 2026)
+
+CHANGELOG v3.3.0 (Oct 31 2026) -- STALENESS SCRUB:
+- GOVERNMENT CARDS refreshed and DATED. Salami (killed Jun 2025) was shown
+  as IRGC commander "status unknown"; Pezeshkian "alive (unconfirmed)";
+  Ghalibaf "status unknown"; the summary read "Hormuz closed" as of Mar 14.
+  Each card now carries 'verified' (the date the status was last checked)
+  and a runtime 'status_stale' flag once it is older than GOVT_REVIEW_DAYS,
+  so a card that nobody re-checked says so instead of looking current.
+  Added: Armed Forces Chief of Staff, SNSC Secretary, Foreign Minister.
+- The regime summary is dated and appends the live ceasefire read from the
+  Iran tracker (rhetoric:iran:latest) when it is available.
+- FALLBACKS ARE NOT READINGS: the static USD/IRR rate and the static Brent
+  price are no longer stamped with today's date or marked 'success'; they
+  carry stale=True and no fake 24h/7d/6m changes.
+- War casualty extractor requires Iran context (it could take a Lebanon or
+  Gaza toll) and dates its figure; the March "24 of 31 provinces" / "2,000+
+  strikes" strings are labelled as of their date.
+- Hormuz: the US naval blockade of Iranian ports is tracked separately from
+  an Iranian closure of the strait ("hormuz blockade" conflated the two).
 
 Consolidated module handling ALL Iran dashboard data:
 - Regime Stability Index (multi-component scoring)
@@ -356,103 +375,211 @@ def _read_iran_commodity_pressure():
 
 
 # ============================================
-# GOVERNMENT STATUS (static, update as needed)
+# GOVERNMENT STATUS (static, DATED -- v3.3.0)
 # ============================================
-def get_government_status():
-    """Current Iranian government leadership — updated for active war (Mar 2026)"""
+# Hand-maintained. Every card carries 'verified': the date its status was
+# last checked against reporting. At runtime a card older than
+# GOVT_REVIEW_DAYS is flagged status_stale and the page says so -- a card
+# nobody re-checked must not look current. To update: change the fact AND
+# the 'verified' date together.
+GOVT_REVIEW_DAYS = 45
+GOVT_LAST_REVIEW = '2026-10-31'
+
+
+def _govt_static():
     return {
         "supreme_leader": {
             "name": "Ayatollah Ali Khamenei",
             "title": "Former Supreme Leader",
             "since": "1989-06-04",
-            "age": 86,
-            "note": "Killed in US-Israel strike on Feb 28, 2026. Compound destroyed in opening strike; death confirmed by multiple sources.",
+            "note": "Killed in US-Israel strike on Feb 28, 2026.",
             "status": "KILLED",
             "status_color": "red",
             "status_date": "2026-02-28",
-            "status_detail": "Death confirmed. Mujtaba Khamenei elected Supreme Leader by surviving Assembly of Experts members.",
-            "successor": "Mujtaba Khamenei — elected Supreme Leader by surviving Assembly of Experts members"
+            "verified": "2026-10-31",
+            "historical": True,
+            "status_detail": "Death confirmed. Mojtaba Khamenei chosen Supreme Leader by surviving Assembly of Experts members (Mar 2026).",
         },
-        "mujtaba_khamenei": {
-            "name": "Mujtaba Khamenei",
+        "mujtaba_khamenei": {       # key kept for the page; spelling is Mojtaba (common English usage)
+            "name": "Mojtaba Khamenei",
             "title": "Supreme Leader",
             "since": "2026-03-14",
-            "age": 56,
-            "note": "Son of Ali Khamenei; elected by surviving Assembly of Experts members following father's reported death",
+            "note": "Son of Ali Khamenei; chosen by surviving Assembly of Experts members.",
             "status": "ACTIVE",
             "status_color": "red",
-            "status_date": "2026-03-14",
-            "status_detail": "First public statement vowed to avenge father's killing, keep Strait of Hormuz closed, and target US bases in region"
+            "status_date": "2026-10-31",
+            "verified": "2026-10-31",
+            "status_detail": ("Oct 31: said any threat warrants a 'geographically unrestricted' "
+                              "response and ordered target lists updated to cover US and Israeli "
+                              "assets. Aug 10: appointed new senior military commanders."),
+            "source": "Fox News live (Oct 31 2026); The National (Aug 10 2026)",
         },
         "president": {
             "name": "Masoud Pezeshkian",
             "title": "President",
             "since": "2024-07-28",
             "faction": "Reformist",
-            "note": "9th President; government authority severely degraded by strikes on command infrastructure",
-            "status": "ALIVE (Unconfirmed)",
+            "note": "9th President; government functioning under wartime conditions.",
+            "status": "ACTIVE",
             "status_color": "yellow",
-            "status_date": "2026-03-05",
-            "status_detail": "No confirmed public appearance since strikes began; believed alive but governing capacity unclear"
+            "status_date": "2026-10-31",
+            "verified": "2026-10-31",
+            "status_detail": "In office and active.",
         },
         "speaker_of_parliament": {
             "name": "Mohammad Bagher Ghalibaf",
             "title": "Speaker of the Islamic Consultative Assembly",
             "since": "2024-05-28",
-            "note": "Former Tehran mayor; conservative faction",
-            "status": "STATUS UNKNOWN",
-            "status_color": "orange",
-            "status_date": "2026-03-05",
-            "status_detail": "Parliament building reported targeted by airstrikes; status unconfirmed"
+            "note": "Former Tehran mayor; conservative; prominent voice on negotiations.",
+            "status": "ACTIVE",
+            "status_color": "yellow",
+            "status_date": "2026-10-30",
+            "verified": "2026-10-31",
+            "status_detail": ("Oct 30: said progress depends on Iran's seven conditions (sanctions "
+                              "relief, end of the US naval blockade, guarantees against strikes, "
+                              "unfrozen assets)."),
+            "source": "Al Jazeera (Oct 30 2026), citing Tasnim",
         },
         "irgc_commander": {
-            "name": "Major General Hossein Salami",
+            "name": "Maj. Gen. Ahmad Vahidi",
             "title": "Commander-in-Chief, IRGC",
-            "since": "2019-04-21",
-            "note": "IRGC command and control infrastructure heavily degraded by US-Israel strikes",
-            "status": "STATUS UNKNOWN",
-            "status_color": "orange",
-            "status_date": "2026-03-05",
-            "status_detail": "IRGC C2 nodes targeted; 17 naval vessels destroyed per CENTCOM; air defense suppressed"
+            "since": "2026-08-10",
+            "note": "Appointed by Mojtaba Khamenei, succeeding Pakpour (Salami was killed in Jun 2025).",
+            "status": "ACTIVE",
+            "status_color": "red",
+            "status_date": "2026-08-10",
+            "verified": "2026-10-31",
+            "source": "The National; Anadolu (Aug 10 2026)",
+        },
+        "armed_forces_chief": {
+            "name": "Maj. Gen. Ali Abdollahi",
+            "title": "Chief of Staff, Armed Forces",
+            "since": "2026-08-10",
+            "note": "Appointed in the same Aug 10 decrees.",
+            "status": "ACTIVE",
+            "status_color": "red",
+            "status_date": "2026-08-10",
+            "verified": "2026-10-31",
+            "source": "Anadolu (Aug 10 2026)",
+        },
+        "snsc_secretary": {
+            "name": "Mohsen Rezaei",
+            "title": "Secretary, Supreme National Security Council",
+            "since": "N/A",
+            "note": "Addressee of the US Vice President's letter proposing direct talks (delivered via Qatar, Oct 26).",
+            "status": "ACTIVE",
+            "status_color": "yellow",
+            "status_date": "2026-10-30",
+            "verified": "2026-10-31",
+            "source": "Al Jazeera (Oct 30 2026), citing NYT/WaPo",
+        },
+        "foreign_minister": {
+            "name": "Abbas Araghchi",
+            "title": "Foreign Minister",
+            "since": "2024-08-21",
+            "note": "Lead diplomatic voice; engaged with Qatari mediators.",
+            "status": "ACTIVE",
+            "status_color": "yellow",
+            "status_date": "2026-10-31",
+            "verified": "2026-10-31",
         },
         "quds_force_commander": {
-            "name": "Brigadier General Esmail Qaani",
+            "name": "Brig. Gen. Esmail Qaani",
             "title": "Commander, IRGC Quds Force",
             "since": "2020-01-03",
-            "note": "Succeeded Qasem Soleimani; previously reported killed Jun 2025 but resurfaced",
-            "status": "STATUS UNKNOWN",
+            "note": "Succeeded Qasem Soleimani.",
+            "status": "NOT CONFIRMED",
             "status_color": "orange",
             "status_date": "2026-03-05",
-            "status_detail": "Status uncertain; Quds Force operations ongoing but chain of command disrupted"
+            "verified": "2026-10-31",
+            "status_detail": "Current status not confirmed in open reporting as of the last review.",
         },
         "ali_shamkhani": {
             "name": "Ali Shamkhani",
             "title": "Former Secretary, Supreme National Security Council",
             "since": "N/A",
-            "note": "Senior security official; key figure in Iran's strategic decision-making",
+            "note": "Senior security official.",
             "status": "KILLED",
             "status_color": "red",
             "status_date": "2026-02-28",
-            "status_detail": "Killed in US-Israel strikes on Feb 28, 2026"
+            "verified": "2026-10-31",
+            "historical": True,
+            "status_detail": "Killed in US-Israel strikes on Feb 28, 2026.",
         },
         "assembly_of_experts": {
             "name": "Assembly of Experts",
             "title": "Supreme Leader Selection Body",
             "since": "N/A",
-            "note": "88-member body responsible for selecting next Supreme Leader",
+            "note": "88-member body responsible for selecting the Supreme Leader.",
             "status": "STRUCK DURING SESSION",
             "status_color": "red",
             "status_date": "2026-03-02",
-            "status_detail": "Israel bombed Assembly session convened to elect Khamenei successor; casualties unknown"
+            "verified": "2026-10-31",
+            "historical": True,
+            "status_detail": "Session struck on Mar 2, 2026; surviving members chose Mojtaba Khamenei.",
         },
-        "days_pezeshkian_in_office": (datetime.now() - datetime(2024, 7, 28)).days,
-        "regime_status_summary": {
-            "overall": "SEVERE DEGRADATION — NEW LEADERSHIP",
-            "color": "red",
-            "summary": "Ali Khamenei KILLED Feb 28. Mujtaba Khamenei elected Supreme Leader.IRGC C2 degraded. Navy destroyed. Air defense suppressed. Hormuz closed.",
-            "last_updated": "2026-03-14"
-        }
     }
+
+
+def _ceasefire_line():
+    """Live one-liner from the Iran tracker's ceasefire read, or None."""
+    try:
+        fp = _iran_rhetoric_cache_read()
+        tr = (fp or {}).get('ceasefire_trajectory') or {}
+        if tr.get('phase_day') is None:
+            return None
+        dirw = {'building': 'pressure building', 'easing': 'pressure easing',
+                'steady': 'steady on the week'}.get(tr.get('direction'), '')
+        return ('Ceasefire with the US in effect since 8 Apr (day %s): %s%s.'
+                % (tr.get('phase_day'), tr.get('lean', '').replace('_', '-'),
+                   (', ' + dirw) if dirw else ''))
+    except Exception:
+        return None
+
+
+def _iran_rhetoric_cache_read():
+    url = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
+    tok = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+    if not (url and tok):
+        return None
+    try:
+        r = requests.get(f"{url}/get/rhetoric:iran:latest",
+                         headers={"Authorization": f"Bearer {tok}"}, timeout=5)
+        res = r.json().get('result') if r.status_code == 200 else None
+        return json.loads(res) if res else None
+    except Exception:
+        return None
+
+
+def get_government_status():
+    """Iranian leadership, each card dated; stale cards flagged at runtime."""
+    now = datetime.now(timezone.utc)
+    out = _govt_static()
+    for key, card in out.items():
+        try:
+            v = datetime.strptime(card.get('verified', ''), '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            age = (now - v).days
+        except Exception:
+            age = None
+        card['verified_age_days'] = age
+        card['status_stale'] = (age is None) or (age > GOVT_REVIEW_DAYS and not card.get('historical'))
+    out["days_pezeshkian_in_office"] = (datetime.now() - datetime(2024, 7, 28)).days
+    summary = ("Ali Khamenei was killed Feb 28; Mojtaba Khamenei has been Supreme Leader since "
+               "Mar 14. A ceasefire with the US has held since 8 Apr, extended indefinitely. The US "
+               "maintains a naval blockade of Iranian ports; tankers struck mines in the Strait of "
+               "Hormuz on Oct 30. US strike options were briefed Oct 29 while Qatari mediators carry "
+               "a US offer of direct talks.")
+    live = _ceasefire_line()
+    out["regime_status_summary"] = {
+        "overall": "WARTIME LEADERSHIP — CEASEFIRE UNDER STRAIN",
+        "color": "red",
+        "summary": summary + ((' Latest read: ' + live) if live else ''),
+        "last_updated": GOVT_LAST_REVIEW,
+        "as_of_label": "As of %s" % GOVT_LAST_REVIEW,
+        "review_overdue": (now - datetime.strptime(GOVT_LAST_REVIEW, '%Y-%m-%d')
+                           .replace(tzinfo=timezone.utc)).days > GOVT_REVIEW_DAYS,
+    }
+    return out
 
 
 # ============================================
@@ -460,15 +587,19 @@ def get_government_status():
 # ============================================
 def get_exchange_rate():
     """Fetch USD/IRR exchange rate — black market is the real indicator"""
+    # v3.3.0 -- the fallback is a reference number for the stability score,
+    # NOT a reading: no timestamp of "now", no invented 24h/7d/6m changes.
     fallback_rate = {
         "usd_to_irr": 1641000,
-        "change_24h": 0.61,
-        "change_7d": 0.80,
-        "change_6m": 60.96,
-        "pressure": "SELLING",
-        "source": "alanchand.com/bonbast.com",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "change_24h": None,
+        "change_7d": None,
+        "change_6m": None,
+        "pressure": None,
+        "source": "static fallback (live bonbast unreachable)",
+        "timestamp": None,
+        "fallback_as_of": "2026-06 (hand-entered reference)",
         "is_fallback": True,
+        "stale": True,
         "note": "Black market rate; official rate (~42,000) is symbolic"
     }
 
@@ -485,6 +616,8 @@ def get_exchange_rate():
             if usd_sell > 100000:
                 fallback_rate["usd_to_irr"] = usd_sell
                 fallback_rate["is_fallback"] = False
+                fallback_rate["stale"] = False
+                fallback_rate["timestamp"] = datetime.now(timezone.utc).isoformat()
                 fallback_rate["source"] = "bonbast.com (live)"
                 print(f"[Exchange Rate] Live bonbast rate: {usd_sell} IRR/USD")
     except Exception as e:
@@ -558,14 +691,17 @@ def get_brent_oil_price():
 
 def get_fallback_oil_price():
     """Fallback oil price data when API is unavailable"""
+    # v3.3.0 -- a frozen price is not today's price and not a "success".
     return {
-        "success": True,
+        "success": False,
+        "stale": True,
         "current_price": 103.14,
-        "price_change": 2.68, "percent_change": 2.67,
-        "arrow": "↑", "trend": "up",
-        "timestamp": datetime.now().strftime("%Y-%m-%d"),
+        "price_change": None, "percent_change": None,
+        "arrow": "", "trend": "unknown",
+        "timestamp": None,
+        "fallback_as_of": "2026-06 (hand-entered reference)",
         "currency": "USD", "unit": "bbl",
-        "source": "fallback", "sparkline": []
+        "source": "static fallback (Yahoo unreachable)", "sparkline": []
     }
 
 
@@ -600,8 +736,15 @@ def get_iran_oil_reserves():
 # ============================================
 # STRAIT OF HORMUZ STATUS (v3.2.0)
 # ============================================
+# v3.3.0 -- the US naval blockade of IRANIAN PORTS is not an Iranian closure
+# of the strait; it is tracked separately (US_BLOCKADE_KEYWORDS).
+US_BLOCKADE_KEYWORDS = [
+    'blockade of iranian ports', 'naval blockade of iran', 'us naval blockade',
+    'us blockade of iran', 'blockade on iranian ports', 'blockade of iran\'s ports',
+    'enforcing the blockade', 'blockade enforcement', 'ending the us naval blockade',
+]
 HORMUZ_CLOSURE_KEYWORDS = [
-    'strait of hormuz closed', 'hormuz closed', 'hormuz blockade',
+    'strait of hormuz closed', 'hormuz closed', 'iran blockade of hormuz',
     'hormuz shut', 'hormuz standstill', 'hormuz halt',
     'hormuz near standstill', 'hormuz traffic stopped',
     'hormuz traffic dropped', 'hormuz 90%', 'hormuz effectively closed',
@@ -799,8 +942,13 @@ def get_hormuz_status(all_articles=None):
         status_detail += (f' (State persisted: no fresh closure or reopening '
                           f'signals this scan -- {reopen_hits} reopening keywords detected.)')
 
+    blockade_hits = sum(1 for a in articles
+                        if any(kw in f"{a.get('title', '')} {a.get('description', '')}".lower()
+                               for kw in US_BLOCKADE_KEYWORDS))
     result = {
         'success': True,
+        'us_blockade_reported': blockade_hits > 0,
+        'us_blockade_signals': blockade_hits,
         'status': status,
         'emoji': status_emoji,
         'status_text': status_text,
@@ -1370,6 +1518,13 @@ def extract_war_casualties(articles):
         ])
         if not war_context:
             continue
+        # v3.3.0 -- a toll must be about IRAN. "Killed in Israeli strikes" in a
+        # Lebanon or Gaza story was being counted as Iran's war dead.
+        if 'iran' not in text and 'tehran' not in text:
+            continue
+        if any(x in text for x in ('lebanon', 'gaza', 'hezbollah', 'yemen')) and \
+                'iran' not in title:
+            continue
 
         sentences = re.split(r'[.!?]\s+', text)
         for sentence in sentences:
@@ -1407,6 +1562,7 @@ def extract_war_casualties(articles):
                         war_cas['details'].append({
                             'type': category, 'count': best_num,
                             'source': source, 'url': url,
+                            'published': article.get('publishedAt') or article.get('published') or '',
                             'sentence': sentence[:200]
                         })
 
@@ -1431,8 +1587,11 @@ def extract_war_casualties(articles):
     war_cas['total_sites_struck'] = sum(
         len(d['targets']) for d in KNOWN_STRIKE_LOCATIONS.values()
     )
-    war_cas['provinces_struck'] = '24 of 31 (per IDF statement)'
-    war_cas['total_munitions'] = '2,000+ strikes (per ISW/CENTCOM)'
+    war_cas['provinces_struck'] = '24 of 31 (per IDF statement, March 2026)'
+    war_cas['total_munitions'] = '2,000+ strikes (per ISW/CENTCOM, March 2026)'
+    war_cas['static_figures_as_of'] = '2026-03'
+    war_cas['figure_note'] = ('Highest Iran-specific toll found in this scan\'s articles; '
+                              'see details[].published for the date of each figure.')
     war_cas['operation_name'] = 'Operation Epic Fury (US) / Operation Roaring Lion (Israel)'
     war_cas['start_date'] = '2026-02-28'
 
