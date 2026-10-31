@@ -1,6 +1,6 @@
 """
 Asifah Analytics — Iran Rhetoric & Command Node Tracker
-v1.0.0 — April 4, 2026
+v1.8.0 — October 31, 2026 (v1.0.0 April 4, 2026)
 ANALYTICAL FRAME:
 Iran is not just an actor — it is the COMMAND NODE of the resistance axis.
 This tracker answers two questions:
@@ -74,6 +74,12 @@ CHANGELOG:
     direction (building / easing / steady / unread) from a daily memory.
     New vocabulary from late-Oct reporting ("geographically unrestricted",
     Qatari mediators, Vance letter, naval mines, strike options briefed).
+    SCRUB: Supreme Leader actor names Mojtaba (and the Mujtaba spelling);
+    retrospective "Khamenei killed" stories no longer count as his statements;
+    the Russia-Iran axis needs Russia in the article (bare Araghchi/Mojtaba/
+    Witkoff matches removed); Google News feeds use when:7d instead of a
+    hardcoded "2026" (which would have gone stale on Jan 1); 'snapback' only
+    as a new trigger.
   v1.0.0 (2026-03-21): Initial build — command node architecture
 
 COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
@@ -165,7 +171,7 @@ ESCALATION_LEVELS = {
 # ============================================
 ACTORS = {
     'khamenei': {
-        'name': 'Khamenei / Supreme Leader',
+        'name': 'Supreme Leader (Mojtaba Khamenei)',
         'flag': '🇮🇷',
         'icon': '👁️',
         'color': '#dc2626',
@@ -175,7 +181,8 @@ ACTORS = {
             'khamenei', 'supreme leader', 'rahbar', 'khamenei says',
             'khamenei warns', 'khamenei orders', 'khamenei statement',
             'office of the supreme leader', 'leader of the revolution',
-            'ayatollah khamenei', 'ali khamenei',
+            'ayatollah khamenei', 'mojtaba khamenei', 'mujtaba khamenei',
+            'mojtaba', 'mujtaba', 'مجتبی خامنه‌ای', 'مجتبى خامنئي',
             'خامنه‌ای', 'رهبر انقلاب', 'مقام معظم رهبری',
             'بیانات رهبری', 'فرمان رهبری',
             'خامنئي', 'المرشد الأعلى', 'ولي الفقيه',
@@ -936,6 +943,12 @@ DIPLOMATIC_TRIGGERS = {
         'توافق نهایی ایران', 'اتفاق نهائي إيران أمريكا',
     ],
     4: [
+        # -- v1.8.0 Oct 31 2026: the Qatar/Vance track (letter delivered Oct 26,
+        #    Qatari mediators in Tehran Oct 30). Generic phrasing so it keeps
+        #    working after this news cycle. --
+        'vance letter', 'vance iran', 'vance offered', 'vance proposes',
+        'direct talks proposal', 'offer of direct talks', 'qatar delivers letter',
+        'mediators return to tehran', 'doha channel', 'rezaei vance',
         # Active negotiations / direct talks / framework momentum
         'araghchi pakistan', 'araghchi oman', 'araghchi russia',
         'iran second round talks', 'iran direct talks us',
@@ -2435,39 +2448,39 @@ RHETORIC_RSS_FEEDS = [
     # Iranian state media (English)
     ("https://www.presstv.ir/rss.xml", 1.0),
     ("https://en.mehrnews.com/rss", 1.0),
-    ("https://news.google.com/rss/search?q=IRGC+Iran+missile+drone+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Khamenei+statement+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Iran+Quds+Force+proxy+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=IRGC+Iran+missile+drone+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Khamenei+statement+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+Quds+Force+proxy+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Operation+True+Promise+Iran&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Iran+nuclear+natanz+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Iran+strait+hormuz+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Iran+protests+economy+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    ("https://news.google.com/rss/search?q=Iran+US+war+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Iran+Israel+war+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+nuclear+natanz+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Iran+strait+hormuz+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Iran+protests+economy+when:7d&hl=en&gl=US&ceid=US:en", 0.9),
+    ("https://news.google.com/rss/search?q=Iran+US+war+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Iran+Israel+war+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
     # Iran International (opposition — domestic pressure signals)
     ("https://www.iranintl.com/en/rss", 0.95),
     # CENTCOM
-    ("https://news.google.com/rss/search?q=CENTCOM+Iran+strikes+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=CENTCOM+Iran+strikes+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
     # Arabic — Iranian state/proxy framing
-    ("https://news.google.com/rss/search?q=إيران+الحرس+الثوري+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
-    ("https://news.google.com/rss/search?q=خامنئي+بيان+2026&hl=ar&gl=SA&ceid=SA:ar", 1.0),
+    ("https://news.google.com/rss/search?q=إيران+الحرس+الثوري+when:7d&hl=ar&gl=SA&ceid=SA:ar", 1.0),
+    ("https://news.google.com/rss/search?q=خامنئي+بيان+when:7d&hl=ar&gl=SA&ceid=SA:ar", 1.0),
     ("https://news.google.com/rss/search?q=عملية+الوعد+الصادق+إيران&hl=ar&gl=SA&ceid=SA:ar", 1.0),
-    ("https://news.google.com/rss/search?q=إيران+محور+المقاومة+2026&hl=ar&gl=SA&ceid=SA:ar", 0.95),
+    ("https://news.google.com/rss/search?q=إيران+محور+المقاومة+when:7d&hl=ar&gl=SA&ceid=SA:ar", 0.95),
     # Farsi — 2-3 focused queries only (GDELT Farsi errors under load)
-    ("https://news.google.com/rss/search?q=سپاه+پاسداران+عملیات+2026&hl=fa&gl=IR&ceid=IR:fa", 0.95),
-    ("https://news.google.com/rss/search?q=خامنه‌ای+بیانیه+2026&hl=fa&gl=IR&ceid=IR:fa", 0.95),
+    ("https://news.google.com/rss/search?q=سپاه+پاسداران+عملیات+when:7d&hl=fa&gl=IR&ceid=IR:fa", 0.95),
+    ("https://news.google.com/rss/search?q=خامنه‌ای+بیانیه+when:7d&hl=fa&gl=IR&ceid=IR:fa", 0.95),
     # Hebrew — Israeli perspective on Iran
-    ("https://news.google.com/rss/search?q=איראן+תקיפה+2026&hl=iw&gl=IL&ceid=IL:iw", 0.9),
+    ("https://news.google.com/rss/search?q=איראן+תקיפה+when:7d&hl=iw&gl=IL&ceid=IL:iw", 0.9),
     # Israeli shadow war / nuclear red line signals (v2.1)
-    ("https://news.google.com/rss/search?q=Israel+Iran+nuclear+red+line+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Mossad+Iran+operation+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Israel+Iran+deal+opposition+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    ("https://news.google.com/rss/search?q=Israel+Iran+nuclear+red+line+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Mossad+Iran+operation+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Israel+Iran+deal+opposition+when:7d&hl=en&gl=US&ceid=US:en", 0.9),
     # Trump / US Iran pressure signals (v2.1)
-    ("https://news.google.com/rss/search?q=Trump+Iran+nuclear+deal+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Trump+warns+Iran+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Trump+maximum+pressure+Iran+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Witkoff+Iran+deal+2026&hl=en&gl=US&ceid=US:en", 0.95),
-    ("https://news.google.com/rss/search?q=Rubio+Iran+sanctions+2026&hl=en&gl=US&ceid=US:en", 0.9),
+    ("https://news.google.com/rss/search?q=Trump+Iran+nuclear+deal+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Trump+warns+Iran+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Trump+maximum+pressure+Iran+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Witkoff+Iran+deal+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Rubio+Iran+sanctions+when:7d&hl=en&gl=US&ceid=US:en", 0.9),
     # Truth Social — Trump direct statements (public RSS, no auth required)
     ("https://truthsocial.com/@realDonaldTrump.rss", 1.1),
     # Nitter deprecated platform-wide. Trump direct still captured via
@@ -2492,16 +2505,16 @@ RHETORIC_RSS_FEEDS = [
     ("https://www.ft.com/world?format=rss", 1.0),
     ("https://feeds.reuters.com/Reuters/worldNews", 1.0),
     # Targeted queries for China-Iran axis specifically
-    ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+2026&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=China+Iran+military+OR+satellite+OR+MANPADS+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=IRGC+Chinese+satellite+OR+IRGC+Chinese+weapons+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Russia+satellite+Iran+targeting+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
     # ── v2.4 — Targeted queries for Iran-Russia DIPLOMATIC coordination ──
     # Catches NYT/Reuters analytical framing on top-level meetings,
     # mediation substitution, UN cover, uranium handover. Iranian state
     # media reports the meeting fact; Western OSINT reports the substance.
-    ("https://news.google.com/rss/search?q=Araghchi+Putin+OR+%22Iran+foreign+minister%22+Russia+2026&hl=en&gl=US&ceid=US:en", 1.05),
-    ("https://news.google.com/rss/search?q=Russia+veto+Iran+OR+%22Hormuz+resolution%22+2026&hl=en&gl=US&ceid=US:en", 1.0),
-    ("https://news.google.com/rss/search?q=Russia+uranium+Iran+OR+%22Caspian%22+Iran+trade+2026&hl=en&gl=US&ceid=US:en", 0.95),
+    ("https://news.google.com/rss/search?q=Araghchi+Putin+OR+%22Iran+foreign+minister%22+Russia+when:7d&hl=en&gl=US&ceid=US:en", 1.05),
+    ("https://news.google.com/rss/search?q=Russia+veto+Iran+OR+%22Hormuz+resolution%22+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
+    ("https://news.google.com/rss/search?q=Russia+uranium+Iran+OR+%22Caspian%22+Iran+trade+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
     # Barak Ravid — first-mover Israel/Iran OSINT journalist (v2.3)
     # 2 queries — Ravid covers Iran less centrally than Israel/Lebanon
     # but his US-Iran ceasefire + nuclear deal scoops are high-value
@@ -2617,7 +2630,8 @@ IRAN_REDDIT_KEYWORDS = [
 ]
 
 ACTOR_KEYWORDS = {
-    'khamenei':     ['khamenei', 'supreme leader', 'خامنه‌ای', 'المرشد', 'خامنئي'],
+    'khamenei':     ['khamenei', 'supreme leader', 'mojtaba', 'mujtaba', 'مجتبی',
+                     'خامنه‌ای', 'المرشد', 'خامنئي'],
     'irgc':         ['irgc', 'revolutionary guard', 'quds force', 'pasdaran',
                      'سپاه', 'فيلق القدس', 'حرس الثوري', 'operation true promise'],
     'iran_gov':     ['iran foreign ministry', 'pezeshkian', 'araghchi',
@@ -2654,14 +2668,17 @@ ACTOR_KEYWORDS = {
                          'russia supplies iran', 'russia iran military',
                          'russian targeting iran', 'russian rocket iran',
                          # v2.4 — top-level diplomatic / mediation
-                         'araghchi', 'mojtaba khamenei', 'mojtaba',
-                         'iran foreign minister', 'iranian foreign minister',
+                         # (v1.8.0: bare 'araghchi' / 'mojtaba' / 'iran foreign
+                         # minister' / 'witkoff' / 'pakistan and oman' removed --
+                         # every Araghchi or Mojtaba story counted as Russia-Iran
+                         # coordination. Names now need a Russia co-term; see
+                         # RUSSIA_COTERMS in classify_articles.)
+                         'araghchi lavrov', 'araghchi moscow', 'araghchi putin',
                          'foreign minister moscow', 'foreign minister putin',
                          'russia veto', 'hormuz resolution',
                          'iranian uranium', 'kremlin uranium',
                          'caspian sea', 'via the caspian',
-                         'moscow mediation', 'witkoff',
-                         'called off the trip', 'pakistan and oman',
+                         'moscow mediation',
                          'روسیه ایران', 'روسيا إيران',
                          'عراقچی', 'مجتبی خامنه‌ای'],
     'israel_iran':  ['israel iran', 'israel strikes iran', 'idf iran',
@@ -2833,7 +2850,7 @@ def fetch_rhetoric_articles(days=3):
     # GDELT — balanced, Farsi limited to avoid overload
     gdelt_queries = {
         'eng': [
-            'IRGC Iran missile strike 2026',
+            'IRGC Iran missile strike',
             'Khamenei statement warns',
             'Iran proxy coordination hezbollah houthi',
             'Operation True Promise Iran wave',
@@ -2942,6 +2959,16 @@ def fetch_rhetoric_articles(days=3):
 # ============================================
 # CLASSIFY ARTICLES
 # ============================================
+RUSSIA_COTERMS = ('russia', 'russian', 'moscow', 'kremlin', 'putin', 'lavrov',
+                  'روسیه', 'روسيا', 'مسکو', 'موسكو')
+IRAN_PRINCIPALS = ('araghchi', 'mojtaba', 'mujtaba', 'pezeshkian', 'larijani', 'rezaei',
+                   'iran foreign minister', 'iranian foreign minister')
+KHAMENEI_RETROSPECTIVE = ('khamenei was killed', 'killing of khamenei', 'khamenei killed',
+                          'killed khamenei', 'late supreme leader', 'death of khamenei',
+                          "khamenei's death", 'assassination of khamenei',
+                          'since khamenei', 'after khamenei', 'ali khamenei, who')
+
+
 def classify_articles(articles, proxy_activation_level):
     """
     Classify articles. Reporting actors get downgraded.
@@ -3033,6 +3060,22 @@ def classify_articles(articles, proxy_activation_level):
                 if kw.lower() in text:
                     matched_actors.append(actor_id)
                     break
+        # v1.8.0 (Oct 31 2026) -- two gates on actor attribution:
+        #  (1) Russia-Iran axis needs Russia IN the article. Without it, any
+        #      story naming Iran's FM or leader lifted the Russia axis.
+        #  (2) A story ABOUT Ali Khamenei's killing is history, not a statement
+        #      by the Supreme Leader -- unless the current leader is named too.
+        if 'russia_iran_axis' in matched_actors and not any(c in text for c in RUSSIA_COTERMS):
+            matched_actors.remove('russia_iran_axis')
+        # ...and an Iranian principal named WITH Russia in the same article is
+        # the top-level coordination the v2.4 name keywords were reaching for.
+        if 'russia_iran_axis' not in matched_actors and \
+                any(n in text for n in IRAN_PRINCIPALS) and \
+                any(c in text for c in RUSSIA_COTERMS):
+            matched_actors.append('russia_iran_axis')
+        if 'khamenei' in matched_actors and any(r in text for r in KHAMENEI_RETROSPECTIVE) \
+                and not any(m in text for m in ('mojtaba', 'mujtaba', 'مجتبی', 'مجتبى')):
+            matched_actors.remove('khamenei')
 
         if not matched_actors:
             continue
@@ -3403,13 +3446,18 @@ CEASEFIRE_BREACH_TRIGGERS = [
     'ceasefire violated', 'ceasefire breach', 'ceasefire collapse', 'truce collapses',
     'truce breaks down', 'talks collapse', 'talks break down', 'negotiations collapse',
     'walks away from talks', 'deal collapses', 'mou collapse', 'deal in jeopardy',
-    'iran resumes enrichment', 'resumes enrichment', 'snapback', 'reimpose sanctions',
+    'iran resumes enrichment', 'resumes enrichment', 'snapback triggered', 'new snapback',
+    'reimpose sanctions',
     'strikes resume', 'israel strikes iran', 'us strikes iran', 'war resumes', 'back to war',
     'iran retaliates', 'iran vows revenge', 'iran threatens retaliation',
     'iran attacks ship', 'iran seizes tanker', 'attack on shipping', 'tanker seized',
     'iran strikes vessel', 'cargo ship attacked', 'hormuz mining',
     'israel will not leave lebanon', 'israel strikes lebanon',
     'irgc threatens', 'iran threatens to resume',
+    # v1.8.0 -- late-Oct breach drivers
+    'tanker hit a mine', 'tanker struck a mine', 'hit a naval mine', 'mine explosion',
+    'blockade enforcement', 'enforcing the blockade', 'strike options',
+    'geographically unrestricted', 'after the midterms',
 ]
 CEASEFIRE_CONSOLIDATION_TRIGGERS = [
     'ceasefire holds', 'truce holds', 'ceasefire extended', 'ceasefire extension',
@@ -3908,7 +3956,7 @@ def run_iran_rhetoric_scan(days=3):
         # Actors
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.0.0-iran-command-node',
+        'version': '1.8.0-iran-command-node',
     }
 
     # Save initial cache
@@ -4126,7 +4174,7 @@ def register_iran_rhetoric_routes(app):
             'theatre_escalation_color': '#6b7280',
             'actors': {},
             'message': 'First scan in progress — check back in 3-4 minutes',
-            'version': '1.0.0-iran-command-node',
+            'version': '1.8.0-iran-command-node',
         })
 
     @app.route('/api/rhetoric/iran/summary', methods=['GET'])
