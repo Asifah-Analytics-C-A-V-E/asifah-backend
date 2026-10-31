@@ -67,6 +67,13 @@ ENDPOINTS:
   GET /api/rhetoric/iran/history
 
 CHANGELOG:
+  v1.8.0 (2026-10-31): CEASEFIRE PHASE + DIRECTION. The Jun 2026 "60-day
+    ceasefire" read is re-anchored to the real ceasefire (8 Apr 2026, extended
+    indefinitely, day count shown) and split into four lanes -- Iranian threat
+    rhetoric, US/Israeli preparation, incidents, mediation -- with a 7-day
+    direction (building / easing / steady / unread) from a daily memory.
+    New vocabulary from late-Oct reporting ("geographically unrestricted",
+    Qatari mediators, Vance letter, naval mines, strike options briefed).
   v1.0.0 (2026-03-21): Initial build — command node architecture
 
 COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
@@ -3357,15 +3364,41 @@ def _detect_deescalation_context(articles, diplomatic_max_raw):
 
 
 # ============================================
-# CEASEFIRE TRAJECTORY (bidirectional 60-day-window read, Jun 2026)
+# CEASEFIRE PHASE + TRAJECTORY  (v1.8.0, Oct 31 2026)
 # --------------------------------------------------------------------
-# The MOU machinery above tracks the off-ramp's MATURITY (forward only). During
-# a bumpy 60-day ceasefire the honest read is BIDIRECTIONAL: weigh consolidation
-# (MOU maturing / milestones delivered) against breach (fraying / going hot) from
-# the SAME evidence, and surface a lean both ways. Estimative voice only --
-# 'indicates', 'consistent with', 'historically precedes'. No probabilities, no
-# dates, no 'will'. CONVERGENCE indicator, not a forecast.
+# Rachel (Oct 31): "we are in a ceasefire pattern with Iran but there is
+# readiness happening by the US (and Israeli) troops, widely reported -- and
+# [the Supreme Leader] threatened today ... -- so we should add NUANCE as to
+# where we are in a ceasefire and if rhetoric and prep is waxing or waning."
+#
+# The Jun 2026 read below was framed as a "60-day ceasefire" -- that window
+# closed months ago; the ceasefire took hold 8 Apr 2026 and was extended
+# indefinitely. The question a reader now has is not "is there fighting?" but
+# "where is this ceasefire, and is it getting closer to breaking or not?"
+#
+# v1.8.0 answers in four LANES, each from the article pool, each counted:
+#   RHETORIC     -- Iranian leadership/IRGC threat language (e.g. a "geographically
+#                   unrestricted" response; "beyond the region")
+#   PREPARATION  -- US/Israeli readiness reporting (strike options briefed,
+#                   airlift into Israeli/Gulf bases, munitions and air defences
+#                   moved in, plans "after the midterms") + the strike-window
+#                   detector's severity
+#   INCIDENTS    -- things that actually happened at sea or in the air
+#                   (mines, tanker explosions/seizures, strikes)
+#   DIPLOMACY    -- mediation actually moving (Qatar/Oman/Pakistan mediators,
+#                   letters, offers of direct talks, extensions)
+# plus the existing consolidation/breach weighing. Then a 7-day DIRECTION from
+# a daily memory (rhetoric:iran:ceasefire_history): building / easing / steady
+# / unread. A direction needs at least 3 prior days; until then it says
+# unread rather than guessing.
+#
+# Estimative voice only -- 'indicates', 'consistent with', 'historically
+# precedes'. No probabilities, no dates, no 'will'. Convergence, not prediction.
 # ============================================
+CEASEFIRE_START_DATE = '2026-04-08'      # Pakistan-brokered; extended indefinitely by Trump
+CEASEFIRE_HISTORY_KEY = 'rhetoric:iran:ceasefire_history'
+CEASEFIRE_HISTORY_TTL = 60 * 24 * 3600
+
 CEASEFIRE_BREACH_TRIGGERS = [
     'ceasefire violated', 'ceasefire breach', 'ceasefire collapse', 'truce collapses',
     'truce breaks down', 'talks collapse', 'talks break down', 'negotiations collapse',
@@ -3389,28 +3422,134 @@ CEASEFIRE_CONSOLIDATION_TRIGGERS = [
     'de-escalation', 'off-ramp',
 ]
 
+# ── v1.8.0 lanes ──────────────────────────────────────────────────────
+# Each lane is a list of phrases. An article counts once per lane.
+CEASEFIRE_LANES = {
+    'rhetoric': [
+        'geographically unrestricted', 'geographic boundaries', 'geographical boundaries',
+        'beyond the region', 'far beyond the region', 'broader geographical',
+        'engulf the region', 'open new fronts', 'new fronts against',
+        'crushing response', 'crushing blow', 'devastating response', 'regret it',
+        'target database', 'targets updated', 'all american bases', 'us bases in the region',
+        'will not remain silent', 'iran warns us', 'iran warns israel', 'khamenei warns',
+        'irgc warns', 'irgc threatens', 'iran threatens', 'supreme leader warns',
+        'many more surprises',
+    ],
+    'preparation': [
+        'options for renewed', 'military options', 'strike options', 'options briefed',
+        'plans to attack iran', 'plans to strike iran', 'joint plans', 'strike plans',
+        'after the midterms', 'after the midterm', 'cargo planes', 'airlift',
+        'nevatim', 'ovda', 'munitions', 'air defenses', 'air defences', 'thaad',
+        'patriot batteries', 'carrier strike group', 'bombers deployed', 'b-2',
+        'troops moved', 'repositioned', 'prepare for possible action',
+        'locked and loaded', 'pre-strike', 'centcom briefed',
+    ],
+    'incidents': [
+        'naval mine', 'hit a mine', 'struck a mine', 'strikes mine', 'mines in the strait',
+        'tanker explosion', 'tanker caught fire', 'tanker ablaze', 'supertanker',
+        'tanker seized', 'vessel seized', 'ship attacked', 'drone attack', 'missile attack',
+        'airstrike', 'air strike', 'strike on', 'shot down', 'intercepted',
+    ],
+    'diplomacy': [
+        'qatari mediators', 'qatar mediation', 'qatari mediation', 'omani mediators',
+        'oman mediation', 'pakistani mediation', 'munir', 'mediator', 'mediators',
+        'vance letter', 'vance offered', 'direct talks', 'proposal to iran',
+        'iran response to', 'talks in doha', 'talks in muscat', 'talks in islamabad',
+        'ceasefire extended', 'back-channel', 'negotiations resume', 'talks resume',
+        'envoy', 'seven conditions',
+    ],
+}
+
 _CEASEFIRE_DISCLAIMER = (' This is a CONVERGENCE indicator, NOT a probability of action; '
                          'the reader completes the inference.')
 
 
+def _ceasefire_day(now=None):
+    now = now or datetime.now(timezone.utc)
+    try:
+        d0 = datetime.strptime(CEASEFIRE_START_DATE, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        return max(0, (now - d0).days)
+    except Exception:
+        return None
+
+
+# Preparation and incident vocabulary is generic ("munitions", "airstrike");
+# the Iran pool also carries Lebanon/Yemen coverage. Those two lanes count an
+# article only when it is about Iran, the Gulf or Hormuz.
+_IRAN_CONTEXT = ('iran', 'tehran', 'irgc', 'hormuz', 'persian gulf', 'gulf of oman',
+                 'khamenei', 'islamic republic')
+_CONTEXT_LANES = ('preparation', 'incidents')
+
+
+def _lane_counts(pool):
+    out, examples = {}, {}
+    for lane, kws in CEASEFIRE_LANES.items():
+        n, ex = 0, []
+        for title, full in pool:
+            if lane in _CONTEXT_LANES and not any(c in full for c in _IRAN_CONTEXT):
+                continue
+            hit = next((kw for kw in kws if kw in full), None)
+            if hit:
+                n += 1
+                if len(ex) < 2 and title:
+                    ex.append(title[:140])
+        out[lane], examples[lane] = n, ex
+    return out, examples
+
+
+def _ceasefire_direction(today_rec):
+    """Store today's lane counts and compare with the previous 7 days.
+    'building' = pressure toward breaking (breach up and/or diplomacy down);
+    'easing'   = the reverse. Needs 3+ prior days; otherwise 'unread'.
+    Never overwrites the history if it could not be read (a failed read is
+    not day zero)."""
+    hist = _redis_get(CEASEFIRE_HISTORY_KEY)
+    read_ok = hist is not None or not (UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN)
+    hist = hist if isinstance(hist, list) else []
+    today = today_rec['date']
+    prior = [h for h in hist if isinstance(h, dict) and h.get('date') != today][-7:]
+
+    direction, detail = 'unread', 'fewer than 3 days of history -- direction not yet readable'
+    if len(prior) >= 3:
+        def _pressure(h):
+            ln = h.get('lanes') or {}
+            return (h.get('breach', 0) + min(ln.get('rhetoric', 0), 4)
+                    + min(ln.get('preparation', 0), 4) + min(ln.get('incidents', 0), 4)
+                    - h.get('forward', 0) - min(ln.get('diplomacy', 0), 4))
+        base = sum(_pressure(h) for h in prior) / float(len(prior))
+        now_p = _pressure(today_rec)
+        delta = round(now_p - base, 1)
+        if delta >= 2:
+            direction = 'building'
+        elif delta <= -2:
+            direction = 'easing'
+        else:
+            direction = 'steady'
+        detail = 'net pressure %+.1f against the %d-day average' % (delta, len(prior))
+
+    if read_ok:
+        hist = [h for h in hist if isinstance(h, dict) and h.get('date') != today] + [today_rec]
+        _redis_set(CEASEFIRE_HISTORY_KEY, hist[-30:], ttl=CEASEFIRE_HISTORY_TTL)
+    else:
+        direction, detail = 'unread', 'history store unreadable this cycle -- not overwritten'
+    return direction, detail
+
+
 def _compute_ceasefire_trajectory(articles, deesc_ctx, escalation_level,
                                   regional_level, strike_severity):
-    """Bidirectional 60-day-ceasefire read. Weighs CONSOLIDATION (MOU maturing /
-    milestones delivered) against BREACH (fraying / going hot) from the same
-    article pool, and returns an estimative lean both ways. Always returns a dict;
-    lean='quiet' when neither side carries signal."""
-    pool = [((a.get('title') or '') + ' ' + (a.get('description') or '')).lower()
-            for a in (articles or [])]
+    """Ceasefire PHASE (how it stands) + TRAJECTORY (which way it is moving).
+    Always returns a dict; lean='quiet' when neither side carries signal."""
+    pool = []
+    for a in (articles or []):
+        title = (a.get('title') or '')
+        pool.append((title, (title + ' ' + (a.get('description') or '')).lower()))
 
     def _hits(triggers):
-        c = 0
-        for t in pool:
-            if any(kw in t for kw in triggers):
-                c += 1
-        return c
+        return sum(1 for _t, full in pool if any(kw in full for kw in triggers))
 
     breach_hits = _hits(CEASEFIRE_BREACH_TRIGGERS)
     consol_hits = _hits(CEASEFIRE_CONSOLIDATION_TRIGGERS)
+    lanes, lane_examples = _lane_counts(pool)
 
     maturity   = deesc_ctx.get('maturity', 'none')
     milestones = deesc_ctx.get('milestones', []) or []
@@ -3419,7 +3558,6 @@ def _compute_ceasefire_trajectory(articles, deesc_ctx, escalation_level,
     MATURITY_WEIGHT = {'none': 0, 'framework': 1, 'signed': 2, 'implementing': 3}
 
     forward = MATURITY_WEIGHT.get(maturity, 0) + len(milestones) + min(consol_hits, 3)
-
     breach = len(flags) + min(breach_hits, 3)
     if contra:
         breach += 1
@@ -3429,11 +3567,20 @@ def _compute_ceasefire_trajectory(articles, deesc_ctx, escalation_level,
         breach += 2
     elif strike_severity == 'elevated':
         breach += 1
-    if escalation_level >= 5:                      # active conflict resuming
+    if escalation_level >= 5:
         breach += 1
+    # v1.8.0 -- preparation and incidents are breach-side evidence in their own
+    # right (capped so one busy news day cannot swamp the read).
+    if lanes.get('preparation', 0) >= 3:
+        breach += 1
+    if lanes.get('incidents', 0) >= 2:
+        breach += 1
+    # ...and mediation that is actually moving is forward-side evidence.
+    if lanes.get('diplomacy', 0) >= 2:
+        forward += 1
 
     net = forward - breach
-    if forward == 0 and breach == 0:
+    if forward == 0 and breach == 0 and not any(lanes.values()):
         lean = 'quiet'
     elif net >= 3:
         lean = 'consolidating'
@@ -3443,45 +3590,83 @@ def _compute_ceasefire_trajectory(articles, deesc_ctx, escalation_level,
         lean = 'breach_risk'
     elif net <= -1:
         lean = 'fraying'
-    else:  # net == 0 with signal on at least one side
+    else:
         lean = 'strained' if (forward > 0 and breach > 0) else ('holding' if forward else 'fraying')
+
+    day = _ceasefire_day()
+    today_rec = {'date': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                 'breach': breach, 'forward': forward, 'lanes': lanes, 'lean': lean}
+    try:
+        direction, direction_detail = _ceasefire_direction(today_rec)
+    except Exception as _de:
+        direction, direction_detail = 'unread', 'direction error: %s' % str(_de)[:80]
 
     flag_txt = ', '.join(x.replace('_', ' ') for x in flags)
     ms_txt   = ', '.join(x.replace('_', ' ') for x in milestones)
+    phase_txt = ('in effect since 8 Apr 2026 (day %d), extended indefinitely' % day
+                 if day is not None else 'in effect since 8 Apr 2026')
+
+    def _n(k):
+        c = lanes.get(k, 0)
+        return '%d report%s' % (c, '' if c == 1 else 's')
+    lane_bits = []
+    if lanes.get('rhetoric'):
+        lane_bits.append('Iranian threat language (%s)' % _n('rhetoric'))
+    if lanes.get('preparation'):
+        lane_bits.append('US/Israeli preparation (%s)' % _n('preparation'))
+    if lanes.get('incidents'):
+        lane_bits.append('incidents at sea or in the air (%s)' % _n('incidents'))
+    if lanes.get('diplomacy'):
+        lane_bits.append('mediation activity (%s)' % _n('diplomacy'))
+    lanes_txt = '; '.join(lane_bits)
+    dir_txt = {'building': 'pressure toward breaking is BUILDING against the past week',
+               'easing': 'pressure is EASING against the past week',
+               'steady': 'pressure is about level with the past week',
+               'unread': 'week-on-week direction not yet readable'}[direction]
 
     if lean == 'consolidating':
-        headline = 'Ceasefire trajectory: CONSOLIDATING'
-        detail = ('Pattern indicates the US-Iran MOU track maturing'
+        headline = 'Ceasefire: CONSOLIDATING'
+        detail = ('Pattern indicates the off-ramp maturing'
                   + (' -- delivered milestones (%s)' % ms_txt if ms_txt else '')
                   + '. Consolidation signals are outpacing breach signals this cycle.')
     elif lean == 'holding':
-        headline = 'Ceasefire trajectory: HOLDING'
+        headline = 'Ceasefire: HOLDING'
         detail = ('Pattern is consistent with an off-ramp that is present but not yet delivering -- '
                   'consolidation signals modestly outweigh breach signals.')
     elif lean == 'strained':
-        headline = 'Ceasefire trajectory: STRAINED (bumpy road)'
+        headline = 'Ceasefire: STRAINED'
         detail = ('Consolidation AND breach signals are active simultaneously'
                   + (' (breach drivers: %s)' % flag_txt if flag_txt else '')
-                  + '. The 60-day track is contested -- a pattern consistent with a ceasefire that '
-                    'could mature or break from the same evidence.')
+                  + ' -- a pattern consistent with a ceasefire that could mature or break from '
+                    'the same evidence.')
     elif lean == 'fraying':
-        headline = 'Ceasefire trajectory: FRAYING'
+        headline = 'Ceasefire: FRAYING'
         detail = ('Breach signals'
                   + (' (%s)' % flag_txt if flag_txt else '')
                   + ' are outpacing consolidation -- consistent with a ceasefire under increasing '
                     'strain, the pattern that has historically preceded a return to kinetic exchange.')
     elif lean == 'breach_risk':
-        headline = 'Ceasefire trajectory: BREACH-RISK'
+        headline = 'Ceasefire: BREACH-RISK'
         detail = ('Multiple signals that have historically preceded a ceasefire collapse are active '
                   'simultaneously'
                   + (' (%s)' % flag_txt if flag_txt else '')
                   + '; the consolidation signal is faint by comparison.')
-    else:  # quiet
-        headline = 'Ceasefire trajectory: QUIET'
+    else:
+        headline = 'Ceasefire: QUIET'
         detail = 'No fresh ceasefire-track signal in either direction this cycle.'
+
+    detail = ('Ceasefire %s. %s%s Direction: %s.'
+              % (phase_txt, detail, (' Evidence this cycle: %s.' % lanes_txt) if lanes_txt else '',
+                 dir_txt))
 
     return {
         'lean':                  lean,
+        'phase_since':           CEASEFIRE_START_DATE,
+        'phase_day':             day,
+        'direction':             direction,
+        'direction_detail':      direction_detail,
+        'lanes':                 lanes,
+        'lane_examples':         lane_examples,
         'forward_signal':        forward,
         'breach_signal':         breach,
         'net':                   net,
@@ -3624,14 +3809,14 @@ def run_iran_rhetoric_scan(days=3):
               f"composite={strike_window_state.get('composite_score')}, "
               f"signals={strike_window_state.get('active_signal_count', 0)}")
 
-    # ── Ceasefire trajectory (bidirectional 60-day-window read, Jun 2026) ──
+    # ── Ceasefire phase + trajectory (v1.8.0, Oct 31 2026; was the Jun 2026 60-day read) ──
     ceasefire_trajectory = _compute_ceasefire_trajectory(
         articles, deesc_ctx, max_level, max_regional,
         strike_window_state.get('severity'))
-    if ceasefire_trajectory['lean'] not in ('quiet', 'holding'):
-        print(f"[Iran Rhetoric] (ceasefire) trajectory={ceasefire_trajectory['lean']} "
-              f"(forward={ceasefire_trajectory['forward_signal']}, "
-              f"breach={ceasefire_trajectory['breach_signal']})")
+    print(f"[Iran Rhetoric] (ceasefire) day {ceasefire_trajectory.get('phase_day')}: "
+          f"{ceasefire_trajectory['lean']}, {ceasefire_trajectory['direction']} "
+          f"(forward={ceasefire_trajectory['forward_signal']}, "
+          f"breach={ceasefire_trajectory['breach_signal']}, lanes={ceasefire_trajectory['lanes']})")
 
     # Theatre specificity
     all_specs = theatre_summary.get('all_specificity_scores', [])

@@ -5,6 +5,18 @@ ASIFAH ANALYTICS — Iran Strike Window Detector v1.1.0
 ================================================================
 
 Built May 22 2026.
+Updated Oct 31 2026 (v1.2.0): (1) CALENDAR HONESTY -- the religious-date
+list ended in September 2026, so the multiplier had silently read "no window"
+for six weeks. Extended to mid-2027 (incl. Nowruz, Ramadan, Eid, Hanukkah)
+and the result now says when the list runs out (calendar_coverage) instead
+of reading 'inactive'. (2) PREPARATION FROM THE ARTICLE POOL -- the
+pre-strike signal only fired when the military tracker matched one of a few
+exact phrases ("pentagon orders deployment"); late-Oct reporting (strike
+options briefed, cargo planes into Nevatim/Ovda, munitions and air defences
+moved, plans "after the midterms") matched none. The detector now also
+scans its own pool, Iran-context-gated. (3) Diplomatic suppression learns
+the late-Oct channel: Qatari mediators, the Vance letter, offers of direct
+talks.
 Updated May 24 2026 (v1.1.0): Added DIPLOMATIC SUPPRESSION FACTOR —
 a negative multiplier that reduces composite score when active Iran-US
 diplomatic-track signals are detected. Reads Iran rhetoric ceasefire_level
@@ -114,7 +126,7 @@ UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('U
 STRIKE_WINDOW_CACHE_KEY  = 'iran_strike_window:current'
 STRIKE_WINDOW_CACHE_TTL  = 6 * 3600   # 6h
 
-DETECTOR_VERSION = '1.1.0'
+DETECTOR_VERSION = '1.2.0'
 DEFAULT_HOURS_BACK = 48   # 2-day look-back for environmental signals
 
 OSINT_SIGNAL_WEIGHT  = 1.0
@@ -291,6 +303,12 @@ DIPLOMATIC_SUPPRESSION_KEYWORDS = [
     'iran us encouraging progress', 'final understanding iran',
     'iran nuclear talks resume', 'iran nuclear talks restart',
     'iran ceasefire extension', 'trump extends iran ceasefire',
+    # v1.2.0 (Oct 31 2026) -- the late-Oct channel: Qatar carries the Vance
+    # letter (delivered Oct 26), Qatari mediators back in Tehran Oct 30.
+    'qatari mediators', 'qatari mediation', 'qatar mediates iran',
+    'mediators return to tehran', 'vance letter', 'vance offered direct talks',
+    'vance proposes direct talks', 'direct talks with iran', 'rezaei vance',
+    'oman mediation iran', 'iran responds to us proposal',
     # Hormuz reopening agreement language
     'hormuz reopening agreement', 'iran hormuz deal',
     'iran agrees hormuz', 'iran us hormuz agreement',
@@ -453,20 +471,48 @@ def _is_us_long_weekend(now=None):
     return {'active': False}
 
 
+# v1.2.0 -- one dated list, extended to mid-2027. Islamic dates depend on moon
+# sighting and can shift by a day; Nowruz (20/21 Mar) matters for Iran in its
+# own right. EXTEND THIS LIST before RELIGIOUS_CALENDAR_ENDS -- the result
+# reports calendar_coverage so an expired list is visible, not silent.
+RELIGIOUS_DATES = [
+    ('Eid al-Adha',       datetime(2026, 5, 27, tzinfo=timezone.utc)),
+    ('Hajj (begins)',     datetime(2026, 5, 24, tzinfo=timezone.utc)),
+    ('Hajj (ends)',       datetime(2026, 5, 29, tzinfo=timezone.utc)),
+    ('Ashura',            datetime(2026, 7, 15, tzinfo=timezone.utc)),
+    ("Tisha B'Av",        datetime(2026, 7, 23, tzinfo=timezone.utc)),
+    ('Rosh Hashanah',     datetime(2026, 9, 12, tzinfo=timezone.utc)),
+    ('Yom Kippur',        datetime(2026, 9, 21, tzinfo=timezone.utc)),
+    ('Mawlid al-Nabi',    datetime(2026, 9, 23, tzinfo=timezone.utc)),
+    ('Hanukkah (begins)', datetime(2026, 12, 4, tzinfo=timezone.utc)),
+    ('Ramadan (begins)',  datetime(2027, 2, 8, tzinfo=timezone.utc)),
+    ('Eid al-Fitr',       datetime(2027, 3, 10, tzinfo=timezone.utc)),
+    ('Nowruz',            datetime(2027, 3, 21, tzinfo=timezone.utc)),
+    ('Passover (begins)', datetime(2027, 4, 21, tzinfo=timezone.utc)),
+    ('Hajj (begins)',     datetime(2027, 5, 14, tzinfo=timezone.utc)),
+    ('Eid al-Adha',       datetime(2027, 5, 16, tzinfo=timezone.utc)),
+    ('Ashura',            datetime(2027, 6, 15, tzinfo=timezone.utc)),
+]
+RELIGIOUS_CALENDAR_ENDS = max(d for _n, d in RELIGIOUS_DATES)
+
+
+def _calendar_coverage(now=None):
+    now = now or datetime.now(timezone.utc)
+    days_left = (RELIGIOUS_CALENDAR_ENDS - now).days
+    return {'list_ends': RELIGIOUS_CALENDAR_ENDS.strftime('%Y-%m-%d'),
+            'days_left': days_left,
+            'status': ('expired -- religious window UNREAD' if days_left < 0
+                       else 'extend soon' if days_left < 45 else 'ok')}
+
+
 def _is_religious_window(now=None):
     now = now or datetime.now(timezone.utc)
-    religious_dates_2026 = [
-        ('Eid al-Adha',       datetime(2026, 5, 27, tzinfo=timezone.utc)),
-        ('Hajj (begins)',     datetime(2026, 5, 24, tzinfo=timezone.utc)),
-        ('Hajj (ends)',       datetime(2026, 5, 29, tzinfo=timezone.utc)),
-        ('Ashura',            datetime(2026, 7, 15, tzinfo=timezone.utc)),
-        ("Tisha B'Av",        datetime(2026, 7, 23, tzinfo=timezone.utc)),
-        ('Mawlid al-Nabi',    datetime(2026, 9, 23, tzinfo=timezone.utc)),
-        ('Rosh Hashanah',     datetime(2026, 9, 12, tzinfo=timezone.utc)),
-        ('Yom Kippur',        datetime(2026, 9, 21, tzinfo=timezone.utc)),
-    ]
+    if now > RELIGIOUS_CALENDAR_ENDS + timedelta(days=3):
+        return {'active': False, 'unread': True,
+                'rationale': 'Religious calendar list ended %s -- window unread, not inactive.'
+                             % RELIGIOUS_CALENDAR_ENDS.strftime('%Y-%m-%d')}
 
-    for name, date in religious_dates_2026:
+    for name, date in RELIGIOUS_DATES:
         days_diff = (date - now).days
         if 0 <= days_diff <= 7:
             return {
@@ -696,9 +742,52 @@ def detect_regional_notams(articles):
     }
 
 
-def detect_pre_strike_posture():
+# v1.2.0 -- preparation vocabulary read straight from the pool (Iran-context
+# gated), so the signal no longer depends on the military tracker matching a
+# handful of exact phrases.
+PREPARATION_KEYWORDS = [
+    'options for renewed', 'military options', 'strike options', 'options briefed',
+    'plans to attack iran', 'plans to strike iran', 'joint plans', 'strike plans',
+    'after the midterms', 'cargo planes', 'nevatim', 'ovda', 'munitions',
+    'air defenses', 'air defences', 'thaad', 'patriot batteries', 'carrier strike group',
+    'bombers deployed', 'troops moved', 'repositioned', 'prepare for possible action',
+    'locked and loaded',
+]
+_IRAN_CTX = ('iran', 'tehran', 'irgc', 'hormuz', 'persian gulf')
+
+
+def _preparation_from_pool(articles):
+    hits = []
+    for art in articles or []:
+        t = _article_text(art)
+        if not t or not any(c in t for c in _IRAN_CTX):
+            continue
+        kw = next((k for k in PREPARATION_KEYWORDS if k in t), None)
+        if kw:
+            hits.append({'article': art, 'keyword': kw})
+    return hits
+
+
+def detect_pre_strike_posture(articles=None):
     fp = _read_iran_kinetic_fingerprint()
+    pool_hits = _preparation_from_pool(articles)
     if not fp.get('present'):
+        if len(pool_hits) >= 2:
+            return {
+                'active': True, 'confidence': 'osint',
+                'weight': OSINT_SIGNAL_WEIGHT * (1.0 if len(pool_hits) >= 4 else 0.7),
+                'severity': 'high' if len(pool_hits) >= 4 else 'elevated',
+                'pattern': 'reported_preparation',
+                'matched_phrases': sorted({h['keyword'] for h in pool_hits})[:6],
+                'top_matches': [{'title': (h['article'].get('title') or '')[:140],
+                                 'url': h['article'].get('url', ''),
+                                 'source': _article_source(h['article']),
+                                 'keyword': h['keyword']} for h in pool_hits[:4]],
+                'rationale': ('%d reports of US/Israeli preparation for possible action against '
+                              'Iran (strike options, airlift into regional bases, munitions or '
+                              'air defences moved). Military tracker fingerprint not lit.'
+                              % len(pool_hits)),
+            }
         return {'active': False}
 
     severity = fp.get('severity', 'elevated')
@@ -1073,7 +1162,7 @@ def run_strike_window_detection(hours_back=DEFAULT_HOURS_BACK, extra_articles=No
     signals = {
         'iran_airspace':       detect_iran_airspace(articles),
         'regional_notams':     detect_regional_notams(articles),
-        'pre_strike_posture':  detect_pre_strike_posture(),
+        'pre_strike_posture':  detect_pre_strike_posture(articles),
         'embassy_posture':     detect_embassy_posture(),
         'adversary_defensive': detect_adversary_defensive(articles),
         'principal_friction':  detect_principal_friction(articles),
@@ -1172,6 +1261,7 @@ def run_strike_window_detection(hours_back=DEFAULT_HOURS_BACK, extra_articles=No
         'calendar_multipliers': calendar_multipliers,
         # v1.1.0 — diplomatic suppression transparency
         'diplomatic_suppression': diplomatic_suppression,
+        'calendar_coverage': _calendar_coverage(now),
         'base_score': round(base_score, 2),
         'pre_suppression_multiplier': round(pre_suppression_multiplier, 2),
         'multiplier_total': round(multiplier_total, 2),

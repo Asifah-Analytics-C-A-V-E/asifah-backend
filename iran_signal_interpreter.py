@@ -1,7 +1,14 @@
 """
 iran_signal_interpreter.py
 Asifah Analytics -- ME Backend Module
-v1.1.0 -- May 17, 2026
+v1.2.0 -- Oct 31, 2026 (v1.1.0 May 17, 2026)
+
+v1.2 ADDS (Oct 31 2026): CEASEFIRE PHASE SIGNAL. build_top_signals emits
+'ceasefire_phase' -- the 8 Apr ceasefire's day count, lean (holding /
+strained / fraying ...) and week-on-week direction, with the evidence lanes
+(threat rhetoric, US/Israeli preparation, incidents, mediation) from the
+tracker v1.8.0. The diplomatic_active long_text no longer hardcodes
+"Witkoff envoy / Muscat back-channel / JCPOA framing detected".
 
 Signal interpretation engine for the Iran Rhetoric Tracker.
 Iran is the COMMAND NODE -- the analytical frame is fundamentally
@@ -921,7 +928,7 @@ def _build_so_what(scan_data, red_lines_triggered, historical_matches):
             'to ACTIVE projection tier.'
         )
 
-    # ── Ceasefire trajectory (bidirectional 60-day-window read, Jun 2026) ──
+    # ── Ceasefire phase + trajectory (tracker v1.8.0; was the Jun 2026 60-day read) ──
     # Surfaces the Iran tracker's ceasefire_trajectory -- a read that weighs
     # consolidation (MOU maturing) against breach (going hot) from the same
     # evidence. Estimative voice; the trajectory prose is already doctrine-clean.
@@ -1414,6 +1421,8 @@ def build_top_signals(scan_data):
     rl_block      = interp.get('red_lines') or {}
     triggered_rls = rl_block.get('triggered') or []
 
+    _traj           = scan_data.get('ceasefire_trajectory') or {}      # tracker v1.8.0
+    _traj_ex        = _traj.get('lane_examples') or {}
     theatre_level   = int(scan_data.get('theatre_level', 0) or 0)
     theatre_score   = int(scan_data.get('theatre_score', 0) or 0)
     irgc_lvl        = int(scan_data.get('irgc_direct_level', 0) or 0)
@@ -1684,10 +1693,52 @@ def build_top_signals(scan_data):
             'color':      '#10b981',
             'short_text': (f'{IRAN_FLAG} IRAN: Diplomatic track L{ceasefire_lvl} '
                            f'({dipl_label})'),
+            # Oct 31 2026 -- the long_text used to hardcode "Witkoff envoy / Muscat
+            # back-channel / JCPOA framing detected" whatever was actually seen
+            # (by late Oct the live channel was Qatari mediators). It now names
+            # the mediation reporting the tracker actually counted, if any.
             'long_text':  (f'{IRAN_FLAG} IRAN diplomatic momentum L{ceasefire_lvl} '
-                           f'— {dipl_label}. Witkoff envoy / Muscat back-channel '
-                           f'/ JCPOA framing detected. Modifier: '
-                           f'{scan_data.get("diplomatic_modifier", 0)} pts.'),
+                           f'— {dipl_label}.'
+                           + (f' Mediation reporting this cycle: '
+                              f'{"; ".join(_traj_ex.get("diplomacy", [])[:2])}.'
+                              if _traj_ex.get('diplomacy') else '')),
+        })
+
+    # ── 11b. Ceasefire phase + direction (v2.1, Oct 31 2026) ────────
+    # Where the 8 Apr ceasefire stands and which way it is moving, with the
+    # four evidence lanes. This is the read a reader actually wants on Iran
+    # right now ("is this getting closer to breaking?"), so it outranks the
+    # bare diplomatic-track level.
+    if _traj.get('lean') and _traj.get('lean') != 'quiet':
+        _lean = _traj['lean']
+        _dir = _traj.get('direction', 'unread')
+        _lvl = {'consolidating': 2, 'holding': 3, 'strained': 3,
+                'fraying': 4, 'breach_risk': 4}.get(_lean, 3)
+        _dir_words = {'building': 'pressure building', 'easing': 'pressure easing',
+                      'steady': 'steady on the week', 'unread': 'direction not yet read'}[_dir]
+        _day = _traj.get('phase_day')
+        _ln = _traj.get('lanes') or {}
+        signals.append({
+            'priority':   12 if _lean in ('fraying', 'breach_risk') or _dir == 'building' else 10,
+            'category':   'ceasefire_phase',
+            'pressure_type': 'diplomatic',
+            'axes':       ['diplomatic', 'kinetic'],
+            'theatre':    'iran',
+            'level':      _lvl,
+            'icon':       '🕊️' if _lean in ('consolidating', 'holding') else '⏳',
+            'color':      '#f97316' if _lvl >= 4 else '#f59e0b',
+            'short_text': (f'{IRAN_FLAG} IRAN: ceasefire day {_day} (since Apr 8) — '
+                           f'{_lean.replace("_", "-")}, {_dir_words}'),
+            'long_text':  (_traj.get('detail', '').split(' This is a CONVERGENCE')[0]
+                           + (' Threat-language examples: '
+                              + ' | '.join(_traj_ex.get('rhetoric', [])[:1]) + '.'
+                              if _traj_ex.get('rhetoric') else '')
+                           + (' Preparation examples: '
+                              + ' | '.join(_traj_ex.get('preparation', [])[:1]) + '.'
+                              if _traj_ex.get('preparation') else '')),
+            'ceasefire_lanes': _ln,
+            'ceasefire_direction': _dir,
+            'phase_since': _traj.get('phase_since'),
         })
 
     # ── 12. Commodity pressure (Phase 2B) ────────────────────────────

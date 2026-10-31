@@ -4,6 +4,8 @@ Asifah Analytics -- ME Backend Module
 v2.4.1  (Oct 11 2026; v2.4.0 Oct 5 2026)
 
 VERSION HISTORY AT A GLANCE
+  v2.6.1 Oct 31 2026 -- Iran 'ceasefire_phase' signal mapped to diplomatic +
+                       kinetic axes.
   v2.6.0 Oct 31 2026 -- Lebanon humanitarian signal quotes CURRENT displacement
                        (OCHA ~300K, dated), not the April PEAK (1.0M) as if
                        current; every figure carries its date; a lapsed IPC
@@ -73,7 +75,7 @@ import os
 # The marker itself fires at the BOTTOM of this file, because _CANON_AVAILABLE
 # does not exist yet up here -- printing it at import-time would NameError.
 # ════════════════════════════════════════════════════════════════════
-BLUF_VERSION = '2.6.0'
+BLUF_VERSION = '2.6.1'
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -2409,6 +2411,10 @@ _ME_REGIONAL_AXIS_SETS = {
     # never kinetic. Explicit here as well as via the signal's pressure_type.
     'government_formation': ['diplomatic'],
     'diplomatic_track_active': ['diplomatic'], 'diplomatic_active': ['diplomatic'],
+    # v2.6.1 (Oct 31 2026) -- Iran tracker v1.8.0: where the 8 Apr ceasefire
+    # stands and which way it is moving. Diplomatic first; kinetic because the
+    # question it answers is whether fighting resumes.
+    'ceasefire_phase': ['diplomatic', 'kinetic'],
     'green_line_active': ['diplomatic'], 'mediation': ['diplomatic'],
     'ceasefire': ['diplomatic'], 'humanitarian': ['humanitarian'],
     'humanitarian_lebanon': ['humanitarian'], 'displacement': ['humanitarian'],
