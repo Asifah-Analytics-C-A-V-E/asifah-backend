@@ -16,7 +16,7 @@ Estimative voice. Convergence, not prediction. The reader completes the inferenc
 # v1.1.0: `import re` and `from datetime import ...` removed -- neither name
 # was referenced anywhere in this module.
 
-MODULE_VERSION = '1.3.1'
+MODULE_VERSION = '1.4.0'   # Oct 31 2026: claim labelling, holy cities, US anchor vector, current frame
 
 LEVEL_ORDER = ['low', 'normal', 'elevated', 'high', 'surge']
 ESCALATORY_LEVELS = {'elevated', 'high', 'surge'}
@@ -28,12 +28,16 @@ VECTOR_NAMES = {
     'normalization_watch':     'Normalization Watch',
     'domestic_transformation': 'Domestic Transformation',
     'guarantor_response':      'Guarantor Response',
+    'us_security_anchor':      'US Security Anchor',
 }
 
 VECTOR_MEMBERS = {
     'kinetic_inbound':         ('houthi_yemen', 'saudi_mod_airdefense', 'iran_saudi'),
     'energy_infrastructure':   ('aramco_energy', 'opec_policy'),
-    'normalization_watch':     ('accords_normalization', 'us_saudi', 'gcc_saudi'),
+    'normalization_watch':     ('accords_normalization', 'gcc_saudi'),
+    # v1.4.0: us_saudi has its own vector (tracker v2.3.0) -- US drawdown and
+    # terror-designation traffic is security news, not normalization.
+    'us_security_anchor':      ('us_saudi',),
     'domestic_transformation': ('royal_court_mbs', 'vision2030_domestic'),
     # v1.3.0: the two vectors/actors added 11 + 18 Oct had no members here, so
     # so-what "Driving this scan" never named them.
@@ -45,6 +49,9 @@ TRIPWIRE_LABELS = {
     'israel_defense_transfer': 'Israeli Defence Transfer',
     'hormuz_closure':          'Hormuz Closure',
     'hajj_mass_casualty':      'Hajj Mass Casualty',
+    'holy_city_targeted':      'Fire Toward the Holy Cities',
+    'infrastructure_strike':   'Energy-Infrastructure Strike',
+    'houthi_salvo':            'Houthi Salvo on Saudi Territory',
 }
 
 # Actor display names for prose (cleaner than the formal `name` field)
@@ -207,10 +214,22 @@ def build_top_signals(actor_summaries, tripwires_global, commodity_pressure, cro
         _conf = ('confirmed' if any(t.get('confirmation') == 'confirmed' for t in _same)
                  else next((t.get('confirmation') for t in _same if t.get('confirmation')), None))
         _chans = sorted({c for t in _same for c in (t.get('claim_channels') or [])})
+        # v1.4.0 Oct 31 2026: a CLAIMED event says so in the headline and does
+        # not sit at surge. Live: the Houthi Ras Tanura claim (27 Oct, never
+        # confirmed by Riyadh) rode up as "Tripwire: Infrastructure Strike" at
+        # surge -- and the BLUF reads short_text, not the confirmation field.
+        _lvl = tw.get('severity', 'high')
+        if _conf == 'claim_sourced':
+            short += ' (claimed, not confirmed)'
+            if _lvl == 'surge':
+                _lvl = 'high'
+            long_text = ('CLAIM, NOT CONFIRMED: every report that fired this tripwire is either a '
+                         'claim channel or a sentence attributing the event to the attacking side. '
+                         'Labelled, not suppressed -- a claim is itself rhetoric. ' + long_text)
         signals.append({
             'short_text': short,
             'long_text':  long_text,
-            'level':      tw.get('severity', 'high'),
+            'level':      _lvl,
             'type':       'tripwire',
             'actor':      actor_id,
             'sources':    sources,
@@ -341,6 +360,14 @@ def _tripwire_prose(tw_id, actor_id):
             "Mecca Pact; its deployment answers the pact's own question -- does an attack on Saudi Arabia "
             "pull in third parties -- from OUTSIDE the treaty. Read it against Turkiye and Pakistan: if the "
             "outsider arrives before the guarantors move, the pact is being priced by its absence."),
+        'holy_city_targeted': (
+            "Inbound fire reported toward the holy cities (Makkah / Madinah). This is a different event "
+            "class from a salvo on Riyadh: it is the Custodian-legitimacy story, and for a defence pact "
+            "NAMED for Mecca it is the framing test -- whether Muslim-majority guarantors read the "
+            "Houthi campaign as an attack on Islam's holiest sites or as a Yemen war. Two cautions: "
+            "Makkah is also a province (Jeddah, Taif), so 'targeting Makkah' in an intercept statement "
+            "need not mean the holy city; and the Houthis denied targeting the holy city in Sep 2026. "
+            "Watch the guarantors' language, not just the intercepts."),
         'hajj_mass_casualty': (
             "Hajj mass-casualty signals at tripwire confidence -- a Custodian-legitimacy event class. "
             "NOTE: Hajj-window timing itself is a calendar MULTIPLIER on other tripwires, never a "
@@ -597,7 +624,7 @@ def build_executive_summary(actor_summaries, vector_scores, vector_levels, tripw
         parts.append("Active vectors: " + ", ".join(hot_vecs).lower() +
                      (" -- driven by " + ", ".join(hot_actors[:3]) + "." if hot_actors else "."))
     else:
-        parts.append("All four vectors at baseline.")
+        parts.append("All vectors at baseline.")
     # standing frame
     _iran = (asum.get('iran_saudi') or {}).get('level', 'low')
     _norm = (asum.get('accords_normalization') or {}).get('level', 'low')
@@ -606,8 +633,11 @@ def build_executive_summary(actor_summaries, vector_scores, vector_levels, tripw
                      "pattern: Riyadh pricing both the Iran detente and the Israel signature path in the "
                      "same window.")
     else:
-        parts.append("Friction-tier node with detente shim: Iran friction reads against the Beijing-2023 "
-                     "track; the Accords drift axis stays live. Convergence read, not prediction.")
+        # v1.4.0: the Beijing-2023 detente frame was retired as an anchor on
+        # 11 Oct (war with Iran, Houthi fire on Riyadh); this line still used it.
+        parts.append("Mecca Pact anchor under Houthi fire: the read is who shows up for Riyadh -- the "
+                     "pact guarantors, Egypt from outside it, or the US. The Accords holdout stays "
+                     "anchored by the Palestinian file. Convergence read, not prediction.")
     return " ".join(parts)
 
 
@@ -808,6 +838,12 @@ def build_so_what_factor(actor_summaries, vector_scores, vector_levels, tripwire
             "tests the pact; non-signatory movement (Egypt) tests the region around it. The Mecca Pact "
             "card carries the measured reading. Confirmation gauges: deployment and basing statements, "
             "DG ISPR, transport-aircraft and air-defence arrivals.", 0.88),
+        'us_security_anchor': ("US security anchor at {lvl}. What it means: US-Saudi traffic is heavy, "
+            "and the direction is the whole read -- arms, intercept support and pact text mean the "
+            "incumbent guarantor is leaning in; ordered departure and terror-designation delays mean it "
+            "is managing exposure. Read against the Mecca Pact card: the question is who shows up for "
+            "Riyadh, and the US is the guarantor the region has priced for 50 years. Confirmation "
+            "gauges: State/DoD posture announcements, interceptor deliveries, embassy status.", 0.86),
     }
     for vec, (txt, w) in CHAINS.items():
         l = lv.get(vec)
@@ -828,9 +864,9 @@ def build_so_what_factor(actor_summaries, vector_scores, vector_levels, tripwire
 
     if not bullets:
         bullets.append({'weight': 0.3, 'bullet':
-            "All four vectors at baseline this scan. Baseline for a friction-tier node still means the "
-            "detente shim is load-bearing and the Accords drift axis stays live. Quiet is a posture, not "
-            "an absence."})
+            "All vectors at baseline this scan. For the Mecca Pact anchor, quiet means no strike cycle "
+            "is testing the guarantors this week; the Accords holdout stays anchored by the Palestinian "
+            "file. Quiet is a posture, not an absence."})
     bullets.sort(key=lambda b: -b['weight'])
     return bullets[:6]
 

@@ -1,5 +1,8 @@
 """
-rhetoric_tracker_saudi_arabia.py -- Asifah Analytics ME Backend -- v2.1.0 Oct 18 2026
+rhetoric_tracker_saudi_arabia.py -- Asifah Analytics ME Backend -- v2.3.0 Oct 31 2026
+(v2.3.0: pact-name/minister-title tripwire neutralizer, claim-attribution
+ confirmation, holy_city_targeted, US security anchor vector, Mecca Pact lanes,
+ Egypt/pact feeds, NewsAPI via gateway; v2.1.0 Oct 18 2026)
 (v2.0.0 Oct 11 2026 matcher/gate/Mecca Pact; v1.0.0 Jul 2026)
 FRICTION-TIER TRACKER with DETENTE SHIM (Iran wheel step 5, per Jun 28 scoping):
 Saudi Arabia sits on the Iran wheel as friction-tier WITH an active detente track
@@ -19,6 +22,7 @@ MECCA PACT: Saudi Arabia · Turkiye · Pakistan (signed Aug 2026; collective
   Pakistan is a guarantor ACTOR, not a hub.
 VECTORS (4 -- these keys ARE the saudi_arabia-stability.html gauge contract):
   kinetic_inbound, energy_infrastructure, normalization_watch, domestic_transformation
+  (+ guarantor_response 11 Oct, us_security_anchor 31 Oct -- rhetoric page only)
 CALENDAR: Hajj window = timing MULTIPLIER on kinetic/mass-casualty tripwires
   (Black Swan doctrine: calendar factors amplify, never signal alone).
 EMITS: rhetoric:saudi_arabia:latest + crosstheater:saudi_arabia:fingerprint
@@ -30,7 +34,7 @@ import os
 import re
 import json
 
-MODULE_VERSION = '2.2.2'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.3.0'   # ONE version string -- every payload/debug field reads this
 import time
 import threading
 import traceback
@@ -145,7 +149,16 @@ except ImportError:
 # ============================================
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
-NEWSAPI_KEY         = os.environ.get('NEWSAPI_KEY')
+NEWSAPI_KEY         = os.environ.get('NEWSAPI_KEY')   # legacy; deleted from Render 18 Oct
+# v2.3.0 Oct 31 2026: NewsAPI goes through the shared gateway. The 18 Oct
+# gateway rollout deleted NEWSAPI_KEY from Render, so this tracker's direct
+# calls have skipped silently ever since (live 31 Oct: newsapi 0, GDELT 0/6
+# throttled, Brave 0 -- the scan ran on 138 RSS items plus Telegram).
+try:
+    from newsapi_gateway import newsapi_fetch_probed as _newsapi_gw
+except Exception:
+    _newsapi_gw = None
+_NEWSAPI_HEALTH = {'queries': 0, 'sensed': 0, 'articles': 0, 'not_sensed': {}}
 BRAVE_API_KEY       = os.environ.get('BRAVE_API_KEY')
 
 CACHE_TTL_HOURS                = 12
@@ -350,6 +363,11 @@ ACTORS = {
                      'egypt defense assistance saudi', 'egyptian military transport saudi',
                      'egyptian parliament troops', 'egypt national defense council saudi',
                      'sisi defend saudi',
+                     # v2.3.0: verbatim 21-26 Oct headlines --
+                     #   "Egypt's parliament authorizes military support for Saudi Arabia" (AP)
+                     #   "Sisi says Egypt to 'defend Saudi territory' and will not attack Yemen" (Reuters)
+                     'egypt military support saudi', 'egypt parliament authorizes saudi',
+                     'sisi saudi territory', 'egyptian deployment saudi',
                      '\u0642\u0648\u0627\u062a \u0645\u0635\u0631\u064a\u0629',     # AR  Egyptian forces
                      '\u0645\u0635\u0631 \u0627\u0644\u062f\u0641\u0627\u0639 \u0639\u0646 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629'],  # AR  Egypt + defend + Saudi
         'baseline_statements_per_week': 2,
@@ -449,9 +467,11 @@ ACTORS = {
         'name': 'US-Saudi Track', 'flag': '🇺🇸', 'icon': '🛡️', 'color': '#64748b',
         'role': 'Ally anchor -- security guarantees, arms, strategic pacts',
         'description': 'US-Saudi statements: defense-pact negotiations, arms packages, security-guarantee language, presidential visits. The security-guarantee question couples directly to the normalization file.',
-        'vector': 'normalization_watch',
+        'vector': 'us_security_anchor',
         'keywords': ['us saudi','saudi defense pact','us saudi security','saudi arms deal us',
-                     'biden saudi','trump saudi','us saudi agreement','saudi f-35','american troops saudi'],
+                     'biden saudi','trump saudi','us saudi agreement','saudi f-35','american troops saudi',
+                     # v2.3.0: the drawdown is the US story this month (ordered departure 21 Oct)
+                     'ordered departure saudi', 'non-emergency staff saudi', 'us embassy riyadh'],
         'baseline_statements_per_week': 5,
     },
 }
@@ -460,13 +480,18 @@ ACTORS = {
 DOMESTIC_ACTORS = ['royal_court_mbs', 'vision2030_domestic', 'saudi_mod_airdefense', 'aramco_energy', 'opec_policy', 'gcc_saudi']
 EXTERNAL_ACTORS = ['houthi_yemen', 'iran_saudi', 'accords_normalization', 'us_saudi']
 RESOURCE_ACTORS = ['aramco_energy', 'opec_policy']
-ALIGNMENT_ACTORS = {'accords_normalization': 'normalization_watch', 'us_saudi': 'normalization_watch'}
+ALIGNMENT_ACTORS = {'accords_normalization': 'normalization_watch', 'us_saudi': 'us_security_anchor'}
 
 # Vector groupings -- these keys ARE the saudi_arabia-stability.html gauge contract
 VECTOR_GROUPS = {
     'kinetic_inbound':         ['houthi_yemen', 'saudi_mod_airdefense', 'iran_saudi'],
     'energy_infrastructure':   ['aramco_energy', 'opec_policy'],
-    'normalization_watch':     ['accords_normalization', 'us_saudi', 'gcc_saudi'],
+    # v2.3.0 Oct 31 2026: us_saudi moved OUT. Live: normalization_watch read
+    # SURGE on the US ordered departure, a Houthi terror-designation op-ed and
+    # G20 Iran talks -- security traffic, not Israel normalization. The
+    # signal text then told the ME BLUF 'normalization watch' was hot in a war.
+    'normalization_watch':     ['accords_normalization', 'gcc_saudi'],
+    'us_security_anchor':      ['us_saudi'],
     'domestic_transformation': ['royal_court_mbs', 'vision2030_domestic'],
     # NEW 11 Oct 2026. The question the Mecca Pact creates: does an attack on
     # Saudi Arabia pull in third parties, and do the guarantors' words move
@@ -495,7 +520,13 @@ TRIPWIRES = {
                      # Verb-anchored to the Houthis so explainers ("How Saudi Aramco
                      # restores operations after attacks") stay out.
                      'houthi strike aramco', 'houthi attack aramco', 'houthi drone aramco',
-                     'houthi missile aramco'],
+                     'houthi missile aramco',
+                     # v2.3.0: the 27-29 Oct wire wording ("Houthis say they hit Saudi
+                     # Ras Tanura oil refinery with missile") matched nothing. These
+                     # fire, and the claim test then labels the attribution honestly.
+                     'hit ras tanura', 'struck ras tanura', 'ras tanura strike',
+                     'ras tanura missile', 'ras tanura drone', 'hit abqaiq',
+                     'struck abqaiq', 'abqaiq strike', 'abqaiq missile', 'abqaiq drone'],
         'severity': 'surge',
         'note': 'Abqaiq-class energy-infrastructure strike -- the 2019 precedent halved output in a day.',
     },
@@ -595,10 +626,33 @@ TRIPWIRES = {
         'severity': 'high',
         'note': 'Detente-shim rupture -- friction tier loses its brake.',
     },
+    # v2.3.0 Oct 31 2026: CASUALTY-ANCHORED. Live: "the Mecca Pact delegation
+    # ... Houthi attacks" put 'mecca' + 'attacks' in one sentence and fired a
+    # SURGE Hajj mass-casualty tripwire on a diplomatic flight to Tehran -- under
+    # four actors. Pact names are now neutralized before matching (see
+    # _tripwire_text) and the bare 'mecca attack' is gone: an attack TOWARD
+    # Mecca with no casualties is holy_city_targeted, below.
     'hajj_mass_casualty': {
-        'patterns': ['hajj stampede','hajj attack','mecca attack','hajj disaster','pilgrims killed mecca'],
+        'patterns': ['hajj stampede', 'hajj crush', 'hajj disaster', 'hajj attack killed',
+                     'pilgrims killed', 'pilgrims dead', 'killed mecca', 'killed makkah',
+                     'kill mecca', 'kill makkah', 'dead mecca', 'dead makkah'],
         'severity': 'surge',
         'note': 'Custodian-legitimacy event. NOTE: Hajj-window timing is a calendar MULTIPLIER on other tripwires, never a standalone signal (Black Swan doctrine).',
+    },
+    # NEW v2.3.0 Oct 31 2026: inbound fire reported toward the holy cities.
+    # Live 31 Oct (Saudi Gazette): "Air defenses intercept Houthi missiles, drones
+    # targeting Makkah, Madinah and other regions". It is a different event class
+    # from a salvo on Riyadh: it is the Custodian-legitimacy story, and for a pact
+    # NAMED for Mecca it is the pan-Islamic framing test. Two cautions carried
+    # into the prose: Makkah is also a PROVINCE (Jeddah, Taif), and the Houthis
+    # denied targeting the holy city in Sep 2026.
+    'holy_city_targeted': {
+        'patterns': ['targeting makkah', 'targeting mecca', 'targeting madinah', 'targeting medina',
+                     'heading makkah', 'approaching makkah', 'heading mecca', 'approaching mecca',
+                     'drone makkah', 'missile makkah', 'drone mecca', 'missile mecca',
+                     'drone madinah', 'missile madinah', 'drone medina', 'missile medina'],
+        'severity': 'high',
+        'note': 'Inbound fire reported toward Makkah/Madinah -- Custodian-legitimacy and pact-framing event.',
     },
 }
 RSS_FEEDS = {
@@ -613,6 +667,11 @@ RSS_FEEDS = {
     'saudigaz':{'url': 'https://saudigazette.com.sa/rssFeed/74', 'name': 'Saudi Gazette', 'weight': 0.95, 'language': 'en'},
     'alarabiya':{'url': 'https://www.alarabiya.net/feed/rss2/ar.xml', 'name': 'Al Arabiya', 'weight': 0.9, 'language': 'ar'},
     'almonitor':{'url': 'https://www.al-monitor.com/rss', 'name': 'Al-Monitor', 'weight': 0.95, 'language': 'en'},
+    # v2.3.0 Oct 31 2026: live scan saw ZERO Egypt stories in a week when
+    # Egypt's parliament authorised military support (26 Oct) -- the general
+    # Saudi query never surfaced them. Two targeted queries, 7-day window.
+    'gn_pact': {'url': 'https://news.google.com/rss/search?q=%22Mecca%20pact%22%20OR%20%22Mecca%20defence%22%20OR%20%22Mecca%20defense%22%20when:7d&hl=en-US&gl=US&ceid=US:en', 'name': 'GoogleNews-EN (Mecca Pact)', 'weight': 0.85, 'language': 'en'},
+    'gn_egypt':{'url': 'https://news.google.com/rss/search?q=Egypt%20Saudi%20(troops%20OR%20defend%20OR%20Houthi%20OR%20Sisi)%20when:7d&hl=en-US&gl=US&ceid=US:en', 'name': 'GoogleNews-EN (Egypt-Saudi)', 'weight': 0.85, 'language': 'en'},
 }
 GDELT_QUERIES_EN = [
     '"Saudi Arabia" AND ("MBS" OR "crown prince" OR "royal court")',
@@ -851,10 +910,12 @@ def _check_tripwires_tiered(articles_for_actor):
     for art in articles_for_actor or []:
         text = f"{art.get('title','')} {art.get('description','')}"
         tier = art.get('source_tier')          # None for RSS/GDELT/wire
-        for tw_id, sev in _check_tripwires(text):
+        for tw_id, sev, _pat, _sent in _check_tripwires(text, detail=True):
             rec = hits.setdefault(tw_id, {'id': tw_id, 'severity': sev,
                                           'confirmed_by': 0, 'claim_by': 0,
                                           'claim_channels': [], 'evidence': []})
+            # v2.3.0: a conventional outlet REPORTING a claim is still a claim.
+            _is_claim = (tier in NON_CONFIRMING_TIERS) or _sentence_is_claim(_sent)
             # v2.1.3: keep the articles that ACTUALLY fired the tripwire. The
             # page used to cite the actor's top article instead -- live 18 Oct
             # 'Infrastructure Strike' cited "Fijian conjoined twins successfully
@@ -862,14 +923,19 @@ def _check_tripwires_tiered(articles_for_actor):
             if len(rec['evidence']) < 3:
                 rec['evidence'].append({'title': art.get('title', ''), 'url': art.get('url', ''),
                                         'source': art.get('source', ''),
-                                        'source_tier': tier})
-            if tier is None or tier not in CLAIM_ONLY_TIERS:
+                                        'source_tier': tier,
+                                        # v2.3.0: WHICH pattern fired, and whether the firing
+                                        # sentence was a reported claim -- so the next false
+                                        # positive is diagnosable from the payload alone.
+                                        'pattern': _pat,
+                                        'basis': 'claim' if _is_claim else 'confirmation'})
+            if not _is_claim:
                 # No tier = conventional feed (RSS/GDELT/NewsAPI/Brave), which
                 # is an independent source for this purpose.
                 rec['confirmed_by'] += 1
             else:
                 rec['claim_by'] += 1
-                ch = art.get('channel')
+                ch = art.get('channel') or art.get('source')
                 if ch and ch not in rec['claim_channels']:
                     rec['claim_channels'].append(ch)
     out = []
@@ -1059,8 +1125,35 @@ def fetch_all_gdelt(days=7):
     return all_articles
 
 
-def fetch_newsapi(query, days=7):
-    """Fetch from NewsAPI."""
+def fetch_newsapi(query, days=7, have=None):
+    """Fetch from NewsAPI -- via the shared gateway when present (v2.3.0)."""
+    if _newsapi_gw is not None:
+        _NEWSAPI_HEALTH['queries'] += 1
+        try:
+            raw, probe = _newsapi_gw(query, days=days, page_size=30,
+                                     label='saudi/' + query.split()[0].lower(), have=have)
+        except Exception as e:
+            raw, probe = [], {'sensed': False, 'reason': 'exception:' + type(e).__name__}
+        if probe.get('sensed'):
+            _NEWSAPI_HEALTH['sensed'] += 1
+        else:
+            r = probe.get('reason') or 'unknown'
+            _NEWSAPI_HEALTH['not_sensed'][r] = _NEWSAPI_HEALTH['not_sensed'].get(r, 0) + 1
+        out = []
+        for item in raw or []:
+            out.append({
+                'title':       item.get('title', ''),
+                'description': item.get('description', ''),
+                'url':         item.get('url', ''),
+                'published':   item.get('publishedAt', ''),
+                'source':      (item.get('source') or {}).get('name', 'NewsAPI'),
+                'feed_id':     'newsapi',
+                'feed_type':   'newsapi',
+                'language':    'en',
+                'feed_weight': 0.9,
+            })
+        _NEWSAPI_HEALTH['articles'] += len(out)
+        return out
     if not NEWSAPI_KEY:
         return []
     from_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -1095,20 +1188,29 @@ def fetch_newsapi(query, days=7):
         return []
 
 
-def fetch_all_newsapi(days=7):
+def fetch_all_newsapi(days=7, have=None):
+    # v2.3.0: THREE queries, not seven. The gateway caps each backend at 9
+    # requests per 12h, shared by every ME tracker; seven Saudi queries would
+    # spend most of it. Cached results are free, so these rotate in over days.
+    for k in list(_NEWSAPI_HEALTH):
+        _NEWSAPI_HEALTH[k] = {} if k == 'not_sensed' else 0
     queries = [
-        'Saudi Arabia MBS crown prince',
-        'Houthi attack Saudi OR missile OR drone',
-        'Aramco Abqaiq pipeline OR facility',
-        'Saudi Israel normalization',
-        'Saudi Iran talks OR detente',
-        'OPEC Saudi production cut',
-        'Vision 2030 NEOM Saudi',
+        'Houthi Saudi (missile OR drone OR attack OR intercept)',
+        '"Mecca pact" OR (Egypt Saudi (troops OR defend OR Houthi))',
+        'Aramco (Ras Tanura OR Abqaiq OR pipeline OR refinery)',
     ]
+    if _newsapi_gw is None:
+        queries += [
+            'Saudi Arabia MBS crown prince',
+            'Saudi Israel normalization',
+            'Saudi Iran talks OR detente',
+            'OPEC Saudi production cut',
+        ]
     all_articles = []
     for q in queries:
-        all_articles.extend(fetch_newsapi(q, days=days))
-        time.sleep(0.5)
+        all_articles.extend(fetch_newsapi(q, days=days, have=have))
+        if _newsapi_gw is None:
+            time.sleep(0.5)
     if all_articles:
         print(f"[KSA Rhetoric] NewsAPI: {len(all_articles)} articles")
     return all_articles
@@ -1349,11 +1451,67 @@ def _classify_article_actor(article):
 _SENTENCE_SPLIT = re.compile(r'(?<=[.!?\u061f\u06d4])\s+|\n+|\s+[\u2014\u2013]\s+|[:;\u061b]\s+')
 
 
+# v2.3.0 Oct 31 2026 -- NAMES ARE NOT EVENTS.
+# The pact is named for Mecca and the Saudi delegation is led by the Defence
+# Minister. Both phrases supply tokens to event patterns ('mecca' to the Hajj
+# tripwire, 'defense' + 'saudi' to the Israeli-transfer one) without any event
+# having happened. They are collapsed to single inert tokens BEFORE tripwire
+# matching only -- actor keywords still see the full text.
+_TRIPWIRE_NEUTRAL = [
+    (re.compile(r'\b(?:mecca|makkah)[\s-]+(?:joint[\s-]+)?(?:pact|alliance|agreement|accord|'
+                r'defen[cs]e|declaration|treaty|bloc|group|states|countries|members?|signator\w*)\b'),
+     ' meccapact '),
+    (re.compile(r'\bdefen[cs]e\s+minist(?:er|ry|ers)\b'), ' defminister '),
+]
+
+
+def _tripwire_text(text):
+    t = text or ''
+    for rx, sub in _TRIPWIRE_NEUTRAL:
+        t = rx.sub(sub, t)
+    return t
+
+
+# A sentence that REPORTS a claim ("Houthis say they hit Ras Tanura") is not
+# confirmation of the event, whoever publishes it -- AP and Reuters ran the
+# Houthi Ras Tanura claim on 27 Oct and Riyadh never confirmed it. The claim
+# test needs BOTH an attribution verb and the attacking side named in the same
+# sentence; "Saudi Arabia says it intercepted" is the target confirming, and
+# stays confirmation.
+_CLAIM_VERB_RX = re.compile(r'\b(?:say|says|said|claim|claims|claimed|claiming|announce[sd]?|'
+                            r'alleged|allegedly|purported|purportedly)\b')
+_CLAIMANT_RX = re.compile(r'\b(?:houthis?|ansar\s?allah|ansarullah|yemeni armed forces|yaf|saree|'
+                          r'sanaa)\b|\u0627\u0644\u062d\u0648\u062b\u064a|\u0633\u0631\u064a\u0639')
+_TARGET_CONFIRMS_RX = re.compile(r'\b(?:saudi (?:civil defen[cs]e|ministry|press agency|authorities|'
+                                 r'defminister|air defen[cs]es?)|coalition (?:said|says)|aramco (?:said|says|confirm\w*)|'
+                                 r'spa reported)\b')
+
+
+def _sentence_is_claim(sentence):
+    s = (sentence or '').lower()
+    if _TARGET_CONFIRMS_RX.search(s):
+        return False
+    return bool(_CLAIM_VERB_RX.search(s) and _CLAIMANT_RX.search(s))
+
+
+# Aggregators relay fast and mix sourcing: they may not confirm alone (v2.3.0).
+NON_CONFIRMING_TIERS = CLAIM_ONLY_TIERS + ('aggregator',)
+
+
 def _tripwire_match(pattern, text):
-    """Sentence-scoped, plural-tolerant, quoted = strict phrase."""
+    """Sentence-scoped, plural-tolerant, quoted = strict phrase.
+
+    v2.3.0: returns the MATCHING SENTENCE (truthy) instead of True, so the
+    confirmation step can ask whether that sentence reports a claim."""
     p = pattern.lower().strip()
     if len(p) > 2 and p[0] == '"' and p[-1] == '"':
-        return p[1:-1] in text                      # explicit strict phrase
+        _ph = p[1:-1]
+        if _ph not in text:
+            return ''
+        for _sent in _SENTENCE_SPLIT.split(text):
+            if _sent and _ph in _sent:
+                return _sent
+        return text                                 # explicit strict phrase
     parts = _kw_parts(p)                            # v2.1.1: hyphen-safe
     if not parts:
         return False
@@ -1369,11 +1527,11 @@ def _tripwire_match(pattern, text):
             elif not (w in toks or (w + 's') in toks or (w + 'es') in toks):
                 ok = False; break
         if ok:
-            return True
-    return False
+            return sent
+    return ''
 
 
-def _check_tripwires(text):
+def _check_tripwires(text, detail=False):
     """Check article text against TRIPWIRES patterns, COUNTRY-GATED.
 
     v2.0.0: patterns go through _kw_match, exactly like actor keywords. They
@@ -1388,12 +1546,15 @@ def _check_tripwires(text):
     text_lower = _normalize_text(text)
     if not _passes_country_gate(text_lower):
         return []
+    text_tw = _tripwire_text(text_lower)        # v2.3.0: names are not events
     triggered = []
     for tw_id, tw_data in TRIPWIRES.items():
         for pattern in tw_data['patterns']:
             # v2.2.0: sentence-scoped, NOT the actor-keyword matcher.
-            if _tripwire_match(pattern, text_lower):
-                triggered.append((tw_id, tw_data['severity']))
+            _sent = _tripwire_match(pattern, text_tw)
+            if _sent:
+                triggered.append((tw_id, tw_data['severity'], pattern, _sent) if detail
+                                 else (tw_id, tw_data['severity']))
                 break  # only count each tripwire once per article
     return triggered
 
@@ -1674,9 +1835,9 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
                 if v in ('elevated','high','surge')]
     parts = [f"Saudi Arabia composite {composite_score:.1f} ({composite_level.upper()})."]
     parts.append(f"Active vectors: {', '.join(vecs_hot[:3])}." if vecs_hot
-                 else "All four vectors at baseline this scan.")
-    parts.append("Friction-tier node with detente shim: Iran friction vs Beijing-2023 "
-                 "normalization track; Accords drift on the Israel axis -- convergence read, not prediction.")
+                 else "All vectors at baseline this scan.")
+    parts.append("Mecca Pact anchor under Houthi fire; Accords holdout anchored by the "
+                 "Palestinian file -- convergence read, not prediction.")
         # --- Fallback So-What bullets (v1: interpreter-less; vector-level driven) ---
     so_what = []
     _esc = ('elevated', 'high', 'surge')
@@ -1696,7 +1857,57 @@ def _builtin_fallback_signals(composite_score, composite_level, vector_scores,
     return sigs[:8], ' '.join(parts), so_what[:6]
 
 
-def _mecca_pact_reading(actor_levels):
+# v2.3.0 Oct 31 2026 -- WHICH LANE IS MOVING.
+# Live 31 Oct the reading said "guarantor tempo is moving (turkiye, pakistan)".
+# It was -- but the stories were the pact delegation flying to TEHRAN (26 Oct),
+# Syria weighing membership, and DG ISPR saying more troops "depend on
+# developments". That is diplomacy and enlargement, not defence. A pact that
+# talks to Tehran while the Houthis fire on Riyadh is a different finding from
+# one that deploys, and the reading must say which.
+_PACT_LANES = {
+    'defence':   re.compile(r'\b(?:deploy\w*|troops?|forces|contingents?|air[\s-]defen[cs]e|'
+                            r'intercept\w*|bas(?:e|es|ing)|jets?|batter(?:y|ies)|patriot|'
+                            r'deterrence|military support|defend\w*)\b'),
+    'diplomacy': re.compile(r'\b(?:tehran|talks?|dialogue|delegation|mediat\w*|proposal|'
+                            r'negotiat\w*|guarantor\w*|non-?aggression|peace|visit\w*)\b'),
+    'expansion': re.compile(r'\b(?:join\w*|membership|accession|expand\w*|enlarg\w*|'
+                            r'new members?)\b'),
+}
+_US_DRAWDOWN_RX = re.compile(r'\b(?:ordered departure|non-emergency|non-essential|leave saudi|'
+                             r'staff to leave|drawdown|draw down|withdraw\w*)\b')
+
+
+def _pact_lanes(actor_summaries):
+    """Count the guarantor/third-party stories by lane. Absence-honest: with no
+    summaries passed, returns None rather than zeros."""
+    if not isinstance(actor_summaries, dict):
+        return None
+    lanes = {k: 0 for k in _PACT_LANES}
+    seen = set()
+    n = 0
+    for aid in ('mecca_pact_turkiye', 'mecca_pact_pakistan', 'egypt_support'):
+        for art in (actor_summaries.get(aid) or {}).get('top_articles') or []:
+            key = (art.get('url') or art.get('title') or '')[:200]
+            if key in seen:
+                continue
+            seen.add(key)
+            n += 1
+            t = (art.get('title') or '').lower()
+            for lane, rx in _PACT_LANES.items():
+                if rx.search(t):
+                    lanes[lane] += 1
+    us_drawdown = any(_US_DRAWDOWN_RX.search((a.get('title') or '').lower())
+                      for a in (actor_summaries.get('us_saudi') or {}).get('top_articles') or [])
+    dominant = None
+    if n:
+        top = max(lanes.values())
+        if top:
+            leaders = [k for k, v in lanes.items() if v == top]
+            dominant = leaders[0] if len(leaders) == 1 else 'mixed'
+    return {'stories': n, 'lanes': lanes, 'dominant': dominant, 'us_drawdown': us_drawdown}
+
+
+def _mecca_pact_reading(actor_levels, actor_summaries=None):
     """The Mecca Pact reading -- ONE writer for the fingerprint AND the page.
 
     v2.1.2 Oct 18 2026: the note used to be a constant ("the pact is paper"),
@@ -1733,14 +1944,37 @@ def _mecca_pact_reading(actor_levels):
                  '): the outsider responding before the guarantors is itself the finding.')
     elif third_party:
         note += (' Non-pact support is also moving (' + ', '.join(n.title() for n in third_party) + ' at ' + eg + ').')
+    lanes = _pact_lanes(actor_summaries)
+    if lanes and lanes['stories']:
+        _lv = lanes['lanes']
+        _dom = lanes['dominant']
+        _talk = max(_lv['diplomacy'], _lv['expansion'])
+        if responding and _talk > _lv['defence']:
+            _lane_name = ('DIPLOMACY and ENLARGEMENT lanes' if _lv['diplomacy'] == _lv['expansion']
+                          else 'DIPLOMACY lane' if _lv['diplomacy'] > _lv['expansion']
+                          else 'ENLARGEMENT lane')
+            note = ('Guarantor tempo is moving (' + ', '.join(responding) + '), but on the '
+                    + _lane_name + ', not the defence lane: '
+                    + str(_lv['diplomacy']) + ' diplomacy, ' + str(_lv['expansion']) + ' enlargement and '
+                    + str(_lv['defence']) + ' defence stories among the ' + str(lanes['stories'])
+                    + ' driving the guarantor cards, against a Saudi kinetic cycle at ' + kin + '. '
+                    'A pact that talks while its anchor is under fire is behaving as a channel, '
+                    'not yet as a shield.')
+            if third_party:
+                note += (' Non-pact support is also moving (' + ', '.join(n.title() for n in third_party)
+                         + ' at ' + eg + ').')
+        if lanes['us_drawdown']:
+            note += (' The incumbent guarantor is reducing its footprint in the same window '
+                     '(US ordered-departure reporting on the US-Saudi card).')
     return {'turkiye_level': tk, 'pakistan_level': pk, 'kinetic_level': kin,
             'guarantors_responding': ['mecca_pact_' + g for g in responding],
             'third_party': {'egypt': eg},
             'third_party_responding': third_party,
+            'lanes': lanes,          # v2.3.0: None = not measured this call
             'reading': reading, 'note': note}
 
 
-def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global):
+def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global, mecca_reading=None):
     """
     Saudi crosstheater slice -- FRICTION-TIER node with DETENTE SHIM (Iran wheel).
     Slices (canonical hub-agnostic spoke schema, AZ lineage):
@@ -1807,7 +2041,8 @@ def _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global):
         # would discover it, and inventing a Pakistan wheel to hold one actor
         # would be a hub asserted rather than measured. It rides as an actor
         # on the guarantor_response vector until a Pakistan tracker drives it.
-        'mecca_pact': _mecca_pact_reading(actor_levels),
+        'mecca_pact': mecca_reading or _mecca_pact_reading(actor_levels),
+        'us_security_anchor': vector_scores.get('us_security_anchor', 0),
         'tripwires':        tripwires_global[:5] if isinstance(tripwires_global, list) else [],
     }
     _redis_set('crosstheater:saudi_arabia:fingerprint', slice_payload, ttl_hours=14)
@@ -1943,7 +2178,7 @@ def scan_saudi_rhetoric(force=False, days=7):
     rss_articles = fetch_all_rss()
     print(f"[KSA Rhetoric] RSS total: {len(rss_articles)}")
     gdelt_articles = fetch_all_gdelt(days=days)
-    newsapi_articles = fetch_all_newsapi(days=days)
+    newsapi_articles = fetch_all_newsapi(days=days, have=len(gdelt_articles))
     brave_articles = fetch_all_brave(
         days=days,
         gdelt_count=len(gdelt_articles),
@@ -2038,7 +2273,8 @@ def scan_saudi_rhetoric(force=False, days=7):
           f"(vol={claim_posture['claim_volume']}, baseline={claim_posture['baseline']})")
 
     # ── Write Saudi Arabia fingerprints for downstream consumers ──
-    _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global)
+    mecca_reading = _mecca_pact_reading(actor_levels, actor_summaries)
+    _write_saudi_fingerprints(actor_levels, vector_scores, tripwires_global, mecca_reading)
 
     # ── Compute composite Saudi Arabia pressure score ──
     composite_score = round(sum(vector_scores.values()), 2)
@@ -2162,7 +2398,8 @@ def scan_saudi_rhetoric(force=False, days=7):
         'commodity_pressure':    commodity_pressure,
         'crosstheater_amplifiers': crosstheater_amplifiers,
         'crosstheater_absent':     list(_CROSSTHEATER_ABSENT),
-        'mecca_pact':              _mecca_pact_reading(actor_levels),   # v2.1.2: page reads this
+        'mecca_pact':              mecca_reading,   # v2.1.2: page reads this; v2.3.0 adds lanes
+        'newsapi_health':          dict(_NEWSAPI_HEALTH),
         'claim_posture':         claim_posture,
         'telegram_available':    TELEGRAM_AVAILABLE,
         'top_signals':           top_signals,
@@ -2304,7 +2541,8 @@ def register_saudi_rhetoric_routes(app, start_background=True):
             'gdelt_queries_es':         len(GDELT_QUERIES_ES),
             'tripwires':                len(TRIPWIRES),
             'redis_configured':         bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN),
-            'newsapi_configured':       bool(NEWSAPI_KEY),
+            'newsapi_configured':       bool(NEWSAPI_KEY) or _newsapi_gw is not None,
+            'newsapi_via_gateway':      _newsapi_gw is not None,
             'brave_configured':         bool(BRAVE_API_KEY),
             'commodity_fingerprint':    COMMODITY_FINGERPRINT_AVAILABLE,
             'interpreter_available':    KSA_INTERPRETER_AVAILABLE,
