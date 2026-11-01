@@ -1325,6 +1325,12 @@ try:
     register_egypt_stability_endpoints(app)
 except Exception as e:
     print(f"[ME Backend] WARNING: Egypt stability unavailable ({e})")
+# Mecca Pact Watch (v1.0.0 Nov 2026) -- shield or channel; members read from their own capitals
+try:
+    from mecca_pact_watch import register_mecca_pact_endpoints
+    register_mecca_pact_endpoints(app)
+except Exception as e:
+    print(f"[ME Backend] WARNING: Mecca Pact Watch unavailable ({e})")
 # Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
 if SYRIA_HUMANITARIAN_AVAILABLE:
     register_syria_humanitarian_endpoints(app)
