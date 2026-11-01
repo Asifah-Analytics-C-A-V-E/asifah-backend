@@ -1311,6 +1311,12 @@ register_israel_stability_endpoints(app)
 register_saudi_stability_endpoints(app)   # v0.5.2 Jul 2026
 register_qatar_stability_endpoints(app)   # v1.0.0 Jul 2026
 register_uae_stability_endpoints(app)     # v1.0.0 Jul 2026
+# Egypt Stability (v1.0.0 Nov 2026) -- conditions: pound, bread, gas, Suez, borders, social
+try:
+    from egypt_stability import register_egypt_stability_endpoints
+    register_egypt_stability_endpoints(app)
+except Exception as e:
+    print(f"[ME Backend] WARNING: Egypt stability unavailable ({e})")
 # Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
 if SYRIA_HUMANITARIAN_AVAILABLE:
     register_syria_humanitarian_endpoints(app)
