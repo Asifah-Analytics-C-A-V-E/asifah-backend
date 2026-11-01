@@ -1254,13 +1254,13 @@ try:
 except Exception as e:
     print(f"[App] ⚠️ Libya rhetoric tracker not found: {e}")
 
-   # Egypt Rhetoric Tracker -- six fronts at the crossroads (Nov 1 2026)
-   try:
-       from rhetoric_tracker_egypt import register_egypt_rhetoric_endpoints
-       register_egypt_rhetoric_endpoints(app)
-       print("[App] ✅ Egypt rhetoric tracker loaded (with scan thread)")
-   except Exception as e:
-       print(f"[App] ⚠️ Egypt rhetoric tracker not found: {e}")
+# Egypt Rhetoric Tracker -- six fronts at the crossroads (Nov 1 2026)
+try:
+    from rhetoric_tracker_egypt import register_egypt_rhetoric_endpoints
+    register_egypt_rhetoric_endpoints(app)
+    print("[App] ✅ Egypt rhetoric tracker loaded (with scan thread)")
+except Exception as e:
+    print(f"[App] ⚠️ Egypt rhetoric tracker not found: {e}")
 
 register_military_endpoints(app)
 
