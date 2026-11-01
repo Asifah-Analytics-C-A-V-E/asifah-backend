@@ -65,7 +65,7 @@ from datetime import datetime, timezone, timedelta, date
 
 import requests
 
-MODULE_VERSION = '1.0.0'
+MODULE_VERSION = '1.0.1'   # Nov 1 2026: Gaza-locus guard on food/social; Egypt-locus required for social; 'study' is commentary
 
 try:
     import feedparser
@@ -223,7 +223,7 @@ _HEDGE_RX = re.compile(
 
 # Commentary is not an event (same lesson as the US tracker v1.4.1).
 _COMMENTARY_RX = re.compile(
-    r"^\s*(opinion|analysis|explainer|editorial|comment|podcast|explained)\b|"
+    r"^\s*(opinion|analysis|explainer|editorial|comment|podcast|explained|study|interview)\b|"
     r"\b(what to know|what we know|op-ed|cheat sheet|q&a)\b", re.I)
 
 # Each lane: topic_rx (is this article ABOUT the lane?) and patterns
@@ -258,6 +258,7 @@ LANES = {
     },
     'food_bread': {
         'label': 'Food & bread', 'icon': '\U0001F35E', 'weight': 0.20,
+        'exclude_gaza': True,      # v1.0.1: Egyptian aid to Gaza's bread crisis is not Egypt's bread stress
         'topic_rx': (r"\b(wheat|bread|baladi|flour|subsid\w*|ration cards?|tender|"
                      r"mostakbal misr|gasc|food prices?|sugar|rice|cooking oil)\b|"
                      r"(القمح|الخبز|الدقيق|"
@@ -343,6 +344,7 @@ LANES = {
     'social': {
         'label': 'Social & political', 'icon': '\U0001F465', 'weight': 0.10,
         'under_sensed': True,
+        'require_locus': True,     # v1.0.1: the protest must be IN Egypt (headline names it)
         'topic_rx': (r"\b(protests?|protesters?|demonstrat\w*|strikes?|arrests?|detain\w*|crackdown|"
                      r"dissent|activists?|riot\w*|unrest|sit-in|workers)\b|"
                      r"(احتجاج|مظاهرات|اعتصام|"
@@ -358,6 +360,25 @@ LANES = {
         ],
     },
 }
+
+# v1.0.1 (Nov 1 2026). Live false positive: "Egypt sends 280 aid trucks to
+# tackle Gaza bread shortage" read as Egyptian bread stress. Egypt is the
+# SENDER there. Food and social lanes skip Gaza-locus stories; the social lane
+# also needs Egypt named in the headline itself.
+_GAZA_LOCUS = re.compile(r"\b(gaza|gazans?|palestin\w*|west bank|unrwa)\b|(\u063a\u0632\u0629|\u0641\u0644\u0633\u0637\u064a\u0646)", re.I)
+_EGYPT_LOCUS = re.compile(
+    r"\b(egypt|egyptian|egyptians|cairo|alexandria|giza|mahalla|port said|suez)\b|"
+    r"(\u0645\u0635\u0631|\u0627\u0644\u0645\u0635\u0631\u064a|\u0627\u0644\u0642\u0627\u0647\u0631\u0629|\u0627\u0644\u0625\u0633\u0643\u0646\u062f\u0631\u064a\u0629)", re.I)
+
+# A headline that names another country is about that country's street, even
+# when it mentions Egypt ("Protests erupt in Tunisia..., Egypt watches").
+_OTHER_LOCUS = re.compile(
+    r"\b(tunisia\w*|jordan\w*|morocc\w*|algeria\w*|leban\w*|iraq\w*|iran\w*|israel\w*|syria\w*|libya\w*|"
+    r"sudan\w*|turkey|turkish|yemen\w*|saudi|kenya\w*|nigeria\w*|pakistan\w*|bangladesh\w*|gaza\w*|palestin\w*|"
+    r"europe\w*|france|french|britain|british|american|ethiopia\w*)\b|"
+    r"(\u062a\u0648\u0646\u0633|\u0627\u0644\u0623\u0631\u062f\u0646|\u0627\u0644\u0645\u063a\u0631\u0628|\u0627\u0644\u062c\u0632\u0627\u0626\u0631|"
+    r"\u0644\u0628\u0646\u0627\u0646|\u0627\u0644\u0639\u0631\u0627\u0642|\u0625\u064a\u0631\u0627\u0646|\u0625\u0633\u0631\u0627\u0626\u064a\u0644|"
+    r"\u0633\u0648\u0631\u064a\u0627|\u0644\u064a\u0628\u064a\u0627|\u0627\u0644\u0633\u0648\u062f\u0627\u0646|\u063a\u0632\u0629|\u0627\u0644\u064a\u0645\u0646)", re.I)
 
 for _lane in LANES.values():
     _lane['_topic'] = re.compile(_lane['topic_rx'], re.I)
@@ -774,7 +795,11 @@ def classify(articles):
         for lid, lane in LANES.items():
             if not lane['_topic'].search(txt):
                 continue
+            if lane.get('exclude_gaza') and _GAZA_LOCUS.search(txt):
+                continue
             lanes[lid]['topic'].append(a)
+            if lane.get('require_locus') and (not _EGYPT_LOCUS.search(title) or _OTHER_LOCUS.search(title)):
+                continue
             best = None
             for direction, w, rx in lane['_pats']:
                 m = rx.search(title) or rx.search(txt)

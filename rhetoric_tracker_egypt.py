@@ -66,7 +66,7 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 
-MODULE_VERSION = '1.0.0'
+MODULE_VERSION = '1.0.1'   # Nov 1 2026: Gaza aid != Egyptian bread stress; 'Study|' is commentary; Saudi lens lanes
 
 try:
     import feedparser
@@ -139,7 +139,7 @@ _HEDGE_RX = re.compile(
     r"(قد |مستعد|محتمل|يدرس)", re.I)
 
 _COMMENTARY_RX = re.compile(
-    r"^\s*(opinion|analysis|explainer|editorial|comment|podcast|explained|interview)\b|"
+    r"^\s*(opinion|analysis|explainer|editorial|comment|podcast|explained|interview|study|research)\b|"
     r"\b(what to know|what we know|op-ed|cheat sheet|q&a|why it matters)\b", re.I)
 
 # Claim attribution (Saudi v2.3.0 lesson): attacker says it struck -> claim.
@@ -152,6 +152,13 @@ _CONFIRMS_RX = re.compile(r"\b(egyptian (?:army|military|armed forces|spokesman|
                           r"(?:said|says|confirmed)|military spokesman confirmed|"
                           r"suez canal authority (?:said|confirmed)|ukmto|reuters witnesses)\b|"
                           r"(المتحدث العسكري)", re.I)
+
+# v1.0.1 (Nov 1 2026). First live scan read bread_balance at L4 "Coercion" from
+# "Egypt sends 280 aid trucks to tackle Gaza bread shortage" -- Egypt was the
+# SENDER, the shortage was Gaza's. Gaza-locus stories are routed to the
+# eastern flank (where Gaza lives) and never climb the bread ladder.
+_GAZA_LOCUS = re.compile(r"\b(gaza|gazans?|palestin\w*|west bank|unrwa)\b|(\u063a\u0632\u0629|\u0641\u0644\u0633\u0637\u064a\u0646)", re.I)
+_LOCUS_EXCLUDED_FRONTS = {'bread_balance': _GAZA_LOCUS}
 
 # ============================================================
 # ACTORS (speakers)
@@ -673,7 +680,17 @@ def build_lenses():
         eg = (sa.get('actors') or {}).get('egypt_support') or {}
         mp = sa.get('mecca_pact') or {}
         lanes = mp.get('lanes') or {}
-        lane_txt = ', '.join(f"{k} {v.get('count', v) if isinstance(v, dict) else v}" for k, v in lanes.items()) if lanes else 'lanes unread'
+        # Saudi v2.3.0 nests the counts: {'stories': n, 'lanes': {'defence': n, ...}}
+        if isinstance(lanes.get('lanes'), dict):
+            lanes = lanes['lanes']
+
+        def _n(v):
+            if isinstance(v, dict):
+                return v.get('count', v.get('stories', len(v)))
+            if isinstance(v, (list, tuple)):
+                return len(v)
+            return v
+        lane_txt = ', '.join(f"{k} {_n(v)}" for k, v in lanes.items()) if lanes else 'lanes unread'
         txt = (f"Saudi tracker: egypt_support actor L{_int(eg.get('escalation_level'))} "
                f"({_int(eg.get('statement_count'))} statements); Mecca Pact lanes: {lane_txt}.")
         lenses['gulf_defence'].append({'name': 'Saudi tracker', 'read': how, 'age_h': _scan_age_hours(sa),
@@ -755,6 +772,9 @@ def classify(articles):
         art_level = 0
         for fid, f in FRONTS.items():
             if not f['topic'].search(txt):
+                continue
+            ex = _LOCUS_EXCLUDED_FRONTS.get(fid)
+            if ex is not None and ex.search(txt):
                 continue
             fronts[fid]['topic'].append(a)
             lvl, phrase, hedged, claim = _ladder_hit(f, txt)
