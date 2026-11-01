@@ -6,6 +6,10 @@ v2.4.1  (Oct 11 2026; v2.4.0 Oct 5 2026)
 VERSION HISTORY AT A GLANCE
   v2.6.1 Oct 31 2026 -- Iran 'ceasefire_phase' signal mapped to diplomatic +
                        kinetic axes.
+  v2.6.2 Nov 1 2026  -- Egypt (rhetoric_tracker_egypt v1.0.0, six fronts) and
+                       Libya join the rollup. Libya's tracker has run since Jun
+                       2026 but was never in TRACKER_KEYS, so its reads never
+                       reached the ME region card or the GPI through this path.
   v2.6.0 Oct 31 2026 -- Lebanon humanitarian signal quotes CURRENT displacement
                        (OCHA ~300K, dated), not the April PEAK (1.0M) as if
                        current; every figure carries its date; a lapsed IPC
@@ -22,7 +26,7 @@ running. Both are now derived from ONE constant below -- see BLUF_VERSION.
 
 ME Regional BLUF (Bottom Line Up Front) Engine.
 
-Reads from all SEVEN ME rhetoric tracker Redis caches simultaneously
+Reads from every ME rhetoric tracker Redis cache in TRACKER_KEYS simultaneously
 and synthesizes a single analyst-prose BLUF paragraph + top-5 structured
 signals.
 
@@ -75,7 +79,7 @@ import os
 # The marker itself fires at the BOTTOM of this file, because _CANON_AVAILABLE
 # does not exist yet up here -- printing it at import-time would NameError.
 # ════════════════════════════════════════════════════════════════════
-BLUF_VERSION = '2.6.1'
+BLUF_VERSION = '2.6.2'
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -218,7 +222,7 @@ def _redis_set(key, value, ttl=BLUF_CACHE_TTL):
 
 
 # ============================================================
-# CACHE KEY MAP -- all SEVEN ME trackers
+# CACHE KEY MAP -- every ME tracker (12 as of v2.6.2)
 # ============================================================
 TRACKER_KEYS = {
     'israel':  ('rhetoric:israel:latest',   'israel_rhetoric_cache'),
@@ -231,6 +235,11 @@ TRACKER_KEYS = {
     'qatar':        ('rhetoric:qatar:latest',        None),  # v1.0 Jul 2026: mediation class
     'saudi_arabia': ('rhetoric:saudi_arabia:latest', None),  # v1.0 Jul 2026: friction + detente shim
     'uae':          ('rhetoric:uae:latest',          None),  # v1.0 Jul 2026: aligned hub
+    'egypt':        ('rhetoric:egypt:latest',        None),  # v2.6.2 Nov 2026: six-front crossroads tracker
+    # v2.6.2: Libya's cache key is not confirmed from its source file yet. The
+    # primary/fallback pair covers both platform conventions; if neither is
+    # right the boot log says "libya: no cache available" -- absent, not calm.
+    'libya':        ('rhetoric:libya:latest',        'libya_rhetoric_cache'),
 }
 
 THEATRE_FLAGS = {
@@ -244,6 +253,8 @@ THEATRE_FLAGS = {
     'qatar':        '\U0001f1f6\U0001f1e6',
     'saudi_arabia': '\U0001f1f8\U0001f1e6',
     'uae':          '\U0001f1e6\U0001f1ea',
+    'egypt':        '\U0001f1ea\U0001f1ec',
+    'libya':        '\U0001f1f1\U0001f1fe',
 }
 
 # ── CANONICAL LADDER (Oct 3 2026) ────────────────────────────────────
@@ -656,11 +667,11 @@ def _synthesize_top_signals_legacy(theatre, raw_data, threat_int, influence_int,
 
 
 # ============================================================
-# DATA INGESTION -- read all SEVEN caches
+# DATA INGESTION -- read every tracker cache
 # ============================================================
 
 def _read_all_trackers():
-    """Read all SEVEN ME tracker caches. Returns (results, missing, stale).
+    """Read every ME tracker cache. Returns (results, missing, stale).
 
     Cold-start resilience (Jun 13 2026 -- A/B/C):
       C: primary -> fallback -> durable last-known-good (rhetoric:<x>:lastgood,
@@ -1741,6 +1752,7 @@ THEATRE_DISPLAY_NAMES = {
     'jordan':     'Jordan',
     'turkey':     'Turkey',
     'egypt':      'Egypt',
+    'libya':      'Libya',
     'palestine':  'Palestine',
 }
 
@@ -2542,7 +2554,7 @@ def _build_convergence_panel():
 
 def build_regional_bluf(force=False):
     """
-    Build the ME regional BLUF. Reads all SEVEN caches, synthesizes,
+    Build the ME regional BLUF. Reads every tracker cache, synthesizes,
     caches result in Redis. Returns dict.
     v2.0: Uses normalized tracker shape, emits dual-axis-aware output, top-5 signals.
     """
@@ -2558,7 +2570,7 @@ def build_regional_bluf(force=False):
             except Exception:
                 pass
 
-    print('[ME BLUF v2.0] Building regional BLUF from all SEVEN tracker caches...')
+    print('[ME BLUF v2.0] Building regional BLUF from every tracker cache...')
     trackers, trackers_missing, trackers_stale = _read_all_trackers()  # Already normalized post-shim
 
     if not trackers:
