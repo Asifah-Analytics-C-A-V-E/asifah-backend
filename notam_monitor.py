@@ -1,6 +1,17 @@
 """
-Asifah Analytics -- Airspace Watch (ME)  v2.0.0
+Asifah Analytics -- Airspace Watch (ME)  v2.1.0
 November 1, 2026
+
+v2.1.0 -- first live run (Nov 1 21:34Z) read nothing; each source failed differently:
+  EASA   JSON came back 200 but parsed to 0 rows (export shape differs from the
+         sample) -> shape-tolerant parser, shape logged in health, and an RSS
+         fallback (newest bulletin per country, status marked unconfirmed).
+         CZIB number now read from the RSS link (czib-2026-09-r1).
+  FAA    HTTP 403 to our bare UA -> standard crawler-form UA (see constant).
+  OpenSky token endpoint ConnectTimeout from Render -> longer timeout + retry,
+         and a second behaviour provider, adsb.lol (open community ADS-B, no key),
+         used only when OpenSky cannot be reached. Baselines are kept PER
+         PROVIDER -- counts from two networks are never compared with each other.
 
 Drop-in replacement for notam_monitor.py v1.1.0. Same file name, same
 register_notam_endpoints(app) -- app.py needs no edit.
@@ -55,9 +66,13 @@ from datetime import datetime, timezone
 
 import requests
 
-AIRSPACE_VERSION = '2.0.0'
-AIRSPACE_USER_AGENT = (f'AsifahAnalytics-ME-Airspace/{AIRSPACE_VERSION} '
-                       f'(OSINT monitoring tool; +https://asifahanalytics.com)')
+AIRSPACE_VERSION = '2.1.0'
+# v2.1.0 (Nov 1 2026): the standard crawler form "Mozilla/5.0 (compatible; Name/ver; +url)"
+# -- the convention Googlebot/Bingbot use. It names us truthfully (no browser is
+# impersonated) but passes WAFs that reject anything not starting "Mozilla/5.0".
+# faa.gov returned 403 to the bare 'AsifahAnalytics-...' string on the first live run.
+AIRSPACE_USER_AGENT = (f'Mozilla/5.0 (compatible; AsifahAnalytics-ME-Airspace/{AIRSPACE_VERSION}; '
+                       f'+https://asifahanalytics.com)')
 
 # ========================================
 # CONFIG
@@ -70,6 +85,8 @@ OPENSKY_CLIENT_SECRET = os.environ.get('OPENSKY_CLIENT_SECRET')
 OPENSKY_TOKEN_URL = ('https://auth.opensky-network.org/auth/realms/opensky-network/'
                      'protocol/openid-connect/token')
 OPENSKY_STATES_URL = 'https://opensky-network.org/api/states/all'
+ADSBLOL_POINT_URL = 'https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}'   # radius in nm, max 250
+PROVIDER_LABELS = {'os': 'OpenSky Network', 'al': 'adsb.lol'}
 EASA_JSON_URL = ('https://www.easa.europa.eu/en/domains/air-operations/czibs/'
                  'export-json?page&_format=json')
 EASA_RSS_URL = 'https://www.easa.europa.eu/en/domains/air-operations/czibs/feed.xml'
@@ -82,6 +99,7 @@ HISTORY_DAYS = 8                      # traffic samples kept
 BASELINE_MIN_DAYS = 3                 # days of samples before any ratio is claimed
 THIN_COVERAGE_MEDIAN = 5              # baseline median below this = thin coverage
 CHANGES_KEEP = 60
+RSS_FALLBACK_DAYS = 180
 
 K_LATEST = 'airspace:latest'
 K_TRAFFIC = 'airspace:traffic_history'
@@ -224,12 +242,28 @@ def _parse_any_dt(s):
 
 def parse_easa_json(payload):
     """EASA export -> list of CZIB dicts. Accepts a list or {'data': [...]}."""
-    rows = payload.get('data', payload) if isinstance(payload, dict) else payload
+    rows = payload
+    if isinstance(payload, dict):
+        rows = None
+        for k in ('data', 'nodes', 'rows', 'items', 'results'):
+            if isinstance(payload.get(k), list):
+                rows = payload[k]
+                break
+        if rows is None:
+            lists = [v for v in payload.values() if isinstance(v, list)]
+            if lists:
+                rows = max(lists, key=len)
+            elif payload and all(isinstance(v, dict) for v in payload.values()):
+                rows = list(payload.values())          # {"0": {...}, "1": {...}}
+            else:
+                rows = []
     out = []
     for r in rows or []:
+        if isinstance(r, dict) and isinstance(r.get('node'), dict):
+            r = r['node']                              # Drupal views wraps rows as {"node": {...}}
         if not isinstance(r, dict):
             continue
-        name = _squash(_strip_tags(r.get('name', '')))
+        name = _squash(_strip_tags(r.get('name', '') or r.get('title', '')))
         country = _squash(_strip_tags(r.get('country', ''))) or name
         valid_until = _parse_ddmmyyyy(r.get('valid_until_date', '')) or \
             _parse_ddmmyyyy(_strip_tags(r.get('field_easa_valid_until_descr', '')))
@@ -256,10 +290,16 @@ def parse_easa_rss(xml_text):
         def tag(t):
             m = re.search(rf'<{t}[^>]*>(.*?)</{t}>', block, re.S | re.I)
             return _squash(_strip_tags(re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', m.group(1), flags=re.S))) if m else ''
-        title, desc = tag('title'), tag('description')
-        idm = _CZIB_ID_RX.search(title + ' ' + desc)
-        items.append({'title': title, 'czib_id': _squash(idm.group(1)).replace(' ', '') if idm else None,
-                      'link': tag('link'), 'pub': _iso(_parse_any_dt(tag('pubDate')))})
+        title, desc, link = tag('title'), tag('description'), tag('link')
+        lm = re.search(r'czib-(\d{4}-\d{2})-?(r\d+)?', link or '', re.I)
+        if lm:
+            czib_id = lm.group(1) + ('-' + lm.group(2).upper() if lm.group(2) else '')
+        else:
+            idm = _CZIB_ID_RX.search(title + ' ' + desc)
+            czib_id = _squash(idm.group(1)).replace(' ', '') if idm else None
+        items.append({'title': title, 'czib_id': czib_id,
+                      'country': re.sub(r'^airspace of (the )?', '', title, flags=re.I).strip(),
+                      'link': link, 'pub': _iso(_parse_any_dt(tag('pubDate')))})
     return items
 
 
@@ -272,11 +312,15 @@ def fetch_easa():
         if r.status_code != 200:
             src['error'] = f'JSON HTTP {r.status_code}'
         else:
-            czibs = parse_easa_json(r.json())
+            j = r.json()
+            src['json_shape'] = (f"list[{len(j)}]" if isinstance(j, list) else
+                                 f"dict keys={list(j)[:6]}" if isinstance(j, dict) else type(j).__name__)
+            czibs = parse_easa_json(j)
     except Exception as e:
         src['error'] = f'JSON {type(e).__name__}: {str(e)[:120]}'
 
     # RSS: pick up CZIB numbers + any revision newer than the JSON's record.
+    rss = []
     try:
         r = requests.get(EASA_RSS_URL, headers={'User-Agent': AIRSPACE_USER_AGENT}, timeout=25)
         if r.status_code == 200:
@@ -299,6 +343,26 @@ def fetch_easa():
 
     if czibs:
         src.update(state='read', read_at=_iso(_now()), count=len(czibs))
+    elif rss:
+        # Fallback: the RSS has no status or expiry. Newest item per country, published
+        # within RSS_FALLBACK_DAYS, is shown as LISTED with status unconfirmed -- and the
+        # source reports 'partial', so change detection (which needs 'read') stays off.
+        cutoff = _now().timestamp() - RSS_FALLBACK_DAYS * 86400
+        newest = {}
+        for i in rss:
+            if not i['pub'] or datetime.fromisoformat(i['pub']).timestamp() < cutoff:
+                continue
+            k = i['country'].lower()
+            if k not in newest or i['pub'] > newest[k]['pub']:
+                newest[k] = i
+        for i in newest.values():
+            czibs.append({'nid': i['link'], 'name': i['title'], 'country': i['country'],
+                          'status': 'Active', 'status_confirmed': False, 'issued': i['pub'],
+                          'valid_until': None,
+                          'valid_until_text': 'Status and expiry not confirmed (read from EASA RSS).',
+                          'updated': i['pub'], 'czib_id': i['czib_id'], 'source_url': i['link']})
+        src.update(state='partial', read_at=_iso(_now()), count=len(czibs),
+                   note=f'JSON gave no rows; RSS fallback (newest per country, last {RSS_FALLBACK_DAYS} days)')
     return czibs, src
 
 
@@ -371,20 +435,24 @@ class _OpenSkyToken:
         with self.lock:
             if self.token and not force and time.time() < self.expires - 60:
                 return self.token, None
-            try:
-                r = requests.post(OPENSKY_TOKEN_URL, data={
-                    'grant_type': 'client_credentials',
-                    'client_id': OPENSKY_CLIENT_ID,
-                    'client_secret': OPENSKY_CLIENT_SECRET,
-                }, headers={'User-Agent': AIRSPACE_USER_AGENT}, timeout=20)
-                if r.status_code != 200:
-                    return None, f'token HTTP {r.status_code}'
-                j = r.json()
-                self.token = j.get('access_token')
-                self.expires = time.time() + int(j.get('expires_in', 1800))
-                return self.token, None if self.token else 'token missing in response'
-            except Exception as e:
-                return None, f'token {type(e).__name__}'
+            last = None
+            for attempt in (1, 2):
+                try:
+                    r = requests.post(OPENSKY_TOKEN_URL, data={
+                        'grant_type': 'client_credentials',
+                        'client_id': OPENSKY_CLIENT_ID,
+                        'client_secret': OPENSKY_CLIENT_SECRET,
+                    }, headers={'User-Agent': AIRSPACE_USER_AGENT}, timeout=(30, 30))
+                    if r.status_code != 200:
+                        return None, f'token HTTP {r.status_code}'
+                    j = r.json()
+                    self.token = j.get('access_token')
+                    self.expires = time.time() + int(j.get('expires_in', 1800))
+                    return self.token, None if self.token else 'token missing in response'
+                except Exception as e:
+                    last = f'token {type(e).__name__} (attempt {attempt})'
+                    time.sleep(5)
+            return None, last
 
 
 _token = _OpenSkyToken()
@@ -413,10 +481,10 @@ def fetch_region_count(region_key, token):
     return r
 
 
-def scan_traffic():
-    """Returns ({region: count|None}, source_state)."""
+def scan_opensky():
+    """Returns ({region: count}, source_state)."""
     src = {'state': 'unread', 'read_at': None, 'error': None, 'credits_remaining': None,
-           'regions_read': 0, 'regions_total': len(REGIONS)}
+           'regions_read': 0, 'regions_total': len(REGIONS), 'provider': 'os'}
     token, err = _token.get()
     if not token:
         src['error'] = err
@@ -453,16 +521,84 @@ def scan_traffic():
     return counts, src
 
 
-def append_history(history, counts, now=None):
-    """history = {region: [[epoch_min, count], ...]} -> trimmed to HISTORY_DAYS."""
+def _region_circle(key):
+    """bbox -> (lat, lon, radius_nm) for point queries. Radius capped at 250 nm, so
+    the biggest regions (Iran, Saudi, Egypt) are sampled, not covered -- the same
+    circle every time, so the same-hour comparison still holds."""
+    import math
+    lat0, lat1, lon0, lon1 = REGIONS[key]['bbox']
+    lat, lon = (lat0 + lat1) / 2, (lon0 + lon1) / 2
+    dlat = (lat1 - lat0) * 60 / 2
+    dlon = (lon1 - lon0) * 60 * math.cos(math.radians(lat)) / 2
+    return round(lat, 2), round(lon, 2), int(max(25, min(250, math.hypot(dlat, dlon))))
+
+
+def count_airborne_adsblol(ac_list):
+    n = 0
+    for a in ac_list or []:
+        if not isinstance(a, dict) or a.get('lat') is None or a.get('lon') is None:
+            continue
+        if a.get('alt_baro') == 'ground':
+            continue
+        n += 1
+    return n
+
+
+def scan_adsblol():
+    """Fallback behaviour provider: adsb.lol community ADS-B, no key."""
+    src = {'state': 'unread', 'read_at': None, 'error': None, 'regions_read': 0,
+           'regions_total': len(REGIONS), 'provider': 'al'}
+    counts = {}
+    for key in REGIONS:
+        lat, lon, rad = _region_circle(key)
+        try:
+            r = requests.get(ADSBLOL_POINT_URL.format(lat=lat, lon=lon, radius=rad),
+                             headers={'User-Agent': AIRSPACE_USER_AGENT}, timeout=(15, 30))
+            if r.status_code == 429:
+                src['error'] = 'rate limited'
+                src['state'] = 'rate_limited'
+                break
+            if r.status_code != 200:
+                src['error'] = f'{key}: HTTP {r.status_code}'
+                continue
+            counts[key] = count_airborne_adsblol((r.json() or {}).get('ac'))
+            time.sleep(1.5)                      # polite: well under 1 request/second
+        except Exception as e:
+            src['error'] = f'{key}: {type(e).__name__}'
+    src['regions_read'] = len(counts)
+    if counts:
+        src['state'] = 'read' if len(counts) == len(REGIONS) else 'partial'
+        src['read_at'] = _iso(_now())
+    return counts, src
+
+
+def scan_traffic():
+    """OpenSky first; adsb.lol only if OpenSky could not be read at all."""
+    counts, src = scan_opensky()
+    if counts:
+        return counts, src
+    first_err = src.get('error')
+    counts, src2 = scan_adsblol()
+    src2['fallback_from'] = f'OpenSky: {first_err}'
+    return counts, src2
+
+
+def append_history(history, counts, now=None, provider='os'):
+    """history = {'<provider>:<region>': [[epoch_min, count], ...]} -> trimmed to HISTORY_DAYS.
+    Keyed per provider: two networks' counts are never mixed into one baseline."""
     now = now or _now()
     t = int(now.timestamp() // 60)
     cutoff = t - HISTORY_DAYS * 24 * 60
     history = history or {}
+    for k in list(history):
+        history[k] = [row for row in history[k] if row[0] >= cutoff]
+        if not history[k]:
+            del history[k]
     for k, c in counts.items():
-        rows = [row for row in history.get(k, []) if row[0] >= cutoff]
+        hk = f'{provider}:{k}'
+        rows = history.get(hk, [])
         rows.append([t, int(c)])
-        history[k] = rows
+        history[hk] = rows
     return history
 
 
@@ -621,8 +757,10 @@ def assemble(czibs, easa_src, faa_sections, faa_src, history, traffic_src, chang
             'czib': [{k: c.get(k) for k in ('name', 'czib_id', 'issued', 'valid_until',
                                              'valid_until_text', 'updated', 'source_url')} for c in active],
             'faa': faa,
-            'traffic': assess_region_traffic((history or {}).get(key, [])),
+            'traffic': assess_region_traffic((history or {}).get(
+                f"{traffic_src.get('provider', 'os')}:{key}", [])),
         }
+        regions[key]['traffic']['provider'] = PROVIDER_LABELS.get(traffic_src.get('provider', 'os'))
         regions[key]['traffic']['word'] = TRAFFIC_WORDS.get(regions[key]['traffic']['state'], '')
     fresh = [s for s in (easa_src, faa_src, traffic_src) if s.get('state') == 'read']
     some = [s for s in (easa_src, faa_src, traffic_src) if s.get('state') in ('read', 'partial', 'stale')]
@@ -632,14 +770,14 @@ def assemble(czibs, easa_src, faa_sections, faa_src, history, traffic_src, chang
         'version': AIRSPACE_VERSION,
         'scanned_at': _iso(_now()),
         'state': state,
-        'sources': {'easa': easa_src, 'faa': faa_src, 'opensky': traffic_src},
+        'sources': {'easa': easa_src, 'faa': faa_src, 'opensky': traffic_src},   # key kept for the page
         'regions': regions,
         'changes': (changes or [])[:20],
         'lines': build_lines(regions, changes),
         'all_czibs_active': [{k: c.get(k) for k in ('country', 'name', 'czib_id', 'valid_until', 'source_url')}
                              for c in czibs if c['status'].lower() == 'active'],
         'method': ('Paper: EASA conflict-zone bulletins + FAA prohibitions page. Behaviour: airborne aircraft '
-                   'counted per region by OpenSky Network, compared with the median for the same clock hour '
+                   'counted per region (OpenSky Network; adsb.lol if OpenSky is unreachable -- never mixed), compared with the median for the same clock hour '
                    f'on prior days (needs {BASELINE_MIN_DAYS} days). ADS-B coverage is uneven; thin regions are '
                    'labelled, not scored.'),
     }
@@ -676,7 +814,9 @@ def to_legacy_notams(payload):
                 'summary': f"{t['now']} aircraft airborne vs ~{t['baseline']} usual for this hour "
                            f"({round((1 - t['ratio']) * 100)}% below).",
                 'valid_from': (payload.get('scanned_at') or '')[:10], 'valid_to': '',
-                'source': 'OpenSky Network', 'source_url': 'https://opensky-network.org/',
+                'source': t.get('provider') or 'ADS-B',
+                'source_url': ('https://adsb.lol/' if t.get('provider') == 'adsb.lol'
+                               else 'https://opensky-network.org/'),
             })
     order = {'red': 0, 'orange': 1, 'yellow': 2}
     items.sort(key=lambda x: order.get(x['type_color'], 9))
@@ -719,7 +859,7 @@ def run_cycle(force_paper=False):
     counts, traffic_src = scan_traffic()
     history = _rget(K_TRAFFIC) or {}
     if counts:
-        history = append_history(history, counts, now)
+        history = append_history(history, counts, now, provider=traffic_src.get('provider', 'os'))
         _rset(K_TRAFFIC, history)
 
     payload = assemble(pc['czibs'], pc['easa'], pc['faa_sections'], pc['faa'], history, traffic_src, [])
@@ -745,7 +885,7 @@ def run_cycle(force_paper=False):
     _rset(K_LATEST, payload)
     _rset(K_LEGACY, to_legacy_notams(payload))
     print(f"[Airspace] cycle: state={payload['state']} easa={pc['easa'].get('state')} "
-          f"faa={pc['faa'].get('state')} opensky={traffic_src.get('state')} "
+          f"faa={pc['faa'].get('state')} traffic[{traffic_src.get('provider')}]={traffic_src.get('state')} "
           f"({traffic_src.get('regions_read')}/{len(REGIONS)}) credits_left={traffic_src.get('credits_remaining')}")
     return payload
 
