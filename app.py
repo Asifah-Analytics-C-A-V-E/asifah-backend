@@ -2,7 +2,8 @@
 Asifah Analytics Backend (Middle East) -- version lives in ME_BACKEND_VERSION
 February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)  |  November 1, 2026 (v3.6.0)
 
-v3.7.0 (Nov 1 2026) -- Actor Matrix v3 registered (threat_matrix_v3.py).
+v3.7.0 (Nov 1 2026) -- Actor Matrix v3 registered (threat_matrix_v3.py); Israel OUTGOING
+  operations gain headline co-occurrence matching (actor + target + kinetic/intent verb).
 v3.6.0 (Nov 1 2026) -- audit cleanup (claude/ME_APP_AUDIT_2026-11-01.md):
   - ~400 dead lines removed: a shadow copy of the airline scanner, a /api/notams
     route that never answered (notam_monitor registers first), an unused
@@ -3875,6 +3876,26 @@ def calculate_israel_incoming_threats(articles, days_analyzed=7):
     }
 
 
+# v3.7.0 (Nov 1 2026) -- co-occurrence matching for Israeli OUTGOING operations.
+_ISR_ACTOR_RX = re.compile(r"\b(israel|israeli|israelis|idf|iaf|netanyahu|bibi|katz|zamir|mossad|"
+                           r"tel aviv|jerusalem)\b|ישראל|צה\"?ל|إسرائيل", re.I)
+_ISR_KINETIC_RX = re.compile(r"\b(strik\w*|attack\w*|bomb\w*|raid\w*|hit|hits|pound\w*|shell\w*|"
+                             r"target\w*|kill\w*|assassinat\w*|eliminat\w*|airstrike\w*|offensive|incursion\w*|"
+                             r"invad\w*|retaliat\w*)\b|תקיפ|תקף|غارة|قصف|هجوم", re.I)
+_ISR_INTENT_RX = re.compile(r"\b(threat\w*|warn\w*|plan\w*|prepar\w*|weigh\w*|consider\w*|vow\w*|"
+                            r"option\w*|readies|ready|mull\w*|signal\w*|approv\w*|green.?light\w*)\b", re.I)
+_ISR_DEESC_RX = re.compile(r"\b(ceasefire|cease-fire|truce|talks|negotiat\w*|deal|agreement|accord|aid|"
+                           r"humanitarian|hostage\w*|withdraw\w*|de-escalat\w*|deescalat\w*|mediat\w*)\b|הפסקת אש|هدنة", re.I)
+_ISR_OUT_TARGETS = {
+    'vs_iran':      re.compile(r"\b(iran|iranian|tehran|isfahan|natanz|fordow|parchin|irgc|khamenei)\b|איראן|إيران", re.I),
+    'vs_lebanon':   re.compile(r"\b(lebanon|lebanese|beirut|hezbollah|hizballah|hizbollah|dahiyeh|litani)\b|לבנון|חיזבאללה|لبنان", re.I),
+    'vs_gaza':      re.compile(r"\b(gaza|hamas|rafah|khan yunis|jabalia)\b|עזה|غزة", re.I),
+    'vs_syria':     re.compile(r"\b(syria|syrian|damascus|quneitra|daraa)\b|סוריה|سوريا", re.I),
+    'vs_west_bank': re.compile(r"\b(west bank|jenin|nablus|tulkarm|judea|samaria)\b|יהודה ושומרון|الضفة", re.I),
+    'vs_houthis':   re.compile(r"\b(houthi|houthis|yemen|yemeni|hodeidah|sanaa|ansarallah)\b|חות'?ים|الحوثي", re.I),
+}
+
+
 def calculate_israel_outgoing_operations(articles, days_analyzed=7):
     """
     Calculate probability of Israeli OUTGOING military operations
@@ -3908,12 +3929,14 @@ def calculate_israel_outgoing_operations(articles, days_analyzed=7):
     
     for article in articles:
         content = f"{article.get('title', '')} {article.get('description', '')} {article.get('content', '')}".lower()
+        title = (article.get('title', '') or '').lower()
         
         for category, data in ISRAEL_OUTGOING_KEYWORDS.items():
             mapped = key_map.get(category)
             if not mapped:
                 continue
             
+            matched = False
             for phrase in data['phrases']:
                 if phrase in content:
                     outgoing_scores[mapped]['score'] += data['weight']
@@ -3923,7 +3946,36 @@ def calculate_israel_outgoing_operations(articles, days_analyzed=7):
                         'article': article.get('title', '')[:80],
                         'article_url': article.get('url', '')
                     })
+                    matched = True
                     break
+
+            # v3.7.0 (Nov 1 2026) -- co-occurrence fallback. The exact phrases above
+            # ('israel strike iran') miss how headlines are actually written ("Israel
+            # STRIKES Iran", "Netanyahu weighs strike on Iran", "IDF prepares Iran
+            # options"), so outgoing read 0% while incoming read 75%. Now: an Israeli
+            # actor + the target + an action word in the SAME HEADLINE also counts.
+            # Kinetic verbs score full weight; intent/planning verbs score half --
+            # planning is signal, but it is not a strike.
+            if not matched and mapped in _ISR_OUT_TARGETS:
+                _am = _ISR_ACTOR_RX.search(title)
+                _tm = _ISR_OUT_TARGETS[mapped].search(title)
+                # Direction: the Israeli actor must come BEFORE the target ("Iran warns
+                # Israel" is incoming, not outgoing). De-escalation headlines never count.
+                if _am and _tm and _am.start() < _tm.start() and not _ISR_DEESC_RX.search(title):
+                    if _ISR_INTENT_RX.search(title):          # "weighs strike" is intent, not a strike
+                        w, why = data['weight'] * 0.5, 'actor+target+intent in headline'
+                    elif _ISR_KINETIC_RX.search(title):
+                        w, why = data['weight'], 'actor+target+kinetic in headline'
+                    else:
+                        w = 0
+                    if w:
+                        outgoing_scores[mapped]['score'] += w
+                        outgoing_scores[mapped]['indicators'].append({
+                            'phrase': why,
+                            'weight': w,
+                            'article': article.get('title', '')[:80],
+                            'article_url': article.get('url', '')
+                        })
     
     results = {}
     for key, data in outgoing_scores.items():

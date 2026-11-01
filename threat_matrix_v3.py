@@ -23,6 +23,20 @@ HOW A CELL IS READ
   4. No tracker -> 'unread'. Tracker present but no vector matched -> 'not
      sensed'. Neither is ever shown as L0.
 
+v3.1.0 (Nov 1 2026, after the first live /debug):
+  - The Israel and Lebanon trackers expose no directional vectors (Israel: only
+    government_formation / gaza_framework_gates; Lebanon: framework_gates), so every
+    Israel pair read 'not sensed'. The Israel CARD (/api/israel-threat, the 6x6
+    incoming/outgoing panel Rachel keeps) already carries those directions as
+    keyword %. v3.1 reads it as a second source type: ('card:israel', 'path').
+    Card % -> level: <10 L0, <25 L1, <45 L2, <65 L3, else L4. Capped at L4 -- a
+    keyword count never asserts L5 (L5 assertion rule).
+  - Gulf trackers' real names wired in: Saudi kinetic_inbound, UAE kinetic_inbound,
+    Qatar gas_infrastructure -> Iran -> Gulf; Qatar base_posture -> Iran -> US forces.
+  - New pairs: Iran -> Iraq (Iraq tracker iran_iraq), Israel -> Gaza, Hamas -> Israel.
+  - Known tracker-side gap: the Iran tracker scores israel_iran and us_iran at 0
+    while its theatre reads L5 -- tracker tuning, not matrix.
+
 The vector names differ tracker to tracker. /api/threat-matrix-v3/debug lists
 every tracker's vectors and which pair each one fed, so the token lists can be
 tuned from what the trackers actually emit instead of from guesses.
@@ -40,7 +54,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-MATRIX_VERSION = '3.0.0'
+MATRIX_VERSION = '3.1.0'
 CACHE_KEY = 'threat_matrix_v3:latest'
 PREV_KEY = 'threat_matrix_v3:previous_levels'
 CACHE_SEC = 15 * 60
@@ -64,38 +78,53 @@ ISR, LEB, IRN, USA, YEM, SYR, IRQ, SAU, EGY, TUR, GULF, SEA = (
 PAIRS = [
     _P('israel>lebanon', 'Israel', ISR, 'Lebanon / Hizballah', LEB, ['israel', 'lebanon', 'hezbollah'],
        [('lebanon', ['israel', 'israeli', 'idf'], []),
-        ('israel', ['lebanon', 'hezbollah', 'hizballah', 'northern'], ['inbound'])]),
+        ('israel', ['lebanon', 'hezbollah', 'hizballah', 'northern'], ['inbound']),
+        ('card:israel', 'outgoing_operations.vs_lebanon', None)]),
     _P('hizballah>israel', 'Hizballah', LEB, 'Israel', ISR, ['israel', 'lebanon', 'hezbollah'],
        [('israel', ['lebanon', 'hezbollah', 'hizballah', 'northern'], ['outbound']),
-        ('lebanon', ['hezbollah', 'hizballah', 'resistance'], [])]),
+        ('lebanon', ['hezbollah', 'hizballah', 'resistance'], []),
+        ('card:israel', 'incoming_threats.hezbollah', None)]),
     _P('israel>iran', 'Israel', ISR, 'Iran', IRN, ['israel', 'iran'],
        [('iran', ['israel', 'israeli', 'zionist'], []),
-        ('israel', ['iran', 'iranian'], ['inbound'])]),
+        ('israel', ['iran', 'iranian'], ['inbound']),
+        ('card:israel', 'outgoing_operations.vs_iran', None)]),
     _P('iran>israel', 'Iran', IRN, 'Israel', ISR, ['israel', 'iran'],
        [('israel', ['iran', 'iranian'], ['outbound']),
-        ('iran', ['retaliation', 'retaliate', 'response'], [])]),
+        ('iran', ['retaliation', 'retaliate', 'response'], []),
+        ('card:israel', 'incoming_threats.iran_direct', None)]),
     _P('us>iran', 'United States', USA, 'Iran', IRN, ['iran'],
        [('iran', ['us', 'usa', 'american', 'america', 'washington', 'trump', 'centcom'], [])]),
     _P('iran>us_forces', 'Iran & partners', IRN, 'US forces / Gulf bases', USA, ['iran', 'iraq'],
        [('iran', ['hormuz', 'bases', 'proxy', 'proxies'], []),
-        ('iraq', ['us', 'american', 'coalition', 'bases'], [])]),
+        ('iraq', ['us', 'american', 'coalition', 'bases'], []),
+        ('qatar', ['base'], [])]),
     _P('iran>gulf', 'Iran', IRN, 'Gulf states', GULF, ['iran', 'saudi_arabia', 'uae', 'qatar', 'oman', 'bahrain', 'kuwait'],
-       [('saudi_arabia', ['iran', 'iranian'], []), ('uae', ['iran', 'iranian'], []),
-        ('qatar', ['iran', 'iranian'], []), ('oman', ['iran', 'iranian', 'hormuz'], [])]),
+       [('saudi_arabia', ['iran', 'iranian', 'kinetic'], []), ('uae', ['iran', 'iranian', 'kinetic'], []),
+        ('qatar', ['iran', 'iranian', 'gas'], []), ('oman', ['iran', 'iranian', 'hormuz'], [])],
+       note='Saudi / UAE "kinetic inbound" is read as Iran-led in the 2026 context; the trackers do not name the attacker.'),
     _P('houthis>shipping', 'Houthis', YEM, 'Red Sea shipping / Suez', SEA, ['yemen', 'houthis', 'egypt'],
        [('yemen', ['red', 'shipping', 'maritime', 'mandeb', 'vessel', 'vessels'], []),
         ('egypt', ['suez'], [])]),
     _P('houthis>israel', 'Houthis', YEM, 'Israel', ISR, ['yemen', 'houthis', 'israel'],
        [('yemen', ['israel', 'israeli', 'eilat'], []),
-        ('israel', ['yemen', 'houthi', 'houthis'], ['outbound'])]),
+        ('israel', ['yemen', 'houthi', 'houthis'], ['outbound']),
+        ('card:israel', 'incoming_threats.houthis', None)]),
     _P('israel>houthis', 'Israel', ISR, 'Houthis', YEM, ['yemen', 'houthis', 'israel'],
-       [('israel', ['yemen', 'houthi', 'houthis'], ['inbound'])]),
+       [('israel', ['yemen', 'houthi', 'houthis'], ['inbound']),
+        ('card:israel', 'outgoing_operations.vs_houthis', None)]),
     _P('houthis>saudi', 'Houthis', YEM, 'Saudi Arabia', SAU, ['yemen', 'houthis', 'saudi_arabia'],
        [('saudi_arabia', ['houthi', 'houthis', 'yemen'], []),
         ('yemen', ['saudi', 'ksa', 'riyadh'], [])]),
     _P('israel>syria', 'Israel', ISR, 'Syria', SYR, ['israel', 'syria'],
        [('syria', ['israel', 'israeli', 'idf', 'golan'], []),
-        ('israel', ['syria', 'syrian'], ['inbound'])]),
+        ('israel', ['syria', 'syrian'], ['inbound']),
+        ('card:israel', 'outgoing_operations.vs_syria', None)]),
+    _P('israel>gaza', 'Israel', ISR, 'Gaza', '🇵🇸', ['israel'],
+       [('card:israel', 'outgoing_operations.vs_gaza', None)]),
+    _P('hamas>israel', 'Hamas', '🇵🇸', 'Israel', ISR, ['israel'],
+       [('card:israel', 'incoming_threats.hamas', None)]),
+    _P('iran>iraq', 'Iran', IRN, 'Iraq (influence & proxies)', IRQ, ['iran', 'iraq'],
+       [('iraq', ['iran'], [])]),
     _P('turkey>syria', 'Türkiye', TUR, 'Syria (north / SDF)', SYR, ['syria'],
        [('syria', ['turkey', 'turkish', 'turkiye'], [])],
        note='Türkiye\'s own tracker lives on the Europe backend; this cell reads the Syria tracker only.'),
@@ -164,12 +193,74 @@ def read_trackers():
 
 
 # ----------------------------------------------------------------------------
+# CARD SOURCES (v3.1) -- the ME page's own country cards, cached by app.py
+# under threat:<target>. Keyword %, so capped at L4.
+# ----------------------------------------------------------------------------
+CARD_STALE_HOURS = 48
+
+
+def pct_to_level(p):
+    p = float(p or 0)
+    return 0 if p < 10 else 1 if p < 25 else 2 if p < 45 else 3 if p < 65 else 4
+
+
+def read_cards(redis_get, names=('israel',)):
+    out = {}
+    for n in names:
+        try:
+            c = redis_get(f'threat:{n}')
+        except Exception:
+            c = None
+        if isinstance(c, str):
+            try:
+                c = json.loads(c)
+            except ValueError:
+                c = None
+        if isinstance(c, dict):
+            fresh = 'live'
+            try:
+                age = (_now() - datetime.fromisoformat(str(c.get('cached_at')).replace('Z', '+00:00'))).total_seconds()
+                if age > CARD_STALE_HOURS * 3600:
+                    fresh = 'stale'
+            except Exception:
+                pass
+            out[n] = {'data': c, 'freshness': fresh}
+    return out
+
+
+def _dig(d, path):
+    for k in path.split('.'):
+        if not isinstance(d, dict):
+            return None
+        d = d.get(k)
+    return d
+
+
+# ----------------------------------------------------------------------------
 # CELL + MATRIX
 # ----------------------------------------------------------------------------
-def read_pair(pair, trackers):
+def read_pair(pair, trackers, cards=None):
     best = None
     tried, unread = [], []
     for th, match, exclude in pair['sources']:
+        if th.startswith('card:'):
+            name = th.split(':', 1)[1]
+            card = (cards or {}).get(name)
+            if not card:
+                unread.append(f'{name} card')
+                continue
+            node = _dig(card['data'], match)
+            if not isinstance(node, dict) or node.get('probability') is None:
+                tried.append(f'{name} card')
+                continue
+            tried.append(f'{name} card')
+            pct = float(node.get('probability') or 0)
+            lvl = pct_to_level(pct)
+            cand = {'level': lvl, 'raw_level': lvl, 'tracker': f'{name} card', 'vector': f"{match.split('.')[-1]} ({pct:.0f}%)",
+                    'capped': False, 'freshness': card['freshness'], 'tracker_so_what': '', 'kind': 'card'}
+            if best is None or cand['level'] > best['level']:
+                best = cand
+            continue
         t = trackers.get(th)
         if not t:
             unread.append(th)
@@ -181,7 +272,7 @@ def read_pair(pair, trackers):
             capped = min(vlvl, t['threat'])
             cand = {'level': capped, 'raw_level': vlvl, 'tracker': th, 'vector': vname,
                     'capped': capped < vlvl, 'freshness': t['freshness'],
-                    'tracker_so_what': t['so_what']}
+                    'tracker_so_what': t['so_what'], 'kind': 'tracker'}
             if best is None or cand['level'] > best['level']:
                 best = cand
     cell = {k: pair[k] for k in ('id', 'actor', 'actor_flag', 'target', 'target_flag', 'keys', 'note')}
@@ -205,7 +296,7 @@ def build_lines(cells, prev):
         tops = [c for c in read if c['level'] == top]
         if top >= 3:
             names = '; '.join(f"{c['actor']} → {c['target']}" for c in tops[:3])
-            lines.append(f"Highest corroborated pressure: {names} at L{top} {LADDER[top]}.")
+            lines.append(f"Highest pressure: {names} at L{top} {LADDER[top]}.")
         else:
             lines.append(f"No directed pair above L{top} {LADDER[top]} -- pressure is rhetorical, not yet confrontational.")
     a, b = by.get('israel>iran'), by.get('us>iran')
@@ -235,7 +326,8 @@ def build_lines(cells, prev):
 
 def build_matrix(redis_get, redis_set):
     trackers, missing = read_trackers()
-    cells = [read_pair(p, trackers) for p in PAIRS]
+    cards = read_cards(redis_get)
+    cells = [read_pair(p, trackers, cards) for p in PAIRS]
     prev = redis_get(PREV_KEY) or {}
     if isinstance(prev, str):
         try:
@@ -256,9 +348,11 @@ def build_matrix(redis_get, redis_set):
         'lines': build_lines(cells, prev),
         'trackers_read': sorted(trackers), 'trackers_missing': sorted(missing),
         'stale_trackers': sorted(t for t, v in trackers.items() if v['freshness'] != 'live'),
-        'method': ('Each pair reads the rhetoric tracker(s) that watch it; the cell takes the highest matching '
-                   'vector, capped at that tracker\'s own corroborated theatre level. Nothing here is scanned '
-                   'separately. Unread and not-sensed pairs are shown as gaps, never as L0.'),
+        'cards_read': sorted(cards),
+        'method': ('Each pair reads the rhetoric tracker(s) that watch it, plus the Israel card\'s incoming/outgoing '
+                   'panel; the cell takes the highest reading. Tracker vectors are capped at their tracker\'s '
+                   'corroborated level; card percentages convert to levels and are capped at L4. Nothing here is '
+                   'scanned separately. Unread and not-sensed pairs are shown as gaps, never as L0.'),
     }
     redis_set(PREV_KEY, {c['id']: c['level'] for c in read})
     return payload, trackers
@@ -339,7 +433,12 @@ def register_threat_matrix_v3(app, redis_client=None):
             rows[th] = {'theatre_level': t['threat'], 'freshness': t['freshness'],
                         'vectors': t['vectors'], 'vector_feeds_pairs': feeds,
                         'unused_vectors': sorted(k for k, v in feeds.items() if not v)}
-        return jsonify({'version': MATRIX_VERSION, 'trackers': rows, 'missing': missing,
+        cards = read_cards(rget)
+        card_rows = {n: {'freshness': c['freshness'],
+                         'paths': {s[1]: (_dig(c['data'], s[1]) or {}).get('probability')
+                                   for p in PAIRS for s in p['sources'] if s[0] == f'card:{n}'}}
+                     for n, c in cards.items()}
+        return jsonify({'version': MATRIX_VERSION, 'trackers': rows, 'cards': card_rows, 'missing': missing,
                         'pairs_by_source': {p['id']: [s[0] for s in p['sources']] for p in PAIRS}})
 
     app.add_url_rule('/api/threat-matrix-v3', 'threat_matrix_v3', api_matrix, methods=['GET'])
