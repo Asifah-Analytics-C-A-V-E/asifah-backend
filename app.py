@@ -2,6 +2,7 @@
 Asifah Analytics Backend (Middle East) -- version lives in ME_BACKEND_VERSION
 February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)  |  November 1, 2026 (v3.6.0)
 
+v3.7.0 (Nov 1 2026) -- Actor Matrix v3 registered (threat_matrix_v3.py).
 v3.6.0 (Nov 1 2026) -- audit cleanup (claude/ME_APP_AUDIT_2026-11-01.md):
   - ~400 dead lines removed: a shadow copy of the airline scanner, a /api/notams
     route that never answered (notam_monitor registers first), an unused
@@ -1357,6 +1358,14 @@ try:
     register_mecca_pact_endpoints(app)
 except Exception as e:
     print(f"[ME Backend] WARNING: Mecca Pact Watch unavailable ({e})")
+# Actor Matrix v3 (Nov 1 2026) -- reader of the rhetoric trackers; replaces the v2
+# "strike probability" matrix on the ME page. /api/threat-matrix/<target> (v2) stays
+# registered for Iraq/Israel/Jordan's bespoke cards until they move over.
+try:
+    from threat_matrix_v3 import register_threat_matrix_v3
+    register_threat_matrix_v3(app, redis_client)
+except Exception as e:
+    print(f"[ME Backend] WARNING: Actor Matrix v3 unavailable ({e})")
 # Syria Humanitarian Module (DTM API + ReliefWeb + OCHA)
 if SYRIA_HUMANITARIAN_AVAILABLE:
     register_syria_humanitarian_endpoints(app)
@@ -1634,7 +1643,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.6.0'
+ME_BACKEND_VERSION = '3.7.0'
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
