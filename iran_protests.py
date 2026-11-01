@@ -79,7 +79,7 @@ except ImportError:
 # CONFIGURATION
 # ============================================
 NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY')
-ALPHA_VANTAGE_KEY = os.environ.get('ALPHA_VANTAGE_KEY', 'NUW8NKIRMXNMRTD9')
+ALPHA_VANTAGE_KEY = os.environ.get('ALPHA_VANTAGE_KEY')   # Nov 1 2026: hardcoded default removed (was in public history); env var only
 GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 # Upstash Redis (persistent cache across Render cold starts)

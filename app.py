@@ -1597,8 +1597,12 @@ def debug_list_routes():
 # ========================================
 
 NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY')
-EODHD_API_KEY = os.environ.get('EODHD_API_KEY', '697925068da530.81277377')
-ALPHA_VANTAGE_KEY = os.environ.get('ALPHA_VANTAGE_KEY', '6V1C73D5FYVIDWM5')
+# Nov 1 2026 (October list #2): key text removed from source. Both values were
+# hardcoded defaults visible in public repo history; neither constant is read
+# anywhere in this file. Keys now come ONLY from Render env vars -- an unset
+# var is None, never a fallback key.
+EODHD_API_KEY = os.environ.get('EODHD_API_KEY')
+ALPHA_VANTAGE_KEY = os.environ.get('ALPHA_VANTAGE_KEY')
 GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 # Reddit User Agent
