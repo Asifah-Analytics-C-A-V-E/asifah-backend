@@ -1,7 +1,7 @@
 """
 yemen_signal_interpreter.py
 Asifah Analytics -- ME Backend Module
-v1.0.0
+v1.0.1 (Nov 1 2026: actor-id fix in build_top_signals)
 
 Signal interpretation engine for the Yemen / Houthi Rhetoric Tracker.
 
@@ -688,7 +688,7 @@ def interpret_signals(scan_data):
                 'highest_severity':  max((r['severity'] for r in red_lines), default=0),
             },
             'historical_matches':  historical,
-            'interpreter_version': '1.0.0',
+            'interpreter_version': '1.0.1',
             'interpreted_at':      datetime.now(timezone.utc).isoformat(),
         }
 
@@ -698,7 +698,7 @@ def interpret_signals(scan_data):
             'so_what':            {'scenario': 'Interpreter error', 'assessment': str(e)[:200]},
             'red_lines':          {'triggered': [], 'breached_count': 0, 'approaching_count': 0, 'highest_severity': 0},
             'historical_matches': [],
-            'interpreter_version': '1.0.0',
+            'interpreter_version': '1.0.1',
             'error':              str(e)[:200],
         }
 
@@ -759,11 +759,13 @@ def build_top_signals(result):
     migration_return_lvl = result.get('migration_return_level',   0) or 0
 
     actors = result.get('actors', {}) or {}
-    houthi_lvl     = actors.get('houthi',      {}).get('escalation_level', 0)
-    ksa_lvl        = actors.get('ksa',         {}).get('escalation_level', 0)
-    uae_lvl        = actors.get('uae',         {}).get('escalation_level', 0)
-    israel_lvl     = actors.get('israel',      {}).get('escalation_level', 0)
-    us_lvl         = actors.get('us',          {}).get('escalation_level', 0)
+    # v1.0.1 (Nov 1 2026): the tracker's actor ids are 'houthis' and 'usa' -- this read
+    # 'houthi' and 'us', so the Houthi composite and US levels were always 0.
+    houthi_lvl     = (actors.get('houthis') or actors.get('houthi') or {}).get('escalation_level', 0) or 0
+    ksa_lvl        = (actors.get('ksa')     or {}).get('escalation_level', 0) or 0
+    uae_lvl        = (actors.get('uae')     or {}).get('escalation_level', 0) or 0
+    israel_lvl     = (actors.get('israel')  or {}).get('escalation_level', 0) or 0
+    us_lvl         = (actors.get('usa') or actors.get('us') or {}).get('escalation_level', 0) or 0
 
     # Pull interpretation block
     interp = result.get('interpretation', {}) or {}

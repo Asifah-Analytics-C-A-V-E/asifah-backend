@@ -1,6 +1,6 @@
 """
-Yeme (Houthi) Rhetoric Tracker — Asifah Analytics
-'version': '2.1.1 - April 2026'
+Yemen (Houthi) Rhetoric Tracker — Asifah Analytics
+'version': '2.2.0 - November 1 2026' (v2.2.0: corroboration gate + target vectors; was 2.1.1 April 2026)
 
 Tracks escalation rhetoric from Ansar Allah (Houthis) and responses
 from KSA, UAE, US, Israel across two primary threat vectors:
@@ -20,6 +20,7 @@ Endpoint: GET /api/rhetoric/yemen
 """
 
 import os
+import re   # v2.2.0: corroboration + target matchers
 import json
 import threading
 import time
@@ -1452,12 +1453,161 @@ def _detect_crosstheater_coordination():
 # ============================================
 # MAIN RHETORIC SCAN
 # ============================================
+# ════════════════════════════════════════════════════════════════════════
+# v2.2.0 (Nov 1 2026) -- CORROBORATION GATE + TARGET VECTORS
+# ════════════════════════════════════════════════════════════════════════
+# Two defects found when the ME Actor Matrix first read this tracker:
+#  1. A SINGLE article set the theatre maximum. One Arabic "ballistic
+#     missile" (صاروخ باليستي) or a Houthi claim "hit the target" (أصاب الهدف)
+#     printed L5 "Active Strike" -- no corroboration, no check on whether the
+#     only source was the attacker's own claim. Doctrine: L3+ needs 2+ outlets;
+#     L5 is active conflict and must be confirmed by someone OTHER than the
+#     party claiming it (L5_ASSERTION_RULE + attacker-claim rule). Uncorroborated
+#     L3+ is held at L2; uncorroborated-by-a-third-party L5 is held at L4.
+#  2. Nothing downstream could read the vectors. maritime_level etc. are flat
+#     ints and the actor dicts carry no level, so the BLUF / Actor Matrix saw an
+#     empty tracker. Now emitted as `vector_levels`, split by target (Houthi
+#     strikes on Israel / Saudi / UAE / US) plus INBOUND strikes on the Houthis
+#     (Israel / US / Saudi-led coalition), and every actor gets escalation_level.
+
+_HOUTHI_OUTLETS = ('saba', 'almasirah', 'al-masirah', 'al masirah', 'masirah', 'ansarallah', 'ansar allah')
+_HOUTHI_CLAIM_RX = re.compile(r"saree|houthi spokesman|houthis? say|houthis? claim|ansar allah says|"
+                              r"استهدفنا|أطلقنا|بيان عسكري|المتحدث العسكري|سريع", re.I)
+_Y_TARGETS = {
+    'israel': re.compile(r"\b(israel|israeli|tel aviv|eilat|jaffa|ben gurion|haifa)\b|يافا|إسرائيل|الإسرائيلي|ישראל|אילת", re.I),
+    'saudi':  re.compile(r"\b(saudi|riyadh|jeddah|jizan|jazan|najran|aramco|abha|dammam)\b|السعودية|الرياض|جيزان|نجران", re.I),
+    'uae':    re.compile(r"\b(uae|emirates|abu dhabi|dubai)\b|الإمارات|أبوظبي|دبي", re.I),
+    'us':     re.compile(r"\b(us base|us forces|u\.s\. forces|carrier|uss|american|centcom|destroyer|us navy|us warship)\b|"
+                         r"الأمريكية|الأمريكي|حاملة", re.I),
+}
+_Y_INB_ACTORS = {
+    'israel': re.compile(r"\b(israel|israeli|idf|iaf)\b|إسرائيل|الإسرائيلي|ישראל|צה\"?ל", re.I),
+    'us':     re.compile(r"\b(us|u\.s\.|american|centcom|pentagon|trump|washington)\b|الأمريكي|أمريكا|ترامب", re.I),
+    'saudi':  re.compile(r"\b(saudi|coalition|riyadh)\b|السعودية|التحالف", re.I),
+}
+_Y_HOUTHI = re.compile(r"\b(houthi|houthis|yemen|yemeni|hodeidah|hudaydah|sanaa|sana'a|ansar allah|ansarallah|saada)\b|"
+                       r"الحوثي|الحوثيين|اليمن|صنعاء|الحديدة|صعدة", re.I)
+_Y_KINETIC = re.compile(r"\b(strikes?|struck|airstrikes?|bomb\w*|raid\w*|hits?|pound\w*|destroy\w*|targets?|targeted)\b|"
+                        r"غارة|غارات|قصف|استهداف|תקיפה|תקף", re.I)
+_Y_PREP = re.compile(r"\b(weighs?|considers?|options|prepar\w*|readies|deploy\w*|plans?)\b", re.I)
+_Y_THREAT = re.compile(r"\b(warns?|threat\w*|vows?|retaliat\w*)\b|يهدد|يتوعد", re.I)
+_Y_DEESC = re.compile(r"\b(talks|negotiat\w*|ceasefire|truce|deal|agreement|prisoner|exchange|mediat\w*)\b|هدنة|مفاوضات", re.I)
+
+
+def _y_outlet(article):
+    title = article.get('title', '') or ''
+    if ' - ' in title:
+        tail = title.rsplit(' - ', 1)[-1].strip()
+        if 2 <= len(tail) <= 60:
+            return tail.lower()
+    url = article.get('url', '') or ''
+    m = re.match(r'https?://([^/]+)/', url)
+    if m and 'news.google' not in m.group(1):
+        return m.group(1).lower().replace('www.', '')
+    return (str(article.get('source', '')) or title[:40]).lower()
+
+
+def _y_is_houthi_voice(outlet, title):
+    o = (outlet or '').lower()
+    return any(h in o for h in _HOUTHI_OUTLETS) or bool(_HOUTHI_CLAIM_RX.search(title or ''))
+
+
+def _y_gate(hits):
+    """hits: {level: {outlet: (title, houthi_voice)}} -> (gated_level, raw_level, reason)."""
+    raw = max((lv for lv, v in hits.items() if v), default=0)
+    for lv in range(5, 0, -1):
+        h = hits.get(lv) or {}
+        if not h:
+            continue
+        if lv <= 2:
+            return lv, raw, f'L{lv} (no corroboration needed below L3)'
+        if len(h) >= 2:
+            if lv == 5 and all(hv for (_t, hv) in h.values()):
+                # every L5 outlet is the Houthis' own voice -> confirmation missing
+                return 4, raw, 'L5 held at L4: only Houthi outlets / claims assert it'
+            return lv, raw, f'L{lv} confirmed by {len(h)} outlets'
+        # single outlet at L3+: hold at L2 unless a lower rung is corroborated
+    lower = [lv for lv in (4, 3) if len(hits.get(lv) or {}) >= 2]
+    if lower:
+        return lower[0], raw, f'L{lower[0]} confirmed; higher reads single-outlet'
+    return (2 if raw >= 2 else raw), raw, (f'single-outlet L{raw} held at L2' if raw >= 3 else f'L{raw}')
+
+
+def _corroborate_and_split(articles):
+    """Re-reads the scan's articles for the gate and the target split."""
+    vec = {'maritime': {}, 'direct_strike': {}}
+    by_target = {t: {} for t in _Y_TARGETS}
+    inbound = {a: {} for a in _Y_INB_ACTORS}
+    seen = set()
+    for a in articles or []:
+        title = (a.get('title', '') or '').strip()
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        text = f"{title} {a.get('description', '')}".lower()
+        outlet = _y_outlet(a)
+        hv = _y_is_houthi_voice(outlet, title)
+        for vname, triggers in (('maritime', MARITIME_TRIGGERS), ('direct_strike', DIRECT_STRIKE_TRIGGERS)):
+            for lv in range(5, 0, -1):
+                if any(kw in text for kw in triggers.get(lv, [])):
+                    vec[vname].setdefault(lv, {}).setdefault(outlet, (title[:140], hv))
+                    if vname == 'direct_strike':
+                        for tname, trx in _Y_TARGETS.items():
+                            if trx.search(text):
+                                by_target[tname].setdefault(lv, {}).setdefault(outlet, (title[:140], hv))
+                    break
+        # inbound: actor BEFORE Houthi/Yemen term in the headline, never de-escalation
+        tl = title.lower()
+        hm = _Y_HOUTHI.search(tl)
+        if hm and not _Y_DEESC.search(tl):
+            for aname, arx in _Y_INB_ACTORS.items():
+                am = arx.search(tl)
+                if not am or am.start() > hm.start():
+                    continue
+                if _Y_PREP.search(tl):
+                    lv = 3
+                elif _Y_KINETIC.search(tl) and not _Y_THREAT.search(tl):
+                    lv = 4
+                elif _Y_THREAT.search(tl):
+                    lv = 2
+                else:
+                    continue
+                inbound[aname].setdefault(lv, {}).setdefault(outlet, (title[:140], False))
+    out = {'vectors': {}, 'detail': {}}
+    for vname, hits in vec.items():
+        g, raw, why = _y_gate(hits)
+        out['vectors'][vname] = g
+        out['detail'][vname] = {'gated': g, 'raw': raw, 'reason': why}
+    for tname, hits in by_target.items():
+        g, raw, why = _y_gate(hits)
+        out['vectors'][f'strike_{tname}'] = g
+        out['detail'][f'strike_{tname}'] = {'gated': g, 'raw': raw, 'reason': why}
+    for aname, hits in inbound.items():
+        g, raw, why = _y_gate(hits)
+        out['vectors'][f'inbound_{aname}'] = min(g, 4)
+        out['detail'][f'inbound_{aname}'] = {'gated': min(g, 4), 'raw': raw, 'reason': why}
+    return out
+
+
 def run_houthi_rhetoric_scan(days=3):
     """Full Houthi rhetoric scan"""
     print(f"[Yemen Rhetoric] Starting scan ({days}-day window)...")
 
     articles = fetch_rhetoric_articles(days)
     actor_results, theatre_summary = classify_articles(articles)
+
+    # -- v2.2.0: corroboration gate on the two threat vectors + target split
+    try:
+        corroboration = _corroborate_and_split(articles)
+        for _v, _key in (('maritime', 'maritime_max_level'), ('direct_strike', 'direct_strike_max_level')):
+            _g = corroboration['vectors'].get(_v)
+            if _g is not None and _g < theatre_summary[_key]:
+                print(f"[Yemen Rhetoric] {_v}: L{theatre_summary[_key]} -> L{_g} "
+                      f"({corroboration['detail'][_v]['reason']})")
+                theatre_summary[_key] = _g
+    except Exception as _e:
+        corroboration = {'vectors': {}, 'detail': {}, 'error': f'{type(_e).__name__}: {str(_e)[:120]}'}
+        print(f"[Yemen Rhetoric] corroboration gate failed (ungated reads kept): {_e}")
 
     # Overall escalation level (max of all THREAT vectors — diplomacy excluded)
     max_maritime   = theatre_summary['maritime_max_level']
@@ -1603,8 +1753,24 @@ def run_houthi_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'conditional_threats': theatre_summary.get('conditional_threats', [])[:8],
         'specificity_score': theatre_specificity,
-        'version': '2.1.1-yemen-interpreter-wired'
+        # v2.2.0: readable vectors for the BLUF / Actor Matrix, and the gate's reasons
+        'vector_levels': {
+            'maritime': max_maritime,
+            'somaliland': theatre_summary['somaliland_max_level'],
+            **{k: v for k, v in corroboration.get('vectors', {}).items() if k not in ('maritime', 'direct_strike')},
+        },
+        'corroboration': corroboration.get('detail', {}),
+        'version': '2.2.0-yemen-corroborated'
     }
+
+    # v2.2.0: every actor carries a level (was absent -> interpreter read 0 / None),
+    # never above the gated theatre maximum.
+    for _ar in actor_results.values():
+        _lv = max(_ar.get('maritime_score', 0) or 0, _ar.get('direct_strike_score', 0) or 0,
+                  _ar.get('somaliland_score', 0) or 0)
+        _lv = min(_lv, max_level)
+        _ar['escalation_level'] = _lv
+        _ar['escalation_label'] = ESCALATION_LEVELS.get(_lv, {}).get('label', 'Monitoring')
 
     # ── Baseline + silence detection ──
     baselines = _update_actor_baselines(actor_results)

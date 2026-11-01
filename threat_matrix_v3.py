@@ -35,7 +35,15 @@ v3.1.0 (Nov 1 2026, after the first live /debug):
     Qatar gas_infrastructure -> Iran -> Gulf; Qatar base_posture -> Iran -> US forces.
   - New pairs: Iran -> Iraq (Iraq tracker iran_iraq), Israel -> Gaza, Hamas -> Israel.
   - Known tracker-side gap: the Iran tracker scores israel_iran and us_iran at 0
-    while its theatre reads L5 -- tracker tuning, not matrix.
+    while its theatre reads L5 -- tracker tuning, not matrix. (Fixed in Iran
+    tracker v1.9.0: those buckets now carry inbound pressure.)
+
+v3.2.0 (Nov 1 2026): Yemen tracker v2.2.0 emits corroborated, target-split vectors
+  (maritime, strike_israel/saudi/uae/us, inbound_israel/us/saudi). Wired with
+  all-token matches ('strike+israel'). Saudi 'kinetic_inbound' REMOVED from
+  Iran -> Gulf: the live Yemen read attributes this autumn's strikes on Saudi
+  Arabia to the Houthis (strike_saudi L5, 8 outlets). New pairs: Houthis -> US
+  forces, Houthis -> UAE, US -> Houthis, Saudi-led coalition -> Houthis.
 
 The vector names differ tracker to tracker. /api/threat-matrix-v3/debug lists
 every tracker's vectors and which pair each one fed, so the token lists can be
@@ -54,7 +62,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-MATRIX_VERSION = '3.1.0'
+MATRIX_VERSION = '3.2.0'
 CACHE_KEY = 'threat_matrix_v3:latest'
 PREV_KEY = 'threat_matrix_v3:previous_levels'
 CACHE_SEC = 15 * 60
@@ -99,22 +107,31 @@ PAIRS = [
         ('iraq', ['us', 'american', 'coalition', 'bases'], []),
         ('qatar', ['base'], [])]),
     _P('iran>gulf', 'Iran', IRN, 'Gulf states', GULF, ['iran', 'saudi_arabia', 'uae', 'qatar', 'oman', 'bahrain', 'kuwait'],
-       [('saudi_arabia', ['iran', 'iranian', 'kinetic'], []), ('uae', ['iran', 'iranian', 'kinetic'], []),
+       [('saudi_arabia', ['iran', 'iranian'], []), ('uae', ['iran', 'iranian', 'kinetic'], []),
         ('qatar', ['iran', 'iranian', 'gas'], []), ('oman', ['iran', 'iranian', 'hormuz'], [])],
-       note='Saudi / UAE "kinetic inbound" is read as Iran-led in the 2026 context; the trackers do not name the attacker.'),
+       note='UAE "kinetic inbound" is read as Iran-led; Saudi inbound strikes are attributed to the Houthis by the Yemen tracker.'),
     _P('houthis>shipping', 'Houthis', YEM, 'Red Sea shipping / Suez', SEA, ['yemen', 'houthis', 'egypt'],
-       [('yemen', ['red', 'shipping', 'maritime', 'mandeb', 'vessel', 'vessels'], []),
+       [('yemen', ['maritime', 'shipping', 'mandeb'], []),
         ('egypt', ['suez'], [])]),
     _P('houthis>israel', 'Houthis', YEM, 'Israel', ISR, ['yemen', 'houthis', 'israel'],
-       [('yemen', ['israel', 'israeli', 'eilat'], []),
+       [('yemen', ['strike+israel'], []),
         ('israel', ['yemen', 'houthi', 'houthis'], ['outbound']),
         ('card:israel', 'incoming_threats.houthis', None)]),
     _P('israel>houthis', 'Israel', ISR, 'Houthis', YEM, ['yemen', 'houthis', 'israel'],
        [('israel', ['yemen', 'houthi', 'houthis'], ['inbound']),
+        ('yemen', ['inbound+israel'], []),
         ('card:israel', 'outgoing_operations.vs_houthis', None)]),
+    _P('us>houthis', 'United States', USA, 'Houthis', YEM, ['yemen', 'houthis'],
+       [('yemen', ['inbound+us'], [])]),
+    _P('coalition>houthis', 'Saudi-led coalition', SAU, 'Houthis', YEM, ['yemen', 'houthis', 'saudi_arabia'],
+       [('yemen', ['inbound+saudi'], [])]),
+    _P('houthis>us_forces', 'Houthis', YEM, 'US forces / ships', USA, ['yemen', 'houthis'],
+       [('yemen', ['strike+us'], [])]),
+    _P('houthis>uae', 'Houthis', YEM, 'UAE', '🇦🇪', ['yemen', 'houthis', 'uae'],
+       [('yemen', ['strike+uae'], [])]),
     _P('houthis>saudi', 'Houthis', YEM, 'Saudi Arabia', SAU, ['yemen', 'houthis', 'saudi_arabia'],
        [('saudi_arabia', ['houthi', 'houthis', 'yemen'], []),
-        ('yemen', ['saudi', 'ksa', 'riyadh'], [])]),
+        ('yemen', ['strike+saudi'], [])]),
     _P('israel>syria', 'Israel', ISR, 'Syria', SYR, ['israel', 'syria'],
        [('syria', ['israel', 'israeli', 'idf', 'golan'], []),
         ('israel', ['syria', 'syrian'], ['inbound']),
@@ -148,8 +165,16 @@ def _tokens(name):
 
 
 def _match(vector_name, match, exclude):
+    """Any match item hits. An item written 'a+b' needs ALL of its tokens (v3.2:
+    'strike+israel' must not fire on 'inbound_israel')."""
     tk = _tokens(vector_name)
-    return bool(tk & set(match)) and not (tk & set(exclude))
+    if tk & set(exclude or []):
+        return False
+    for m in match:
+        parts = m.split('+')
+        if all(p in tk for p in parts):
+            return True
+    return False
 
 
 # ----------------------------------------------------------------------------

@@ -1,6 +1,9 @@
 """
 Asifah Analytics — Iran Rhetoric & Command Node Tracker
-v1.8.0 — October 31, 2026 (v1.0.0 April 4, 2026)
+v1.9.0 — November 1, 2026 (v1.0.0 April 4, 2026)
+v1.9.0 — Israel / US INBOUND pressure scored into the israel_iran / us_iran buckets
+         (were always L0 -- only Iranian trigger lists ever ran over them).
+v1.8.0 — October 31, 2026
 ANALYTICAL FRAME:
 Iran is not just an actor — it is the COMMAND NODE of the resistance axis.
 This tracker answers two questions:
@@ -86,6 +89,7 @@ COPYRIGHT © 2025-2026 Asifah Analytics. All rights reserved.
 """
 
 import os
+import re   # v1.9.0: inbound-pressure matchers
 import json
 import threading
 import time
@@ -3210,6 +3214,117 @@ def classify_articles(articles, proxy_activation_level):
 
 
 # ============================================
+# INBOUND PRESSURE -- Israel / US pressure ON Iran (v1.9.0, Nov 1 2026)
+# ============================================
+# The israel_iran and us_iran actor buckets were built to answer "how hard are
+# Israel and the US pressing on Iran?" -- the interpreter reads their levels as
+# "strike posture language" (US) and "nuclear red line language" (Israel). But
+# the scorer only ran IRANIAN trigger lists over them, behind a reporting
+# downgrade, so both read L0 on a day the bucket held "US Weighs Fresh Iran
+# Strikes; CENTCOM Chief Briefs Trump On Military Options" and "Trump Warns 'US
+# Can Strike Iran In 10 Minutes'". This scores them on their own terms.
+#
+# Direction-aware: the actor must appear BEFORE Iran in the headline ("Iran
+# warns Israel" is Iranian rhetoric, not Israeli pressure). Ladder (cap L4 --
+# a keyword count never asserts L5, L5_ASSERTION_RULE):
+#   L4  strike on Iran by that actor (kinetic verb)            needs 2+ outlets
+#   L3  decision / preparation (options briefed, date set,
+#       forces deploying, "readies", "approves")                 needs 2+ outlets
+#   L2  threat / warning / ultimatum
+#   L1  actor + Iran in the same headline, 3+ times
+# De-escalation headlines (talks, ceasefire, deal, letter) never count.
+# These levels feed ONLY the two adversary buckets. They do not touch the
+# theatre level, the score, the command-node bonus or the actor baselines.
+
+_INB_ACTORS = {
+    'israel': re.compile(r"\b(israel|israeli|idf|iaf|netanyahu|bibi|katz|zamir|mossad|dermer)\b|"
+                         r"ישראל|צה\"?ל|נתניהו|כ\"ץ|إسرائيل|الاحتلال|اسرائیل|رژیم صهیونیستی|صهیونیست", re.I),
+    'us': re.compile(r"\b(us|u\.s\.|usa|united states|american|america|washington|trump|pentagon|centcom|"
+                     r"hegseth|rubio|vance|white house)\b|ארה\"?ב|טראמפ|הבית הלבן|אמריקה|أمريكا|الأمريكي|ترامب|"
+                     r"واشنطن|آمریکا|ترامپ|واشنگتن|کاخ سفید", re.I),
+}
+_INB_IRAN = re.compile(r"\b(iran|iranian|tehran|isfahan|natanz|fordow|bushehr|kharg|irgc)\b|"
+                       r"איראן|באיראן|טהרן|إيران|طهران|ایران|تهران", re.I)
+_INB_KINETIC = re.compile(r"\b(strikes|struck|bombs|bombed|bombing|attacks|attacked|hits|hit|raids|raided|"
+                          r"pounds|pounded|destroys|destroyed|airstrikes?)\b|תקף|תקפה|הפציץ|הפציצו|"
+                          r"قصف|غارات|استهدف|حمله کرد|بمباران", re.I)
+_INB_PREP = re.compile(r"\b(weighs?|weighing|considers?|considering|options|prepar\w*|readies|readying|plans?|"
+                       r"planning|deploy\w*|carrier|bombers?|approv\w*|green.?light\w*|target list|"
+                       r"briefs?|briefed|date set|countdown|mobiliz\w*|positions?)\b|תקיפה|לקראת|היערכות|"
+                       r"החלטה|התאריך|יעדים|استعداد|تحضير|آماده|بررسی گزینه", re.I)
+_INB_THREAT = re.compile(r"\b(warns?|warned|threat\w*|ultimatum|vows?|vowed|can strike|will strike|"
+                         r"would strike|retaliat\w*|consequences|red line)\b|מאיים|איום|אזהרה|"
+                         r"يهدد|تهديد|يحذر|تهدید|هشدار", re.I)
+_INB_DEESC = re.compile(r"\b(talks|negotiat\w*|ceasefire|cease-fire|truce|deal|agreement|letter|mediat\w*|"
+                        r"diplomac\w*|de-escalat\w*|indirect)\b|מגעים|הפסקת אש|مفاوضات|هدنة|مذاکره|آتش‌بس", re.I)
+
+
+def _inb_outlet(article):
+    """Distinct-outlet key: Google News titles end ' - Publisher'; else URL host; else source."""
+    title = article.get('title', '') or ''
+    if ' - ' in title:
+        tail = title.rsplit(' - ', 1)[-1].strip()
+        if 2 <= len(tail) <= 60:
+            return tail.lower()
+    url = article.get('url', '') or ''
+    m = re.match(r'https?://([^/]+)/', url)
+    if m and 'news.google' not in m.group(1):
+        return m.group(1).lower().replace('www.', '')
+    return (str(article.get('source', '')) or title[:40]).lower()
+
+
+def _score_inbound_pressure(articles):
+    """-> {'israel': {...}, 'us': {...}} each with level, label, outlets, evidence."""
+    out = {}
+    for actor, actor_rx in _INB_ACTORS.items():
+        tiers = {4: {}, 3: {}, 2: {}, 1: {}}   # level -> {outlet: title}
+        seen = set()
+        for a in articles or []:
+            title = (a.get('title', '') or '').strip()
+            if not title or title in seen:
+                continue
+            seen.add(title)
+            t = title.lower()
+            am, im = actor_rx.search(t), _INB_IRAN.search(t)
+            if not (am and im) or am.start() > im.start():
+                continue
+            if _INB_DEESC.search(t):
+                continue
+            outlet = _inb_outlet(a)
+            # Order matters: "weighs strikes" / "briefs on strike options" is
+            # preparation, not a strike -- the planning verb wins over the noun.
+            if _INB_PREP.search(t):
+                lvl = 3
+            elif _INB_KINETIC.search(t) and not _INB_THREAT.search(t):
+                lvl = 4
+            elif _INB_THREAT.search(t):
+                lvl = 2
+            else:
+                lvl = 1
+            tiers[lvl].setdefault(outlet, title[:140])
+        level, reason = 0, 'no actor-on-Iran headlines this cycle'
+        for lv in (4, 3):
+            if len(tiers[lv]) >= 2:
+                level, reason = lv, f'{len(tiers[lv])} outlets'
+                break
+            if len(tiers[lv]) == 1 and level < 2:
+                level, reason = 2, f'single-outlet L{lv} held at L2 (needs 2+ outlets)'
+        if level == 0 and tiers[2]:
+            level, reason = 2, f'{len(tiers[2])} outlet(s) with threat language'
+        if level == 0 and sum(len(v) for v in tiers.values()) >= 3:
+            level, reason = 1, 'actor-on-Iran coverage without threat or preparation language'
+        evidence = []
+        for lv in (4, 3, 2, 1):
+            for outlet, title in tiers[lv].items():
+                if len(evidence) < 5:
+                    evidence.append({'level': lv, 'outlet': outlet, 'title': title})
+        out[actor] = {'level': level, 'label': ESCALATION_LEVELS.get(level, {}).get('label', 'Baseline'),
+                      'reason': reason, 'outlets_by_level': {lv: len(v) for lv, v in tiers.items()},
+                      'evidence': evidence}
+    return out
+
+
+# ============================================
 # SCORING — Proxy Activation is a weighted input
 # ============================================
 # ════════════════════════════════════════════════════════════════════════
@@ -3750,6 +3865,26 @@ def run_iran_rhetoric_scan(days=3):
     articles = fetch_rhetoric_articles(days)
     actor_results, theatre_summary = classify_articles(articles, proxy_activation_level)
 
+    # -- v1.9.0 (Nov 1 2026): inbound pressure on the two adversary buckets.
+    # escalation_level / label / colour only; max_level (score, command-node
+    # bonus, baselines) is deliberately left alone.
+    try:
+        inbound_pressure = _score_inbound_pressure(articles)
+        for _actor_key, _bucket in (('israel', 'israel_iran'), ('us', 'us_iran')):
+            _ip = inbound_pressure.get(_actor_key, {})
+            _ar = actor_results.get(_bucket)
+            if _ar is not None and _ip.get('level', 0) > _ar.get('escalation_level', 0):
+                _ar['escalation_level'] = _ip['level']
+                _ar['escalation_label'] = ESCALATION_LEVELS.get(_ip['level'], {}).get('label', 'Baseline')
+                _ar['escalation_color'] = ESCALATION_LEVELS.get(_ip['level'], {}).get('color', '#6b7280')
+                _ar['inbound_pressure'] = _ip
+        print(f"[Iran Rhetoric] Inbound pressure: Israel L{inbound_pressure.get('israel', {}).get('level', 0)} "
+              f"({inbound_pressure.get('israel', {}).get('reason', '')}), "
+              f"US L{inbound_pressure.get('us', {}).get('level', 0)} ({inbound_pressure.get('us', {}).get('reason', '')})")
+    except Exception as _e:
+        inbound_pressure = {'error': f'{type(_e).__name__}: {str(_e)[:120]}'}
+        print(f"[Iran Rhetoric] Inbound pressure scoring failed: {_e}")
+
     # -- v1.7.0 (Jun 18 2026): De-escalation maturity + contradiction soft-cap --
     # Trust the diplomatic keywords for depth (Coco's call); but if 2+ articles
     # carry a live contradiction of the all-fronts off-ramp (Israel won't leave
@@ -3955,8 +4090,10 @@ def run_iran_rhetoric_scan(days=3):
 
         # Actors
         'actors': actor_results,
+        # v1.9.0: Israel / US pressure ON Iran (also written into the two adversary buckets)
+        'inbound_pressure': inbound_pressure,
         'scan_time_seconds': scan_time,
-        'version': '1.8.0-iran-command-node',
+        'version': '1.9.0-iran-command-node',
     }
 
     # Save initial cache
@@ -4174,7 +4311,7 @@ def register_iran_rhetoric_routes(app):
             'theatre_escalation_color': '#6b7280',
             'actors': {},
             'message': 'First scan in progress — check back in 3-4 minutes',
-            'version': '1.8.0-iran-command-node',
+            'version': '1.9.0-iran-command-node',
         })
 
     @app.route('/api/rhetoric/iran/summary', methods=['GET'])
