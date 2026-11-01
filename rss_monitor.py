@@ -2,22 +2,33 @@
 RSS Monitor for Asifah Analytics
 Comprehensive RSS feed monitoring for Middle East intelligence
 
-v3.6.0 — October 4, 2026
-(was stamped v3.2.0/February here while the body documented v3.3.0, v3.4.0
- and v3.5.0 -- the version now lives in RSS_MONITOR_VERSION below)
+Version lives in RSS_MONITOR_VERSION below (v3.8.0, November 1, 2026).
+
+v3.8.0 (Nov 1 2026) -- ME audit (claude/ME_APP_AUDIT_2026-11-01.md):
+  - Flight cache moved from /tmp to Redis (Upstash REST). /tmp is per instance:
+    the standby instance had an empty cache, so its visitors saw "scan in
+    progress" AND each of those requests launched an unlocked ~100-query
+    Google News scan -- the double scanning instance_lock v1.1.0 was built to
+    stop. Now only the leader's periodic thread scans; requests only read.
+    /tmp is kept as a fallback when Redis is not configured.
+  - Leader names current as of Nov 2026: Mojtaba Khamenei (Supreme Leader since
+    Mar 2026), Israel Katz (Defence Minister), Eyal Zamir (IDF Chief of Staff).
+    Gallant/Halevi retired. Generic titles narrowed ("Defense Minister" alone
+    used to tag ANY country's defence minister as an Israeli leader quote).
+  - Michel Issa relabelled: US Ambassador to Lebanon (was tagged Lebanese).
 
 Monitors:
 1. Leadership Rhetoric (MEMRI, Al-Manar, Iran Wire)
 
 2. Israeli News Sources (Ynet, Times of Israel, JPost, i24NEWS, Haaretz)
 3. Regional Arab News Sources (Arab News)
-4. Airline Flight Disruptions — CACHED, background refresh every 12h
+4. Airline Flight Disruptions — Redis-cached, leader-only refresh every 6h
 
 Leaders monitored:
-- Naim Qassem (Hezbollah Secretary-General)
-- Ali Khamenei (Iran Supreme Leader)
+- Naim Qassem (Hizballah Secretary-General)
+- Mojtaba Khamenei (Iran Supreme Leader, since Mar 2026)
 - Abdul-Malik al-Houthi (Houthi leader)
-- Israeli leadership (Netanyahu, Gallant, Halevi)
+- Israeli leadership (Netanyahu, Defence Minister Israel Katz, CoS Eyal Zamir)
 """
 
 import requests
@@ -54,7 +65,7 @@ except ImportError:
 # 2026, while the file itself documents v3.3.0 (April), v3.4.0 (May) and
 # v3.5.0 (September). The flight-cancellations endpoint reported '3.2.0' to
 # callers in four places. Seven months of releases, invisible from outside.
-RSS_MONITOR_VERSION = '3.7.0'
+RSS_MONITOR_VERSION = '3.8.0'
 RSS_USER_AGENT = (f'AsifahAnalytics-ME-RSS/{RSS_MONITOR_VERSION} '
                   f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -244,11 +255,14 @@ LEADERSHIP_NAMES = {
         'organization': 'hezbollah'
     },
     'khamenei': {
+        # Key kept (weights + downstream readers use it). Since Mar 2026 the
+        # Supreme Leader is Mojtaba Khamenei; bare 'Khamenei' now means him.
         'names': [
-            'Ali Khamenei', 'Ayatollah Khamenei', 'خامنه‌ای',
-            'علی خامنه‌ای', 'Supreme Leader Khamenei'
+            'Mojtaba Khamenei', 'Ayatollah Mojtaba Khamenei', 'مجتبی خامنه‌ای',
+            'Supreme Leader Mojtaba', 'Supreme Leader Khamenei', 'Ayatollah Khamenei',
+            'خامنه‌ای'
         ],
-        'titles': ['Supreme Leader', 'Ayatollah', 'Iran\'s leader'],
+        'titles': ['Supreme Leader', 'Iran\'s leader'],
         'organization': 'iran'
     },
     'abdul_malik_houthi': {
@@ -267,18 +281,19 @@ LEADERSHIP_NAMES = {
         'titles': ['Prime Minister', 'PM Netanyahu', 'Israeli PM'],
         'organization': 'israel'
     },
-    'gallant': {
+    'katz': {
         'names': [
-            'Yoav Gallant', 'Gallant', 'Defense Minister Gallant'
+            'Israel Katz', 'Defense Minister Katz', 'Defence Minister Katz',
+            'ישראל כ"ץ'
         ],
-        'titles': ['Defense Minister', 'Israeli Defense Minister'],
+        'titles': ['Israeli Defense Minister', 'Israeli Defence Minister'],
         'organization': 'israel'
     },
-    'halevi': {
+    'zamir': {
         'names': [
-            'Herzi Halevi', 'Halevi', 'IDF Chief Halevi'
+            'Eyal Zamir', 'Lt. Gen. Zamir', 'IDF Chief Zamir', 'אייל זמיר'
         ],
-        'titles': ['IDF Chief of Staff', 'Chief of Staff', 'IDF Commander'],
+        'titles': ['IDF Chief of Staff'],
         'organization': 'israel'
     },
     # ========================================
@@ -361,9 +376,9 @@ LEADERSHIP_NAMES = {
             'Michel Issa', 'Ambassador Issa',
         ],
         'titles': [
-            'Lebanese Ambassador',
+            'US Ambassador to Lebanon',
         ],
-        'organization': 'lebanon_diplomatic'
+        'organization': 'us_diplomatic'
     },
     'hamadeh': {
         'names': [
@@ -464,12 +479,12 @@ LEADERSHIP_WEIGHTS = {
         'international': 1.7,
         'operational': 2.3
     },
-    'gallant': {
+    'katz': {
         'domestic': 1.1,
         'international': 1.6,
         'operational': 2.4
     },
-    'halevi': {
+    'zamir': {
         'domestic': 1.0,
         'international': 1.5,
         'operational': 2.5
@@ -631,10 +646,14 @@ def fetch_iraq_rss():
 
 # ========================================
 # AIRLINE FLIGHT DISRUPTION MONITORING
-# Cached system — background refresh every 12h
+# Cached in Redis — leader-only background refresh every 6h
 # ========================================
 
-FLIGHT_CACHE_FILE = '/tmp/flight_disruptions_cache.json'
+FLIGHT_CACHE_FILE = '/tmp/flight_disruptions_cache.json'   # fallback only (no Redis)
+FLIGHT_REDIS_KEY = 'flight_disruptions:latest'
+import os as _os
+_UPSTASH_URL = _os.environ.get('UPSTASH_REDIS_URL')
+_UPSTASH_TOKEN = _os.environ.get('UPSTASH_REDIS_TOKEN')
 _flight_scan_running = False
 _flight_scan_lock = threading.Lock()
 
@@ -700,7 +719,16 @@ DISRUPTION_SEARCH_KEYWORDS = [
 
 
 def _load_flight_cache():
-    """Load flight disruption cache from /tmp file"""
+    """v3.8.0: Redis first (shared by both instances), /tmp only as fallback."""
+    if _UPSTASH_URL and _UPSTASH_TOKEN:
+        try:
+            r = requests.get(f"{_UPSTASH_URL}/get/{FLIGHT_REDIS_KEY}",
+                             headers={"Authorization": f"Bearer {_UPSTASH_TOKEN}"}, timeout=8)
+            res = r.json().get('result')
+            if res:
+                return json.loads(res)
+        except Exception as e:
+            print(f"[Flight Cache] Redis load error: {str(e)[:120]}")
     try:
         if Path(FLIGHT_CACHE_FILE).exists():
             with open(FLIGHT_CACHE_FILE, 'r') as f:
@@ -711,7 +739,15 @@ def _load_flight_cache():
 
 
 def _save_flight_cache(data):
-    """Save flight disruption cache to /tmp file"""
+    """v3.8.0: write Redis (shared) and /tmp (local fallback)."""
+    if _UPSTASH_URL and _UPSTASH_TOKEN:
+        try:
+            requests.post(f"{_UPSTASH_URL}/set/{FLIGHT_REDIS_KEY}",
+                          headers={"Authorization": f"Bearer {_UPSTASH_TOKEN}",
+                                   "Content-Type": "application/json"},
+                          data=json.dumps(data, default=str), timeout=10)
+        except Exception as e:
+            print(f"[Flight Cache] Redis save error: {str(e)[:120]}")
     try:
         with open(FLIGHT_CACHE_FILE, 'w') as f:
             json.dump(data, f, indent=2)
@@ -1049,7 +1085,7 @@ def _trigger_flight_background_scan():
 
 def _flight_periodic_scan_thread():
     """
-    Background thread — scans every 12 hours.
+    Background thread — scans every 6 hours (leader instance only).
     First scan after 20s delay (let app boot first).
     """
     SCAN_INTERVAL = 6 * 60 * 60  # 6 hours — war footing
@@ -1105,14 +1141,11 @@ def fetch_airline_disruptions():
             print(f"[Flight Cache] Returning {len(cache['cancellations'])} cached disruptions (fresh)")
             return cache['cancellations']
         else:
-            # Stale but usable — return it and trigger background refresh
-            print(f"[Flight Cache] Returning {len(cache['cancellations'])} cached disruptions (stale, triggering refresh)")
-            _trigger_flight_background_scan()
+            # Stale but usable. v3.8.0: no request-triggered scan -- the leader's
+            # periodic thread refreshes; a request on the standby must not scan.
             return cache['cancellations']
 
-    # No cache at all — trigger scan, return empty
-    print("[Flight Cache] No cache found, triggering background scan")
-    _trigger_flight_background_scan()
+    print("[Flight Cache] No cache yet -- the leader's periodic scan will fill it")
     return []
 
 
@@ -1123,7 +1156,7 @@ def register_flight_scan_thread():
     """
     thread = threading.Thread(target=_flight_periodic_scan_thread, daemon=True)
     thread.start()
-    print("[Flight Scan] ✅ Periodic scan thread registered (12h cycle)")
+    print("[Flight Scan] ✅ Periodic scan thread registered (6h cycle, leader only)")
 
 
 def get_flight_cache_for_endpoint():
@@ -1135,10 +1168,7 @@ def get_flight_cache_for_endpoint():
 
     if cache and 'cancellations' in cache:
         fresh = _is_flight_cache_fresh(cache, max_age_hours=12)
-
-        if not fresh:
-            _trigger_flight_background_scan()
-            cache['stale'] = True
+        # v3.8.0: stale is reported, never fixed by the request (see docstring)
 
         return {
             'success': True,
@@ -1150,8 +1180,7 @@ def get_flight_cache_for_endpoint():
             'version': RSS_MONITOR_VERSION
         }
 
-    # No cache — trigger scan, return skeleton
-    _trigger_flight_background_scan()
+    # No cache yet -- the leader's periodic thread fills it (first run ~20s after boot)
     return {
         'success': True,
         'cancellations': [],
@@ -1159,7 +1188,8 @@ def get_flight_cache_for_endpoint():
         'last_updated': None,
         'cached': False,
         'scan_in_progress': True,
-        'message': 'Initial scan in progress. Disruption data will appear shortly.',
+        'state': 'unread',
+        'message': 'Not read yet -- the first scan runs shortly after a deploy. This is not the same as "no disruptions".',
         'version': RSS_MONITOR_VERSION
     }
 
@@ -1329,7 +1359,7 @@ def apply_leadership_multiplier(base_score, article):
 # ========================================
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("TESTING RSS MONITOR v3.2.0")
+    print(f"TESTING RSS MONITOR v{RSS_MONITOR_VERSION}")
     print("=" * 60 + "\n")
 
     print("Fetching ALL RSS feeds...\n")

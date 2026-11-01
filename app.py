@@ -1,6 +1,18 @@
 """
-Asifah Analytics Backend v3.2.0
-February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)
+Asifah Analytics Backend (Middle East) -- version lives in ME_BACKEND_VERSION
+February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)  |  November 1, 2026 (v3.6.0)
+
+v3.6.0 (Nov 1 2026) -- audit cleanup (claude/ME_APP_AUDIT_2026-11-01.md):
+  - ~400 dead lines removed: a shadow copy of the airline scanner, a /api/notams
+    route that never answered (notam_monitor registers first), an unused
+    Instagram keyword table.
+  - Public ?refresh=true is now throttled: at most one live rescan per target per
+    15 minutes across both instances (Redis SET NX). Inside the window the
+    request gets the cache -- anyone on the internet can hit that URL.
+  - /api/threat-matrix/<target> is cached for 2 hours (was a live 6-source scan
+    on every click) and serves cache even when the daily rate limit is spent.
+  - Leader names in the keyword tables brought up to date (Qassem, Mojtaba
+    Khamenei, al-Sharaa; Biden-era phrases retired).
 
 v3.2.0 — Reddit moved to search.rss with an honest User-Agent (the spoofed
 Chrome UA was the cause of auth_failed), 30-min platform cooldown on 429,
@@ -25,7 +37,6 @@ from flask_cors import CORS
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
 import os
 import time
 import re
@@ -453,8 +464,6 @@ from rss_monitor import (
     fetch_all_rss,
     fetch_israeli_rss,
     enhance_article_with_leadership,
-    apply_leadership_multiplier,
-    fetch_airline_disruptions,
     register_flight_scan_thread,
     get_flight_cache_for_endpoint
 )
@@ -473,10 +482,10 @@ if REDIS_URL:
     try:
         redis_client = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5)
         redis_client.ping()
-        print(f"[Cache] ✅ Redis connected successfully")
+        print("[Cache] ✅ Redis connected successfully")
     except Exception as e:
         print(f"[Cache] ⚠️ Redis connection failed: {e}")
-        print(f"[Cache] Falling back to file-based cache")
+        print("[Cache] Falling back to file-based cache")
         redis_client = None
 else:
     print("[Cache] ⚠️ No REDIS_URL found in environment — using file fallback")
@@ -1194,12 +1203,29 @@ def _empty_placeholder(target=None, extended=False):
     return base
 
 
+PUBLIC_REFRESH_GAP_SEC = 15 * 60
+
+
+def _public_refresh_allowed(key):
+    """v3.6.0: one live rescan per key per 15 min, shared across instances.
+    No Redis -> allow (fail-open, same as before this guard existed)."""
+    if not redis_client:
+        return True
+    try:
+        return bool(redis_client.set(f'refresh_gate:{key}', '1', nx=True, ex=PUBLIC_REFRESH_GAP_SEC))
+    except Exception:
+        return True
+
+
 def _check_cache_or_placeholder(label, cache_key, target=None, extended=False):
     """
     Standard cache-check logic. Call at the top of each endpoint.
     Returns a Response if cache hit or placeholder, or None if a fresh scan should proceed.
     """
     refresh = request.args.get('refresh', 'false').lower() == 'true'
+    if refresh and not _public_refresh_allowed(cache_key):
+        print(f"[{label}] refresh=true inside the 15-min window -- serving cache")
+        refresh = False
 
     if not refresh:
         cached = get_cached_result(cache_key)
@@ -1608,7 +1634,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.5.0'
+ME_BACKEND_VERSION = '3.6.0'
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
@@ -1779,31 +1805,6 @@ KEYWORD_SEVERITY = {
         ],
         'multiplier': 1.0
     }
-}
-
-# ========================================
-# OSINT DEFENDER INSTAGRAM FEED
-# ========================================
-
-# Middle East country keyword detection
-MIDDLE_EAST_COUNTRIES = {
-    'IRAN': ['iran', 'iranian', 'tehran', 'irgc', 'khamenei', 'revolutionary guard'],
-    'SYRIA': ['syria', 'syrian', 'damascus', 'aleppo', 'assad', 'hts'],
-    'LEBANON': ['lebanon', 'lebanese', 'beirut', 'hezbollah', 'nasrallah'],
-    'ISRAEL': ['israel', 'israeli', 'idf', 'tel aviv', 'jerusalem', 'netanyahu'],
-    'YEMEN': ['yemen', 'yemeni', 'houthi', 'houthis', 'sanaa', 'ansarallah'],
-    'SAUDI ARABIA': ['saudi', 'riyadh', 'mbs', 'kingdom'],
-    'UAE': ['uae', 'dubai', 'abu dhabi', 'emirates'],
-    'JORDAN': ['jordan', 'jordanian', 'amman'],
-    'EGYPT': ['egypt', 'egyptian', 'cairo', 'sisi'],
-    'IRAQ': ['iraq', 'iraqi', 'baghdad', 'erbil'],
-    'TURKEY': ['turkey', 'turkish', 'ankara', 'erdogan', 'istanbul'],
-    'QATAR': ['qatar', 'doha'],
-    'KUWAIT': ['kuwait'],
-    'BAHRAIN': ['bahrain', 'manama'],
-    'OMAN': ['oman', 'muscat'],
-    'GAZA': ['gaza', 'hamas', 'palestinian'],
-    'WEST BANK': ['west bank', 'jenin', 'ramallah']
 }
 
 # ========================================
@@ -2038,7 +2039,7 @@ ESCALATION_KEYWORDS = [
 TARGET_KEYWORDS = {
     'hezbollah': {
         'keywords': [
-            'hezbollah', 'hizbollah', 'hizballah', 'lebanon', 'lebanese', 'nasrallah',
+            'hezbollah', 'hizbollah', 'hizballah', 'lebanon', 'lebanese', 'naim qassem', 'qassem',
             # v3.3 — diplomat amplifier keywords (Ravid-style wider net)
             'michel issa', 'nada hamadeh', 'simon karam',
             'tom barrack', 'massad boulos', 'boulos',
@@ -2050,7 +2051,7 @@ TARGET_KEYWORDS = {
     },
     'iran': {
         'keywords': [
-            'iran', 'iranian', 'tehran', 'irgc', 'revolutionary guard', 'khamenei',
+            'iran', 'iranian', 'tehran', 'irgc', 'revolutionary guard', 'khamenei', 'mojtaba',
             # v3.3 — diplomat amplifier keywords (Ravid-style wider net)
             'tom barrack', 'massad boulos', 'boulos',
             'ron dermer', 'dermer', 'yechiel leiter', 'leiter',
@@ -2149,11 +2150,12 @@ TARGET_KEYWORDS = {
             'hts', 'hayat tahrir al-sham', 'tahrir al-sham',
             'sdf', 'syrian democratic forces', 'kurdish forces', 'kurds', 'ypg', 'ypj',
             'druze', 'druze community', 'golan', 'golan heights',
-            'assad regime', 'post-assad', 'syria transition'
+            'assad regime', 'post-assad', 'syria transition',
+            'al-sharaa', 'sharaa'
         ],
         'reddit_keywords': [
             'Syria', 'Damascus', 'ISIS', 'Al Qaeda', 'HTS', 'SDF',
-            'Kurds', 'Druze', 'Golan', 'Israel', 'Assad', 'civil war'
+            'Kurds', 'Druze', 'Golan', 'Israel', 'Sharaa', 'civil war'
         ]
     },
     'jordan': {
@@ -2972,7 +2974,7 @@ def detect_coordination_signals(israel_prob, us_prob, all_articles):
             'allied forces', 'joint training', 'integrated operations'
         ],
         'diplomatic_coordination': [
-            'biden netanyahu', 'us israel coordination', 'allied planning',
+            'trump netanyahu', 'us israel coordination', 'allied planning',
             'strategic coordination', 'defense consultation'
         ],
         'simultaneous_deployments': [
@@ -3213,7 +3215,7 @@ def calculate_reverse_threat(articles, source_actor='iran', target_actor='israel
         
         # Proxy mobilization (Hezbollah, Houthis, Iraqi militias)
         'proxy_threats': [
-            'hezbollah warns', 'hezbollah threatens', 'nasrallah warns', 'nasrallah threatens',
+            'hezbollah warns', 'hezbollah threatens', 'qassem warns', 'qassem threatens',
             'houthi attack', 'houthi strike', 'houthi threatens', 'ansarallah warns',
             'militia deployment', 'proxy forces', 'armed groups mobilize',
             'shiite militias', 'hashd forces', 'iraqi militia', 'pmu forces',
@@ -3398,7 +3400,7 @@ ISRAEL_INCOMING_THREAT_KEYWORDS = {
             'hezbollah threatens', 'hezbollah retaliation',
             'hezbollah fires', 'hezbollah launches',
             'radwan force', 'hezbollah tunnel',
-            'nasrallah warns', 'nasrallah threatens',
+            'qassem warns', 'qassem threatens',
             'lebanon border attack', 'lebanese rocket',
             'rockets northern israel', 'rockets galilee',
             'rockets haifa', 'sirens northern israel',
@@ -4223,7 +4225,7 @@ IRAN_INCOMING_THREAT_KEYWORDS = {
             'us airstrike iran', 'centcom strikes iran', 'pentagon iran strike',
             'us military iran', 'american strike iran', 'b-52 iran',
             'us carrier iran', 'us tomahawk iran', 'us war iran',
-            'biden orders iran', 'trump orders iran strike',
+            'trump orders iran strike',
             'us hits iran', 'us targets iran', 'us bombs iranian',
             'us navy iran', 'us destroys iran', 'operation iran us',
             'american bombing iran', 'us combat iran',
@@ -4266,7 +4268,7 @@ IRAN_OUTGOING_THREAT_KEYWORDS = {
             'hezbollah orders iran', 'iran directs hezbollah',
             'irgc hezbollah coordinate', 'iran activates hezbollah',
             'hezbollah iran missiles', 'hezbollah precision missiles',
-            'iran hezbollah northern front', 'nasrallah iran orders',
+            'iran hezbollah northern front', 'qassem iran orders',
             'hezbollah full war', 'hezbollah multi-front',
             'iran proxy hezbollah', 'quds force hezbollah',
         ]
@@ -5247,7 +5249,7 @@ def fetch_syria_direct_rss():
     feed_url = 'https://syriadirect.org/feed/'
     
     try:
-        print(f"[Syria Direct] Fetching RSS...")
+        print("[Syria Direct] Fetching RSS...")
         
         headers = {
             'User-Agent': ASIFAH_USER_AGENT,
@@ -5315,7 +5317,7 @@ def fetch_sohr_rss():
     feed_url = 'https://www.syriahr.com/en/feed/'
     
     try:
-        print(f"[SOHR] Fetching RSS...")
+        print("[SOHR] Fetching RSS...")
         
         headers = {
             'User-Agent': ASIFAH_USER_AGENT,
@@ -5888,225 +5890,9 @@ def enhance_syria_conflict_data_with_displacement(conflict_data, unhcr_data, alh
     
     return enhanced
       
-# ========================================
-# AIRLINE DISRUPTIONS TRACKER
-# ========================================
+# (Nov 1 2026) Dead airline-disruption copy removed (~215 lines). The live
+# scanner, cache and /flight-cancellations data all come from rss_monitor.py.
 
-def fetch_airline_disruptions():
-    """
-    Fetch airline disruptions from Google News RSS
-    Searches for flight cancellations to Middle East destinations
-    
-    Returns list of disruption objects with:
-    - airline, route, origin, destination, date, duration, status, source_url, headline
-    """
-    
-    print("[RSS Monitor - Airline Disruptions] Starting scan...")
-    
-    # Middle East destinations to monitor
-    destinations = [
-        # High priority (conflict zones)
-        'Tel Aviv', 'Israel', 'Beirut', 'Lebanon', 'Damascus', 'Syria',
-        'Tehran', 'Iran', 'Baghdad', 'Iraq',
-        # Regional capitals
-        'Amman', 'Jordan', 'Dubai', 'UAE', 'Riyadh', 'Saudi Arabia',
-        'Cairo', 'Egypt', 'Istanbul', 'Turkey', 'Doha', 'Qatar'
-    ]
-    
-    keywords = [
-        'airline suspended flights',
-        'airline cancelled flights',
-        'flight cancellation',
-        'suspend service',
-        'cancel flights'
-    ]
-    
-    all_disruptions = []
-    seen_urls = set()
-    
-    # Search each destination (limit to prevent slowness)
-    for destination in destinations[:8]:  # Top 8 destinations
-        for keyword in keywords[:2]:  # Top 2 keywords per destination
-            query = f'{keyword} {destination}'
-            
-            try:
-                # Google News RSS endpoint
-                url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en&gl=US&ceid=US:en"
-                
-                response = requests.get(url, timeout=10, headers={
-                    'User-Agent': ASIFAH_USER_AGENT
-                })
-                
-                if response.status_code != 200:
-                    continue
-                
-                # Parse RSS XML
-                import xml.etree.ElementTree as ET
-                
-                try:
-                    root = ET.fromstring(response.content)
-                except ET.ParseError:
-                    continue
-                
-                items = root.findall('.//item')
-                
-                # Process top 3 results per query
-                for item in items[:3]:
-                    title_elem = item.find('title')
-                    link_elem = item.find('link')
-                    pubDate_elem = item.find('pubDate')
-                    
-                    if title_elem is None or link_elem is None:
-                        continue
-                    
-                    title = title_elem.text or ''
-                    link = link_elem.text or ''
-                    pub_date = pubDate_elem.text if pubDate_elem is not None else ''
-                    
-                    # Skip duplicates
-                    if link in seen_urls:
-                        continue
-                    
-                    seen_urls.add(link)
-                    
-                    # Parse disruption details
-                    disruption = {
-                        'airline': extract_airline_from_title(title),
-                        'route': f"Various → {destination}",
-                        'origin': 'Various',
-                        'destination': destination,
-                        'date': parse_rss_date(pub_date),
-                        'duration': extract_duration_from_title(title),
-                        'status': extract_status_from_title(title),
-                        'source_url': link,
-                        'headline': title[:150]  # Truncate long headlines
-                    }
-                    
-                    all_disruptions.append(disruption)
-                
-            except Exception as e:
-                print(f"[RSS Monitor] Error fetching {destination}: {str(e)[:100]}")
-                continue
-    
-    print(f"[RSS Monitor - Airline Disruptions] ✅ Found {len(all_disruptions)} disruptions")
-    return all_disruptions
-
-
-def extract_airline_from_title(title):
-    """Extract airline name from news headline"""
-    
-    # Comprehensive airline list (major carriers + Middle East carriers)
-    airlines = [
-        # Star Alliance
-        'Lufthansa', 'United Airlines', 'United', 'Air Canada', 'Turkish Airlines',
-        'Swiss', 'SWISS', 'Austrian Airlines', 'Austrian', 'Singapore Airlines',
-        
-        # SkyTeam
-        'Air France', 'KLM', 'Delta', 'Delta Airlines', 'Korean Air',
-        
-        # Oneworld
-        'British Airways', 'American Airlines', 'American', 'Cathay Pacific',
-        'Qantas', 'Qatar Airways', 'Iberia',
-        
-        # Middle East carriers
-        'Emirates', 'Etihad', 'flydubai', 'Air Arabia', 'Saudia',
-        'Gulf Air', 'Kuwait Airways', 'Royal Jordanian', 'Oman Air',
-        'Middle East Airlines', 'MEA',
-        
-        # Israeli carriers
-        'El Al', 'Arkia', 'Israir',
-        
-        # Low-cost carriers
-        'Wizz Air', 'Ryanair', 'EasyJet', 'Pegasus Airlines',
-        
-        # Other major carriers
-        'Air New Zealand', 'Ethiopian Airlines', 'EgyptAir', 'Egypt Air'
-    ]
-    
-    title_lower = title.lower()
-    
-    # Check each airline
-    for airline in airlines:
-        if airline.lower() in title_lower:
-            return airline
-    
-    # Try to extract from sentence structure
-    # Pattern: "[Airline] suspends/cancels/resumes"
-    import re
-    pattern = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:suspend|cancel|halt|resume)', title, re.IGNORECASE)
-    if pattern:
-        potential = pattern.group(1)
-        if len(potential) > 3 and potential not in ['United States', 'Middle East']:
-            return potential
-    
-    return "Unknown Airline"
-
-
-def extract_status_from_title(title):
-    """Extract flight status (Suspended/Cancelled/Resumed)"""
-    
-    title_lower = title.lower()
-    
-    if 'resume' in title_lower or 'restart' in title_lower or 'return' in title_lower:
-        return 'Resumed'
-    elif 'cancel' in title_lower:
-        return 'Cancelled'
-    elif 'suspend' in title_lower or 'halt' in title_lower or 'stop' in title_lower:
-        return 'Suspended'
-    else:
-        return 'Disrupted'
-
-
-def extract_duration_from_title(title):
-    """Extract duration (Until March, For 3 weeks, Indefinite, etc.)"""
-    
-    import re
-    
-    # Look for "until [date]"
-    until_match = re.search(r'until\s+([A-Za-z]+\s+\d{1,2}(?:,?\s+\d{4})?)', title, re.IGNORECASE)
-    if until_match:
-        return f"Until {until_match.group(1)}"
-    
-    # Look for specific months
-    months = ['January', 'February', 'March', 'April', 'May', 'June',
-              'July', 'August', 'September', 'October', 'November', 'December']
-    for month in months:
-        if month.lower() in title.lower():
-            year_match = re.search(r'\b(202[4-9])\b', title)
-            if year_match:
-                return f"Until {month} {year_match.group(1)}"
-            else:
-                return f"Until {month}"
-    
-    # Look for "for X days/weeks/months"
-    for_match = re.search(r'for\s+(\d+)\s+(day|week|month)s?', title, re.IGNORECASE)
-    if for_match:
-        num = for_match.group(1)
-        unit = for_match.group(2)
-        return f"For {num} {unit}{'s' if int(num) > 1 else ''}"
-    
-    # Look for "indefinite"
-    if 'indefinite' in title.lower():
-        return 'Indefinite'
-    
-    return 'Unknown'
-
-
-def parse_rss_date(pub_date):
-    """Parse RSS pub date to ISO format"""
-    
-    try:
-        if pub_date:
-            # RSS uses RFC 2822 format
-            from email.utils import parsedate_to_datetime
-            date_obj = parsedate_to_datetime(pub_date)
-            return date_obj.isoformat()
-    except:
-        pass
-    
-    # Fallback to current time
-    return datetime.now(timezone.utc).isoformat()
-    
 # ========================================
 # API ENDPOINTS
 # ========================================
@@ -6116,11 +5902,13 @@ def api_threat(target):
     try:
         days = int(request.args.get('days', 7))
         refresh = request.args.get('refresh', 'false').lower() == 'true'
+        if refresh and not _public_refresh_allowed(f'threat:{target}'):
+            refresh = False   # v3.6.0: inside the 15-min window -> cache
         
         if target not in TARGET_KEYWORDS:
             return jsonify({
                 'success': False,
-                'error': f"Invalid target"
+                'error': "Invalid target"
             }), 400
         
         # Check cache first (skip if user clicked Scan OSINT with refresh=true)
@@ -6147,7 +5935,7 @@ def api_threat(target):
         if target not in TARGET_KEYWORDS:
             return jsonify({
                 'success': False,
-                'error': f"Invalid target"
+                'error': "Invalid target"
             }), 400
         
         query = ' OR '.join(TARGET_KEYWORDS[target]['keywords'])
@@ -6221,7 +6009,7 @@ def api_threat(target):
                        articles_reddit + telegram_articles + bluesky_articles)
         
         # NEW: Fetch ALL RSS feeds (leadership rhetoric + Israeli news)
-        print(f"[RSS] Fetching RSS feeds...")
+        print("[RSS] Fetching RSS feeds...")
         rss_articles = fetch_all_rss()  # Includes: MEMRI, Al-Manar, Iran Wire, Ynet, ToI, JPost, i24NEWS, Haaretz
         
         # Add leadership detection to all articles
@@ -6357,19 +6145,31 @@ def api_threat_matrix(target):
     """
     try:
         days = int(request.args.get('days', 7))
-        
+
+        if target not in TARGET_KEYWORDS:
+            return jsonify({
+                'success': False,
+                'error': f"Invalid target: {target}"
+            }), 400
+
+        # v3.6.0: 2-hour cache. Opening the matrix used to run a live 6-source scan.
+        _tm_key = f'threat_matrix:{target}:{days}'
+        if redis_client:
+            try:
+                _hit = redis_client.get(_tm_key)
+                if _hit:
+                    _hit = json.loads(_hit)
+                    _hit['cached'] = True
+                    return jsonify(_hit)
+            except Exception as _e:
+                print(f"[Threat Matrix] cache read failed: {_e}")
+
         if not check_rate_limit():
             return jsonify({
                 'success': False,
                 'error': 'Rate limit reached',
                 'rate_limited': True
             }), 200
-        
-        if target not in TARGET_KEYWORDS:
-            return jsonify({
-                'success': False,
-                'error': f"Invalid target: {target}"
-            }), 400
         
         # Fetch articles (same as existing endpoint)
         query = ' OR '.join(TARGET_KEYWORDS[target]['keywords'])
@@ -6565,8 +6365,15 @@ def api_threat_matrix(target):
                 } if (target == 'iran' and iran_outgoing) else {}
             ),
 
-            'version': '2.8.0-multi-actor'
+            'version': '2.8.0-multi-actor',
+            'computed_at': datetime.now(timezone.utc).isoformat(),
         }
+
+        if redis_client:
+            try:
+                redis_client.setex(_tm_key, 2 * 3600, json.dumps(response, default=str))
+            except Exception as _e:
+                print(f"[Threat Matrix] cache write failed: {_e}")
 
         return jsonify(response)
         
@@ -7038,7 +6845,7 @@ def api_syria_conflict():
             }), 429
         
         # Fetch fresh data
-        syria_keywords = ['syria', 'syrian', 'damascus', 'assad', 'aleppo', 'idlib']
+        syria_keywords = ['syria', 'syrian', 'damascus', 'sharaa', 'aleppo', 'idlib']
         query = ' OR '.join(syria_keywords)
         
         articles_en = fetch_newsapi_articles(query, days)
@@ -7047,7 +6854,7 @@ def api_syria_conflict():
         
         articles_reddit = fetch_reddit_posts(
             'syria',
-            ['Syria', 'Assad', 'Damascus', 'conflict', 'strike'],
+            ['Syria', 'Sharaa', 'Damascus', 'conflict', 'strike'],
             days
         )
         
@@ -8503,174 +8310,9 @@ def flight_cancellations():
             'count': 0
         }), 500
         
-# NOTAM endpoint
-@app.route('/api/notams')
-def get_notams():
-    """Fetch active NOTAMs for Middle East region"""
-    
-    # Middle East ICAO codes and country mappings
-    MIDDLE_EAST_FIRS = {
-        'LLLL': {'country': 'Israel', 'flag': '🇮🇱', 'name': 'Tel Aviv FIR'},
-        'OLBB': {'country': 'Lebanon', 'flag': '🇱🇧', 'name': 'Beirut FIR'},
-        'OSTT': {'country': 'Syria', 'flag': '🇸🇾', 'name': 'Damascus FIR'},
-        'OIIX': {'country': 'Iran', 'flag': '🇮🇷', 'name': 'Tehran FIR'},
-        'OYSC': {'country': 'Yemen', 'flag': '🇾🇪', 'name': 'Sanaa FIR'},
-        'ORBB': {'country': 'Iraq', 'flag': '🇮🇶', 'name': 'Baghdad FIR'},
-        'OJAC': {'country': 'Jordan', 'flag': '🇯🇴', 'name': 'Amman FIR'},
-        'HECC': {'country': 'Egypt', 'flag': '🇪🇬', 'name': 'Cairo FIR'},
-        'OEJD': {'country': 'Saudi Arabia', 'flag': '🇸🇦', 'name': 'Jeddah FIR'},
-        'OEDF': {'country': 'Saudi Arabia', 'flag': '🇸🇦', 'name': 'Riyadh FIR'},
-        'OMAE': {'country': 'UAE', 'flag': '🇦🇪', 'name': 'Dubai FIR'},
-        'OTDF': {'country': 'Qatar', 'flag': '🇶🇦', 'name': 'Doha FIR'},
-        'OOMM': {'country': 'Oman', 'flag': '🇴🇲', 'name': 'Muscat FIR'},
-        'OBBB': {'country': 'Bahrain', 'flag': '🇧🇭', 'name': 'Bahrain FIR'}
-    }
-    
-    notams = []
-    
-    try:
-        # FAA NOTAM Search API endpoint
-        base_url = "https://external-api.faa.gov/notamapi/v1/notams"
-        
-        for icao_code, info in MIDDLE_EAST_FIRS.items():
-            try:
-                # Query FAA NOTAM API
-                params = {
-                    'locationICAOId': icao_code,
-                    'responseType': 'application/json'
-                }
-                
-                response = requests.get(base_url, params=params, timeout=5)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    # Parse NOTAMs
-                    if data.get('notamList'):
-                        for notam in data['notamList']:
-                            parsed = parse_notam(notam, info)
-                            if parsed:
-                                notams.append(parsed)
-                
-                # Rate limit protection
-                time.sleep(0.2)
-                
-            except Exception as e:
-                print(f"Error fetching NOTAM for {icao_code}: {e}")
-                continue
-        
-        # Sort by priority (closures first, then by date)
-        priority_order = {
-            'AIRSPACE CLOSURE': 1,
-            'FLIGHT RESTRICTION': 2,
-            'MILITARY ACTIVITY': 3,
-            'AIRPORT CLOSURE': 4,
-            'NAVAID OUTAGE': 5,
-            'HAZARD': 6,
-            'OTHER': 7
-        }
-        
-        notams.sort(key=lambda x: (priority_order.get(x['type'], 99), x.get('effective_date', '')))
-        
-        result = {
-            'notams': notams,
-            'count': len(notams),
-            'last_updated': datetime.now(timezone.utc).isoformat()
-        }
-        
-        return jsonify(result)
-    
-    except Exception as e:
-        print(f"NOTAM fetch error: {e}")
-        return jsonify({'notams': [], 'count': 0, 'error': str(e)}), 500
+# (Nov 1 2026) Dead /api/notams route + parse_notam removed: notam_monitor.py
+# registers /api/notams first and Flask serves the first registration.
 
-
-def parse_notam(notam_data, location_info):
-    """Parse NOTAM data into structured format"""
-    try:
-        # Extract NOTAM text
-        notam_text = notam_data.get('notamText', '').upper()
-        
-        # Determine NOTAM type based on keywords
-        notam_type = 'OTHER'
-        icon = '📋'
-        color = 'gray'
-        
-        if any(word in notam_text for word in ['AIRSPACE CLOSED', 'AIRSPACE CLO', 'FIR CLOSED']):
-            notam_type = 'AIRSPACE CLOSURE'
-            icon = '⛔'
-            color = 'red'
-        elif any(word in notam_text for word in ['RESTRICTED', 'PROHIBITED', 'DANGER AREA']):
-            notam_type = 'FLIGHT RESTRICTION'
-            icon = '🚫'
-            color = 'orange'
-        elif any(word in notam_text for word in ['MILITARY', 'MIL ACT', 'EXERCISE']):
-            notam_type = 'MILITARY ACTIVITY'
-            icon = '⚠️'
-            color = 'yellow'
-        elif any(word in notam_text for word in ['AIRPORT CLOSED', 'AD CLOSED', 'RWY CLOSED']):
-            notam_type = 'AIRPORT CLOSURE'
-            icon = '🛑'
-            color = 'purple'
-        elif any(word in notam_text for word in ['NAVAID', 'VOR', 'DME', 'ILS', 'U/S']):
-            notam_type = 'NAVAID OUTAGE'
-            icon = '📡'
-            color = 'blue'
-        elif any(word in notam_text for word in ['VOLCANIC', 'ASH', 'HAZARD', 'OBSTRUCTION']):
-            notam_type = 'HAZARD'
-            icon = '⚠️'
-            color = 'gray'
-        
-        # Extract dates
-        effective_date = notam_data.get('effectiveStart', '')
-        expiry_date = notam_data.get('effectiveEnd', '')
-        
-        # Format dates
-        effective_formatted = ''
-        expiry_formatted = ''
-        
-        if effective_date:
-            try:
-                eff_dt = datetime.fromisoformat(effective_date.replace('Z', '+00:00'))
-                effective_formatted = eff_dt.strftime('%b %d, %Y')
-            except:
-                effective_formatted = effective_date[:10]
-        
-        if expiry_date:
-            try:
-                exp_dt = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
-                expiry_formatted = exp_dt.strftime('%b %d, %Y')
-            except:
-                expiry_formatted = expiry_date[:10]
-        
-        # Create summary (first 150 chars of NOTAM text)
-        summary = notam_text[:150].strip()
-        if len(notam_text) > 150:
-            summary += '...'
-        
-        # NOTAM ID
-        notam_id = notam_data.get('notamID', 'N/A')
-        
-        return {
-            'id': notam_id,
-            'country': location_info['country'],
-            'flag': location_info['flag'],
-            'fir': location_info['name'],
-            'type': notam_type,
-            'icon': icon,
-            'color': color,
-            'summary': summary,
-            'effective_date': effective_formatted,
-            'expiry_date': expiry_formatted,
-            'valid_range': f"{effective_formatted} - {expiry_formatted}" if expiry_formatted else f"From {effective_formatted}",
-            'notam_text': notam_text,
-            'source_url': f"https://notams.aim.faa.gov/notamSearch/notam.html?id={notam_id}"
-        }
-    
-    except Exception as e:
-        print(f"NOTAM parse error: {e}")
-        return None
-               
 # ========================================
 # START BACKGROUND REFRESH ON BOOT
 # ========================================
