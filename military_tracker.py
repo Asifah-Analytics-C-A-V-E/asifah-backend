@@ -268,8 +268,10 @@ REGIONAL_THEATRES = {
         'label': 'Asia & The Pacific Theatre',
         'icon': '🌏',
         'order': 1,
-        'actors': ['china', 'taiwan', 'vietnam', 'north_korea', 'pakistan', 'afghanistan'],
-        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, Korean Peninsula, South/Central Asia'
+        # v3.15 (Nov 2 2026): japan was defined as an actor but missing here, so it
+        # never counted toward the Asia theatre; philippines added with its actor.
+        'actors': ['china', 'taiwan', 'japan', 'philippines', 'vietnam', 'north_korea', 'pakistan', 'afghanistan'],
+        'description': 'INDOPACOM area — China/PLAN, Taiwan Strait, South China Sea, Luzon Strait, Korean Peninsula, South/Central Asia'
     },
     'europe': {
         'label': 'European Theatre',
@@ -825,7 +827,22 @@ MILITARY_ACTORS = {
             'china military exercise middle east',
             'south china sea military', 'taiwan strait military',
             'pla exercise', 'chinese military exercise',
-            'chinese naval gun', 'plan warship'
+            'chinese naval gun', 'plan warship',
+            # v3.15 (Nov 2 2026) -- the actor was almost blind to its own
+            # neighbourhood: nearly every keyword above is Gulf / Djibouti.
+            # Coast guard + militia are the instruments China actually uses
+            # against the Philippines and Vietnam.
+            'china coast guard', 'chinese coast guard', 'chinese maritime militia',
+            'china water cannon', 'chinese water cannon', 'chinese vessels rammed',
+            'pla southern theater', 'southern theater command',
+            'pla eastern theater', 'eastern theater command',
+            'pla navy philippines', 'chinese warships philippines',
+            'chinese warship philippine', 'chinese navy south china sea',
+            'shandong carrier', 'liaoning carrier', 'fujian carrier',
+            'chinese aircraft carrier', 'type 076', 'pla rocket force',
+            'mischief reef', 'fiery cross reef', 'subi reef', 'ream naval base',
+            'yulin naval base', 'chinese bombers pacific', 'h-6 bombers',
+            '中国海警', '南部战区', '东部战区',
         ],
         'rss_feeds': []
     },
@@ -893,6 +910,51 @@ MILITARY_ACTORS = {
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=vietnam+south+china+sea+OR+vanguard+bank+OR+vietnam+coast+guard&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    # v3.15 (Nov 2 2026) -- the South China Sea claimant with a US treaty.
+    # Tier 2: an active gray-zone theatre (water cannon / ramming / blocked
+    # resupply are routine) AND the host of US Typhon / NMESIS launchers on
+    # the Luzon Strait, so it sits on both the SCS and the Taiwan story.
+    # Keywords are deliberately specific -- never bare 'afp' (the wire agency).
+    'philippines': {
+        'name': 'Philippines',
+        'flag': '🇵🇭',
+        'tier': 2,
+        'theatre': 'asia_pacific',
+        'weight': 0.7,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            # West Philippine Sea features + incidents
+            'west philippine sea', 'second thomas shoal', 'ayungin shoal', 'ayungin',
+            'brp sierra madre', 'sierra madre resupply', 'scarborough shoal',
+            'bajo de masinloc', 'sabina shoal', 'escoda shoal', 'pag-asa island',
+            'thitu island', 'reed bank', 'recto bank', 'iroquois reef',
+            'philippine resupply mission', 'rotation and resupply',
+            # Philippine forces
+            'armed forces of the philippines', 'philippine navy', 'philippine coast guard',
+            'philippine military', 'philippine marines', 'philippine air force',
+            'philippine army', 'philippine troops', 'afp chief', 'afp western command',
+            'brahmos philippines',
+            # Alliance + partner presence on Philippine soil
+            'balikatan', 'kamandag', 'edca site', 'edca sites',
+            'us troops philippines', 'us marines philippines',
+            'typhon philippines', 'typhon missile philippines', 'nmesis batanes',
+            'nmesis philippines', 'task force philippines',
+            'mutual defense treaty philippines', 'us-philippines alliance',
+            'japan philippines reciprocal access', 'maritime cooperative activity',
+            'joint sail philippines',
+            # Northern Luzon / Luzon Strait (the Taiwan link)
+            'luzon strait', 'bashi channel', 'batanes', 'northern luzon',
+            # Domestic security
+            'marawi', 'sulu archipelago', 'abu sayyaf', 'new people\'s army',
+            # Filipino
+            'hukbong dagat', 'tanod baybayin',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=%22west+philippine+sea%22+OR+%22second+thomas%22+OR+scarborough+OR+%22philippine+coast+guard%22&hl=en-PH&gl=PH&ceid=PH:en',
+            'https://news.google.com/rss/search?q=balikatan+OR+edca+OR+typhon+philippines+OR+nmesis+OR+%22luzon+strait%22&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -4043,6 +4105,32 @@ ASSET_CATEGORIES = {
             'us navy disaster relief', 'us navy medical mission',
             'medical relief ship', 'medical mission deployment',
         ]
+    },
+
+    # v3.15 (Nov 2 2026) -- GRAY-ZONE MARITIME COERCION.
+    # The South China Sea's actual instruments are coast guard and militia,
+    # not warships: water cannon, ramming, blocked resupply, lasers, boarding.
+    # Before this class those articles fell through to 'unspecified' (weight
+    # 1.0). Weighted 3.0 -- below a carrier group, at a fighter surge: it is
+    # coercion short of force, which is exactly what it is. Listed LAST so a
+    # heavier asset in the same article still wins. Asset keywords are only
+    # read after an ACTOR keyword matched, so riot-police water cannon in a
+    # protest story does not land here unless a military actor is named.
+    'maritime_coercion': {
+        'label': 'Maritime Coercion (Gray Zone)',
+        'icon': '🌊',
+        'weight': 3.0,
+        'description': (
+            'Coast guard / maritime militia coercion short of naval combat: water cannon, '
+            'ramming, blocked resupply, lasers, boarding, swarming of features.'
+        ),
+        'keywords': [
+            'water cannon', 'water-cannon', 'water cannoned', 'rammed', 'ramming',
+            'blocked resupply', 'resupply blocked', 'blocking maneuver', 'dangerous maneuver',
+            'dangerous manoeuvre', 'military-grade laser', 'laser at', 'boarded the',
+            'swarming', 'militia vessels', 'maritime militia', 'coast guard vessels',
+            'coast guard ship', 'sideswiped', 'collision at sea', 'cut tow line',
+        ]
     }
 }
 
@@ -4353,6 +4441,35 @@ LOCATION_MULTIPLIERS = {
     # Japan / Forward home ports
     'sasebo':                   2.2,   # Amphib hub Western Pacific
     'naval base sasebo':        2.2,
+    # v3.15 (Nov 2 2026) -- West Philippine Sea / Luzon Strait / first island chain.
+    # Before this, a Second Thomas Shoal story had no hotspot at all, so it
+    # never reached the chokepoint read or the ship-position history.
+    'second thomas shoal':      2.5,   # BRP Sierra Madre outpost
+    'ayungin':                  2.5,
+    'scarborough shoal':        2.5,
+    'bajo de masinloc':         2.5,
+    'sabina shoal':             2.2,
+    'mischief reef':            2.2,   # Chinese-built airbase in the PH EEZ
+    'west philippine sea':      2.0,
+    'spratly':                  2.0,
+    'paracel':                  2.0,
+    'reed bank':                2.0,
+    'luzon strait':             2.5,   # Taiwan <-> Philippines; PLAN's door to the Pacific
+    'bashi channel':            2.5,
+    'batanes':                  2.0,   # NMESIS deployed 2026
+    'subic bay':                1.5,
+    'philippine sea':           1.5,   # the PACIFIC east of Luzon -- not the SCS
+    'east china sea':           2.0,
+    'senkaku':                  2.5,
+    'miyako strait':            2.2,
+    'yonaguni':                 2.0,
+    'okinawa':                  1.5,
+    'kadena':                   1.5,
+    'sea of japan':             1.5,
+    'yellow sea':               1.5,
+    'hainan':                   1.5,
+    'yulin naval base':         1.8,
+    'ream naval base':          1.5,   # Chinese-built, Cambodia
     # ──────────────────────────────────────────────────────────────────
     # IRAN KINETIC RE-HEATING — Additional hotspots (May 22 2026)
     # ──────────────────────────────────────────────────────────────────
@@ -4799,6 +4916,32 @@ ASSET_TARGET_MAPPING = {
             'targets': ['armenia'],
             'description': 'Armenian Air Force / former Russian aviation base near Yerevan.'
         },
+    },
+    # v3.15 (Nov 2 2026) -- INDOPACOM. There was no Asia block at all, so a
+    # story about Kadena or an EDCA site never reached any Asia target.
+    'indopacom': {
+        'Yokosuka Naval Base': {'location': 'Japan', 'targets': ['japan', 'china'],
+                                'description': '7th Fleet HQ; forward-deployed carrier.'},
+        'Kadena Air Base': {'location': 'Okinawa, Japan', 'targets': ['japan', 'taiwan', 'china'],
+                            'description': 'Largest US air base in the Pacific; Taiwan-contingency hub.'},
+        'Andersen Air Force Base': {'location': 'Guam', 'targets': ['china', 'north_korea'],
+                                    'description': 'Bomber and tanker hub for the second island chain.'},
+        'Camp Humphreys': {'location': 'South Korea', 'targets': ['north_korea', 'south_korea'],
+                           'description': 'USFK HQ.'},
+        'Subic Bay': {'location': 'Philippines', 'targets': ['philippines', 'china'],
+                      'description': 'Former US naval base; deep-water port facing Scarborough Shoal.'},
+        'Basa Air Base': {'location': 'Philippines', 'targets': ['philippines'],
+                          'description': 'EDCA site, central Luzon.'},
+        'Antonio Bautista Air Base': {'location': 'Palawan, Philippines', 'targets': ['philippines', 'china'],
+                                      'description': 'EDCA site nearest the Spratlys.'},
+        'Lal-lo': {'location': 'Cagayan, Philippines', 'targets': ['philippines', 'taiwan'],
+                   'description': 'EDCA site (2023), northern Luzon facing Taiwan.'},
+        'Camilo Osias': {'location': 'Cagayan, Philippines', 'targets': ['philippines', 'taiwan'],
+                         'description': 'EDCA naval site (2023), Santa Ana, northern Luzon.'},
+        'Balabac': {'location': 'Palawan, Philippines', 'targets': ['philippines', 'china'],
+                    'description': 'EDCA site (2023) on the southern Palawan approaches.'},
+        'Ream Naval Base': {'location': 'Cambodia', 'targets': ['china'],
+                            'description': 'Chinese-built facility on the Gulf of Thailand.'},
     }
 }
 
@@ -4857,7 +5000,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.14.0'
+MILITARY_TRACKER_VERSION = '3.15.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -4886,6 +5029,12 @@ MILITARY_TRACKER_FEATURES = {
     'source_health_v2':        True,   # v3.12 - why a feed is dead, not just that it is
     'gateway_stats_exposed':   True,   # v3.13 - the breaker is visible at last
     'reddit_rss':              True,   # v3.14 - search.rss + honest UA; auth_failed fix
+    'philippines_actor':       True,   # v3.15 - Philippines + Japan in the Asia theatre
+    'scs_gray_zone':           True,   # v3.15 - maritime_coercion asset class, China SCS keywords
+    'luzon_strait_chokepoint': True,   # v3.15 - Luzon Strait; 'philippine sea' no longer filed under SCS
+    'indopacom_bases':         True,   # v3.15 - INDOPACOM block in ASSET_TARGET_MAPPING
+    'ship_track_readback':     True,   # v3.15 - movement history is READ back (was write-only)
+    'multi_navy_roster':       True,   # v3.15 - PLAN / JMSDF / RN / MN / IN / VMF / PN named ships
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -5000,6 +5149,9 @@ DEFENSE_RSS_FEEDS = {
     'Mexico Cartel Military (Google)': 'https://news.google.com/rss/search?q=mexico+cartel+military+OR+cjng+attack+OR+sinaloa+cartel+army&hl=en&gl=US&ceid=US:en',
     'Brazil Military (Google)': 'https://news.google.com/rss/search?q=brazil+military+OR+amazon+military+OR+brazil+armed+forces&hl=en&gl=US&ceid=US:en',
     'SOUTHCOM (Google)': 'https://news.google.com/rss/search?q=southcom+military+OR+us+southern+command+OR+operation+martillo&hl=en&gl=US&ceid=US:en',
+    # v3.15 (Nov 2 2026) -- INDOPACOM had no dedicated feed besides USNI.
+    'West Philippine Sea (Google)': 'https://news.google.com/rss/search?q=%22west+philippine+sea%22+OR+%22china+coast+guard%22+philippines&hl=en-PH&gl=PH&ceid=PH:en',
+    'INDOPACOM (Google)': 'https://news.google.com/rss/search?q=indopacom+OR+%22seventh+fleet%22+OR+%227th+fleet%22+deployed&hl=en&gl=US&ceid=US:en',
 }
 
 REDDIT_MILITARY_SUBREDDITS = [
@@ -5069,8 +5221,14 @@ CHOKEPOINT_LOCATION_MAP = {
     'suez':           ['suez canal', 'suez', 'egyptian canal'],
     'taiwan_strait':  ['taiwan strait', 'taiwan straits', 'kinmen', 'matsu',
                        'taipei', 'penghu'],
+    # v3.15: 'philippine sea' REMOVED -- it is the Pacific east of Luzon, not
+    # the SCS. West Philippine Sea features added (they are what the news names).
     'south_china_sea':['south china sea', 'spratly', 'paracel', 'scarborough shoal',
-                       'second thomas shoal', 'philippine sea'],
+                       'second thomas shoal', 'ayungin', 'bajo de masinloc',
+                       'sabina shoal', 'mischief reef', 'west philippine sea', 'reed bank'],
+    # v3.15: the northern door between the SCS and the Pacific, ~200 km from
+    # Taiwan, with US NMESIS/Typhon launchers on the Philippine side.
+    'luzon_strait':   ['luzon strait', 'bashi channel', 'balintang channel', 'batanes'],
     'malacca':        ['malacca strait', 'strait of malacca', 'malacca'],
     'sunda_strait':   ['sunda strait', 'lombok strait', 'indonesian archipelago transit'],
     'bosporus':       ['bosporus', 'bosphorus', 'turkish straits', 'dardanelles'],
@@ -5209,6 +5367,13 @@ CHOKEPOINT_CONVERGENCE_PAIRS = {
         'min_level':    'contested',
         'rationale':    'Western Hemisphere maritime — only matters when '
                         'Panama disrupted (Magellan is the failover).',
+    },
+    'taiwan_luzon':        {
+        'chokepoints':  ['taiwan_strait', 'luzon_strait'],
+        'min_level':    'contested',
+        'rationale':    'v3.15 -- both doors around Taiwan contested at once. '
+                        'Luzon Strait pressure = a Taiwan contingency that '
+                        'reaches Philippine territory and the alliance.',
     },
     'malacca_sunda':       {
         'chokepoints':  ['malacca', 'sunda_strait'],
@@ -5435,7 +5600,9 @@ def _classify_signal_asset_class(signal):
     """Map a signal's asset_type to broad asset classes for fingerprint distribution.
     Returns one of: 'naval', 'air', 'missile', 'ground', 'cyber', 'evacuation', 'other'.
     """
-    asset_type = (signal.get('asset_type') or '').lower()
+    # v3.15: signals carry the id under 'asset' (analyze_article_military);
+    # 'asset_type' was never set, so only the label was being read.
+    asset_type = (signal.get('asset_type') or signal.get('asset') or '').lower()
     asset_label = (signal.get('asset_label') or '').lower()
     combined = asset_type + ' ' + asset_label
 
@@ -5443,7 +5610,8 @@ def _classify_signal_asset_class(signal):
     if 'evac' in combined or 'neo' in combined or 'drawdown' in combined:
         return 'evacuation'
     if any(t in combined for t in ['carrier', 'naval', 'destroyer', 'frigate', 'submarine',
-                                    'amphib', 'minesweep', 'lcs', 'flagship']):
+                                    'amphib', 'minesweep', 'lcs', 'flagship',
+                                    'maritime_coercion', 'gray zone', 'hospital_ship']):
         return 'naval'
     if any(t in combined for t in ['missile', 'ballistic', 'cruise', 'hypersonic',
                                     'thaad', 'patriot', 'iron dome', 'aegis', 'sm-6', 'sm-3']):
@@ -5567,6 +5735,132 @@ def _extract_named_ships(text):
     return list(set(canonical))  # Dedupe
 
 
+def _ships_in_text(text):
+    """v3.15 -- every named ship in the text as (ship_id, display_name).
+
+    One identity for both the dedupe layer and the movement history. Before
+    this, history used only the 'USS <name> <verb>' regex, so "Abraham
+    Lincoln departs Thailand" (no USS) and every non-US ship were never
+    recorded. Ids for US roster ships are built from their 'uss ...' alias,
+    which is exactly the id the regex produced -- existing 30-day histories
+    keep accumulating under the same Redis keys.
+    """
+    if not text:
+        return []
+    low = text.lower()
+    found = {}
+    naval = _has_naval_context(low)
+    for alias, asset_id in _NAMED_ASSET_ALIASES:
+        if alias in low and asset_id not in found:
+            found[asset_id] = alias
+    if naval:
+        for alias, asset_id in _NAMED_ASSET_CONTEXTUAL:
+            if alias in low and asset_id not in found:
+                found[asset_id] = alias
+    out = {}
+    for asset_id in found:
+        uss = next((a for a in NAMED_MILITARY_ASSETS.get(asset_id, []) if a.startswith('uss ')), None)
+        if uss:
+            sid = uss.replace(' ', '_').replace('.', '').lower()
+            out[sid] = uss.upper()
+        else:
+            out[asset_id] = SHIP_DISPLAY_NAMES.get(asset_id, asset_id.replace('_', ' ').upper())
+    for ship in _extract_named_ships(low):          # off-roster USS names, as before
+        sid = ship.replace(' ', '_').replace('.', '').lower()
+        out.setdefault(sid, ship.upper())
+    return sorted(out.items())
+
+
+def _redis_lrange_json(key, count=10):
+    """Newest-first list of decoded JSON entries from a Redis list."""
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        return []
+    try:
+        resp = requests.get(f"{UPSTASH_REDIS_URL}/lrange/{key}/0/{count - 1}",
+                            headers={'Authorization': f'Bearer {UPSTASH_REDIS_TOKEN}'}, timeout=4)
+        if resp.status_code != 200:
+            return []
+        out = []
+        for raw in resp.json().get('result') or []:
+            try:
+                out.append(json.loads(raw))
+            except Exception:
+                try:
+                    from urllib.parse import unquote
+                    out.append(json.loads(unquote(raw)))
+                except Exception:
+                    pass
+        return out
+    except Exception:
+        return []
+
+
+def _current_ship_positions(all_signals):
+    """{ship_id: {...}} -- the highest-weight located sighting per ship this scan."""
+    ship_latest = {}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for sig in all_signals or []:
+        location = sig.get('hotspot_location')
+        if not location:
+            continue
+        text = (sig.get('article_title') or '') + ' ' + (sig.get('signal_text') or '')
+        for ship_id, display in _ships_in_text(text):
+            cur = ship_latest.get(ship_id)
+            if not cur or sig.get('weight', 0) > cur.get('weight', 0):
+                ship_latest[ship_id] = {
+                    'ship_name':     display,
+                    'location':      location,
+                    'weight':        sig.get('weight', 0),
+                    'asset_class':   sig.get('asset', ''),
+                    'article_title': sig.get('article_title', ''),
+                    'article_url':   sig.get('article_url', ''),
+                    'last_seen':     now_iso,
+                }
+    return ship_latest
+
+
+SHIP_TRACK_MAX_SHIPS = 12
+
+
+def build_asset_movement_summary(all_signals):
+    """v3.15 -- READ the movement history back.
+
+    Since May 22 the tracker wrote every sighting to
+    military:asset:<id>:positions (30 days) and nothing ever read it: the
+    interpreter rebuilt "movement" from one scan's headlines and sorted the
+    places ALPHABETICALLY, then drew arrows between them -- so the path looked
+    like a voyage and was an index. This returns, per ship seen this scan,
+    its stored path oldest -> newest plus today's sighting, consecutive
+    repeats collapsed. Ships with only one place are kept (a position is
+    information) but marked moved=False.
+    """
+    current = _current_ship_positions(all_signals)
+    ships = {}
+    ranked = sorted(current.items(), key=lambda kv: -kv[1].get('weight', 0))[:SHIP_TRACK_MAX_SHIPS]
+    for ship_id, now in ranked:
+        hist = _redis_lrange_json(f"military:asset:{ship_id}:positions", 10)
+        trail = [(h.get('location'), h.get('seen_at')) for h in reversed(hist) if h.get('location')]
+        trail.append((now['location'], now['last_seen']))
+        path = []
+        for loc, seen in trail:
+            if not path or path[-1]['location'] != loc:
+                path.append({'location': loc, 'seen_at': seen})
+            else:
+                path[-1]['seen_at'] = seen
+        ships[ship_id] = {
+            'display':       now['ship_name'],
+            'positions':     [p['location'] for p in path][-4:],
+            'path':          path[-4:],
+            'moved':         len(path) >= 2,
+            'latest':        now['location'],
+            'asset_class':   now['asset_class'],
+            'article_title': now['article_title'][:150],
+            'article_url':   now['article_url'],
+        }
+    return {'ships': ships, 'ordering': 'chronological', 'ship_count': len(ships),
+            'history_readback': bool(UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN)}
+
+
 def _redis_list_lpush_trim(key, value, max_entries, ttl_seconds):
     """LPUSH a value to a Redis list, trim to max_entries, set TTL.
     Returns True on success.
@@ -5617,28 +5911,9 @@ def _write_asset_movement_history(all_signals):
     movement_count = 0
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Build a deduped map: ship_id → most recent (location, weight, signal)
-    ship_latest = {}
-    for sig in all_signals:
-        text = (sig.get('article_title') or '') + ' ' + (sig.get('signal_text') or '')
-        ships = _extract_named_ships(text)
-        location = sig.get('hotspot_location')
-        if not ships or not location:
-            continue
-        for ship in ships:
-            ship_id = ship.replace(' ', '_').replace('.', '').lower()
-            # Keep highest-weight signal per ship per scan
-            current = ship_latest.get(ship_id)
-            if not current or (sig.get('weight', 0) > current.get('weight', 0)):
-                ship_latest[ship_id] = {
-                    'ship_name':       ship.title(),
-                    'location':        location,
-                    'weight':          sig.get('weight', 0),
-                    'asset_class':     sig.get('asset', ''),
-                    'article_title':   sig.get('article_title', ''),
-                    'article_url':     sig.get('article_url', ''),
-                    'last_seen':       now_iso,
-                }
+    # v3.15: same identity as build_asset_movement_summary (roster +
+    # contextual bare names + other navies + off-roster USS regex).
+    ship_latest = _current_ship_positions(all_signals)
 
     # Now write each ship's position + movement history
     for ship_id, data in ship_latest.items():
@@ -6915,6 +7190,8 @@ def fetch_all_gdelt_military(days=7):
         '军事演习 南海',
         '解放军 海军',
         '中国 军舰',
+        '菲律宾 海警',        # v3.15 Philippines / coast guard
+        '仁爱礁 OR 黄岩岛',   # Second Thomas / Scarborough
     ]
 
     polish_queries = [
@@ -6992,7 +7269,6 @@ def fetch_all_gdelt_military(days=7):
         'Pakistan military operation',
         'Pakistan ISPR militants killed',
         'Pakistan nuclear missile test',
-        'India Pakistan line of control',
         'India Pakistan skirmish Kashmir',
         # South Korea / peninsula
         'South Korea North Korea border',
@@ -7024,6 +7300,13 @@ def fetch_all_gdelt_military(days=7):
         'Japan long-range strike deployment',
         'Eastern Theater Command Japan',
         'Yonaguni Miyako Ishigaki garrison',
+        # Philippines / South China Sea -- v3.15 (Nov 2 2026). There were none.
+        'China coast guard Philippines water cannon',
+        'Second Thomas Shoal resupply Philippines',
+        'Scarborough Shoal China Philippines',
+        'Philippines military South China Sea',
+        'Balikatan exercise Philippines',
+        'Luzon Strait Typhon NMESIS Batanes',
     ]
 
     japanese_queries = [
@@ -7718,6 +8001,37 @@ NAMED_MILITARY_ASSETS = {
     'ddg_spruance':           ['uss spruance'],
     'ddg_arleigh_burke':      ['uss arleigh burke'],
     'ddg_bulkeley':           ['uss bulkeley'],
+    # v3.15 (Nov 2 2026) -- carriers / big decks of other navies. The ship
+    # tracker only knew the US Navy, so a Chinese carrier transiting the
+    # Philippine Sea was invisible. Ids are prefixed by navy; display names
+    # come from SHIP_DISPLAY_NAMES. Names that are also provinces or airports
+    # (Shandong, Liaoning, Fujian, Charles de Gaulle) are CONTEXTUAL only.
+    'plan_liaoning':          ['liaoning carrier', 'carrier liaoning', 'aircraft carrier liaoning', 'cns liaoning'],
+    'plan_shandong':          ['shandong carrier', 'carrier shandong', 'aircraft carrier shandong', 'cns shandong'],
+    'plan_fujian':            ['fujian carrier', 'carrier fujian', 'aircraft carrier fujian', 'cns fujian'],
+    'plan_sichuan':           ['type 076 sichuan', 'cns sichuan', 'amphibious assault ship sichuan'],
+    'jmsdf_izumo':            ['js izumo'],
+    'jmsdf_kaga':             ['js kaga'],
+    'rn_prince_of_wales':     ['hms prince of wales'],
+    'rn_queen_elizabeth':     ['hms queen elizabeth'],
+    'mn_charles_de_gaulle':   ['fs charles de gaulle', 'carrier charles de gaulle', 'charles de gaulle carrier', 'charles de gaulle strike group'],
+    'in_vikrant':             ['ins vikrant'],
+    'in_vikramaditya':        ['ins vikramaditya'],
+    'vmf_kuznetsov':          ['admiral kuznetsov'],
+    'pn_sierra_madre':        ['brp sierra madre'],
+    'pcg_teresa_magbanua':    ['brp teresa magbanua'],
+}
+
+# Display names for the ship tracker. US ships with no entry fall back to
+# their 'uss ...' alias, upper-cased, exactly as before.
+SHIP_DISPLAY_NAMES = {
+    'plan_liaoning': 'PLAN Liaoning (CV-16)', 'plan_shandong': 'PLAN Shandong (CV-17)',
+    'plan_fujian': 'PLAN Fujian (CV-18)', 'plan_sichuan': 'PLAN Sichuan (Type 076)',
+    'jmsdf_izumo': 'JS Izumo', 'jmsdf_kaga': 'JS Kaga',
+    'rn_prince_of_wales': 'HMS Prince of Wales', 'rn_queen_elizabeth': 'HMS Queen Elizabeth',
+    'mn_charles_de_gaulle': 'FS Charles de Gaulle', 'in_vikrant': 'INS Vikrant',
+    'in_vikramaditya': 'INS Vikramaditya', 'vmf_kuznetsov': 'Admiral Kuznetsov',
+    'pn_sierra_madre': 'BRP Sierra Madre', 'pcg_teresa_magbanua': 'BRP Teresa Magbanua',
 }
 
 # CONTEXTUAL aliases: bare ship names that are also people or places.
@@ -7736,6 +8050,10 @@ NAMED_ASSET_CONTEXTUAL_ALIASES = {
     'cvn_76_reagan':     ['ronald reagan'],
     'cvn_78_ford':       ['gerald r. ford', 'gerald ford'],
     'lhd_8_makin_island':['makin island'],
+    'plan_liaoning':     ['liaoning'],
+    'plan_shandong':     ['shandong'],
+    'plan_fujian':       ['fujian'],
+    'mn_charles_de_gaulle': ['charles de gaulle'],
 }
 
 NAVAL_CONTEXT_TERMS = (
@@ -9920,6 +10238,13 @@ def _run_full_scan(days=7):
 
     result['chokepoint_postures']       = chokepoint_postures
     result['chokepoint_convergences']   = chokepoint_convergences
+
+    # ── v3.15: ship tracker read-back (history -> chronological paths) ──
+    try:
+        result['asset_movement_summary'] = build_asset_movement_summary(all_signals)
+    except Exception as mv_err:
+        print(f"[Military Tracker] Asset movement summary error (non-critical): {str(mv_err)[:160]}")
+        result['asset_movement_summary'] = {'ships': {}, 'error': str(mv_err)[:160]}
 
     # ── Run analytical interpreter (v3.2.0 — adds prose layer) ──
     if MIL_INTERPRETER_AVAILABLE:

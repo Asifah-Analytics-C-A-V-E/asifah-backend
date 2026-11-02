@@ -146,6 +146,7 @@ CHOKEPOINT_DISPLAY = {
     'suez':             'Suez Canal',
     'taiwan_strait':    'Taiwan Strait',
     'south_china_sea':  'South China Sea',
+    'luzon_strait':     'Luzon Strait / Bashi Channel',
     'malacca':          'Strait of Malacca',
     'sunda_strait':     'Sunda Strait',
     'bosporus':         'Turkish Straits / Bosporus',
@@ -170,6 +171,8 @@ COUNTRY_DISPLAY = {
     'russia':        'Russia',
     'china':         'China',
     'taiwan':        'Taiwan',
+    'japan':         'Japan',
+    'philippines':   'the Philippines',
     'ukraine':       'Ukraine',
     'venezuela':     'Venezuela',
     'cuba':          'Cuba',
@@ -1014,67 +1017,80 @@ def build_iran_kinetic_prose(scan_result):
 # prose for named US Navy ships showing multi-position movement patterns.
 
 def build_asset_movement_prose(scan_result):
-    """Build prose for named US Navy ships with multi-position movement.
+    """Prose for named ships (v3.15, Nov 2 2026).
 
-    Looks for ships that appear in 2+ distinct locations in the current scan
-    or via movement_history attached to scan_result.
+    PRIMARY: scan_result['asset_movement_summary'] (military_tracker v3.15),
+    which reads each ship's stored 30-day history back from Redis. Paths are
+    CHRONOLOGICAL (oldest -> newest), so an arrow means "then".
 
-    Returns:
-        {
-            'active':    bool,
-            'movements': list of {'ship': str, 'positions': list, 'prose': str},
-            'prose':     combined paragraph (or empty if no movements)
-        }
+    FALLBACK (older tracker, or Redis down): headlines from this scan only.
+    Those places are NOT ordered in time, so they are listed with a middle
+    dot and the word "reported at" -- never with arrows. (Before v3.15 they
+    were sorted alphabetically and drawn as a voyage.)
+
+    Returns {'active', 'movements': [{ship, positions, prose, moved}],
+             'sightings': [{ship, location, prose}], 'prose', 'ordering'}
     """
     scan_result = _safe_dict(scan_result)
-    movement_data = _safe_dict(scan_result.get('asset_movement_summary')) or {}
+    summary = _safe_dict(scan_result.get('asset_movement_summary')) or {}
+    ships = _safe_dict(summary.get('ships'))
+    movements, sightings, pieces = [], [], []
 
-    # If scan_result has explicit movement_summary, use it. Otherwise scan
-    # top_signals for multi-location named-ship occurrences.
-    if movement_data and movement_data.get('ships'):
-        ships = movement_data['ships']
+    if ships:
+        ordering = 'chronological'
+        for sid, rec in ships.items():
+            rec = _safe_dict(rec)
+            name = rec.get('display') or sid.replace('_', ' ').upper()
+            positions = [p for p in _safe_list(rec.get('positions')) if p]
+            if rec.get('moved') and len(positions) >= 2:
+                path = ' → '.join(positions)
+                sentence = f"{name}: {path}"
+                movements.append({'ship': name, 'positions': positions, 'prose': sentence, 'moved': True})
+                pieces.append(sentence)
+            elif rec.get('latest'):
+                sightings.append({'ship': name, 'location': rec['latest'],
+                                  'prose': f"{name}: reported at {rec['latest']}"})
     else:
-        # Build from top_signals — look for named ships with multiple locations
-        ships = {}
+        ordering = 'unordered'
+        seen = {}
         for sig in _safe_list(scan_result.get('top_signals')):
-            text = (sig.get('short_text') or '') + ' ' + (sig.get('long_text') or '')
-            text = text.lower()
+            text = ((sig.get('short_text') or '') + ' ' + (sig.get('long_text') or '')).lower()
             import re as _re
             for m in _re.finditer(r'(uss\s+[a-z][a-z\s\.]{3,30})', text):
                 ship = m.group(1).strip(' .,;')
                 loc = sig.get('hotspot_location') or sig.get('theatre') or ''
                 if ship and loc:
-                    ships.setdefault(ship, set()).add(loc)
-        # Convert to list-of-positions, keeping only multi-location ships
-        ships = {ship: sorted(locs) for ship, locs in ships.items() if len(locs) >= 2}
+                    seen.setdefault(ship, [])
+                    if loc not in seen[ship]:
+                        seen[ship].append(loc)
+        for ship, locs in list(seen.items())[:5]:
+            name = ship.upper()
+            if len(locs) >= 2:
+                sentence = f"{name}: reported at " + ' · '.join(locs[:3])
+                movements.append({'ship': name, 'positions': locs[:3], 'prose': sentence, 'moved': False})
+                pieces.append(sentence)
+            else:
+                sightings.append({'ship': name, 'location': locs[0], 'prose': f"{name}: reported at {locs[0]}"})
 
-    if not ships:
-        return {'active': False, 'movements': [], 'prose': ''}
+    movements = movements[:6]
+    sightings = sightings[:8]
+    if not movements and not sightings:
+        return {'active': False, 'movements': [], 'sightings': [], 'prose': '', 'ordering': ordering}
 
-    movements = []
-    pieces = []
-    for ship, positions in list(ships.items())[:5]:  # Cap at 5 ships
-        if isinstance(positions, dict):
-            positions = positions.get('positions', [])
-        if len(positions) < 2:
-            continue
-        # Take last 3 positions max
-        positions = positions[:3] if len(positions) > 3 else positions
-        ship_display = ship.upper()
-        path = ' → '.join(positions)
-        sentence = f"{ship_display}: {path}"
-        movements.append({'ship': ship_display, 'positions': positions, 'prose': sentence})
-        pieces.append(sentence)
-
-    if not pieces:
-        return {'active': False, 'movements': [], 'prose': ''}
-
-    prose = "Named-asset multi-position movement detected — " + '; '.join(pieces) + "."
+    if pieces:
+        lead = ("Named ships that changed position across scans (oldest to newest) — "
+                if ordering == 'chronological' else
+                "Named ships reported in more than one place this scan (order not known) — ")
+        prose = lead + '; '.join(pieces) + "."
+    else:
+        prose = "Named ships reported this scan: " + '; '.join(x['prose'] for x in sightings[:4]) + "."
 
     return {
         'active':    True,
         'movements': movements,
+        'sightings': sightings,
         'prose':     prose,
+        'ordering':  ordering,
     }
 
 
