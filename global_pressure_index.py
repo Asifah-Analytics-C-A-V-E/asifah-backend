@@ -935,7 +935,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.20.0'   # v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.20.1'   # v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -2660,8 +2660,8 @@ def _narrative_china_taiwan_takeover(blufs):
 def _narrative_scs_first_island_chain_axis(blufs):
     """South China Sea / first-island-chain convergence (Jun 2026).
 
-    Fires when China pressure draws in the southern SCS claimant (Vietnam)
-    alongside the cross-strait flashpoint (Taiwan). Reads the Asia BLUF's
+    Fires when China pressure draws in a southern SCS claimant (Vietnam or,
+    since Nov 2026, the Philippines) alongside the cross-strait flashpoint (Taiwan). Reads the Asia BLUF's
     theatre_summary levels PLUS Vietnam's SCS red-line and two-front convergence
     signal categories, so it catches whichever downstream gate (butterfly
     two-front pressure or interpreter SCS convergence) surfaces in the Asia
@@ -2681,6 +2681,7 @@ def _narrative_scs_first_island_chain_axis(blufs):
     cn = _lvl('china')
     tw = _lvl('taiwan')
     vn = _lvl('vietnam')
+    ph = _lvl('philippines')   # v Nov 2 2026 -- the claimant with a US treaty trip-wire
 
     # Vietnam SCS activity can arrive as a signal even while its headline level is
     # modest (e.g. the two-front convergence read from Taiwan's fingerprint).
@@ -2692,39 +2693,51 @@ def _narrative_scs_first_island_chain_axis(blufs):
         'china_direct',                  # nine-dash enforcement, direct coercion
     )
     vn_scs_active = (vn >= 3) or vn_scs_signal
+    ph_active = (ph >= 3)
 
-    # China is the driver; the axis is fundamentally about Vietnam being drawn in
-    # alongside China pressure, so Vietnam must be genuinely SCS-active.
-    if not (cn >= 3 and vn_scs_active):
+    # China is the driver; the axis is about a southern claimant being drawn in
+    # alongside China pressure, so at least one claimant must be genuinely active.
+    if not (cn >= 3 and (vn_scs_active or ph_active)):
         return None
-    all_three = (tw >= 3)
 
     named = ['China']
     if tw >= 3:
         named.append('Taiwan')
-    named.append('Vietnam')
+    if ph_active:
+        named.append('the Philippines')
+    if vn_scs_active:
+        named.append('Vietnam')
+    fronts = len(named)            # 2 .. 4
     vn_note = ' + active SCS convergence signal' if (vn < 3 and vn_scs_signal) else ''
 
-    if all_three:
+    if fronts >= 4:
+        priority = 14
+        headline = ('South China Sea axis -- simultaneous pressure across China, Taiwan, the Philippines '
+                    'and Vietnam: the whole first island chain in one window')
+    elif fronts == 3:
         priority = 13
-        headline = ('South China Sea axis -- simultaneous pressure across China, Taiwan, '
-                    'and Vietnam along the first island chain')
+        headline = ('South China Sea axis -- simultaneous pressure across '
+                    + ', '.join(named[:-1]) + ' and ' + named[-1] + ' along the first island chain')
     else:
         priority = 11
         headline = ('South China Sea axis forming -- pressure spans '
                     + ' + '.join(named) + ' in the same window')
 
+    parts = ['China is the driver (L' + str(cn) + ')',
+             'Taiwan is the cross-strait flashpoint (L' + str(tw) + ')']
+    if ph_active or ph:
+        parts.append('the Philippines is the treaty-ally claimant (L' + str(ph) + ') -- the one front where a '
+                     'gray-zone incident at a shoal can become a US Mutual Defense Treaty test')
+    parts.append('Vietnam is the southern claimant (L' + str(vn) + vn_note + ')')
     detail = (
         'Asia-Pacific maritime theater: pressure is distributed across the South China Sea / '
-        'first-island-chain arc rather than concentrated on the Taiwan Strait alone. China is the '
-        'driver (L' + str(cn) + '); Taiwan is the cross-strait flashpoint (L' + str(tw) + '); '
-        'Vietnam is the southern claimant (L' + str(vn) + vn_note + '). A multi-front maritime '
-        'posture stretches US and allied response capacity across separated theaters at once -- the '
-        'combination is what compounds risk beyond any single chokepoint. Watch China Coast Guard / '
-        'maritime-militia tempo around Vietnamese hydrocarbon blocks, ADIZ activity, and '
-        'US / Japan / Philippines / India coalition signaling. This is a CONVERGENCE indicator, '
-        'NOT a probability of action -- it reports that pressure spans the arc, not that any front '
-        'will go kinetic.'
+        'first-island-chain arc rather than concentrated on the Taiwan Strait alone. '
+        + '; '.join(parts) + '. A multi-front maritime posture stretches US and allied response capacity '
+        'across separated theaters at once -- the combination is what compounds risk beyond any single '
+        'chokepoint. Watch China Coast Guard / maritime-militia tempo at Second Thomas and Scarborough '
+        'shoals and around Vietnamese hydrocarbon blocks, ADIZ activity, and US / Japan / Philippines / '
+        'India coalition signaling. This is a CONVERGENCE indicator, NOT a probability of action -- it '
+        'reports that pressure spans the arc, not that any front will go kinetic.'
     )
     return {
         'priority': priority,
