@@ -2,6 +2,10 @@
 Asifah Analytics Backend (Middle East) -- version lives in ME_BACKEND_VERSION
 February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)  |  November 1, 2026 (v3.6.0)
 
+v3.8.0 (Nov 1 2026) -- Flight disruptions move to the shared flight_watch.py (same
+  file on all five backends). /flight-cancellations keeps its address and shape;
+  the rss_monitor flight scanner is no longer started. New: /api/flights and
+  /api/flights/health, declared end dates, a resumptions lane, no undated items.
 v3.7.0 (Nov 1 2026) -- Actor Matrix v3 registered (threat_matrix_v3.py); Israel OUTGOING
   operations gain headline co-occurrence matching (actor + target + kinetic/intent verb).
 v3.6.0 (Nov 1 2026) -- audit cleanup (claude/ME_APP_AUDIT_2026-11-01.md):
@@ -466,8 +470,6 @@ from rss_monitor import (
     fetch_all_rss,
     fetch_israeli_rss,
     enhance_article_with_leadership,
-    register_flight_scan_thread,
-    get_flight_cache_for_endpoint
 )
 
 # ========================================
@@ -1305,12 +1307,14 @@ if COMMODITY_CONVERGENCE_AVAILABLE:
     register_commodity_convergence_endpoints(app)
     print("[ME Backend] ✅ Commodity convergence registered: /api/commodity-structural-convergence")
 
-# Flight Disruptions — background scan thread (12h cycle)
+# Flight Disruptions -- shared Flight Watch (Nov 1 2026). Registers /api/flights,
+# /api/flights/health and keeps the page's /flight-cancellations address.
+# Leader-only scan every 6 h; requests only ever read the Redis cache.
 try:
-    register_flight_scan_thread()
-    print("[App] ✅ Flight disruption scan thread started")
+    from flight_watch import register_flight_endpoints
+    register_flight_endpoints(app, 'me', legacy_routes=['/flight-cancellations'], job_name='flight_scan')
 except Exception as e:
-    print(f"[App] ⚠️ Flight scan thread failed: {e}")
+    print(f"[App] ⚠️ Flight Watch failed to register: {e}")
 # Iran Stability Module (consolidated from iran_protests.py)
 from iran_protests import register_iran_routes
 register_iran_routes(app)
@@ -1644,7 +1648,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.7.0'
+ME_BACKEND_VERSION = '3.8.0'
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
@@ -5951,8 +5955,8 @@ def enhance_syria_conflict_data_with_displacement(conflict_data, unhcr_data, alh
     
     return enhanced
       
-# (Nov 1 2026) Dead airline-disruption copy removed (~215 lines). The live
-# scanner, cache and /flight-cancellations data all come from rss_monitor.py.
+# (Nov 1 2026) Dead airline-disruption copy removed (~215 lines). Flight data now
+# comes from the shared flight_watch.py; rss_monitor's flight scanner is retired.
 
 # ========================================
 # API ENDPOINTS
@@ -8282,7 +8286,8 @@ def home():
             '/scan-iran-protests': 'Get Iran protests data with casualties',
             '/api/jordan-threat': 'Jordan kinetic activity probability (incoming threats + defensive posture) 🇯🇴 NEW!',
             '/api/syria-conflicts': 'Syria conflicts tracker ✅',
-            '/flight-cancellations': 'Flight disruptions monitor (15 Middle East countries) ✅',
+            '/flight-cancellations': 'Flight Watch: airline suspensions, end dates, resumptions (16 ME destinations)',
+            '/api/flights/health': 'Flight Watch health',
             '/rate-limit': 'Rate limit status',
             '/health': 'Health check'
         }
@@ -8356,21 +8361,8 @@ def telegram_status():
         return jsonify({'available': False, 'error': str(e)[:200]}), 200
 
 
-@app.route('/flight-cancellations', methods=['GET'])
-def flight_cancellations():
-    """Flight disruption data — cached, background refresh"""
-    try:
-        data = get_flight_cache_for_endpoint()
-        return jsonify(data)
-    except Exception as e:
-        print(f"[Flights] Error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'cancellations': [],
-            'count': 0
-        }), 500
-        
+# (Nov 1 2026) /flight-cancellations is served by flight_watch.py (registered above).
+
 # (Nov 1 2026) Dead /api/notams route + parse_notam removed: notam_monitor.py
 # registers /api/notams first and Flask serves the first registration.
 
