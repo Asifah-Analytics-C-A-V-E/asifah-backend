@@ -277,7 +277,7 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary', 'kazakhstan'],
+        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary', 'kazakhstan', 'belarus', 'moldova'],
         'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Greece/Aegean, Cyprus, Caucasus'
     },
     'middle_east': {
@@ -1371,6 +1371,16 @@ MILITARY_ACTORS = {
         'weight': 0.7,
         'feeds_into': ['regional_tension'],
         'keywords': [
+            # v3.16 (Nov 3 2026): plain wartime vocabulary. The list below was
+            # all specialist phrases ('cobasna depot', 'yasen-m'); "Russian
+            # drones", "Russian military says" and "Russian forces" matched
+            # nothing, so mid-war Russia read 'normal' on 4 signals while
+            # Israel read SURGE on 85. Ordinary words, ordinary weight.
+            'russian drone', 'russian drones', 'russian missile', 'russian missiles',
+            'russian strike', 'russian strikes', 'russian attack', 'russian forces',
+            'russian troops', 'russian army', 'russian military', 'russian navy',
+            'black sea fleet', 'russian warship', 'russian jets', 'russian fighter jet',
+            'russian bomber', 'russian shelling', 'russian offensive',
             'russian navy mediterranean',
             # -- Arctic / Northern Fleet subsurface (Jul 2026) --
             'northern fleet', 'russian submarine atlantic', 'russian submarine arctic',
@@ -1957,6 +1967,39 @@ MILITARY_ACTORS = {
         'rss_feeds': []
     },
 
+    # v3.16 (Nov 3 2026): Belarus and Moldova were not military actors at all,
+    # so Russia's staging ground and the country Russian drones keep crashing
+    # into could never register. Same tier and weight as Poland.
+    'belarus': {
+        'name': 'Belarus',
+        'flag': '🇧🇾',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'belarus military', 'belarusian army', 'belarusian armed forces', 'belarus troops',
+            'belarusian troops', 'lukashenko military', 'belarus border troops', 'belarus exercise',
+            'zapad exercise', 'zapad-2025', 'zapad 2025', 'belarus nuclear', 'nuclear weapons in belarus',
+            'oreshnik belarus', 'oreshnik in belarus', 'iskander belarus', 'russian troops in belarus',
+            'wagner belarus', 'belarus drone', 'drone from belarus', 'balloons from belarus',
+            'belarus airspace', 'belarus hybrid', 'lukashenko threatens',
+        ]
+    },
+    'moldova': {
+        'name': 'Moldova',
+        'flag': '🇲🇩',
+        'tier': 3,
+        'theatre': 'europe',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'moldova military', 'moldovan army', 'moldovan armed forces', 'moldova airspace',
+            'moldovan airspace', 'drone crashed in moldova', 'drone in moldova', 'drone over moldova',
+            'moldova drone', 'transnistria', 'tiraspol', 'cobasna', 'operational group of russian forces',
+            'russian troops in transnistria', 'ogrf', 'moldova border', 'moldova hybrid', 'gagauzia',
+        ]
+    },
     'poland': {
         'name': 'Poland',
         'flag': '🇵🇱',
@@ -1986,6 +2029,7 @@ MILITARY_ACTORS = {
             'stray drone poland', 'wayward drone poland',
             'poland scramble jets', 'poland intercept drone',
             'poland shoot down drone', 'poland airspace incursion',
+            'polish airspace', 'poland airspace',   # v3.16
             'object entered polish airspace', 'missile entered poland',
             'projectile crossed into poland', 'poland airspace breach',
             'przewodów', 'przewodow missile',
@@ -4052,6 +4096,12 @@ ASSET_CATEGORIES = {
         'icon': '🛸',
         'weight': 3.5,
         'description': 'Unidentified drone or object entering sovereign airspace. Border threat signal.',
+        # v3.16 (Nov 3 2026): BORDER-CROSSING vocabulary only. The v2.7.2 war
+        # terms ('drone strike', 'shahed drone', 'kamikaze drone') were filed
+        # here, so every FPV strike in Kharkiv was labelled an "airspace
+        # violation" -- the incursion signal (a drone INTO a country not at war)
+        # drowned in the war itself. Those terms now live in 'drone_strike',
+        # same weight, so no score moves; only the label tells the truth.
         'keywords': [
             'drone incursion', 'drone entered airspace',
             'drone crossed border', 'airspace violation',
@@ -4065,11 +4115,27 @@ ASSET_CATEGORIES = {
             'border airspace incident',
             'drone from belarus', 'drone from russia',
             'uav crossed border', 'uav incursion',
-            # Active war drone/airspace (v2.7.2)
+            'violated airspace', 'violates airspace', 'entered polish airspace',
+            'entered romanian airspace', 'entered moldovan airspace', 'drone debris found',
+            'violated polish airspace', 'violated romanian airspace', 'violated moldovan airspace',
+            'violated lithuanian airspace', 'violated latvian airspace', 'violated estonian airspace',
+            'violated finnish airspace', 'violated nato airspace', 'drones violated',
+            'drone crashed in moldova', 'drone crashed in romania', 'drone crashed in poland',
+            'drone fell in moldova', 'drone fell in romania', 'drone fell in poland',
+            'drone debris in romania', 'drone debris in moldova', 'drone debris in poland',
+        ]
+    },
+    'drone_strike': {
+        'label': 'Drone Strike / Air Attack (war zone)',
+        'icon': '💥',
+        'weight': 3.5,
+        'description': 'One-way attack drones and drone strikes inside an active war -- battlefield or strategic strike, not a border incursion.',
+        'keywords': [
+            # Moved from drone_incursion in v3.16 (were v2.7.2 "active war" terms)
             'shahed drone', 'iranian drone', 'iran drone attack',
             'drone swarm', 'drone strike', 'kamikaze drone',
             'one-way attack drone', 'uav attack',
-            'airspace closed', 'airspace violation',
+            'airspace closed',
         ]
     },
     # ────────────────────────────────────────────────────────────────
@@ -4191,6 +4257,15 @@ LOCATION_MULTIPLIERS = {
     'gulf of oman': 2.5,
     'eastern mediterranean': 2.0,
     'black sea': 2.0,
+    # v3.16 (Nov 3 2026): the Black Sea's ports and straits. A tanker struck at
+    # Novorossiysk or a port strike at Odesa could never register as a Black Sea
+    # event: chokepoints are assigned from the hotspot, and none of these were
+    # hotspots. Port-specific forms only -- 'odesa' alone is the city and the war.
+    'odesa port': 2.0, 'port of odesa': 2.0, 'odessa port': 2.0, 'port of odessa': 2.0,
+    'novorossiysk': 2.0, 'kerch strait': 2.0, 'kerch bridge': 2.0, 'sevastopol': 2.0,
+    'chornomorsk': 2.0, 'pivdennyi port': 2.0, 'izmail': 2.0, 'danube port': 2.0,
+    'snake island': 2.0, 'constanta': 1.5, 'grain corridor': 2.0,
+    'bosphorus': 2.0, 'bosporus': 2.0, 'turkish straits': 2.0, 'dardanelles': 2.0,
     'sea of azov': 2.0,
     'al udeid': 2.5,
     'bahrain naval': 2.0,
@@ -5000,7 +5075,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.15.0'
+MILITARY_TRACKER_VERSION = '3.16.0'
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -5035,6 +5110,12 @@ MILITARY_TRACKER_FEATURES = {
     'indopacom_bases':         True,   # v3.15 - INDOPACOM block in ASSET_TARGET_MAPPING
     'ship_track_readback':     True,   # v3.15 - movement history is READ back (was write-only)
     'multi_navy_roster':       True,   # v3.15 - PLAN / JMSDF / RN / MN / IN / VMF / PN named ships
+    'europe_war_floors':       True,   # v3.16 - Russia + Ukraine floors (merged into live Redis once)
+    'drone_strike_split':      True,   # v3.16 - battlefield drone strikes are not airspace incursions
+    'black_sea_geography':     True,   # v3.16 - Odesa port / Novorossiysk / Kerch / Bosphorus hotspots
+    'watched_chokepoints':     True,   # v3.16 - Black Sea, Bosphorus, Baltic always listed (honest 'no signals')
+    'telegram_promo_strip':    True,   # v3.16 - gambling / referral tails cut before matching
+    'belarus_moldova_actors':  True,   # v3.16 - Belarus + Moldova join the Europe theatre
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -5060,7 +5141,22 @@ WAR_FOOTING_FLOORS_SEED = {
     'egypt':        {'score': 10, 'half_life_days': 30, 'note': 'Suez disruption risk; Sinai watch'},
     'oman':         {'score': 15, 'half_life_days': 30, 'note': 'Strait of Hormuz operations'},
     'cyprus':       {'score': 15, 'half_life_days': 30, 'note': 'Akrotiri on alert; evacuation staging'},
+    # v3.16 (Nov 3 2026): the war in Europe had no floor at all. Live read Nov 2:
+    # Ukraine 'normal' on 6 signals and Russia 'normal' on 4, mid-war, while the
+    # Middle East floors held Israel and the Gulf up. An active interstate war
+    # must not read as quiet because one scan's tape was thin.
+    'ukraine':      {'score': 50, 'half_life_days': 60, 'note': 'Active interstate war on its territory; daily strikes'},
+    'russia':       {'score': 30, 'half_life_days': 60, 'note': 'Waging the war in Ukraine; own territory and Black Sea fleet struck'},
 }
+
+# Seed entries added AFTER the live Redis key was first hydrated never reach it
+# (the seed only fills an EMPTY key). Each release that adds floors names them
+# here; load_war_footing_floors() adds the missing ones exactly once and records
+# that it did, so a floor a human later deletes is never resurrected.
+WAR_FOOTING_SEED_MERGES = {
+    '3.16.0': ['ukraine', 'russia'],
+}
+WAR_FOOTING_META_KEY = '_meta'
 
 # Back-compat: some older call sites read WAR_FOOTING_FLOORS as a flat
 # {country: score} dict. Keep that name alive as the UNDECAYED asserted
@@ -5240,12 +5336,20 @@ CHOKEPOINT_LOCATION_MAP = {
     'arctic':         ['arctic', 'svalbard', 'barents sea', 'beaufort sea',
                        'greenland sea', 'thule', 'pituffik'],
     'bering_strait':  ['bering strait', 'bering sea', 'diomede islands', 'chukchi sea'],
-    'black_sea':      ['black sea', 'sevastopol', 'crimea naval', 'odesa naval', 'odessa naval'],
+    'black_sea':      ['black sea', 'sevastopol', 'crimea naval', 'odesa naval', 'odessa naval',
+                       # v3.16
+                       'sea of azov', 'odesa port', 'port of odesa', 'odessa port', 'port of odessa',
+                       'novorossiysk', 'kerch strait', 'kerch bridge', 'chornomorsk', 'pivdennyi port',
+                       'izmail', 'danube port', 'snake island', 'constanta', 'grain corridor'],
     'mediterranean':  ['eastern mediterranean', 'levantine', 'cyprus naval', 'haifa naval',
                        'sicily', 'aegean'],
     'caribbean':      ['caribbean sea', 'gulf of mexico', 'gtmo', 'guantanamo', 'cuba naval',
                        'florida straits', 'bahamas naval'],
 }
+
+# v3.16: always listed in chokepoint_postures, even with zero signals.
+WATCHED_CHOKEPOINTS = ['hormuz', 'bab_el_mandeb', 'black_sea', 'bosporus', 'baltic',
+                       'taiwan_strait', 'luzon_strait', 'south_china_sea']
 
 # Reverse-lookup: location-keyword → chokepoint_id (built once at import time)
 _LOCATION_TO_CHOKEPOINT = {}
@@ -5534,8 +5638,35 @@ def load_war_footing_floors():
     or Redis is unreachable. Always returns a dict of entries."""
     stored = _redis_fp_get(WAR_FOOTING_FLOOR_REDIS_KEY)
     if isinstance(stored, dict) and stored:
-        clean = {k: v for k, v in stored.items() if isinstance(v, dict)}
+        meta = stored.get(WAR_FOOTING_META_KEY) if isinstance(stored.get(WAR_FOOTING_META_KEY), dict) else {}
+        clean = {k: v for k, v in stored.items()
+                 if isinstance(v, dict) and not str(k).startswith('_')}
         if clean:
+            # v3.16: one-time merge of floors added to the seed after hydration.
+            merged = list(meta.get('merged') or [])
+            changed = False
+            stamp = datetime.now(timezone.utc).isoformat()
+            for release, countries in WAR_FOOTING_SEED_MERGES.items():
+                if release in merged:
+                    continue
+                for c in countries:
+                    cfg = WAR_FOOTING_FLOORS_SEED.get(c)
+                    if cfg and c not in clean:
+                        clean[c] = {
+                            'score': float(cfg['score']),
+                            'half_life_days': float(cfg.get('half_life_days', DEFAULT_FLOOR_HALF_LIFE_DAYS)),
+                            'note': cfg.get('note', ''),
+                            'set_at': stamp,
+                            'source': f'seed_merge_{release}',
+                            'provenance': f'Added by the {release} seed merge. Renew or remove via the floor endpoint.',
+                        }
+                merged.append(release)
+                changed = True
+            if changed:
+                payload = dict(clean)
+                payload[WAR_FOOTING_META_KEY] = {'merged': merged}
+                ok = _redis_fp_set(WAR_FOOTING_FLOOR_REDIS_KEY, payload, WAR_FOOTING_FLOOR_TTL_SECONDS)
+                print(f"[Military Tracker] War footing seed merge {merged} (redis_write={ok})")
             return clean
     seeded = _seed_floor_entries()
     ok = _redis_fp_set(WAR_FOOTING_FLOOR_REDIS_KEY, seeded, WAR_FOOTING_FLOOR_TTL_SECONDS)
@@ -5574,6 +5705,8 @@ def get_effective_floors(now=None):
 def set_war_footing_floor(country, score, half_life_days=None, note='', source='manual'):
     """Assert or renew a single floor. Restamps set_at, restarting decay."""
     entries = load_war_footing_floors()
+    # v3.16: keep the seed-merge record, or a deleted floor could come back.
+    entries[WAR_FOOTING_META_KEY] = {'merged': list(WAR_FOOTING_SEED_MERGES.keys())}
     key = (country or '').strip().lower().replace(' ', '_')
     if not key:
         return None
@@ -5593,6 +5726,7 @@ def set_war_footing_floor(country, score, half_life_days=None, note='', source='
             'source': source,
         }
     _redis_fp_set(WAR_FOOTING_FLOOR_REDIS_KEY, entries, WAR_FOOTING_FLOOR_TTL_SECONDS)
+    entries.pop(WAR_FOOTING_META_KEY, None)
     return entries.get(key)
 
 
@@ -8327,6 +8461,35 @@ _OPAQUE_TOKEN_RE = _re.compile(
 _LONG_ALPHA_RUN_RE = _re.compile(r'\b[A-Za-z]{28,}\b')
 
 
+# v3.16 (Nov 3 2026): Telegram war channels append gambling / referral ads
+# ("💧 Rainbet.com the #1 Non-KYC Crypto Casino") to every post. They rode into
+# signal titles on the military page. Cut a post at the first promo line.
+_PROMO_LINE_RE = re.compile(
+    r'(rainbet|stake\.com|non-?kyc|casino|betting|bet now|bonus code|promo code|referral|'
+    r'use code|sign up here|join (our|my) (channel|vip)|subscribe (to|for)|airdrop|'
+    r'crypto giveaway|\bgiveaway\b|sponsored|#ad\b)', re.IGNORECASE)
+
+
+def strip_promo_tail(text):
+    """Text up to (not including) the first promo line or sentence. '' if the
+    whole post is promotion."""
+    if not text:
+        return ''
+    out = []
+    for line in str(text).splitlines():
+        m = _PROMO_LINE_RE.search(line)
+        if m:
+            out.append(line[:m.start()])      # keep the news before the ad on this line
+            break
+        out.append(line)
+    cleaned = ' '.join(' '.join(out).split()).rstrip(' -|•·💧👉🔥⚡️🎰💰')
+    # Single-line posts: cut at the promo phrase itself.
+    m = _PROMO_LINE_RE.search(cleaned)
+    if m:
+        cleaned = cleaned[:m.start()].rstrip(' -|•·💧👉🔥')
+    return cleaned.strip()
+
+
 def clean_match_text(raw):
     """Strip markup, links and machine tokens so keyword matching only ever
     sees human-readable prose. Returns lowercased, whitespace-collapsed text.
@@ -9840,13 +10003,16 @@ def _run_full_scan(days=7):
             telegram_msgs = fetch_telegram_signals(hours_back=days*24, include_extended=True)
             if telegram_msgs:
                 for msg in telegram_msgs:
+                    _tg_text = strip_promo_tail(msg.get('title', ''))
+                    if not _tg_text:
+                        continue
                     telegram_articles.append({
-                        'title': msg.get('title', '')[:200],
-                        'description': msg.get('title', '')[:500],
+                        'title': _tg_text[:200],
+                        'description': _tg_text[:500],
                         'url': msg.get('url', ''),
                         'publishedAt': msg.get('published', ''),
                         'source': {'name': msg.get('source', 'Telegram')},
-                        'content': msg.get('title', '')[:500],
+                        'content': _tg_text[:500],
                         'feed_type': 'telegram'
                     })
                 print(f"[Military Tracker] Telegram: {len(telegram_articles)} messages")
@@ -10210,6 +10376,21 @@ def _run_full_scan(days=7):
             'score':                 round(cp_info['weighted_score'], 2),
             'top_signals':           cp_info['top_signals'],
         }
+
+    # v3.16 (Nov 3 2026): watched chokepoints are ALWAYS listed. A chokepoint
+    # with no signals used to vanish from the payload, which a reader cannot
+    # tell apart from "not tracked". It now reads Open with signal_count 0 and
+    # says so. (Open chokepoints get no prose, so the page is not cluttered.)
+    for cp_id in WATCHED_CHOKEPOINTS:
+        if cp_id not in chokepoint_postures:
+            chokepoint_postures[cp_id] = {
+                'chokepoint': cp_id, 'alert_level': 'open',
+                'alert_label': CHOKEPOINT_THRESHOLDS['open']['label'],
+                'alert_icon': CHOKEPOINT_THRESHOLDS['open']['icon'],
+                'signal_count': 0, 'critical_signal_count': 0, 'score': 0.0,
+                'top_signals': [], 'watched': True,
+                'note': 'Watched chokepoint: no signals matched this scan.',
+            }
 
     # Compute chokepoint convergences (mirror writer logic)
     chokepoint_convergences = {}
