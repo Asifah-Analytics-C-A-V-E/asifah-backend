@@ -1341,6 +1341,15 @@ try:
     print('[ME Backend] Conflict Repricing detector loaded')
 except Exception as e:
     print(f'[ME Backend] WARNING: Conflict Repricing unavailable ({e})')
+
+# Tracker voice (Nov 3 2026) -- plain-language read + "what this means" for
+# Military / Commodities / Market Watch. Reads caches only; ?force never calls Claude.
+try:
+    from tracker_voice import register_tracker_voice_endpoints
+    register_tracker_voice_endpoints(app)
+    print('[ME Backend] Tracker voice loaded')
+except Exception as e:
+    print(f'[ME Backend] WARNING: Tracker voice unavailable ({e})')
 from notam_monitor import register_notam_endpoints
 register_notam_endpoints(app)
 from israel_stability import register_israel_stability_endpoints
