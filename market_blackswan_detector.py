@@ -89,8 +89,17 @@ import statistics
 import requests
 from datetime import datetime, timezone
 from market_prose import market_disclaimer, analog_tail
+try:
+    import market_analog_lens as _lens       # v1.5.0 -- market-by-market reads + analog lens
+    LENS_AVAILABLE = True
+except Exception as _lens_err:               # pragma: no cover
+    _lens = None
+    LENS_AVAILABLE = False
+    print(f'[Market BlackSwan] analog lens unavailable ({_lens_err})')
 
-VERSION = '1.4.0'   # Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
+VERSION = '1.5.0'   # Nov 3 2026: market-by-market reads (each market on its own index + currency, matched
+                    # against every episode) and the analog lens (chain, interval, effects, live checks)
+                    # via market_analog_lens.py | v1.4.0 Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
                     # (Europe/MENA/Africa/LatAm), region tags, proportional F10
                     # (v1.3.0 Jul 26 2026: +5 non-US episodes, so_what, global_majors)
 CACHE_KEY = 'blackswan:market:latest'
@@ -300,11 +309,48 @@ def _fetch_fred_monthly(series_id):
         return None
 
 
+def _fetch_yahoo_monthly_recent(ticker):
+    """v1.5.0: one bounded chunk (2005-present) -- enough history (~20 years)
+    for the market-by-market reads, at one request per series instead of three."""
+    encoded = requests.utils.quote(ticker, safe='')
+    now = int(datetime.now(timezone.utc).timestamp())
+    for host in YAHOO_HOSTS:
+        try:
+            url = (f'{host}/v8/finance/chart/{encoded}'
+                   f'?period1=1104537600&period2={now + 86400}&interval=1mo')
+            r = requests.get(url, headers={'User-Agent': CHROME_UA}, timeout=(6, 25))
+            if r.status_code != 200:
+                continue
+            result = (r.json().get('chart') or {}).get('result')
+            if not result:
+                continue
+            res = result[0]
+            out = {}
+            for ts, c in zip(res.get('timestamp') or [],
+                             ((res.get('indicators') or {}).get('quote') or [{}])[0].get('close') or []):
+                if c is None:
+                    continue
+                d = datetime.fromtimestamp(ts, tz=timezone.utc)
+                out[f'{d.year:04d}-{d.month:02d}'] = float(c)
+            if out:
+                return out
+        except Exception as e:
+            print(f'[Market BlackSwan] Yahoo {host} {ticker} (recent) failed: {e}')
+    return None
+
+
 def _gather_all_series():
     """Fetch everything once; returns dict of {name: {month: value}}."""
     data = {}
     for name, tk in TICKERS.items():
         data[name] = _fetch_yahoo_monthly(tk)
+    # v1.5.0 -- currencies + three Americas indices + Brent for the
+    # market-by-market reads. Soft: a failure leaves those markets unmeasured.
+    if LENS_AVAILABLE:
+        try:
+            data.update(_lens.fetch_extra_series(_fetch_yahoo_monthly_recent))
+        except Exception as e:
+            print(f'[Market BlackSwan] extra series failed (non-fatal): {e}')
     for name, sid in FRED_SERIES.items():
         data[name] = _fetch_fred_monthly(sid)
     if data.get('spx'):
@@ -1513,6 +1559,19 @@ def run_scan():
     matches = similarity_matches(active, library)
     backtest = _redis_get(BACKTEST_KEY)
 
+    # v1.5.0 -- every market on its own index + currency, and the lens on the
+    # detector's own matches (what matches, the old chain, the interval then,
+    # the effects, and which steps of that chain are visible and lit today).
+    regional = None
+    lens = []
+    if LENS_AVAILABLE:
+        try:
+            regional = _lens.regional_reads(data)
+            lens = _lens.analog_lens(matches, regional, backtest)
+        except Exception as e:
+            print(f'[Market BlackSwan] lens error (non-fatal): {e}')
+            regional = {'markets': {}, 'flags': [], 'error': str(e)[:160]}
+
     sources_ok = {k: bool(v) for k, v in data.items()}
     payload = {
         'success': True,
@@ -1547,6 +1606,13 @@ def run_scan():
         # resembles present conditions -- which is itself a useful read, and
         # the previous layout implied the opposite.
         'match_strength': _match_strength(matches),
+        # v1.5.0 (Nov 3 2026)
+        'analog_lens': lens,
+        'regional_reads': regional,
+        'regional_flags': (regional or {}).get('flags', []),
+        'spine_note': ('The ten conditions above are measured on US markets. Below, every other '
+                       'market is read on its own index and currency and matched against every '
+                       'episode in the library.'),
         'ai_thematic_read': detail.get('thematic_fever'),
         'data_honesty': {
             'sources': sources_ok,
@@ -1639,6 +1705,9 @@ def run_scan():
                            'pct_from_24m_high': v.get('pct_from_24m_high')}
                        for k, v in _gm.items() if not k.startswith('_')},
         },
+        # v1.5.0 -- markets outside the US whose own read matches a pattern
+        'regional_flags': [{k: f.get(k) for k in ('name', 'label', 'similarity_pct', 'home_region', 'text')}
+                           for f in (payload.get('regional_flags') or [])[:5]],
         'disclaimer': DISCLAIMER,
         'updated_at': payload['last_updated'],
     })

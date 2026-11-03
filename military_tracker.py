@@ -307,7 +307,11 @@ REGIONAL_THEATRES = {
         'label': 'Western Hemisphere',
         'icon': '🌎',
         'order': 5,
-        'actors': ['venezuela', 'cuba', 'haiti', 'panama', 'colombia', 'mexico', 'brazil'],
+        # v3.17 (Nov 3 2026): the WHA landing page carries Argentina, Paraguay and
+        # Canada cards that read this tracker; with no actor they always read
+        # 'normal'. Chile and Peru join with their rhetoric trackers.
+        'actors': ['venezuela', 'cuba', 'haiti', 'panama', 'colombia', 'mexico', 'brazil',
+                   'argentina', 'paraguay', 'chile', 'peru', 'canada'],
         'description': 'SOUTHCOM area — Caribbean, Central America, South America, narco-military actors'
     }
 }
@@ -2652,6 +2656,123 @@ MILITARY_ACTORS = {
         ],
         'rss_feeds': [
             'https://news.google.com/rss/search?q=brazil+military+OR+amazon+military+OR+brazil+armed+forces+operation&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    # ══════════════════════════════════════════════════════════════════
+    # v3.17 (Nov 3 2026) -- SOUTHERN CONE, ANDES, CANADA
+    # Phrases are country-anchored so a bare place name never fires.
+    # ══════════════════════════════════════════════════════════════════
+    'argentina': {
+        'name': 'Argentina',
+        'flag': '🇦🇷',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.4,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'argentina military', 'argentine armed forces', 'argentine navy', 'armada argentina',
+            'argentine army', 'ejercito argentino', 'fuerza aerea argentina', 'argentina f-16',
+            'argentina defense minister', 'argentina military exercise',
+            # Falklands / South Atlantic
+            'falklands military', 'malvinas military', 'falklands sovereignty', 'malvinas soberania',
+            'falkland islands defence', 'south atlantic military', 'ushuaia naval base',
+            # China
+            'chinese space station argentina', 'neuquen space station', 'espacio lejano',
+            'china argentina military', 'chinese fishing fleet argentina', 'argentina illegal fishing navy',
+            # US / partners
+            'southcom argentina', 'us argentina military', 'argentina nato partner',
+            'milei military', 'argentina us troops',
+            # Hizballah / Tri-Border (cross-read with the Hizballah LatAm node, planned)
+            'amia bombing', 'argentina hezbollah', 'argentina hizballah', 'triple frontera argentina',
+            'puerto iguazu security',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=argentina+military+OR+armada+argentina+OR+malvinas+OR+falklands+military&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'paraguay': {
+        'name': 'Paraguay',
+        'flag': '🇵🇾',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.35,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'paraguay military', 'paraguayan armed forces', 'fuerzas armadas paraguay',
+            'paraguay army', 'paraguay navy', 'ejercito paraguayo',
+            'epp paraguay', 'paraguayan people\'s army', 'ejercito del pueblo paraguayo',
+            'pcc paraguay', 'paraguay drug trafficking military', 'paraguay cocaine seizure',
+            'ciudad del este security', 'ciudad del este hezbollah', 'ciudad del este hizballah',
+            'tri-border area', 'triple frontera', 'tri-border hezbollah',
+            'us troops paraguay', 'us paraguay military', 'paraguay status of forces',
+            'paraguay taiwan military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=paraguay+military+OR+ciudad+del+este+OR+triple+frontera+OR+tri-border+area&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'chile': {
+        'name': 'Chile',
+        'flag': '🇨🇱',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.35,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'chile military', 'chilean armed forces', 'chilean navy', 'armada de chile',
+            'chilean army', 'ejercito de chile', 'chile military exercise',
+            'chile state of emergency military', 'chile military deployment',
+            'araucania military', 'mapuche military', 'chile northern border military',
+            'chile tren de aragua', 'chile antarctica military', 'chile strait of magellan navy',
+            'china chile military', 'us chile military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=chile+military+OR+armada+de+chile+OR+chile+state+of+emergency&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'peru': {
+        'name': 'Peru',
+        'flag': '🇵🇪',
+        'tier': 3,
+        'theatre': 'western_hemisphere',
+        'weight': 0.35,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'peru military', 'peruvian armed forces', 'fuerzas armadas peru', 'peruvian navy',
+            'peruvian army', 'ejercito del peru', 'peru military deployment',
+            'peru state of emergency military', 'peru military coup',
+            'vraem', 'shining path', 'sendero luminoso', 'peru drug trafficking military',
+            'chancay port military', 'chinese navy chancay', 'chancay port china navy',
+            'us troops peru', 'peru congress authorizes us troops', 'southcom peru',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=peru+military+OR+vraem+OR+chancay+port+navy+OR+peru+state+of+emergency&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    'canada': {
+        'name': 'Canada',
+        'flag': '🇨🇦',
+        'tier': 2,
+        'theatre': 'western_hemisphere',
+        'weight': 0.5,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'canadian armed forces', 'canada military', 'royal canadian navy', 'royal canadian air force',
+            'canadian army', 'canada defence spending', 'canada defense spending', 'canada f-35',
+            'canada submarine program', 'canada submarines', 'canada nato spending',
+            'canada arctic military', 'canadian arctic sovereignty', 'arctic sovereignty canada',
+            'norad intercept', 'norad russian bombers', 'norad modernization',
+            'canadian forces latvia', 'canada military deployment',
+            'us canada military', 'us canada border military', 'canada annexation',
+            'canada 51st state military', 'chinese spy canada military',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=canadian+armed+forces+OR+canada+military+OR+norad+OR+canada+arctic+sovereignty&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -5075,7 +5196,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.16.0'
+MILITARY_TRACKER_VERSION = '3.17.0'   # Nov 3 2026: Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -5116,6 +5237,8 @@ MILITARY_TRACKER_FEATURES = {
     'watched_chokepoints':     True,   # v3.16 - Black Sea, Bosphorus, Baltic always listed (honest 'no signals')
     'telegram_promo_strip':    True,   # v3.16 - gambling / referral tails cut before matching
     'belarus_moldova_actors':  True,   # v3.16 - Belarus + Moldova join the Europe theatre
+    'wha_southern_cone':       True,   # v3.17 - Argentina, Paraguay, Chile, Peru, Canada actors (WHA landing cards read them)
+    'wha_watched_chokepoints': True,   # v3.17 - Panama Canal + Caribbean always listed; 'colon' no longer matches medicine
 }
 
 # Printed at module import so a deploy is verifiable from the boot log
@@ -5330,7 +5453,9 @@ CHOKEPOINT_LOCATION_MAP = {
     'bosporus':       ['bosporus', 'bosphorus', 'turkish straits', 'dardanelles'],
     'gibraltar':      ['gibraltar', 'strait of gibraltar', 'rock of gibraltar'],
     'sicily_strait':  ['strait of sicily', 'sicilian channel', 'pantelleria', 'lampedusa'],
-    'panama_canal':   ['panama canal', 'miraflores', 'colon', 'gatun'],
+    # v3.17: bare 'colon' matched medical reporting; the port is named in full
+    'panama_canal':   ['panama canal', 'miraflores locks', 'colon free zone', 'port of colon',
+                       'gatun', 'canal de panama'],
     'magellan':       ['strait of magellan', 'magellan', 'punta arenas', 'tierra del fuego'],
     'baltic':         ['baltic sea', 'kaliningrad', 'gulf of finland', 'gotland'],
     'arctic':         ['arctic', 'svalbard', 'barents sea', 'beaufort sea',
@@ -5349,7 +5474,9 @@ CHOKEPOINT_LOCATION_MAP = {
 
 # v3.16: always listed in chokepoint_postures, even with zero signals.
 WATCHED_CHOKEPOINTS = ['hormuz', 'bab_el_mandeb', 'black_sea', 'bosporus', 'baltic',
-                       'taiwan_strait', 'luzon_strait', 'south_china_sea']
+                       'taiwan_strait', 'luzon_strait', 'south_china_sea',
+                       # v3.17 (Nov 3 2026): the Western Hemisphere's two watched waters
+                       'panama_canal', 'caribbean']
 
 # Reverse-lookup: location-keyword → chokepoint_id (built once at import time)
 _LOCATION_TO_CHOKEPOINT = {}

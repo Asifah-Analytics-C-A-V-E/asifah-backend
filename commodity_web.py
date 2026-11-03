@@ -62,7 +62,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 import re
 from datetime import datetime, timezone, timedelta
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'   # Nov 3 2026: soybeans web (China buying choice; US / Brazil / Argentina / Paraguay)
 
 WEB_STATE_KEY = 'commodity_web:state'
 WEB_STATE_TTL = 120 * 24 * 3600
@@ -206,6 +206,115 @@ COMMODITY_WEBS = {
             'reverse in a single notification.',
             'Importer stress listed here is co-occurrence, not causation: it may have '
             'causes that have nothing to do with rice.',
+        ],
+    },
+
+    # ════════════════════════════════════════════════════════════════════
+    # SOYBEANS (v1.1.0, Nov 3 2026) -- the trade-war commodity
+    # ════════════════════════════════════════════════════════════════════
+    # Rachel (Nov 3): build on BRI while we are in the Western Hemisphere.
+    # Soy is where the US-China contest lands on farms: China buys roughly
+    # 60% of the world's traded soybeans, and WHERE it buys is a political
+    # choice -- Brazil and Argentina gain what US farmers lose. The chokepoint
+    # is a buyer's policy, the mirror image of rice (a seller's policy).
+    'soybeans': {
+        'registry_id': 'commodity_web_soybeans',
+        'label': 'Soybeans',
+        'icon': '\U0001FAD8',
+        'as_of': '2026-11-03',
+        'subject_rx': r'\b(soy|soya|soybeans?|soymeal|soybean meal)\b',
+        'chokepoint_kind': 'policy',
+        'chokepoint_note': (
+            "Soy's chokepoint is a BUYER'S policy: China takes roughly 60% of world soybean "
+            "trade, and whether it buys from the US or from Brazil and Argentina is a trade-war "
+            "decision as much as a price one. The 2018-19 tariff war shifted Chinese purchases "
+            "decisively to Brazil, which is now the largest exporter by far; US farm-belt "
+            "politics, Argentine export taxes and the Parana river's water level decide the rest."),
+        'export_producers': ['brazil', 'usa', 'argentina', 'paraguay'],
+        'beneficiaries': ['Brazil', 'Argentina', 'Paraguay'],
+        'corridors': [],   # no river or canal sensor for soy yet; declared, not hidden
+        'inbound': [
+            {'id': 'china_buying_policy', 'label': 'China buying policy',
+             'kind': 'policy',
+             'actor_rx': r'\b(china|chinese|beijing|sinograin|cofco)\b',
+             'action_rx': (r'\b(tariffs? on (?:[\w-]+ ){0,3}soy\w*|retaliatory tariffs?|halts? (?:[\w-]+ ){0,3}purchases|'
+                           r'suspends? (?:[\w-]+ ){0,3}(?:purchases|imports)|stops? buying|cancel(?:s|led)? (?:[\w-]+ ){0,3}(?:cargoes|purchases)|'
+                           r'shifts? (?:[\w-]+ ){0,3}purchases|bans? (?:[\w-]+ ){0,3}imports?)'),
+             'easing_rx': (r'\b(resum(?:e|es|ed|ing) (?:[\w-]+ ){0,3}(?:purchases|buying|imports)|'
+                           r'purchase commitments?|buys? (?:[\w-]+ ){0,3}us soy\w*|waiv(?:e|es|ed|er)|exempt(?:s|ed|ion)?|'
+                           r'lift(?:s|ed)? (?:[\w-]+ ){0,3}tariffs?|trade (?:deal|truce))\b'),
+             'stress_label': 'China cutting or redirecting purchases', 'relief_label': 'China resuming purchases'},
+            {'id': 'us_trade_policy', 'label': 'US tariffs and farm aid',
+             'kind': 'policy',
+             'actor_rx': r'\b(us|u\.s\.|united states|washington|usda|trump|american)\b',
+             'action_rx': (r'\b(tariffs?|trade war|farm (?:aid|bailout|relief)|bailout for farmers|'
+                           r'market facilitation)'),
+             'easing_rx': r'\b(trade (?:deal|truce)|tariff (?:cut|pause|truce)|lift(?:s|ed)? (?:[\w-]+ ){0,3}tariffs?)\b',
+             'stress_label': 'US trade action touching soy', 'relief_label': 'US-China trade easing'},
+            {'id': 'argentina_export_tax', 'label': 'Argentina export taxes',
+             'kind': 'policy',
+             'actor_rx': r'\b(argentin\w*|milei|retenciones)\b',
+             'action_rx': r'\b(export tax(?:es)?|retenciones|export dut(?:y|ies)|farm strike|lockout)',
+             'easing_rx': r'\b(cut(?:s)? (?:[\w-]+ ){0,3}(?:export )?tax(?:es)?|eliminat\w+|lower(?:s|ed)? (?:[\w-]+ ){0,3}tax(?:es)?|zero)\b',
+             'stress_label': 'Argentine export taxes or farm strikes', 'relief_label': 'Argentine export-tax cut'},
+            {'id': 'harvest_weather', 'label': 'Americas harvest weather',
+             'kind': 'weather',
+             'harm_rx': (r'\b(drought|dry spell|heatwave|crop (?:damage|losses?|failure)|'
+                         r'harvest (?:losses?|shortfall|damage|failure)|yield (?:losses?|cut)|'
+                         r'(?:parana|paraguay) river (?:low|levels?|drought)|low river levels?|'
+                         r'output (?:falls?|drops?|slumps?|plunges?))\b'),
+             'stress_label': 'harvest damage reported'},
+            {'id': 'producer_shock', 'label': 'War or disaster in an exporter', 'kind': 'producer_shock'},
+            {'id': 'market', 'label': 'World price', 'kind': 'market'},
+            {'id': 'corridor', 'label': 'River / canal corridor', 'kind': 'corridor'},
+        ],
+        'outbound': [
+            {'country': 'usa', 'label': 'United States (farm belt)', 'verified': False,
+             'source': 'Claude research Nov 3 2026 -- verify',
+             'actor_rx': r'\b(us|u\.s\.|american|iowa|illinois|midwest|farm belt|farmers)\b',
+             'response_rx': r'\b(farm (?:aid|bailout|relief)|bailout|bankrupt\w*|prices? (?:fall|slump|plunge)|storage|unsold)\b',
+             'failure_mode': ('FARM-BELT POLITICS -- losing the China market lands on swing-state '
+                              'farmers; Washington has answered with federal farm aid (2018-19).')},
+            {'country': 'brazil', 'label': 'Brazil', 'verified': True,
+             'source': "Rachel's COUNTRY_COMMODITY_EXPOSURE note",
+             'actor_rx': r'\b(brazil\w*|mato grosso|santos|paranagua)\b',
+             'response_rx': r'\b(record (?:exports?|shipments|sales)|exports? to china|premiums?|port (?:queues?|congestion))\b',
+             'failure_mode': ('THE WINNER -- the largest exporter; every US-China rupture raises '
+                              'Brazilian premiums and deepens China\'s dependence on Brazil.')},
+            {'country': 'argentina', 'label': 'Argentina', 'verified': True,
+             'source': "Rachel's COUNTRY_COMMODITY_EXPOSURE note",
+             'actor_rx': r'\b(argentin\w*|rosario)\b',
+             'response_rx': r'\b(exports? to china|sales to china|crush|soymeal exports?|dollars?|reserves?)\b',
+             'failure_mode': ('DOLLARS -- soy and soymeal are Argentina\'s biggest source of hard '
+                              'currency; China is also its swap-line lender.')},
+            {'country': 'paraguay', 'label': 'Paraguay', 'verified': False,
+             'source': 'Claude research Nov 3 2026 -- verify',
+             'actor_rx': r'\b(paraguay\w*|asuncion)\b',
+             'response_rx': r'\b(barges?|river|exports?|shipments)\b',
+             'failure_mode': ('LANDLOCKED EXPORTER -- soy leaves by barge down the Paraguay and Parana '
+                              'rivers; drought that lowers the water strands the harvest.')},
+            {'country': 'china', 'label': 'China (the buyer)', 'verified': False,
+             'source': 'Claude research Nov 3 2026 -- verify',
+             'actor_rx': r'\b(china|chinese|sinograin|cofco|hog|pork)\b',
+             'response_rx': r'\b(reserves?|auctions?|stockpil\w+|feed (?:costs?|prices?)|pork prices?|soymeal)\b',
+             'failure_mode': ('FEED SECURITY -- soy is animal feed; Beijing draws on state reserves '
+                              'and diversifies suppliers to keep pork affordable.')},
+        ],
+        'so_what': {
+            'region': ('When China turns away from US soy, South America\'s exporters gain share and '
+                       'price, and Beijing\'s leverage over Brazil and Argentina grows with its purchases.'),
+            'global': ('Soy is the clearest place where the US-China contest reaches ordinary '
+                       'livelihoods: US farm incomes, Argentine dollars and Chinese pork prices move '
+                       'with one buying decision.'),
+        },
+        'watch': ['China customs soybean import data by origin', 'USDA export sales to China',
+                  'Brazil soybean export premiums (Paranagua / Santos)',
+                  'Argentine export-tax (retenciones) decrees', 'Parana river levels at Rosario'],
+        'not_implied': [
+            'Not a forecast of prices, shortages or farm failures.',
+            'China shifting purchases is a policy setting that can reverse with a trade deal.',
+            'Exporter windfalls are co-occurrence: Brazil and Argentina\'s sales also move with '
+            'their own harvests and currencies.',
         ],
     },
 }
@@ -460,6 +569,12 @@ _PHRASE = {
     ('other_exporter_policy', 'relief'): 'a substitute exporter easing curbs',
     ('market', 'stress'): 'the world price rising',
     ('market', 'relief'): 'the world price falling',
+    ('china_buying_policy', 'stress'): 'China cutting or redirecting purchases',
+    ('china_buying_policy', 'relief'): 'China resuming purchases',
+    ('us_trade_policy', 'stress'): 'US trade action touching soy',
+    ('us_trade_policy', 'relief'): 'US-China trade easing',
+    ('argentina_export_tax', 'stress'): 'Argentine export taxes or farm strikes',
+    ('argentina_export_tax', 'relief'): 'an Argentine export-tax cut',
 }
 _KIND_PHRASE = {'weather': 'harvest damage in producing countries',
                 'producer_shock': 'war or disaster hitting an exporter',

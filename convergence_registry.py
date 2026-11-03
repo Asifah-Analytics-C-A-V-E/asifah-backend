@@ -1191,6 +1191,46 @@ CONVERGENCE_REGISTRY = [
         ),
     },
 
+    {
+        'id':                      'commodity_web_soybeans',
+        'commodity':               None,
+        'country':                 'global',
+        'trigger_signal_category': 'commodity_web_soybeans',
+        'trigger_signal_categories': ['commodity_soybeans', 'commodity_web_soybeans'],
+        'trigger_region':          'global_commodity',
+        'commodity_threshold':     None,
+        'regions':                 ['global_commodity', 'wha', 'asia'],
+        'axes':                    ['economic', 'diplomatic'],
+        'priority':                12,
+        'watch_priority':          6,
+        'icon':                    '\U0001fad8',          # beans
+        'color':                   '#84cc16',
+        'headline_template':       'Soybean web -- {alert}',
+        'watch_headline_template': 'Soybean web standing watch -- {alert}, nothing new this cycle',
+        'detail': (
+            "Soy's chokepoint is a BUYER'S policy: China takes roughly 60% of world soybean "
+            'trade, and whether it buys from the US or from Brazil and Argentina is a trade-war '
+            'decision as much as a price one. The web reads inbound pressure (China buying '
+            'policy, US tariffs and farm aid, Argentine export taxes, Americas harvest weather, '
+            'the world price) against outbound response in the US farm belt, Brazil, Argentina, '
+            'Paraguay and China itself. WHAT IT MEANS: where China buys soy is one of the '
+            'clearest places the US-China contest reaches ordinary livelihoods -- US farm '
+            'incomes, Argentine dollars and Chinese pork prices move with one buying decision. '
+            'Not a forecast of prices, shortages or farm failures. Watch: China customs import '
+            'data by origin, USDA export sales to China, Brazilian export premiums, Argentine '
+            'retenciones decrees, Parana river levels at Rosario.'
+        ),
+        'facts': {
+            'chokepoint':        "policy -- China ~60% of world soybean trade (buyer's choice)",
+            'precedent':         '2018-19 tariff war shifted Chinese purchases decisively to Brazil; US farm aid followed',
+            'beneficiaries':     'Brazil, Argentina, Paraguay -- gain share when China turns from US soy',
+            'unverified_nodes':  'usa, paraguay, china (Claude research Nov 3 2026, awaiting Rachel)',
+            'not_implied':       'Not a forecast of prices, shortages or farm failures; purchase shifts can reverse with a trade deal.',
+        },
+        'enrichment_text_template': '\U0001fad8 SOYBEAN WEB at {alert} ({signals} live link(s)).',
+        'notes': 'Stamped by commodity_web.py v1.1.0 (Nov 3 2026), same pattern as commodity_web_rice.',
+    },
+
     # ───────────────────────────────────────────────────────────────
     # FUTURE CONVERGENCES — uncomment / adapt as new ones get identified.
     # Examples sketched below show how broad the pattern can stretch.
@@ -1843,8 +1883,8 @@ CLUSTER_LABELS = {
 # remove or rename an entry and it changes by itself. Layer 2 logs both, so a
 # fork shows up in the Render log on the first scan after it happens rather
 # than being discovered months later by someone grepping two clones.
-REGISTRY_VERSION = '1.4.0'      # Oct 29 2026 -- commodity_web_rice
-REGISTRY_AS_OF = '2026-10-29'
+REGISTRY_VERSION = '1.5.0'      # Nov 3 2026 -- commodity_web_soybeans | 1.4.0 Oct 29 2026 -- commodity_web_rice
+REGISTRY_AS_OF = '2026-11-03'
 
 
 def registry_fingerprint():

@@ -2281,6 +2281,47 @@ COUNTRY_COMMODITY_EXPOSURE = {
         'fishmeal':     {'role': 'producer',          'weight': 1.1, 'rank': 1, 'data_as_of': '2026-07',
                          'note': "\U0001F947 World's largest fishmeal exporter -- the Peruvian anchoveta (Humboldt Current) is the planet's biggest single-species fishery and the top global input to aquaculture + animal feed. FOOD-SECURITY frame, NOT fertilizer: when IMARPE biomass surveys trigger a season CANCELLATION (as in the 2023 first-season closure), global fishmeal prices spike and protein-feed costs ripple into farmed-salmon/poultry/aquaculture worldwide. This is the trackable leading indicator behind the viral 'guano collapse' framing -- the real signal is the quota, filed under food/feed, not the birds. Watch: IMARPE anchoveta biomass surveys, PRODUCE quota announcements/cancellations, El Nino warm-water anomalies, fishing-fleet protests. See also Chile (same Humboldt anchoveta fishery, secondary scale) when built."},
     },
+    # ══════════════════════════════════════════════════════════════════
+    # v1.3.2 (Nov 3 2026) -- WESTERN HEMISPHERE FILL. Claude research,
+    # flagged in each note for Rachel's verification pass. Before this the
+    # registry had no Paraguay, Bolivia, Colombia, Ecuador or Guyana, so
+    # the Lithium Triangle had two corners and Venezuela's Essequibo claim
+    # had no oil-producing counterpart.
+    # ══════════════════════════════════════════════════════════════════
+    'paraguay': {
+        'soybeans':     {'role': 'producer', 'weight': 1.0, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) One of the world's top soybean exporters despite being landlocked: the crop leaves by barge down the Paraguay and Parana rivers to Rosario and the Atlantic, so drought that lowers the rivers strands the harvest. Recognises Taiwan, not Beijing -- unusual for a major soy exporter whose biggest end-market is China (reached via Argentine and Uruguayan traders). Watch: Parana river levels, barge freight, Taiwan-recognition politics."},
+        'corn':         {'role': 'producer', 'weight': 0.6, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Second-crop (safrinha-style) corn exporter, mostly to Brazil and Argentina; same river logistics as soy."},
+    },
+    'bolivia': {
+        'lithium':      {'role': 'producer', 'weight': 0.9, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) The Lithium Triangle's third corner and, by USGS estimates, the largest identified lithium RESOURCES on Earth (Salar de Uyuni) -- but tiny production. State company YLB signed direct-extraction deals with a Chinese CATL-led consortium and Russia's Uranium One (2023-24); contracts face legislative and community challenges. RESOURCE, NOT SUPPLY: Bolivia matters for who controls the future, not today's price. Watch: YLB contract ratification, Chinese/Russian plant milestones, 2025-26 political transition."},
+        'natural_gas':  {'role': 'producer', 'weight': 0.6, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Declining gas producer; exports to Brazil and Argentina have fallen as fields deplete and Vaca Muerta supplies Argentina. Lost gas revenue drives Bolivia's dollar shortage and fuel queues."},
+        'zinc':         {'role': 'producer', 'weight': 0.7, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Significant zinc and silver miner (San Cristobal, Potosi); mining is a main export earner alongside gas."},
+        'silver':       {'role': 'producer', 'weight': 0.7, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Top-10 silver producer; Potosi's Cerro Rico and San Cristobal."},
+    },
+    'colombia': {
+        'coffee':       {'role': 'producer', 'weight': 1.1, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Among the top three coffee producers and the largest of washed arabica; rural livelihoods in former conflict zones depend on it. Watch: FNC harvest data, El Nino/La Nina rainfall, US tariff treatment."},
+        'oil':          {'role': 'producer', 'weight': 0.8, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Mid-size producer (roughly 0.75 million barrels a day); Ecopetrol majority state-owned. Pipelines are recurring ELN sabotage targets; the Petro government halted new exploration licensing. Watch: Cano Limon-Covenas pipeline attacks, Ecopetrol output, reserve-life debates."},
+        'coal':         {'role': 'producer', 'weight': 0.9, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) A top-5 thermal coal exporter (Cerrejon, La Guajira); halted coal exports to Israel in 2024 over Gaza -- a rare case of a commodity exporter using supply politically. Watch: export-ban politics, European/Asian demand."},
+        'gold':         {'role': 'producer', 'weight': 0.6, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Significant gold output, much of it informal or illegal and financing armed groups (ELN, Clan del Golfo, FARC dissidents)."},
+    },
+    'ecuador': {
+        'oil':          {'role': 'producer', 'weight': 0.7, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) Oil is the largest export (roughly 0.45-0.5 million barrels a day); left OPEC in 2020; a 2023 referendum ordered Yasuni ITT drilling to stop. Dollarised economy, so oil revenue is the fiscal anchor. Gang violence at ports (Guayaquil) is the stability variable. Watch: Yasuni wind-down, SOTE/OCP pipeline ruptures, port security."},
+    },
+    'guyana': {
+        'oil':          {'role': 'producer', 'weight': 1.0, 'data_as_of': '2026-11',
+                         'note': "(Claude research Nov 3 2026 -- verify) The fastest-growing oil producer in the world this decade: ExxonMobil's Stabroek block, production well past half a million barrels a day and rising as new ships come online. Most of the territory onshore -- Essequibo -- is claimed by Venezuela (2023 Venezuelan referendum; ICJ case pending), so Guyana's oil is also a Venezuela flashpoint. Watch: Venezuelan military moves near Essequibo, ICJ rulings, new FPSO start-ups."},
+    },
     'philippines': {
         'semiconductors': {'role': 'component_producer', 'weight': 1.1,
                          'note': "Long-established assembly, test, and packaging (OSAT) hub - semiconductors and electronics are the country's top merchandise export (Laguna, Cavite, Clark corridors). Like Vietnam, exposure is downstream component/assembly rather than leading-edge fabrication, and it is a beneficiary of China+1 diversification. Watch: SEIPI export figures, US/Japan/Taiwan OSAT capacity additions, CHIPS-adjacent investment announcements."},
@@ -4901,7 +4942,7 @@ def _run_full_scan(days=7):
         },
         'last_updated':           datetime.now(timezone.utc).isoformat(),
         'cached':                 False,
-        'version':                '1.3.1',
+        'version':                '1.3.2',   # Nov 3 2026: WHA exposure fill (PY, BO, CO, EC, GY)
     }
 
     # ── v1.2.0 (May 24 2026) — Active convergence detection ─────

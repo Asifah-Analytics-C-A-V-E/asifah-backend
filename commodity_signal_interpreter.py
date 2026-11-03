@@ -56,7 +56,8 @@ DESIGN PRINCIPLES (lifted from military interpreter):
 from __future__ import annotations
 from datetime import datetime, timezone
 
-INTERPRETER_VERSION = '1.2.0'   # v1.2.0 Oct  5 2026 - consumes trigger_confirmed/fresh: standing watch vs topline, no more firing-on-an-unread-trigger
+INTERPRETER_VERSION = '1.3.0'   # v1.3.0 Nov  3 2026 - butterfly cards carry the registry's full WHAT IT MEANS + facts + watch (was cut at 280 chars); WHA region map fixed (usa, paraguay, bolivia, ecuador, guyana...)
+# v1.2.0 Oct  5 2026 - consumes trigger_confirmed/fresh: standing watch vs topline, no more firing-on-an-unread-trigger
 # v1.1.1 Jun 23 2026 - scrub: dynamic commodity count + sorted elevated fallback (anti-pinning)
 
 # ══════════════════════════════════════════════════════════════
@@ -192,6 +193,22 @@ COUNTRY_TO_REGION = {
     'cuba':          'wha',
     'haiti':         'wha',
     'canada':        'wha',
+    # v1.3.0 (Nov 3 2026): the exposure registry keys the US as 'usa', which
+    # was missing here, so every US exposure was bucketed as 'global' and the
+    # Western Hemisphere region under-read its own largest economy.
+    'usa':           'wha',
+    'paraguay':      'wha',
+    'bolivia':       'wha',
+    'ecuador':       'wha',
+    'guyana':        'wha',
+    'panama':        'wha',
+    'uruguay':       'wha',
+    'guatemala':     'wha',
+    'honduras':      'wha',
+    'el_salvador':   'wha',
+    'nicaragua':     'wha',
+    'dominican_republic': 'wha',
+    'jamaica':       'wha',
 }
 
 # ── Alert-level severity ranking (used to pick "highest-pressured" sets) ──
@@ -540,6 +557,34 @@ def build_executive_summary(scan_result, convergence=None):
 # BUTTERFLY (CONVERGENCE) PROSE BUILDER
 # ══════════════════════════════════════════════════════════════
 
+def _first_sentences(text, n):
+    import re as _re
+    parts = _re.split(r'(?<=[.!?])\s+', ' '.join(str(text or '').split()))
+    return ' '.join(p for p in parts[:n] if p)
+
+
+def _registry_meaning(conv_id, detail, regions):
+    """v1.3.0: the registry entry's own meaning, via tracker_meanings (pure
+    module). Soft-fail: no module or no entry -> {} and the card renders as
+    before, minus the truncation."""
+    try:
+        import tracker_meanings as _tm
+        entry = None
+        try:
+            import convergence_registry as _cr
+            entry = next((e for e in getattr(_cr, 'CONVERGENCE_REGISTRY', [])
+                          if isinstance(e, dict) and e.get('id') == conv_id), None)
+        except Exception:
+            entry = None
+        m = _tm.registry_meaning(entry or {'id': conv_id, 'detail': detail, 'regions': regions})
+        m['readout_short'] = _first_sentences(m.get('readout') or '', 2) if m.get('readout') else ''
+        if m.get('readout_short') and m.get('readout_short') == m.get('plain'):
+            m['readout_short'] = ''
+        return m
+    except Exception:
+        return {}
+
+
 def build_butterfly_prose(scan_result):
     """
     Build prose blocks for each active convergence ('butterfly effect'
@@ -617,7 +662,13 @@ def build_butterfly_prose(scan_result):
         # Cap detail at ~280 chars so the card stays scannable; full
         # detail is in the registry entry if user wants it on a deeper
         # endpoint later.
-        detail_short = (detail[:280] + '...') if len(detail) > 280 else detail
+        # v1.3.0 (Nov 3 2026): this used to be detail[:280] + '...', which cut
+        # every registry entry off before its WHAT IT MEANS paragraph -- the
+        # meaning Rachel wrote never reached the page. The card now keeps a
+        # short readout (whole sentences) in `prose`, and carries the meaning,
+        # facts and watch list as their own fields for the page to render.
+        meaning = _registry_meaning(cid, detail, conv.get('regions'))
+        detail_short = meaning.get('readout_short') or _first_sentences(detail, 2)
 
         region_names = [
             REGIONAL_DISPLAY.get(r, {}).get('display', r.upper())
@@ -680,6 +731,11 @@ def build_butterfly_prose(scan_result):
             'prose':    ' '.join([p for p in prose_parts if p]),
             'commodity':comm,
             'country':  country,
+            # v1.3.0 -- the meaning layer
+            'what_it_means': meaning.get('plain', ''),
+            'facts':         meaning.get('facts', {}),
+            'watch':         meaning.get('watch', ''),
+            'not_implied':   meaning.get('not_implied', ''),
         }
 
     return out

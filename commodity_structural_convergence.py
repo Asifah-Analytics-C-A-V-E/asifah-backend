@@ -52,7 +52,7 @@ from commodity_tracker import (
     _country_commodity_exposures,
 )
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'   # Nov 3 2026: WHA ISO3 fill
 
 # ------------------------------------------------------------
 # Config
@@ -97,6 +97,8 @@ SLUG_TO_ISO3 = {
     'south_korea': 'KOR', 'taiwan': 'TWN', 'thailand': 'THA', 'turkey': 'TUR',
     'turkmenistan': 'TKM', 'uae': 'ARE', 'ukraine': 'UKR', 'usa': 'USA',
     'venezuela': 'VEN', 'vietnam': 'VNM',
+    # Nov 3 2026 -- WHA fill (matches commodity_tracker v1.3.2)
+    'paraguay': 'PRY', 'bolivia': 'BOL', 'colombia': 'COL', 'ecuador': 'ECU', 'guyana': 'GUY',
     # 'eu' intentionally omitted (aggregate, not a WB country row)
 }
 

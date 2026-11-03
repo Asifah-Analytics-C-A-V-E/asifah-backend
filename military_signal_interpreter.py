@@ -1,7 +1,9 @@
 """
-Asifah Analytics — Military Signal Interpreter v1.1.1
+Asifah Analytics — Military Signal Interpreter v1.2.0
 May 11, 2026 (v1.1.1 Oct 31 2026: CENTCOM/AFRICOM baselines no longer assert
-an unmeasured calm or a dated May-2026 situation report)
+an unmeasured calm or a dated May-2026 situation report; v1.2.0 Nov 3 2026: the
+same fix for INDOPACOM, EUCOM, WHA and NORTHCOM, and Argentina, Paraguay, Chile,
+Peru and Canada join the Western Hemisphere)
 
 Analytical prose layer for the Military Tracker. Consumes scan_result data
 (target_postures, theatre_groupings, chokepoint data, evacuation_alerts) and
@@ -63,33 +65,34 @@ REGIONAL_BASELINE_TEMPLATES = {
     'asia_pacific': {
         'display': 'Asia-Pacific / INDOPACOM',
         'baseline': (
-            'INDOPACOM AOR baseline. Standard PLAN, ROK-US-DPRK, and Taiwan-Strait '
-            'routine activity with no theatre-wide escalation signal.'
+            'INDOPACOM AOR: no theatre-wide escalation signal in this scan. Chokepoint and '
+            'actor-level readings below may still be elevated.'
         ),
         'context_actors': ['china', 'taiwan'],
     },
     'europe': {
         'display': 'Europe / EUCOM',
         'baseline': (
-            'EUCOM AOR baseline. Routine NATO eastern-flank posture with Russia-Ukraine '
-            'corridor at established conflict tempo and no broader theatre escalation signal.'
+            'EUCOM AOR: no theatre-wide escalation signal in this scan beyond the established '
+            'Russia-Ukraine war. Actor-level readings below may still be elevated.'
         ),
         'context_actors': ['russia', 'ukraine', 'nato', 'poland', 'greenland'],
     },
     'western_hemisphere': {
         'display': 'Western Hemisphere / SOUTHCOM-NORTHCOM',
         'baseline': (
-            'WHA AOR baseline. Routine SOUTHCOM Caribbean and counter-narcotics posture '
-            'with no theatre-wide escalation signal.'
+            'Western Hemisphere: no theatre-wide escalation signal in this scan. Caribbean, '
+            'Andean and Southern Cone actor readings below may still be elevated.'
         ),
         'context_actors': ['venezuela', 'cuba', 'haiti', 'panama', 'colombia',
-                           'mexico', 'brazil'],
+                           'mexico', 'brazil', 'argentina', 'paraguay', 'chile',
+                           'peru', 'canada'],
     },
     'global_northcom': {
         'display': 'Global / NORTHCOM',
         'baseline': (
-            'NORTHCOM and global US-anchor posture at baseline. No homeland-defense '
-            'escalation indicators or unusual force-projection signals from the US anchor.'
+            'NORTHCOM / US anchor: no homeland-defence escalation signal in this scan. US '
+            'activity abroad is read in each regional theatre.'
         ),
         'context_actors': ['us'],
     },
@@ -181,6 +184,11 @@ COUNTRY_DISPLAY = {
     'colombia':      'Colombia',
     'mexico':        'Mexico',
     'brazil':        'Brazil',
+    'argentina':     'Argentina',
+    'paraguay':      'Paraguay',
+    'chile':         'Chile',
+    'peru':          'Peru',
+    'canada':        'Canada',
     'saudi_arabia':  'Saudi Arabia',
     'uae':           'the UAE',
     'jordan':        'Jordan',
@@ -1191,7 +1199,7 @@ def build_full_interpretation(scan_result):
         'iran_kinetic_prose':           build_iran_kinetic_prose(scan_result),
         'asset_movement_prose':         build_asset_movement_prose(scan_result),
         'humanitarian_convergence_prose': build_humanitarian_convergence_prose(scan_result),
-        'interpreter_version':          '1.1.0',  # bumped for Africa + kinetic + movement + humanitarian
+        'interpreter_version':          '1.2.0',  # Nov 3 2026: no asserted calm in any baseline; WHA actors
     }
 
 
