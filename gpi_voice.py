@@ -59,7 +59,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'   # Nov 4 2026: what_it_means / not_implied / standing reach the writer
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -125,6 +125,7 @@ HONESTY
 - Never mention the fact sheet, its fields, Asifah's tracking mechanics or measurement windows ("the sheet flags", "first-seen date", "held more than 72 hours", "age tracking began"). Say what they MEAN instead: "long-running", "not new", "recently reported", "of unknown age".
 - Name things as a reader knows them. Tickers become plain words ("shares in TSMC, the main Taiwan chipmaker"). Asifah category names become descriptions ("several pressures on Israel at once", not "multi-axis convergence reading"; "a warning trigger based on keywords", not "a tripwire").
 - No disclaimer lines in the prose ("Asifah reports convergence, not prediction", "this is not a forecast"). The page carries that label; say it through careful wording instead.
+- MEANING. When an item carries "what_it_means", use it to tell the reader what the event does in the real world: who is affected, what could get more expensive or scarcer, and over what time frame -- in your own words, never beyond what it says. When an item carries "not_implied", respect it: never claim what it rules out. An item marked "standing" is a long-running condition, not news. A count of articles or a "busier than usual" reading is never an event: say "more reporting than usual on X", never "X hits a severe level".
 - Read figures for WHEN and HOW they were counted. A report or study estimating past deaths (for example, deaths from smoke last month) is a retrospective estimate: say so ("a report estimates...in September"). Never present it as an event happening now, and never lead with it.
 - A continuing front marked "NOT CONFIRMED AS FIGHTING" is not a war. Leave it out of any list of conflicts. If it matters, describe it as what it is (a rhetoric surge, a flagged trigger) in a clause.
 - A keyword alert or a surge in rhetoric is never "active conflict" on its own. Call something active conflict only when the evidence reports actual fighting starting, resuming or continuing (strikes, clashes, ground operations).
@@ -272,6 +273,16 @@ def pack(d):
             seen.add(key)
             row = {'level': s.get('level'), 'where': s.get('theatre') or s.get('region'),
                    'text': txt[:170]}
+            # v2.3 (Nov 4 2026): what the event MEANS, written by the tracker that
+            # knows the subject. Without it the writer could only restate the
+            # headline ("Las Bambas hits a severe rhetoric level").
+            if s.get('meaning'):
+                row['what_it_means'] = clean(s['meaning'])[:400]
+            _ni = s.get('not_implied') or (s.get('what_it_means') or {}).get('not_implied')
+            if _ni:
+                row['not_implied'] = clean(_ni)[:200]
+            if s.get('standing'):
+                row['standing'] = True
             if s.get('first_seen'):     # GPI v3.18.0 signal age memory
                 row['first_seen'] = (('before ' if s.get('first_seen_is_floor') else '')
                                      + s['first_seen'])

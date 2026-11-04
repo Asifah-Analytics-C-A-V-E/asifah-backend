@@ -2,6 +2,8 @@
 global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
 v3.7.0 — Jul 25 2026 (NARRATIVE DECAY)
+v3.21.0 — Nov 4 2026: axis top_signals carry `meaning`, `not_implied`, `standing` from the
+  trackers (Peru/Cuba/Venezuela first) so the voice can explain what an event DOES.
 v3.10.0 add-on — Oct 28 2026: israel_formation_window narrative (caretaker Israel x hot Iran axis)
 v3.12.0 — Oct 28 2026 (SEVERITY vs MOTION):
   * L5 NOVELTY GATE. Global L5 now means "a NEW L5 front within 14 days" (or a
@@ -935,7 +937,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.20.1'   # v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.21.0'   # v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -2550,6 +2552,12 @@ def _build_pressure_axes_payload(blufs, narratives):
                 'color':         s.get('color', PRESSURE_AXIS_META[axis]['color']),
                 'short_text':    (s.get('short_text') or s.get('text') or '')[:120],
                 'long_text':     s.get('long_text') or s.get('short_text') or s.get('text') or '',
+                # v3.21.0 (Nov 4 2026): carry the tracker's plain meaning through,
+                # so the writer can say what an event DOES (who pays, what gets
+                # dearer) instead of "hits a severe rhetoric level".
+                'meaning':       (s.get('meaning') or '')[:400],
+                'not_implied':   ((s.get('what_it_means') or {}).get('not_implied') or '')[:200],
+                'standing':      bool(s.get('standing')),
             })
 
         meta = PRESSURE_AXIS_META[axis]
