@@ -1,7 +1,11 @@
 """
 spoke_wheel_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.5.0 -- Oct 11, 2026  (v1.4.0 Oct 5 2026; v1.0.6 Jul 25 2026)
+v1.5.1 -- Nov 4, 2026  (v1.5.0 Oct 11 2026; v1.4.0 Oct 5 2026; v1.0.6 Jul 25 2026)
+
+v1.5.1: registry only -- Cuba and Peru join the China wheel, Cuba and
+Venezuela join the Iran wheel (their trackers now write spoke:{hub}:{country}).
+No logic change.
 
 One reader for the whole spoke-and-wheel architecture. Give it a hub and it
 returns that hub's rim; give it a country list and it returns what those
@@ -88,7 +92,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.5.0'
+__version__ = '1.5.1'
 
 # ============================================================
 # CONFIG
@@ -143,6 +147,9 @@ HUB_REGISTRY = {
             'israel': 'adversary',
             'yemen': 'proxy', 'lebanon': 'proxy', 'iraq': 'proxy', 'gaza': 'proxy',
             'syria': 'ruptured', 'oman': 'mediation', 'qatar': 'mediation',
+            # Hemisphere (v1.5.1): footholds, not proxies -- diplomatic, oil
+            # and (in Venezuela) drone ties, read by the WHA trackers.
+            'venezuela': 'hemispheric_foothold', 'cuba': 'hemispheric_foothold',
             'azerbaijan': 'friction', 'saudi_arabia': 'friction',
             'bahrain': 'friction', 'pakistan': 'friction', 'armenia': 'friction',
             'russia': 'peer', 'china': 'peer',
@@ -164,9 +171,11 @@ HUB_REGISTRY = {
             'myanmar': 'bri_corridor', 'laos': 'bri_corridor',
             'cambodia': 'bri_corridor', 'sri_lanka': 'bri_corridor',
             'afghanistan': 'bri_corridor',
+            'peru': 'bri_corridor',            # v1.5.1 -- Chancay port (COSCO)
             # Resource / influence clients
             'iran': 'peer', 'russia': 'peer', 'dprk': 'client',
             'venezuela': 'resource_client', 'sudan': 'resource_client',
+            'cuba': 'strategic_foothold',      # v1.5.1 -- reported listening posts
             'drc': 'resource_client', 'zimbabwe': 'resource_client',
             'solomon_islands': 'pacific_client', 'kiribati': 'pacific_client',
         },
