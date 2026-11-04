@@ -1,0 +1,2665 @@
+<!DOCTYPE html>
+<!-- Asifah Analytics — U.S. Rhetoric Tracker — page v1.4.2 (Nov 4 2026; v1.4.1 Nov 1; v1.0.0 May 10 2026) -->
+<!-- v1.4.2: watermark to platform canon (0.18 dark / 0.07 light, 500px); branch cards no longer stretch
+     and carry a plain word; 'ACTIVE — ACTIVE' de-duplicated; page theme button removed (the shell owns
+     the one toggle); flag image instead of a flag emoji (Windows shows 'US'); RSS 'partial' coverage. -->
+<!-- v1.4.0: Election & Governance Window card (tracker v1.4.0 'governance' block, GPI governance
+     axis contract), two-sided civil-society mobilisation, source-coverage line, role-labelled
+     Congress actors, Fed chair label, 'v1.1 Coming Soon' placeholder panel removed. -->
+<!-- COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved. -->
+<!-- Arctic palette · 10 actors · 3 layers · cross-theater (READS ALL) -->
+<!-- Calibration: volatility/coherence-based; US generally upper edge of stable -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U.S. Rhetoric Tracker — Asifah Analytics</title>
+    <meta name="description" content="Multi-actor U.S. rhetoric monitoring across 10 actors and 3 branches, plus the election and governance window. Apolitical infrastructure tracking volatility, divergence, and cross-spectrum fracture.">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/SassAndSweet/asifah-analytics/main/Asifah_Analytics_1_25_26_V1_LOGO.png">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            /* ARCTIC PALETTE — canonical for rhetoric trackers */
+            --bg-primary: #060d1a;
+            --bg-card: #0d1b2e;
+            --bg-signal: #0a1626;
+            --bg-elevated: #112338;
+            --border-color: #1e3a5f;
+            --border-strong: #2a5288;
+            --text-primary: #e2f0fb;
+            --text-secondary: #93c5fd;
+            --text-muted: #5d7ea3;
+            --accent-cyan: #38bdf8;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-orange: #f97316;
+            --accent-red: #ef4444;
+            --accent-purple: #a78bfa;
+
+            /* Levels (band colors) */
+            --level-stable-bg: rgba(16,185,129,0.10);
+            --level-stable-border: #10b981;
+            --level-active-bg: rgba(56,189,248,0.10);
+            --level-active-border: #38bdf8;
+            --level-active-plus-bg: rgba(245,158,11,0.10);
+            --level-active-plus-border: #f59e0b;
+            --level-volatile-bg: rgba(249,115,22,0.10);
+            --level-volatile-border: #f97316;
+            --level-crisis-bg: rgba(239,68,68,0.12);
+            --level-crisis-border: #ef4444;
+
+            /* Layer color tags */
+            --layer-executive: #dc2626;
+            --layer-legislative: #b91c1c;
+            --layer-institutional: #7c3aed;
+
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+            --shadow-glow: 0 0 20px rgba(56,189,248,0.15);
+
+            --watermark-filter: saturate(3) brightness(0.8) hue-rotate(185deg);
+            --loading-bg: rgba(6,13,26,0.95);
+            --header-gradient: linear-gradient(135deg, #0d1b2e 0%, #112338 50%, #1e3a5f 100%);
+
+            /* Watermark gold standard (May 11 2026 — from military.html) */
+            --watermark-opacity: 0.18;
+            --watermark-size: 500px;
+            --grid-color: rgba(0,212,255,0.04);
+            --scanline-opacity: 0.03;
+            --glow-opacity: 1;
+        }
+
+        body[data-theme="light"] {
+            --bg-primary: #f4f8fc;
+            --bg-card: #ffffff;
+            --bg-signal: #f8fafc;
+            --bg-elevated: #eef4fb;
+            --border-color: #cbd5e1;
+            --border-strong: #94a3b8;
+            --text-primary: #0f172a;
+            --text-secondary: #1e3a5f;
+            --text-muted: #64748b;
+            --watermark-filter: saturate(1.5) brightness(1) hue-rotate(0deg);
+            --loading-bg: rgba(244,248,252,0.95);
+            --header-gradient: linear-gradient(135deg, #ffffff 0%, #eef4fb 50%, #cbd5e1 100%);
+
+            /* Watermark gold standard (light theme) */
+            --watermark-opacity: 0.07;
+            --watermark-size: 500px;
+            --grid-color: transparent;
+            --scanline-opacity: 0;
+            --glow-opacity: 0;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.55;
+        }
+
+        /* Watermark gold standard (May 11 2026 — from military.html) */
+        .watermark {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: var(--watermark-size);
+            height: var(--watermark-size);
+            background-image: url('https://raw.githubusercontent.com/SassAndSweet/asifah-analytics/main/Asifah_Analytics_1_25_26_V1_LOGO.png');
+            background-size: 135%;
+            background-repeat: no-repeat;
+            background-position: center;
+            border-radius: 50%;
+            opacity: var(--watermark-opacity);
+            pointer-events: none;
+            z-index: 0;
+            filter: var(--watermark-filter);
+            transition: all 0.4s ease;
+        }
+
+        /* Grid overlay (body::before) — gold standard */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Scanlines overlay (body::after) — gold standard */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,212,255,var(--scanline-opacity)) 2px,
+                rgba(0,212,255,var(--scanline-opacity)) 4px
+            );
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--loading-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        .loading-overlay.fade { opacity: 0; pointer-events: none; }
+        .loading-content { text-align: center; }
+        .loading-spinner {
+            width: 48px; height: 48px;
+            border: 3px solid rgba(56,189,248,0.2);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            margin: 0 auto 16px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            color: var(--accent-cyan);
+            font-size: 0.95rem;
+            letter-spacing: 0.05em;
+        }
+
+        /* HEADER */
+        .header {
+            background: var(--header-gradient);
+            border-bottom: 1px solid var(--border-color);
+            padding: 22px 28px 18px;
+            position: relative;
+            z-index: 10;
+        }
+        .header-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 20px;
+            align-items: center;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .header-title-block { display: flex; flex-direction: column; gap: 6px; }
+        .header-title-row {
+            display: flex; align-items: center; gap: 14px;
+            font-size: 1.85rem; font-weight: 600;
+            color: var(--text-primary);
+        }
+        .header-flag-icons { font-size: 1.4em; }
+        .header-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            max-width: 920px;
+        }
+        .header-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-btn {
+            padding: 8px 14px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            background: rgba(56,189,248,0.08);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .header-btn:hover { background: rgba(56,189,248,0.16); }
+        .header-btn.active {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+        }
+
+        /* MAIN LAYOUT */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 0;
+            max-width: 1800px;
+            margin: 0 auto;
+            min-height: calc(100vh - 92px);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            padding: 22px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .sidebar-section { padding: 8px 0; }
+        .sidebar-header {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            padding: 8px 22px 6px;
+            font-weight: 600;
+        }
+        .sidebar-link {
+            display: block;
+            padding: 7px 22px;
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-size: 0.88rem;
+            border-left: 3px solid transparent;
+            transition: all 0.15s;
+        }
+        .sidebar-link:hover {
+            background: var(--bg-elevated);
+            border-left-color: var(--accent-cyan);
+        }
+        .sidebar-link.active {
+            background: var(--bg-elevated);
+            border-left-color: var(--accent-cyan);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .sidebar-link.rhetoric { color: var(--accent-green); }
+        .sidebar-link.rhetoric:hover { border-left-color: var(--accent-green); }
+        .sidebar-link.rhetoric.active { border-left-color: var(--accent-green); }
+        .sidebar-link.crosscut { color: var(--accent-yellow); }
+        .sidebar-link.crosscut:hover { border-left-color: var(--accent-yellow); }
+        .sidebar-link.gpi { color: var(--accent-purple); }
+        .sidebar-link.gpi:hover { border-left-color: var(--accent-purple); }
+        .sidebar-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 10px 18px;
+        }
+
+        /* CONTENT */
+        .content {
+            padding: 22px 28px;
+            min-width: 0;
+        }
+
+        /* COMPOSITE STRIP */
+        .composite-strip {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+        .composite-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 24px 22px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: var(--shadow-md);
+        }
+        .composite-label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+        }
+        .composite-score-block {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+        .composite-score {
+            font-size: 4.4rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .composite-score.tier-stable { color: var(--accent-green); }
+        .composite-score.tier-active { color: var(--accent-cyan); }
+        .composite-score.tier-active-plus { color: var(--accent-yellow); }
+        .composite-score.tier-volatile { color: var(--accent-orange); }
+        .composite-score.tier-crisis { color: var(--accent-red); }
+        .composite-out-of {
+            font-size: 1.4rem;
+            color: var(--text-muted);
+        }
+        .composite-band-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        .composite-band-icon { font-size: 1.2rem; }
+        .composite-description {
+            font-size: 0.92rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+            margin-top: 6px;
+        }
+        .composite-meta {
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        /* COMPOSITE — VECTOR STRIP RIGHT SIDE */
+        .composite-vectors {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            align-items: start;   /* v1.4.2: cards sit at their own height, not the composite card's */
+            align-content: start;
+        }
+        .vector-read { font-size: 0.8rem; font-weight: 600; margin-top: 8px; color: var(--text-secondary); }
+        .vector-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            border-radius: 8px;
+            padding: 14px 16px;
+            box-shadow: var(--shadow-sm);
+        }
+        .vector-card.exec { border-left-color: var(--layer-executive); }
+        .vector-card.legi { border-left-color: var(--layer-legislative); }
+        .vector-card.inst { border-left-color: var(--layer-institutional); }
+        .vector-card.cross { border-left-color: var(--accent-purple); }
+        .vector-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+        }
+        .vector-score {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+            color: var(--text-primary);
+        }
+        .vector-context {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* SECTION CARDS */
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 22px;
+            margin-bottom: 22px;
+            box-shadow: var(--shadow-sm);
+        }
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            font-style: italic;
+        }
+
+        /* TOP SIGNALS GRID */
+        .top-signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        .signal-card {
+            background: var(--bg-signal);
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            border-radius: 6px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .signal-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-glow);
+        }
+        .signal-card.severity-critical { border-left-color: var(--accent-red); }
+        .signal-card.severity-high     { border-left-color: var(--accent-orange); }
+        .signal-card.severity-medium   { border-left-color: var(--accent-yellow); }
+        .signal-card.severity-low      { border-left-color: var(--accent-cyan); }
+        .signal-short {
+            font-size: 0.92rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+        .signal-long {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            display: none;
+        }
+        .signal-card.expanded .signal-long { display: block; margin-top: 8px; }
+        .signal-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .signal-cat-pill {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            background: rgba(56,189,248,0.12);
+            color: var(--accent-cyan);
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* SO WHAT */
+        .so-what {
+            background: var(--bg-card);
+            border: 1px solid var(--accent-cyan);
+            border-left: 4px solid var(--accent-cyan);
+            border-radius: 10px;
+            padding: 22px;
+            margin-bottom: 22px;
+            box-shadow: var(--shadow-glow);
+        }
+        .so-what-label {
+            font-size: 0.76rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 6px;
+        }
+        .so-what-factor {
+            font-size: 1.65rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+        .so-what-description {
+            font-size: 0.96rem;
+            color: var(--text-secondary);
+            line-height: 1.65;
+            margin-bottom: 14px;
+        }
+        .so-what-bullets {
+            list-style: none;
+            padding: 0;
+        }
+        .so-what-bullets li {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            padding: 8px 0 8px 22px;
+            position: relative;
+            border-top: 1px solid rgba(30,58,95,0.4);
+            line-height: 1.5;
+        }
+        .so-what-bullets li:first-child { border-top: none; }
+        .so-what-bullets li::before {
+            content: '▸';
+            position: absolute;
+            left: 4px;
+            color: var(--accent-cyan);
+        }
+
+        /* CURRENTLY JAWBONING CARD (Phase 5c — May 15, 2026)
+           Reads from /api/jawboning/active/us and renders each active Trump
+           signature with its mechanism, target sector, and analyst prose. */
+        .jawboning-card {
+            background: var(--bg-card);
+            border: 1px solid var(--accent-orange);
+            border-left: 4px solid var(--accent-orange);
+            border-radius: 10px;
+            padding: 22px;
+            margin-bottom: 22px;
+            box-shadow: var(--shadow-glow);
+        }
+        .jawboning-label {
+            font-size: 0.76rem;
+            color: var(--accent-orange);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 6px;
+        }
+        .jawboning-title {
+            font-size: 1.45rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .jawboning-subtitle {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            line-height: 1.55;
+        }
+        .jawboning-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        .jawboning-tile {
+            background: rgba(255,140,0,0.06);
+            border: 1px solid rgba(255,140,0,0.25);
+            border-radius: 8px;
+            padding: 14px 16px;
+            transition: all 0.2s ease;
+        }
+        .jawboning-tile:hover {
+            background: rgba(255,140,0,0.10);
+            border-color: rgba(255,140,0,0.45);
+            transform: translateY(-1px);
+        }
+        .jawboning-tile-target {
+            font-size: 1.0rem;
+            font-weight: 600;
+            color: var(--accent-orange);
+            margin-bottom: 4px;
+            text-transform: capitalize;
+        }
+        .jawboning-tile-mechanism {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .jawboning-tile-prose {
+            font-size: 0.86rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+        .jawboning-empty {
+            font-size: 0.92rem;
+            color: var(--text-muted);
+            font-style: italic;
+            padding: 14px 0;
+            text-align: center;
+        }
+        .jawboning-confidence-badge {
+            display: inline-block;
+            font-size: 0.66rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 7px;
+            border-radius: 4px;
+            margin-left: 6px;
+            vertical-align: 1px;
+        }
+        .jawboning-confidence-badge.high {
+            background: rgba(0,255,136,0.12);
+            color: var(--accent-green);
+            border: 1px solid rgba(0,255,136,0.3);
+        }
+        .jawboning-confidence-badge.medium {
+            background: rgba(255,204,0,0.12);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(255,204,0,0.3);
+        }
+        .jawboning-confidence-badge.low {
+            background: rgba(100,116,139,0.15);
+            color: var(--text-muted);
+            border: 1px solid rgba(100,116,139,0.35);
+        }
+
+        /* v1.4.0: ELECTION & GOVERNANCE WINDOW */
+        .gov-card { border-left: 4px solid #0d9488; }
+        .gov-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .gov-pill { padding: 3px 10px; border-radius: 12px; font-size: 0.74rem; font-weight: 700;
+                    letter-spacing: 0.04em; border: 1px solid #0d9488; color: #5eead4; background: rgba(13,148,136,0.12); }
+        .gov-pill.l2 { border-color: var(--accent-yellow); color: #fcd34d; background: rgba(245,158,11,0.12); }
+        .gov-pill.l3 { border-color: var(--accent-orange); color: #fdba74; background: rgba(249,115,22,0.12); }
+        .gov-pill.l4, .gov-pill.l5 { border-color: var(--accent-red); color: #fca5a5; background: rgba(239,68,68,0.12); }
+        .gov-pill.muted { border-color: var(--border-strong); color: var(--text-muted); background: transparent; }
+        .gov-headline { font-size: 1.02rem; font-weight: 600; color: var(--text-primary); margin: 4px 0 12px; overflow-wrap: anywhere; }
+        .gov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 12px; }
+        .gov-pane { background: var(--bg-signal); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+        .gov-pane h5 { margin: 0 0 8px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+        .gov-row { display: flex; justify-content: space-between; gap: 8px; font-size: 0.86rem; color: var(--text-secondary); padding: 3px 0; }
+        .gov-row b { color: var(--text-primary); }
+        .gov-class { font-size: 0.84rem; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px dashed var(--border-color); overflow-wrap: anywhere; }
+        .gov-class:last-child { border-bottom: none; }
+        .gov-class a { color: var(--accent-cyan); text-decoration: none; }
+        .gov-corr { font-size: 0.68rem; padding: 1px 6px; border-radius: 8px; margin-left: 6px; border: 1px solid var(--border-strong); color: var(--text-muted); }
+        .gov-corr.yes { border-color: var(--accent-orange); color: #fdba74; }
+        .mob-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--bg-elevated); margin: 6px 0; }
+        .mob-bar span { display: block; height: 100%; }
+        .gov-list { margin: 6px 0 0 18px; padding: 0; color: var(--text-secondary); font-size: 0.86rem; }
+        .gov-list li { margin-bottom: 4px; }
+        .gov-note { font-size: 0.76rem; color: var(--text-muted); font-style: italic; margin-top: 8px; }
+        .coverage-line { font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; overflow-wrap: anywhere; }
+        .coverage-line .warn { color: var(--accent-yellow); }
+
+        /* WHITE HOUSE RHETORIC & DIVERGENCE PANEL (retired v1.4.0; styles kept for cache-safety) */
+        .divergence-panel {
+            background: linear-gradient(135deg, rgba(220,38,38,0.05), rgba(124,58,237,0.05));
+            border: 1px dashed var(--border-strong);
+            border-radius: 10px;
+            padding: 22px;
+            margin-bottom: 22px;
+            position: relative;
+        }
+        .divergence-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .divergence-panel-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .divergence-panel-pill {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            background: rgba(167,139,250,0.15);
+            color: var(--accent-purple);
+            border: 1px solid var(--accent-purple);
+        }
+        .divergence-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+        @media (max-width: 900px) {
+            .divergence-grid { grid-template-columns: 1fr; }
+        }
+        .divergence-side {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px 18px;
+        }
+        .divergence-side-label {
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 10px;
+        }
+        .divergence-side-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .divergence-side-context {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .divergence-coming-soon-note {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-top: 14px;
+            text-align: center;
+        }
+
+        /* ACTOR LAYER */
+        .layer-section {
+            margin-bottom: 22px;
+        }
+        .layer-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border-left: 4px solid var(--accent-cyan);
+            border-radius: 0 6px 6px 0;
+        }
+        .layer-header.exec { border-left-color: var(--layer-executive); }
+        .layer-header.legi { border-left-color: var(--layer-legislative); }
+        .layer-header.inst { border-left-color: var(--layer-institutional); }
+        .layer-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .layer-subtitle {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-left: 8px;
+        }
+
+        /* ACTOR CARDS */
+        .actor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 14px;
+        }
+        .actor-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            border-radius: 8px;
+            padding: 16px 18px;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+        }
+        .actor-card:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: var(--shadow-md);
+        }
+        .actor-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .actor-name-block { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .actor-icon { font-size: 1.4rem; }
+        .actor-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+        .actor-role {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .actor-score-block {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .actor-score {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .actor-tier-pill {
+            padding: 2px 9px;
+            border-radius: 11px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 600;
+        }
+        .actor-tier-pill.tier-stable      { background: var(--level-stable-bg);      color: var(--level-stable-border);      border: 1px solid var(--level-stable-border); }
+        .actor-tier-pill.tier-active      { background: var(--level-active-bg);      color: var(--level-active-border);      border: 1px solid var(--level-active-border); }
+        .actor-tier-pill.tier-active-plus { background: var(--level-active-plus-bg); color: var(--level-active-plus-border); border: 1px solid var(--level-active-plus-border); }
+        .actor-tier-pill.tier-volatile    { background: var(--level-volatile-bg);    color: var(--level-volatile-border);    border: 1px solid var(--level-volatile-border); }
+        .actor-tier-pill.tier-crisis      { background: var(--level-crisis-bg);      color: var(--level-crisis-border);      border: 1px solid var(--level-crisis-border); }
+
+        .actor-description {
+            font-size: 0.84rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+            margin-bottom: 10px;
+        }
+        .actor-stats {
+            display: flex;
+            gap: 14px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .actor-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .actor-stat-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        .actor-stat-tripwire { color: var(--accent-orange); }
+
+        .actor-articles-toggle {
+            margin-top: 8px;
+            background: rgba(56,189,248,0.06);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(56,189,248,0.3);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.76rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .actor-articles-toggle:hover {
+            background: rgba(56,189,248,0.14);
+        }
+        .actor-articles {
+            display: none;
+            margin-top: 10px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+        }
+        .actor-articles.expanded { display: block; }
+        .actor-article-item {
+            font-size: 0.82rem;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(30,58,95,0.3);
+        }
+        .actor-article-item:last-child { border-bottom: none; }
+        .actor-article-item a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+        }
+        .actor-article-item a:hover { text-decoration: underline; }
+        .actor-article-meta {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* OUTBOUND TARGETS */
+        .targets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        .target-card {
+            background: var(--bg-signal);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .target-name {
+            font-size: 0.92rem;
+            color: var(--text-primary);
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+        .target-mentions {
+            background: rgba(56,189,248,0.14);
+            color: var(--accent-cyan);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.76rem;
+            font-weight: 600;
+        }
+
+        /* CROSS-THEATER FINGERPRINT READS */
+        .crosstheater-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+        }
+        .crosstheater-item {
+            background: var(--bg-signal);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.84rem;
+        }
+        .crosstheater-item-name {
+            text-transform: capitalize;
+            color: var(--text-primary);
+        }
+        .crosstheater-item-status {
+            font-size: 0.74rem;
+            padding: 1px 8px;
+            border-radius: 10px;
+            background: rgba(16,185,129,0.14);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+        }
+        .crosstheater-item-status.no-data {
+            background: rgba(93,126,163,0.14);
+            color: var(--text-muted);
+            border-color: var(--text-muted);
+        }
+
+        /* CROSS-SPECTRUM BALANCE CARD */
+        .balance-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .balance-cell {
+            background: var(--bg-signal);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 14px 16px;
+            text-align: center;
+        }
+        .balance-cell.left  { border-top: 3px solid var(--accent-blue); }
+        .balance-cell.center{ border-top: 3px solid var(--accent-cyan); }
+        .balance-cell.right { border-top: 3px solid var(--accent-red); }
+        .balance-label {
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 4px;
+        }
+        .balance-count {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+        .balance-pct {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-top: 3px;
+        }
+        .balance-disclaimer {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            font-style: italic;
+            text-align: center;
+            margin-top: 12px;
+            padding: 10px;
+            background: var(--bg-signal);
+            border-radius: 4px;
+        }
+
+        /* NEWS TABS */
+        .news-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .news-tab {
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            padding: 8px 16px;
+            font-family: inherit;
+            font-size: 0.86rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .news-tab:hover { color: var(--text-primary); }
+        .news-tab.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+        .news-tab-count {
+            background: rgba(56,189,248,0.14);
+            color: var(--accent-cyan);
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 0.72rem;
+        }
+        .news-tab-content { display: none; }
+        .news-tab-content.active { display: block; }
+        .news-article {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(30,58,95,0.4);
+        }
+        .news-article:last-child { border-bottom: none; }
+        .news-article-title {
+            font-size: 0.92rem;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        .news-article-title a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .news-article-title a:hover {
+            color: var(--accent-cyan);
+            text-decoration: underline;
+        }
+        .news-article-meta {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+        }
+        .news-source-pill {
+            display: inline-block;
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 0.68rem;
+            background: rgba(93,126,163,0.18);
+            color: var(--text-secondary);
+            margin-right: 8px;
+        }
+        .news-source-pill.rss { background: rgba(56,189,248,0.18); color: var(--accent-cyan); }
+        .news-source-pill.gdelt { background: rgba(167,139,250,0.18); color: var(--accent-purple); }
+        .news-source-pill.newsapi { background: rgba(245,158,11,0.18); color: var(--accent-yellow); }
+        .news-source-pill.brave { background: rgba(249,115,22,0.18); color: var(--accent-orange); }
+        .news-source-pill.bluesky { background: rgba(56,189,248,0.18); color: var(--accent-cyan); }
+        .news-source-pill.telegram { background: rgba(59,130,246,0.18); color: var(--accent-blue); }
+        .news-source-pill.reddit { background: rgba(249,115,22,0.18); color: var(--accent-orange); }
+
+        /* FOOTER */
+        .footer {
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            padding: 22px 28px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            position: relative;
+            z-index: 1;
+        }
+        .footer-grid {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) {
+            .footer-grid { grid-template-columns: 1fr; }
+        }
+        .footer h4 {
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            margin-bottom: 8px;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 1100px) {
+            .composite-strip { grid-template-columns: 1fr; }
+            .composite-vectors { grid-template-columns: repeat(2, 1fr); }
+        }
+        /* ── MOBILE HAMBURGER (gold standard from india-stability.html) ── */
+        .mobile-menu-btn {
+            display: none;
+            background: rgba(56,189,248,0.10); border: 1px solid var(--border-color);
+            border-radius: 6px; padding: 6px 10px; cursor: pointer;
+            font-size: 18px; line-height: 1; color: var(--text-primary);
+            font-family: inherit;
+        }
+        .mobile-menu-btn:hover { border-color: var(--accent-cyan); background: rgba(56,189,248,0.20); }
+
+        /* Mobile drawer (sidebar substitute) + backdrop */
+        .mobile-drawer-backdrop {
+            display: none;
+            position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+            z-index: 9998; backdrop-filter: blur(2px);
+        }
+        .mobile-drawer-backdrop.open { display: block; }
+        .mobile-drawer {
+            display: none;
+            position: fixed; top: 0; left: 0; bottom: 0;
+            width: 84%; max-width: 320px;
+            background: var(--bg-card); border-right: 2px solid var(--accent-cyan);
+            z-index: 9999; padding: 18px 16px;
+            overflow-y: auto;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+        }
+        .mobile-drawer.open { display: block; transform: translateX(0); }
+        .mobile-drawer-close {
+            position: absolute; top: 10px; right: 10px;
+            background: transparent; border: 1px solid var(--border-color);
+            border-radius: 6px; width: 32px; height: 32px;
+            cursor: pointer; color: var(--text-primary); font-size: 16px;
+            line-height: 1; font-family: inherit;
+        }
+        .mobile-drawer-close:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .mobile-drawer-title {
+            font-size: 14px; font-weight: 700; color: var(--accent-cyan);
+            text-transform: uppercase; letter-spacing: 1.5px;
+            margin: 0 0 14px 4px; padding-right: 40px;
+        }
+        @media (max-width: 768px) {
+            .main-layout { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .mobile-menu-btn { display: inline-flex; align-items: center; gap: 6px; }
+            .composite-vectors { grid-template-columns: 1fr; }
+            .actor-grid { grid-template-columns: 1fr; }
+            .balance-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+<link rel="stylesheet" href="resources/asifah-standard-shell.css">
+<script src="resources/asifah-standard-shell.js" defer></script>
+</head>
+<body data-theme="dark">
+
+<div class="watermark"></div>
+
+<!-- Mobile drawer backdrop + drawer (gold standard, hidden on desktop) -->
+<div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" onclick="closeMobileDrawer()"></div>
+<aside class="mobile-drawer" id="mobileDrawer" aria-label="Navigation menu">
+    <button class="mobile-drawer-close" onclick="closeMobileDrawer()" aria-label="Close menu">✕</button>
+    <div class="mobile-drawer-title" data-i18n="mobile_drawer_title">Navigation</div>
+    <div class="sidebar-section">
+        <div class="sidebar-header" data-i18n="sb_regional">REGIONAL LANDINGS</div>
+        <a href="middle-east.html" class="sidebar-link" data-i18n="sb_me">🌍 Middle East</a>
+        <a href="asia.html" class="sidebar-link" data-i18n="sb_asia">🌏 Asia-Pacific</a>
+        <a href="europe.html" class="sidebar-link" data-i18n="sb_europe">🌍 Europe</a>
+        <a href="wha.html" class="sidebar-link" data-i18n="sb_wha">🌎 Western Hemisphere</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+        <div class="sidebar-header" data-i18n="sb_crosscut">CROSS-CUTTING TOOLS</div>
+        <a href="commodities.html" class="sidebar-link crosscut" data-i18n="sb_commodities">🌾 Commodities Tracker</a>
+        <a href="military.html" class="sidebar-link crosscut" data-i18n="sb_military">🪖 Military Tracker</a>
+        <a href="gpi.html" class="sidebar-link gpi" data-i18n="sb_gpi">🌐 Global Pressure Index</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+        <div class="sidebar-header" data-i18n="sb_rhetoric">REGIONAL RHETORIC</div>
+        <a href="rhetoric-index.html" class="sidebar-link rhetoric" data-i18n="sb_rh_me">💬 Middle East Rhetoric</a>
+        <a href="rhetoric-asia.html" class="sidebar-link rhetoric" data-i18n="sb_rh_asia">💬 Asia Rhetoric</a>
+        <a href="rhetoric-europe.html" class="sidebar-link rhetoric" data-i18n="sb_rh_europe">💬 Europe Rhetoric</a>
+        <a href="rhetoric-wha.html" class="sidebar-link rhetoric" data-i18n="sb_rh_wha">💬 Western Hemisphere Rhetoric</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+        <div class="sidebar-header" data-i18n="sb_us_pages">UNITED STATES</div>
+        <a href="rhetoric-us.html" class="sidebar-link rhetoric active" data-i18n="sb_us_rhetoric">💬 U.S. Rhetoric</a>
+        <a href="us-stability.html" class="sidebar-link" data-i18n="sb_us_stability">📊 U.S. Stability</a>
+    </div>
+</aside>
+
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingText">Loading U.S. rhetoric data&hellip;</div>
+    </div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-grid">
+        <div class="header-title-block">
+            <a href="us-stability.html" class="back-link" data-i18n="hdr_back" style="align-self:flex-start; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; margin-bottom:8px; border-radius:8px; border:1px solid rgba(56,189,248,0.3); background:rgba(56,189,248,0.08); color:var(--accent-cyan); text-decoration:none; font-size:0.82rem; font-weight:600; transition:all 0.2s ease;">← Back to U.S. Stability</a>
+            <div class="header-title-row">
+                <span class="header-flag-icons"><img src="https://flagcdn.com/w40/us.png" alt="" title="United States" style="height:0.9em;width:auto;vertical-align:-0.05em;border-radius:2px;"> 💬</span>
+                <span data-i18n="hdr_title">U.S. Rhetoric Tracker</span>
+            </div>
+            <div class="header-subtitle" data-i18n="hdr_subtitle">
+                Multi-actor monitoring across 10 actors and 3 branches. Apolitical infrastructure tracking volatility, divergence, and cross-spectrum fracture — not aggression.
+            </div>
+        </div>
+        <div class="header-controls">
+            <button class="mobile-menu-btn" onclick="openMobileDrawer()" aria-label="Open navigation menu">
+                <span style="font-size:20px;">☰</span><span style="font-size:11px;font-weight:700;letter-spacing:0.5px;" data-i18n="mobile_menu">Menu</span>
+            </button>
+            <button class="header-btn lang-btn active" data-lang="en" onclick="setLanguage('en')">EN</button>
+            <button class="header-btn lang-btn" data-lang="es" onclick="setLanguage('es')">ES</button>
+            <button class="header-btn lang-btn" data-lang="pt" onclick="setLanguage('pt')">PT</button>
+            <button class="header-btn refresh-btn" onclick="refreshData()" id="refreshBtn">↻ <span data-i18n="hdr_refresh">Refresh</span></button>
+        </div>
+    </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-section">
+            <div class="sidebar-header" data-i18n="sb_regional">REGIONAL LANDINGS</div>
+            <a href="middle-east.html" class="sidebar-link" data-i18n="sb_me">🌍 Middle East</a>
+            <a href="asia.html" class="sidebar-link" data-i18n="sb_asia">🌏 Asia-Pacific</a>
+            <a href="europe.html" class="sidebar-link" data-i18n="sb_europe">🌍 Europe</a>
+            <a href="wha.html" class="sidebar-link" data-i18n="sb_wha">🌎 Western Hemisphere</a>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header" data-i18n="sb_crosscut">CROSS-CUTTING TOOLS</div>
+            <a href="commodities.html" class="sidebar-link crosscut" data-i18n="sb_commodities">🌾 Commodities Tracker</a>
+            <a href="military.html" class="sidebar-link crosscut" data-i18n="sb_military">🪖 Military Tracker</a>
+            <a href="gpi.html" class="sidebar-link gpi" data-i18n="sb_gpi">🌐 Global Pressure Index</a>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header" data-i18n="sb_rhetoric">REGIONAL RHETORIC</div>
+            <a href="rhetoric-index.html" class="sidebar-link rhetoric" data-i18n="sb_rh_me">💬 Middle East Rhetoric</a>
+            <a href="rhetoric-asia.html" class="sidebar-link rhetoric" data-i18n="sb_rh_asia">💬 Asia Rhetoric</a>
+            <a href="rhetoric-europe.html" class="sidebar-link rhetoric" data-i18n="sb_rh_europe">💬 Europe Rhetoric</a>
+            <a href="rhetoric-wha.html" class="sidebar-link rhetoric" data-i18n="sb_rh_wha">💬 Western Hemisphere Rhetoric</a>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header" data-i18n="sb_us_pages">UNITED STATES</div>
+            <a href="rhetoric-us.html" class="sidebar-link rhetoric active" data-i18n="sb_us_rhetoric">💬 U.S. Rhetoric</a>
+            <a href="us-stability.html" class="sidebar-link" data-i18n="sb_us_stability">📊 U.S. Stability</a>
+        </div>
+    </aside>
+
+    <!-- CONTENT -->
+    <main class="content">
+
+        <!-- COMPOSITE STRIP -->
+        <div class="composite-strip">
+            <div class="composite-card">
+                <div class="composite-label" data-i18n="comp_label">U.S. Rhetoric Composite</div>
+                <div class="composite-score-block">
+                    <div class="composite-score" id="compositeScore">—</div>
+                    <div class="composite-out-of">/ 100</div>
+                </div>
+                <div class="composite-band-label">
+                    <span class="composite-band-icon" id="compositeBandIcon">—</span>
+                    <span id="compositeBandText">—</span>
+                </div>
+                <div class="composite-description" id="compositeDescription">—</div>
+                <div class="coverage-line" id="coverageLine"></div>
+                <div class="composite-meta" id="compositeMeta">
+                    <span data-i18n="comp_loading">Last scan: loading…</span>
+                </div>
+            </div>
+            <div class="composite-vectors">
+                <div class="vector-card exec">
+                    <div class="vector-label" data-i18n="vec_executive">Executive Branch</div>
+                    <div class="vector-score" id="vecExecScore">—</div>
+                    <div class="vector-read" id="vecExecScoreRead"></div>
+                    <div class="vector-context" id="vecExecContext" data-i18n="vec_executive_ctx">WH + cabinet rhetoric</div>
+                </div>
+                <div class="vector-card legi">
+                    <div class="vector-label" data-i18n="vec_legislative">Legislative Branch</div>
+                    <div class="vector-score" id="vecLegiScore">—</div>
+                    <div class="vector-read" id="vecLegiScoreRead"></div>
+                    <div class="vector-context" id="vecLegiContext" data-i18n="vec_legislative_ctx">House + Senate divergence</div>
+                </div>
+                <div class="vector-card inst">
+                    <div class="vector-label" data-i18n="vec_institutional">Institutional</div>
+                    <div class="vector-score" id="vecInstScore">—</div>
+                    <div class="vector-read" id="vecInstScoreRead"></div>
+                    <div class="vector-context" id="vecInstContext" data-i18n="vec_institutional_ctx">Courts + DHS + Fed + States</div>
+                </div>
+                <div class="vector-card cross">
+                    <div class="vector-label" data-i18n="vec_fracture">Domestic Fracture</div>
+                    <div class="vector-score" id="vecFractureScore">—</div>
+                    <div class="vector-read" id="vecFractureScoreRead"></div>
+                    <div class="vector-context" data-i18n="vec_fracture_ctx">Cross-spectrum divergence</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SO WHAT -->
+        <div class="so-what" id="soWhatCard">
+            <div class="so-what-label" data-i18n="sw_label">So What</div>
+            <div class="so-what-factor" id="soWhatFactor">—</div>
+            <div class="so-what-description" id="soWhatDescription">—</div>
+            <ul class="so-what-bullets" id="soWhatBullets"></ul>
+        </div>
+
+        <!-- CURRENTLY JAWBONING (Phase 5c — May 15, 2026) -->
+        <div class="jawboning-card" id="jawboningCard">
+            <div class="jawboning-label" data-i18n="jaw_label">🦋 Currently Jawboning</div>
+            <div class="jawboning-title" data-i18n="jaw_title">Active Leader Interventions</div>
+            <div class="jawboning-subtitle" data-i18n="jaw_subtitle">
+                Targets the U.S. executive is currently applying public rhetorical pressure to.
+                Each signature shows the mechanism and downstream cross-theater impact path.
+            </div>
+            <div class="jawboning-grid" id="jawboningGrid">
+                <div class="jawboning-empty" data-i18n="jaw_loading">Loading active interventions…</div>
+            </div>
+        </div>
+
+        <!-- TOP SIGNALS -->
+        <div class="section-card">
+            <div class="section-title">
+                ⚡ <span data-i18n="ts_title">Top Signals</span>
+            </div>
+            <div class="section-subtitle" data-i18n="ts_subtitle">
+                Highest-priority rhetoric signals surfaced this scan. Tap any card for context.
+            </div>
+            <div class="top-signals-grid" id="topSignalsGrid">
+                <div style="padding:14px;color:var(--text-muted);">Loading signals…</div>
+            </div>
+        </div>
+
+        <!-- v1.4.0: ELECTION & GOVERNANCE WINDOW (tracker 'governance' block; GPI governance axis) -->
+        <div class="section-card gov-card" id="governance">
+            <div class="section-title">🏛️ <span data-i18n="gov_title">Election &amp; Governance Window</span></div>
+            <div class="section-subtitle" data-i18n="gov_subtitle">Institutional events in the counting, certification and transition window: certification refusals, recounts, concessions, threats to election officials, federal presence at polling sites. Corroborated above L2. Not a forecast of any race and not a judgement on any party.</div>
+            <div id="governanceBody"><div style="color:var(--text-muted);" data-i18n="gov_loading">Loading governance window…</div></div>
+        </div>
+
+        <div id="actorLayersContainer">
+            <!-- Executive Layer -->
+            <div class="layer-section">
+                <div class="layer-header exec">
+                    <span class="layer-title" data-i18n="layer_executive">Executive Branch</span>
+                    <span class="layer-subtitle" data-i18n="layer_executive_sub">White House · State Dept · Defense</span>
+                </div>
+                <div class="actor-grid" id="actorGridExecutive"></div>
+            </div>
+
+            <!-- Legislative Layer -->
+            <div class="layer-section">
+                <div class="layer-header legi">
+                    <span class="layer-title" data-i18n="layer_legislative">Legislative Branch</span>
+                    <span class="layer-subtitle" data-i18n="layer_legislative_sub">Majority + Opposition (cross-spectrum balance)</span>
+                </div>
+                <div class="actor-grid" id="actorGridLegislative"></div>
+            </div>
+
+            <!-- Institutional Layer -->
+            <div class="layer-section">
+                <div class="layer-header inst">
+                    <span class="layer-title" data-i18n="layer_institutional">Institutional</span>
+                    <span class="layer-subtitle" data-i18n="layer_institutional_sub">Judicial · DHS/ICE · Federal Reserve · State Governors</span>
+                </div>
+                <div class="actor-grid" id="actorGridInstitutional"></div>
+            </div>
+        </div>
+
+        <!-- CROSS-SPECTRUM BALANCE TRANSPARENCY -->
+        <div class="section-card">
+            <div class="section-title">
+                ⚖️ <span data-i18n="bal_title">Cross-Spectrum Balance (Transparency)</span>
+            </div>
+            <div class="section-subtitle" data-i18n="bal_subtitle">
+                Asifah is apolitical infrastructure. We deliberately balance left/right/center voices so the score reflects volatility, not partisan judgment. This card shows our current balance.
+            </div>
+            <div class="balance-grid">
+                <div class="balance-cell left">
+                    <div class="balance-label" data-i18n="bal_left">Left-of-Center</div>
+                    <div class="balance-count" id="balanceLeftCount">—</div>
+                    <div class="balance-pct" id="balanceLeftPct">—</div>
+                </div>
+                <div class="balance-cell center">
+                    <div class="balance-label" data-i18n="bal_center">Center / Moderated</div>
+                    <div class="balance-count" id="balanceCenterCount">—</div>
+                    <div class="balance-pct" id="balanceCenterPct">—</div>
+                </div>
+                <div class="balance-cell right">
+                    <div class="balance-label" data-i18n="bal_right">Right-of-Center</div>
+                    <div class="balance-count" id="balanceRightCount">—</div>
+                    <div class="balance-pct" id="balanceRightPct">—</div>
+                </div>
+            </div>
+            <div class="balance-disclaimer" data-i18n="bal_disclaimer">
+                Source mix from r/politics, r/Conservative, r/moderatepolitics, r/NeutralPolitics, plus cross-spectrum journalists on Bluesky. We don't claim perfect balance — only transparency about who we're listening to.
+            </div>
+        </div>
+
+        <!-- OUTBOUND TARGETS -->
+        <div class="section-card">
+            <div class="section-title">
+                🎯 <span data-i18n="targ_title">U.S. Rhetoric Targets</span>
+            </div>
+            <div class="section-subtitle" data-i18n="targ_subtitle">
+                Foreign countries the United States is currently rhetoric-targeting (executive, State Dept, Defense). Mention counts from this scan.
+            </div>
+            <div class="targets-grid" id="targetsGrid">
+                <div style="padding:14px;color:var(--text-muted);grid-column:1/-1;">Loading targets…</div>
+            </div>
+        </div>
+
+        <!-- CROSS-THEATER FINGERPRINT READS -->
+        <div class="section-card">
+            <div class="section-title">
+                🌐 <span data-i18n="ct_title">Cross-Theater Reads</span>
+            </div>
+            <div class="section-subtitle" data-i18n="ct_subtitle">
+                The U.S. tracker reads fingerprints from every other tracker. This shows which theaters had data available this scan. Every tracker also reads U.S. fingerprints back.
+            </div>
+            <div class="crosstheater-list" id="crosstheaterList">
+                <div style="padding:14px;color:var(--text-muted);grid-column:1/-1;">Loading cross-theater data…</div>
+            </div>
+        </div>
+
+        <!-- RECENT ARTICLES -->
+        <div class="section-card">
+            <div class="section-title">
+                📰 <span data-i18n="news_title">Recent Rhetoric Articles</span>
+            </div>
+            <div class="section-subtitle" data-i18n="news_subtitle">
+                Articles classified to one or more actors during this scan. Tap any tab to see articles by source.
+            </div>
+            <div class="news-tabs" id="newsTabs">
+                <button class="news-tab active" data-tab="all" onclick="setNewsTab('all')">
+                    <span data-i18n="news_tab_all">All</span> <span class="news-tab-count" id="newsCountAll">0</span>
+                </button>
+                <button class="news-tab" data-tab="rss" onclick="setNewsTab('rss')">
+                    📰 <span data-i18n="news_tab_rss">RSS</span> <span class="news-tab-count" id="newsCountRss">0</span>
+                </button>
+                <button class="news-tab" data-tab="gdelt" onclick="setNewsTab('gdelt')">
+                    🌍 GDELT <span class="news-tab-count" id="newsCountGdelt">0</span>
+                </button>
+                <button class="news-tab" data-tab="reddit" onclick="setNewsTab('reddit')">
+                    💬 Reddit <span class="news-tab-count" id="newsCountReddit">0</span>
+                </button>
+                <button class="news-tab" data-tab="bluesky" onclick="setNewsTab('bluesky')">
+                    🦋 Bluesky <span class="news-tab-count" id="newsCountBluesky">0</span>
+                </button>
+                <button class="news-tab" data-tab="telegram" onclick="setNewsTab('telegram')">
+                    ✈️ Telegram <span class="news-tab-count" id="newsCountTelegram">0</span>
+                </button>
+            </div>
+            <div class="news-tab-content active" id="newsTabContent-all"></div>
+            <div class="news-tab-content" id="newsTabContent-rss"></div>
+            <div class="news-tab-content" id="newsTabContent-gdelt"></div>
+            <div class="news-tab-content" id="newsTabContent-reddit"></div>
+            <div class="news-tab-content" id="newsTabContent-bluesky"></div>
+            <div class="news-tab-content" id="newsTabContent-telegram"></div>
+        </div>
+
+    </main>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+    <div class="footer-grid">
+        <div>
+            <h4 data-i18n="ftr_about">About this tracker</h4>
+            <p data-i18n="ftr_about_text">
+                The U.S. Rhetoric Tracker monitors rhetoric across 10 actors in 3 branches of U.S. government plus state and institutional pushback. Calibrated to reflect the median American experience: the U.S. is generally on the upper edge of stable, with the view from DC feeling more volatile than the view from the rest of the country. Scoring measures volatility and divergence, not aggression.
+            </p>
+        </div>
+        <div>
+            <h4 data-i18n="ftr_sources">Data sources</h4>
+            <p data-i18n="ftr_sources_text">
+                RSS feeds (NYT, NPR, Politico, Axios, ProPublica, PBS, Atlantic, WaPo, Washington Examiner, National Review, Lawfare, SCOTUSblog, BBC, Guardian) · GDELT · NewsAPI (shared fallback gateway) · Brave Search · Bluesky (76 verified accounts) · Telegram · Reddit (25 cross-spectrum subs) · Cross-theater fingerprints from all 23 other trackers · CISA alerts · Election-administration and two-sided civil-society mobilization feeds (v1.4.0).
+            </p>
+        </div>
+    </div>
+</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ════════════════════════════════════════════════════════════════════
+const API_BASE = 'https://asifah-wha-backend.onrender.com';
+const RHETORIC_ENDPOINT = API_BASE + '/api/rhetoric/us';
+
+// Phase 5c (May 15, 2026) — Jawboning fingerprints live on ME backend
+const ME_BACKEND = 'https://asifah-backend.onrender.com';
+const JAWBONING_ACTIVE_ENDPOINT = ME_BACKEND + '/api/jawboning/active/us';
+
+let currentLang = 'en';
+let currentTheme = 'dark';
+let cachedData = null;
+
+// ════════════════════════════════════════════════════════════════════
+// I18N
+// ════════════════════════════════════════════════════════════════════
+const I18N = {
+    en: {
+        // Header
+        hdr_title: 'U.S. Rhetoric Tracker',
+        hdr_back: '← Back to U.S. Stability',
+        hdr_subtitle: 'Multi-actor monitoring across 10 actors and 3 branches. Apolitical infrastructure tracking volatility, divergence, and cross-spectrum fracture — not aggression.',
+        hdr_dark: 'Dark', hdr_light: 'Light', hdr_refresh: 'Refresh',
+
+        // Sidebar
+        sb_regional: 'REGIONAL LANDINGS',
+        sb_me: '🌍 Middle East',
+        sb_asia: '🌏 Asia-Pacific',
+        sb_europe: '🌍 Europe',
+        sb_wha: '🌎 Western Hemisphere',
+        sb_crosscut: 'CROSS-CUTTING TOOLS',
+        sb_commodities: '🌾 Commodities Tracker',
+        sb_military: '🪖 Military Tracker',
+        sb_gpi: '🌐 Global Pressure Index',
+        sb_rhetoric: 'REGIONAL RHETORIC',
+        sb_rh_me: '💬 Middle East Rhetoric',
+        sb_rh_asia: '💬 Asia Rhetoric',
+        sb_rh_europe: '💬 Europe Rhetoric',
+        sb_rh_wha: '💬 Western Hemisphere Rhetoric',
+        sb_us_pages: 'UNITED STATES',
+        sb_us_rhetoric: '💬 U.S. Rhetoric',
+        sb_us_stability: '📊 U.S. Stability',
+
+        // Composite
+        comp_label: 'U.S. Rhetoric Composite',
+        comp_loading: 'Last scan: loading…',
+
+        // Vector cards
+        vec_executive: 'Executive Branch',
+        vec_executive_ctx: 'WH + cabinet rhetoric',
+        vec_legislative: 'Legislative Branch',
+        vec_legislative_ctx: 'House + Senate divergence',
+        vec_institutional: 'Institutional',
+        vec_institutional_ctx: 'Courts + DHS + Fed + States',
+        vec_fracture: 'Domestic Fracture',
+        vec_fracture_ctx: 'Cross-spectrum divergence',
+
+        // So What
+        sw_label: 'So What',
+
+        // Jawboning card (Phase 5c)
+        jaw_label: '🦋 Currently Jawboning',
+        jaw_title: 'Active Leader Interventions',
+        jaw_subtitle: 'Targets the U.S. executive is currently applying public rhetorical pressure to. Each signature shows the mechanism and downstream cross-theater impact path.',
+        jaw_loading: 'Loading active interventions…',
+
+        // Mobile drawer
+        mobile_menu: 'Menu',
+        mobile_drawer_title: 'Navigation',
+
+        // Top signals
+        ts_title: 'Top Signals',
+        ts_subtitle: 'Highest-priority rhetoric signals surfaced this scan. Tap any card for context.',
+
+        // Divergence panel
+        div_title: 'White House Rhetoric & Divergence Index',
+        div_pill: 'v1.1 Coming Soon',
+        div_rhetoric_label: 'Rhetoric Score (Live)',
+        div_rhetoric_ctx: 'Aggregate executive branch rhetoric tempo. Currently based on statement volume, tripwire hits, and baseline ratios.',
+        div_action_label: 'Statement Follow-Through (v1.1)',
+        div_action_ctx: 'v1.1 will compare statements against historical follow-through rates by topic (immigration, tariffs, Iran, NATO, etc.). Scores: clear action / murky / no action / rollback / success / failure.',
+        div_note: 'Statement-by-statement follow-through analysis ships in v1.1. Methodology designed to be apolitical: measures DIVERGENCE between rhetoric and action, not whether either is "correct."',
+
+        // Layer headers
+        layer_executive: 'Executive Branch',
+        layer_executive_sub: 'White House · State Dept · Defense',
+        layer_legislative: 'Legislative Branch',
+        layer_legislative_sub: 'Majority + Opposition (cross-spectrum balance)',
+        layer_institutional: 'Institutional',
+        layer_institutional_sub: 'Judicial · DHS/ICE · Federal Reserve · State Governors',
+
+        // Cross-spectrum balance
+        bal_title: 'Cross-Spectrum Balance (Transparency)',
+        bal_subtitle: 'Asifah is apolitical infrastructure. We deliberately balance left/right/center voices so the score reflects volatility, not partisan judgment. This card shows our current balance.',
+        bal_left: 'Left-of-Center',
+        bal_center: 'Center / Moderated',
+        bal_right: 'Right-of-Center',
+        bal_disclaimer: "Source mix from r/politics (left), r/Conservative + r/JoeRogan + r/TuckerCarlson + r/BenShapiro (right), r/moderatepolitics + r/NeutralPolitics + r/NeutralNews (center), r/EzraKleinShow + r/PivotPodcast (center-left), plus cross-spectrum journalists on Bluesky. We don't claim perfect balance — only transparency about who we're listening to. Hover over each count to see which subreddits contributed.",
+
+        // Targets + cross-theater
+        targ_title: 'U.S. Rhetoric Targets',
+        targ_subtitle: 'Foreign countries the United States is currently rhetoric-targeting (executive, State Dept, Defense). Mention counts from this scan.',
+        ct_title: 'Cross-Theater Reads',
+        ct_subtitle: 'The U.S. tracker reads fingerprints from every other tracker. This shows which theaters had data available this scan. Every tracker also reads U.S. fingerprints back.',
+
+        // News
+        news_title: 'Recent Rhetoric Articles',
+        news_subtitle: 'Articles classified to one or more actors during this scan. Tap any tab to see articles by source.',
+        news_tab_all: 'All',
+        news_tab_rss: 'RSS',
+
+        // Footer
+        ftr_about: 'About this tracker',
+        ftr_about_text: 'The U.S. Rhetoric Tracker monitors rhetoric across 10 actors in 3 branches of U.S. government plus state and institutional pushback. Calibrated to reflect the median American experience: the U.S. is generally on the upper edge of stable, with the view from DC feeling more volatile than the view from the rest of the country. Scoring measures volatility and divergence, not aggression.',
+        ftr_sources: 'Data sources',
+        ftr_sources_text: 'RSS feeds (NYT, NPR, Politico, Axios, ProPublica, PBS, Atlantic, WaPo, Washington Examiner, National Review, Lawfare, SCOTUSblog, BBC, Guardian) · GDELT · NewsAPI (shared fallback gateway) · Brave Search · Bluesky (76 verified accounts) · Telegram · Reddit (25 cross-spectrum subs) · Cross-theater fingerprints from all 23 other trackers · CISA alerts · Election-administration and two-sided civil-society mobilization feeds (v1.4.0).',
+
+        // Inline labels
+        articles_view: 'View articles',
+        articles_hide: 'Hide articles',
+        statements_label: 'statements',
+        tripwires_label: 'tripwires',
+        baseline_label: 'baseline',
+        no_signals: 'No signals surfaced this scan.',
+        no_targets: 'No specific country targets this scan.',
+        // v1.4.0 governance window
+        gov_title: 'Election & Governance Window',
+        gov_subtitle: 'Institutional events in the counting, certification and transition window: certification refusals, recounts, concessions, threats to election officials, federal presence at polling sites. Corroborated above L2. Not a forecast of any race and not a judgement on any party.',
+        gov_loading: 'Loading governance window…',
+        gov_absent: 'Governance block not in this payload (tracker older than v1.4.0).',
+        gov_days: 'days', gov_control: 'Chamber control', gov_house: 'House', gov_senate: 'Senate',
+        gov_vacant: 'vacant', gov_asof: 'As of', gov_acting: 'Acting / unverified posts',
+        gov_incidents: 'Election administration', gov_not_sensed: 'Not sensed this scan — too few articles. Absence of reports is not calm.',
+        gov_no_incidents: 'No certification, security or federal-presence incidents reported this scan.',
+        gov_corroborated: 'corroborated', gov_single: 'single report',
+        gov_mob: 'Civil-society mobilization (two-sided)', gov_left: 'Left-leaning groups', gov_right: 'Right-leaning groups',
+        gov_unsided: 'Unaffiliated', gov_watch: 'Watch for',
+        gov_preelection: 'Race calls, recounts, certification and concession categories open when polls close. Before then only litigation, threats and federal presence can register. Opinion and explainer pieces are never counted as events.',
+        cov_label: 'Sources not delivering', cov_ok: 'All attempted sources delivered this scan.',
+        cov_not_sensed: 'Not sensed: too few articles this scan.',
+    },
+
+    es: {
+        // Header
+        hdr_title: 'Rastreador de Retórica de EE.UU.',
+        hdr_back: '← Volver a Estabilidad EE.UU.',
+        hdr_subtitle: 'Monitoreo multi-actor a través de 10 actores y 3 ramas. Infraestructura apolítica que rastrea volatilidad, divergencia y fractura transversal — no agresión.',
+        hdr_dark: 'Oscuro', hdr_light: 'Claro', hdr_refresh: 'Recargar',
+
+        // Sidebar
+        sb_regional: 'PÁGINAS REGIONALES',
+        sb_me: '🌍 Medio Oriente',
+        sb_asia: '🌏 Asia-Pacífico',
+        sb_europe: '🌍 Europa',
+        sb_wha: '🌎 Hemisferio Occidental',
+        sb_crosscut: 'HERRAMIENTAS TRANSVERSALES',
+        sb_commodities: '🌾 Rastreador de Commodities',
+        sb_military: '🪖 Rastreador Militar',
+        sb_gpi: '🌐 Índice de Presión Global',
+        sb_rhetoric: 'RETÓRICA REGIONAL',
+        sb_rh_me: '💬 Retórica Medio Oriente',
+        sb_rh_asia: '💬 Retórica Asia',
+        sb_rh_europe: '💬 Retórica Europa',
+        sb_rh_wha: '💬 Retórica Hemisferio Occidental',
+        sb_us_pages: 'ESTADOS UNIDOS',
+        sb_us_rhetoric: '💬 Retórica EE.UU.',
+        sb_us_stability: '📊 Estabilidad EE.UU.',
+
+        // Composite
+        comp_label: 'Compuesto Retórica EE.UU.',
+        comp_loading: 'Último escaneo: cargando…',
+
+        // Vectors
+        vec_executive: 'Rama Ejecutiva',
+        vec_executive_ctx: 'Casa Blanca + retórica de gabinete',
+        vec_legislative: 'Rama Legislativa',
+        vec_legislative_ctx: 'Divergencia Cámara + Senado',
+        vec_institutional: 'Institucional',
+        vec_institutional_ctx: 'Cortes + DHS + Fed + Estados',
+        vec_fracture: 'Fractura Doméstica',
+        vec_fracture_ctx: 'Divergencia transversal',
+
+        // So What
+        sw_label: '¿Y Qué?',
+
+        // Jawboning card (Phase 5c)
+        jaw_label: '🦋 Presionando Actualmente',
+        jaw_title: 'Intervenciones Activas del Líder',
+        jaw_subtitle: 'Objetivos sobre los cuales el ejecutivo estadounidense ejerce actualmente presión retórica pública. Cada firma muestra el mecanismo y la vía de impacto entre teatros.',
+        jaw_loading: 'Cargando intervenciones activas…',
+
+        // Mobile drawer
+        mobile_menu: 'Menú',
+        mobile_drawer_title: 'Navegación',
+
+        // Top signals
+        ts_title: 'Señales Principales',
+        ts_subtitle: 'Señales retóricas de mayor prioridad surgidas en este escaneo. Toque cualquier tarjeta para contexto.',
+
+        // Divergence
+        div_title: 'Índice de Retórica y Divergencia de la Casa Blanca',
+        div_pill: 'v1.1 Próximamente',
+        div_rhetoric_label: 'Puntuación Retórica (En Vivo)',
+        div_rhetoric_ctx: 'Tempo agregado de retórica de la rama ejecutiva. Actualmente basado en volumen de declaraciones, activación de alertas y proporciones de línea base.',
+        div_action_label: 'Seguimiento de Declaraciones (v1.1)',
+        div_action_ctx: 'v1.1 comparará declaraciones contra tasas históricas de seguimiento por tema (inmigración, aranceles, Irán, OTAN, etc.). Puntuaciones: acción clara / ambigua / sin acción / reversión / éxito / fracaso.',
+        div_note: 'El análisis de seguimiento declaración por declaración se lanza en v1.1. Metodología diseñada para ser apolítica: mide la DIVERGENCIA entre retórica y acción, no si alguna es "correcta."',
+
+        // Layer headers
+        layer_executive: 'Rama Ejecutiva',
+        layer_executive_sub: 'Casa Blanca · Depto. Estado · Defensa',
+        layer_legislative: 'Rama Legislativa',
+        layer_legislative_sub: 'Mayoría + Oposición (balance transversal)',
+        layer_institutional: 'Institucional',
+        layer_institutional_sub: 'Judicial · DHS/ICE · Reserva Federal · Gobernadores Estatales',
+
+        // Balance
+        bal_title: 'Balance Transversal (Transparencia)',
+        bal_subtitle: 'Asifah es infraestructura apolítica. Equilibramos deliberadamente voces de izquierda/derecha/centro para que la puntuación refleje volatilidad, no juicio partidista. Esta tarjeta muestra nuestro balance actual.',
+        bal_left: 'Centro-Izquierda',
+        bal_center: 'Centro / Moderado',
+        bal_right: 'Centro-Derecha',
+        bal_disclaimer: "Mezcla de fuentes: r/politics (izquierda), r/Conservative + r/JoeRogan + r/TuckerCarlson + r/BenShapiro (derecha), r/moderatepolitics + r/NeutralPolitics + r/NeutralNews (centro), r/EzraKleinShow + r/PivotPodcast (centro-izquierda), más periodistas transversales en Bluesky. No afirmamos un balance perfecto — solo transparencia sobre a quién escuchamos. Pasa el cursor sobre cada conteo para ver qué subreddits contribuyeron.",
+
+        // Targets + cross-theater
+        targ_title: 'Objetivos Retóricos de EE.UU.',
+        targ_subtitle: 'Países extranjeros que Estados Unidos está actualmente apuntando retóricamente (ejecutivo, Depto. Estado, Defensa). Cuentas de menciones de este escaneo.',
+        ct_title: 'Lecturas Transversales',
+        ct_subtitle: 'El rastreador de EE.UU. lee huellas de cada otro rastreador. Esto muestra qué teatros tuvieron datos disponibles en este escaneo. Cada rastreador también lee las huellas de EE.UU.',
+
+        // News
+        news_title: 'Artículos Recientes de Retórica',
+        news_subtitle: 'Artículos clasificados a uno o más actores durante este escaneo. Toque cualquier pestaña para ver artículos por fuente.',
+        news_tab_all: 'Todos',
+        news_tab_rss: 'RSS',
+
+        // Footer
+        ftr_about: 'Sobre este rastreador',
+        ftr_about_text: 'El Rastreador de Retórica de EE.UU. monitorea retórica a través de 10 actores en 3 ramas del gobierno de EE.UU. más el contrapeso estatal e institucional. Calibrado para reflejar la experiencia mediana del estadounidense: EE.UU. está generalmente en el borde superior de estable, con la vista desde DC sintiéndose más volátil que la vista del resto del país. La puntuación mide volatilidad y divergencia, no agresión.',
+        ftr_sources: 'Fuentes de datos',
+        ftr_sources_text: 'Fuentes RSS (NYT, NPR, Politico, Axios, ProPublica, PBS, Atlantic, WaPo, Washington Examiner, National Review, Lawfare, SCOTUSblog, BBC, Guardian) · GDELT · NewsAPI (shared fallback gateway) · Brave Search · Bluesky (76 cuentas verificadas) · Telegram · Reddit (25 subs transversales) · Huellas de los 23 otros rastreadores · Alertas CISA · Fuentes de administración electoral y movilización (v1.4.0).',
+
+        // Inline labels
+        articles_view: 'Ver artículos',
+        articles_hide: 'Ocultar artículos',
+        statements_label: 'declaraciones',
+        tripwires_label: 'alertas',
+        baseline_label: 'línea base',
+        no_signals: 'No surgieron señales en este escaneo.',
+        no_targets: 'Ningún país específico apuntado en este escaneo.',
+        gov_title: 'Ventana Electoral y de Gobernanza',
+        gov_subtitle: 'Eventos institucionales en la ventana de conteo, certificación y transición: negativas a certificar, recuentos, concesiones, amenazas a funcionarios electorales, presencia federal en centros de votación. Corroborados por encima de L2. No es un pronóstico de ninguna contienda ni un juicio sobre ningún partido.',
+        gov_loading: 'Cargando ventana de gobernanza…',
+        gov_absent: 'Bloque de gobernanza ausente en estos datos (rastreador anterior a v1.4.0).',
+        gov_days: 'días', gov_control: 'Control de las cámaras', gov_house: 'Cámara', gov_senate: 'Senado',
+        gov_vacant: 'vacantes', gov_asof: 'Al', gov_acting: 'Cargos interinos / sin verificar',
+        gov_incidents: 'Administración electoral', gov_not_sensed: 'No detectado en este escaneo: muy pocos artículos. La ausencia de reportes no es calma.',
+        gov_no_incidents: 'Sin incidentes de certificación, seguridad o presencia federal reportados en este escaneo.',
+        gov_corroborated: 'corroborado', gov_single: 'reporte único',
+        gov_mob: 'Movilización de la sociedad civil (ambos lados)', gov_left: 'Grupos de izquierda', gov_right: 'Grupos de derecha',
+        gov_unsided: 'Sin afiliación', gov_watch: 'Qué vigilar',
+        gov_preelection: 'Las categorías de resultados, recuentos, certificación y concesiones se abren al cerrar las urnas. Antes, solo cuentan litigios, amenazas y presencia federal. Los artículos de opinión y explicativos nunca cuentan como hechos.',
+        cov_label: 'Fuentes sin datos', cov_ok: 'Todas las fuentes consultadas respondieron.',
+        cov_not_sensed: 'No detectado: muy pocos artículos en este escaneo.',
+    },
+
+    pt: {
+        // Header
+        hdr_title: 'Rastreador de Retórica dos EUA',
+        hdr_back: '← Voltar para Estabilidade EUA',
+        hdr_subtitle: 'Monitoramento multi-ator através de 10 atores e 3 ramos. Infraestrutura apolítica rastreando volatilidade, divergência e fratura transversal — não agressão.',
+        hdr_dark: 'Escuro', hdr_light: 'Claro', hdr_refresh: 'Atualizar',
+
+        // Sidebar
+        sb_regional: 'PÁGINAS REGIONAIS',
+        sb_me: '🌍 Oriente Médio',
+        sb_asia: '🌏 Ásia-Pacífico',
+        sb_europe: '🌍 Europa',
+        sb_wha: '🌎 Hemisfério Ocidental',
+        sb_crosscut: 'FERRAMENTAS TRANSVERSAIS',
+        sb_commodities: '🌾 Rastreador de Commodities',
+        sb_military: '🪖 Rastreador Militar',
+        sb_gpi: '🌐 Índice de Pressão Global',
+        sb_rhetoric: 'RETÓRICA REGIONAL',
+        sb_rh_me: '💬 Retórica Oriente Médio',
+        sb_rh_asia: '💬 Retórica Ásia',
+        sb_rh_europe: '💬 Retórica Europa',
+        sb_rh_wha: '💬 Retórica Hemisfério Ocidental',
+        sb_us_pages: 'ESTADOS UNIDOS',
+        sb_us_rhetoric: '💬 Retórica EUA',
+        sb_us_stability: '📊 Estabilidade EUA',
+
+        // Composite
+        comp_label: 'Composto Retórica EUA',
+        comp_loading: 'Última varredura: carregando…',
+
+        // Vectors
+        vec_executive: 'Ramo Executivo',
+        vec_executive_ctx: 'Casa Branca + retórica do gabinete',
+        vec_legislative: 'Ramo Legislativo',
+        vec_legislative_ctx: 'Divergência Câmara + Senado',
+        vec_institutional: 'Institucional',
+        vec_institutional_ctx: 'Cortes + DHS + Fed + Estados',
+        vec_fracture: 'Fratura Doméstica',
+        vec_fracture_ctx: 'Divergência transversal',
+
+        // So What
+        sw_label: 'E Daí?',
+
+        // Jawboning card (Phase 5c)
+        jaw_label: '🦋 Pressionando Atualmente',
+        jaw_title: 'Intervenções Ativas do Líder',
+        jaw_subtitle: 'Alvos sobre os quais o executivo dos EUA está aplicando pressão retórica pública. Cada assinatura mostra o mecanismo e o caminho de impacto entre teatros.',
+        jaw_loading: 'Carregando intervenções ativas…',
+
+        // Mobile drawer
+        mobile_menu: 'Menu',
+        mobile_drawer_title: 'Navegação',
+
+        // Top signals
+        ts_title: 'Sinais Principais',
+        ts_subtitle: 'Sinais retóricos de maior prioridade que emergiram nesta varredura. Toque em qualquer cartão para contexto.',
+
+        // Divergence
+        div_title: 'Índice de Retórica e Divergência da Casa Branca',
+        div_pill: 'v1.1 Em Breve',
+        div_rhetoric_label: 'Pontuação Retórica (Ao Vivo)',
+        div_rhetoric_ctx: 'Tempo agregado de retórica do ramo executivo. Atualmente baseado em volume de declarações, ativação de alertas e proporções de linha base.',
+        div_action_label: 'Seguimento de Declarações (v1.1)',
+        div_action_ctx: 'v1.1 comparará declarações contra taxas históricas de seguimento por tópico (imigração, tarifas, Irã, OTAN, etc.). Pontuações: ação clara / ambígua / sem ação / reversão / sucesso / fracasso.',
+        div_note: 'Análise de seguimento declaração por declaração será lançada na v1.1. Metodologia projetada para ser apolítica: mede a DIVERGÊNCIA entre retórica e ação, não se alguma é "correta."',
+
+        // Layer headers
+        layer_executive: 'Ramo Executivo',
+        layer_executive_sub: 'Casa Branca · Depto. Estado · Defesa',
+        layer_legislative: 'Ramo Legislativo',
+        layer_legislative_sub: 'Maioria + Oposição (balanço transversal)',
+        layer_institutional: 'Institucional',
+        layer_institutional_sub: 'Judicial · DHS/ICE · Reserva Federal · Governadores Estaduais',
+
+        // Balance
+        bal_title: 'Balanço Transversal (Transparência)',
+        bal_subtitle: 'Asifah é infraestrutura apolítica. Equilibramos deliberadamente vozes da esquerda/direita/centro para que a pontuação reflita volatilidade, não julgamento partidário. Este cartão mostra nosso balanço atual.',
+        bal_left: 'Centro-Esquerda',
+        bal_center: 'Centro / Moderado',
+        bal_right: 'Centro-Direita',
+        bal_disclaimer: "Mistura de fontes: r/politics (esquerda), r/Conservative + r/JoeRogan + r/TuckerCarlson + r/BenShapiro (direita), r/moderatepolitics + r/NeutralPolitics + r/NeutralNews (centro), r/EzraKleinShow + r/PivotPodcast (centro-esquerda), mais jornalistas transversais no Bluesky. Não afirmamos balanço perfeito — apenas transparência sobre quem ouvimos. Passe o cursor sobre cada contagem para ver quais subreddits contribuíram.",
+
+        // Targets + cross-theater
+        targ_title: 'Alvos Retóricos dos EUA',
+        targ_subtitle: 'Países estrangeiros que os Estados Unidos estão atualmente mirando retoricamente (executivo, Depto. Estado, Defesa). Contagens de menções desta varredura.',
+        ct_title: 'Leituras Transversais',
+        ct_subtitle: 'O rastreador dos EUA lê impressões digitais de todos os outros rastreadores. Isso mostra quais teatros tinham dados disponíveis nesta varredura. Cada rastreador também lê as impressões digitais dos EUA de volta.',
+
+        // News
+        news_title: 'Artigos Recentes de Retórica',
+        news_subtitle: 'Artigos classificados para um ou mais atores durante esta varredura. Toque em qualquer aba para ver artigos por fonte.',
+        news_tab_all: 'Todos',
+        news_tab_rss: 'RSS',
+
+        // Footer
+        ftr_about: 'Sobre este rastreador',
+        ftr_about_text: 'O Rastreador de Retórica dos EUA monitora retórica através de 10 atores em 3 ramos do governo dos EUA mais o contrapeso estadual e institucional. Calibrado para refletir a experiência americana mediana: os EUA estão geralmente na borda superior do estável, com a vista de DC parecendo mais volátil que a vista do resto do país. A pontuação mede volatilidade e divergência, não agressão.',
+        ftr_sources: 'Fontes de dados',
+        ftr_sources_text: 'Feeds RSS (NYT, NPR, Politico, Axios, ProPublica, PBS, Atlantic, WaPo, Washington Examiner, National Review, Lawfare, SCOTUSblog, BBC, Guardian) · GDELT · NewsAPI (shared fallback gateway) · Brave Search · Bluesky (76 contas verificadas) · Telegram · Reddit (25 subs transversais) · Impressões digitais dos 23 outros rastreadores · Alertas CISA · Fontes de administração eleitoral e mobilização (v1.4.0).',
+
+        // Inline labels
+        articles_view: 'Ver artigos',
+        articles_hide: 'Ocultar artigos',
+        statements_label: 'declarações',
+        tripwires_label: 'alertas',
+        baseline_label: 'linha base',
+        no_signals: 'Nenhum sinal surgiu nesta varredura.',
+        no_targets: 'Nenhum país específico mirado nesta varredura.',
+        gov_title: 'Janela Eleitoral e de Governança',
+        gov_subtitle: 'Eventos institucionais na janela de contagem, certificação e transição: recusas de certificação, recontagens, concessões, ameaças a funcionários eleitorais, presença federal em locais de votação. Corroborados acima de L2. Não é previsão de nenhuma disputa nem julgamento sobre nenhum partido.',
+        gov_loading: 'Carregando janela de governança…',
+        gov_absent: 'Bloco de governança ausente nestes dados (rastreador anterior à v1.4.0).',
+        gov_days: 'dias', gov_control: 'Controle das casas', gov_house: 'Câmara', gov_senate: 'Senado',
+        gov_vacant: 'vagas', gov_asof: 'Em', gov_acting: 'Cargos interinos / não verificados',
+        gov_incidents: 'Administração eleitoral', gov_not_sensed: 'Não detectado neste ciclo: poucos artigos. Ausência de relatos não é calma.',
+        gov_no_incidents: 'Nenhum incidente de certificação, segurança ou presença federal relatado neste ciclo.',
+        gov_corroborated: 'corroborado', gov_single: 'relato único',
+        gov_mob: 'Mobilização da sociedade civil (dois lados)', gov_left: 'Grupos de esquerda', gov_right: 'Grupos de direita',
+        gov_unsided: 'Sem afiliação', gov_watch: 'O que observar',
+        gov_preelection: 'As categorias de resultados, recontagens, certificação e concessões abrem quando as urnas fecham. Antes, só contam litígios, ameaças e presença federal. Artigos de opinião e explicativos nunca contam como fatos.',
+        cov_label: 'Fontes sem dados', cov_ok: 'Todas as fontes consultadas responderam.',
+        cov_not_sensed: 'Não detectado: poucos artigos neste ciclo.',
+    }
+};
+
+function setLanguage(lang) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === lang);
+    });
+    applyI18n();
+    if (cachedData) renderAll(cachedData);
+}
+
+function applyI18n() {
+    const dict = I18N[currentLang] || I18N.en;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) el.textContent = dict[key];
+    });
+}
+
+function t(key) {
+    return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// THEME
+// ════════════════════════════════════════════════════════════════════
+function toggleTheme() {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.body.dataset.theme = currentTheme;
+    const btn = document.getElementById('themeBtn');
+    if (btn) btn.innerHTML = currentTheme === 'dark'
+        ? '🌙 <span data-i18n="hdr_dark">' + t('hdr_dark') + '</span>'
+        : '☀️ <span data-i18n="hdr_light">' + t('hdr_light') + '</span>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// TIER MAPPING
+// ════════════════════════════════════════════════════════════════════
+function tierToClass(tier) {
+    if (!tier) return 'tier-active';
+    const m = String(tier).toLowerCase();
+    if (m.includes('crisis')) return 'tier-crisis';
+    if (m.includes('volatile')) return 'tier-volatile';
+    if (m.includes('active+') || m.includes('active_plus') || m.includes('active plus')) return 'tier-active-plus';
+    if (m.includes('active')) return 'tier-active';
+    if (m.includes('stable')) return 'tier-stable';
+    return 'tier-active';
+}
+
+function tierBandIcon(band) {
+    if (!band) return '🟢';
+    const m = String(band).toUpperCase();
+    if (m.includes('CRISIS')) return '🔴';
+    if (m.includes('VOLATILE')) return '🟠';
+    if (m.includes('ACTIVE')) return '🟢';
+    return '🟢';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FETCH
+// ════════════════════════════════════════════════════════════════════
+async function fetchData(forceRefresh) {
+    try {
+        showLoading('Loading U.S. rhetoric data…');
+        const url = RHETORIC_ENDPOINT + (forceRefresh ? '?refresh=true' : '');
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            if (resp.status === 503) {
+                showLoading('First scan still in progress. Try again in a couple of minutes.');
+                return;
+            }
+            throw new Error('HTTP ' + resp.status);
+        }
+        const data = await resp.json();
+        cachedData = data;
+        renderAll(data);
+        hideLoading();
+    } catch (e) {
+        console.error('Fetch error:', e);
+        showLoading('Error loading data: ' + e.message);
+    }
+}
+
+function refreshData() { fetchData(true); fetchJawboningCard(); }
+
+function showLoading(msg) {
+    const overlay = document.getElementById('loadingOverlay');
+    document.getElementById('loadingText').textContent = msg;
+    overlay.classList.remove('fade');
+}
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.add('fade');
+    setTimeout(() => { overlay.style.display = 'none'; }, 350);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RENDERERS
+// ════════════════════════════════════════════════════════════════════
+function renderAll(data) {
+    renderComposite(data);
+    renderVectors(data);
+    renderSoWhat(data);
+    renderTopSignals(data);
+    renderGovernance(data);
+    renderCoverage(data);
+    renderActors(data);
+    renderBalance(data);
+    renderTargets(data);
+    renderCrossTheater(data);
+    renderNews(data);
+}
+
+function renderComposite(data) {
+    const score = data.composite_score;
+    const tier = data.tier_name || data.tier || 'Active';
+    const band = data.tier_band || 'ACTIVE';
+    const desc = data.tier_description || '';
+    const icon = data.tier_icon || tierBandIcon(band);
+
+    const scoreEl = document.getElementById('compositeScore');
+    scoreEl.textContent = (score !== undefined && score !== null) ? Math.round(score) : '—';
+    scoreEl.className = 'composite-score ' + tierToClass(tier);
+
+    document.getElementById('compositeBandIcon').textContent = icon;
+    // v1.4.2: tier and band are often the same word ("ACTIVE — ACTIVE"); say it once.
+    document.getElementById('compositeBandText').textContent =
+        (String(tier).toUpperCase() === String(band).toUpperCase() ? tier : (tier + ' — ' + band)).toUpperCase();
+    document.getElementById('compositeDescription').textContent = desc;
+
+    const completed = data.scan_completed_at ? new Date(data.scan_completed_at).toLocaleString() : 'unknown';
+    document.getElementById('compositeMeta').textContent =
+        'Last scan: ' + completed + ' · Articles: ' + (data.article_count || 0) +
+        ' · Branch divergence: ' + (data.branch_divergence_score || 0) +
+        ' · Domestic fracture: ' + (data.domestic_fracture_score || 0);
+}
+
+function renderVectors(data) {
+    const actors = data.actors || {};
+    const exec = avgScore([actors.us_executive, actors.us_state_dept, actors.us_defense]);
+    const legi = avgScore([actors.us_congress_majority, actors.us_congress_opposition]);
+    const inst = avgScore([actors.us_judicial, actors.us_dhs_ice, actors.us_federal_reserve, actors.us_states]);
+
+    document.getElementById('vecExecScore').textContent = Math.round(exec);
+    document.getElementById('vecLegiScore').textContent = Math.round(legi);
+    document.getElementById('vecInstScore').textContent = Math.round(inst);
+    document.getElementById('vecFractureScore').textContent = Math.round(data.domestic_fracture_score || 0);
+    // v1.4.2: one plain word per card, so a number never stands alone.
+    const word = v => v < 26 ? 'Quiet' : v < 38 ? 'Normal' : v < 51 ? 'Elevated' : v < 66 ? 'High' : 'Very high';
+    [['vecExecScore', exec], ['vecLegiScore', legi], ['vecInstScore', inst],
+     ['vecFractureScore', data.domestic_fracture_score || 0]].forEach(([id, v]) => {
+        const el = document.getElementById(id + 'Read');
+        if (el) el.textContent = word(v);
+    });
+}
+
+function avgScore(actorList) {
+    const valid = actorList.filter(a => a && typeof a.actor_score === 'number');
+    if (valid.length === 0) return 0;
+    return valid.reduce((s, a) => s + a.actor_score, 0) / valid.length;
+}
+
+function renderSoWhat(data) {
+    const sw = data.so_what || {};
+    document.getElementById('soWhatFactor').textContent = sw.factor || '—';
+    document.getElementById('soWhatDescription').textContent = sw.description || '—';
+    const ul = document.getElementById('soWhatBullets');
+    ul.innerHTML = '';
+    (sw.bullet_points || []).forEach(b => {
+        const li = document.createElement('li');
+        li.textContent = b;
+        ul.appendChild(li);
+    });
+}
+
+function renderTopSignals(data) {
+    const grid = document.getElementById('topSignalsGrid');
+    const sigs = data.top_signals || [];
+    if (sigs.length === 0) {
+        grid.innerHTML = '<div style="padding:14px;color:var(--text-muted);grid-column:1/-1;">' + t('no_signals') + '</div>';
+        return;
+    }
+    grid.innerHTML = '';
+    sigs.forEach(sig => {
+        const card = document.createElement('div');
+        card.className = 'signal-card severity-' + (sig.severity || 'low');
+        card.innerHTML = `
+            <div class="signal-short">${escapeHtml(sig.short_text || '')}</div>
+            <div class="signal-long">${escapeHtml(sig.long_text || '')}</div>
+            <div class="signal-meta">
+                <span class="signal-cat-pill">${escapeHtml(sig.category || 'general')}</span>
+                <span>${escapeHtml(sig.actor_key || '')}</span>
+            </div>
+        `;
+        card.addEventListener('click', () => card.classList.toggle('expanded'));
+        grid.appendChild(card);
+    });
+}
+
+// v1.4.0: Election & Governance Window. Absence-honest: an older payload or an
+// unsensed lane says so instead of rendering calm.
+function renderGovernance(data) {
+    const body = document.getElementById('governanceBody');
+    if (!body) return;
+    const _em = (x) => String(x == null ? '' : x).replace(/--/g, '\u2014');
+    const g = data.governance;
+    if (!g) {
+        body.innerHTML = '<div class="gov-note">' + escapeHtml(t('gov_absent')) + '</div>';
+        return;
+    }
+    const lvl = (typeof g.level === 'number') ? g.level : 0;
+    const pillCls = g.sensed === false ? 'muted' : ('l' + lvl);
+    let h = '<div class="gov-head">';
+    h += '<span class="gov-pill ' + pillCls + '">L' + lvl + ' · ' + escapeHtml(g.level_label || '') + '</span>';
+    if (g.phase_label) h += '<span class="gov-pill muted">' + escapeHtml(g.phase_label) + '</span>';
+    if (g.next_milestone && g.days_to_milestone !== null && g.days_to_milestone !== undefined) {
+        h += '<span class="gov-pill muted">' + escapeHtml(g.next_milestone) + ': ' + g.days_to_milestone + ' ' + escapeHtml(t('gov_days')) + '</span>';
+    }
+    h += '</div>';
+    h += '<div class="gov-headline">' + escapeHtml(_em(g.headline)) + '</div>';
+
+    h += '<div class="gov-grid">';
+    // Chambers + acting officials
+    const ch = g.chambers || {};
+    const hs = ch.house || {}, sn = ch.senate || {};
+    const fmtCh = (c) => (c && c.majority_party) ? (c.majority_party + ' ' + (c.majority_size ?? '?') + '–' + (c.minority_size ?? '?')) : '—';
+    h += '<div class="gov-pane"><h5>' + escapeHtml(t('gov_control')) + '</h5>';
+    h += '<div class="gov-row"><span>' + escapeHtml(t('gov_house')) + '</span><b>' + escapeHtml(fmtCh(hs)) + (hs.vacant ? ' (' + hs.vacant + ' ' + escapeHtml(t('gov_vacant')) + ')' : '') + '</b></div>';
+    h += '<div class="gov-row"><span>' + escapeHtml(t('gov_senate')) + '</span><b>' + escapeHtml(fmtCh(sn)) + '</b></div>';
+    if (hs.as_of) h += '<div class="gov-note">' + escapeHtml(t('gov_asof')) + ' ' + escapeHtml(hs.as_of) + ' · ' + escapeHtml(ch.data_freshness || '') + '</div>';
+    if (ch.staleness_warning) h += '<div class="gov-note" style="color:var(--accent-yellow);">' + escapeHtml(ch.staleness_warning) + '</div>';
+    const acting = g.acting_officials || [];
+    if (acting.length) {
+        h += '<h5 style="margin-top:10px;">' + escapeHtml(t('gov_acting')) + '</h5>';
+        acting.forEach(a => {
+            h += '<div class="gov-row"><span>' + escapeHtml(a.role || '') + '</span><b>' + escapeHtml(a.name || '') + (a.status === 'verify' ? ' ⚠' : '') + '</b></div>';
+        });
+    }
+    h += '</div>';
+
+    // Election-administration classes
+    h += '<div class="gov-pane"><h5>' + escapeHtml(t('gov_incidents')) + '</h5>';
+    const cls = g.classes || {};
+    const active = Object.entries(cls).filter(([k, c]) => c && c.count > 0)
+        .sort((a, b) => (b[1].rung - a[1].rung) || (b[1].count - a[1].count));
+    if (g.post_election_classes_open === false) {
+        h += '<div class="gov-note">' + escapeHtml(t('gov_preelection')) + '</div>';
+    }
+    if (g.sensed === false) {
+        h += '<div class="gov-note">' + escapeHtml(t('gov_not_sensed')) + '</div>';
+    } else if (!active.length) {
+        h += '<div class="gov-note">' + escapeHtml(t('gov_no_incidents')) + '</div>';
+    } else {
+        active.forEach(([k, c]) => {
+            const ex = (c.examples || [])[0];
+            h += '<div class="gov-class"><b>' + escapeHtml(c.label) + '</b> · ' + c.count +
+                 '<span class="gov-corr' + (c.corroborated ? ' yes' : '') + '">' +
+                 escapeHtml(c.corroborated ? t('gov_corroborated') : t('gov_single')) + '</span>';
+            if (ex) h += '<br>' + (ex.link ? '<a href="' + escapeAttr(ex.link) + '" target="_blank" rel="noopener">' : '') +
+                         escapeHtml(ex.title || '') + (ex.link ? '</a>' : '') + ' <span style="color:var(--text-muted);">— ' + escapeHtml(ex.source || '') + '</span>';
+            h += '</div>';
+        });
+    }
+    h += '</div>';
+
+    // Two-sided mobilisation
+    const m = g.mobilization || data.mobilization || {};
+    const L = m.left || 0, R = m.right || 0, U = m.unsided || 0, T = Math.max(1, L + R + U);
+    h += '<div class="gov-pane"><h5>' + escapeHtml(t('gov_mob')) + '</h5>';
+    h += '<div class="mob-bar"><span style="width:' + (100 * L / T) + '%;background:#3b82f6;"></span>' +
+         '<span style="width:' + (100 * U / T) + '%;background:#64748b;"></span>' +
+         '<span style="width:' + (100 * R / T) + '%;background:#dc2626;"></span></div>';
+    h += '<div class="gov-row"><span>' + escapeHtml(t('gov_left')) + '</span><b>' + L + '</b></div>';
+    h += '<div class="gov-row"><span>' + escapeHtml(t('gov_unsided')) + '</span><b>' + U + '</b></div>';
+    h += '<div class="gov-row"><span>' + escapeHtml(t('gov_right')) + '</span><b>' + R + '</b></div>';
+    if (m.reading) h += '<div class="gov-note">' + escapeHtml(_em(m.reading)) + '</div>';
+    h += '</div>';
+    h += '</div>';   // grid
+
+    const sw = g.so_what || [];
+    if (sw.length) {
+        h += '<div class="gov-pane" style="margin-bottom:10px;"><h5>' + escapeHtml(t('sw_label')) + '</h5><ul class="gov-list">';
+        sw.forEach(x => { h += '<li>' + escapeHtml(_em(x)) + '</li>'; });
+        h += '</ul></div>';
+    }
+    if (g.cross_read_iran && !sw.includes(g.cross_read_iran)) {
+        h += '<div class="gov-note">🇮🇷 ' + escapeHtml(_em(g.cross_read_iran)) + '</div>';
+    }
+    const w = g.watch || [];
+    if (w.length) {
+        h += '<div class="gov-pane"><h5>' + escapeHtml(t('gov_watch')) + '</h5><ul class="gov-list">';
+        w.forEach(x => { h += '<li>' + escapeHtml(x) + '</li>'; });
+        h += '</ul></div>';
+    }
+    if (g.disclaimer) h += '<div class="gov-note">' + escapeHtml(g.disclaimer) + '</div>';
+    body.innerHTML = h;
+}
+
+// v1.4.0: say which sources did NOT deliver -- a dead feed must not read as calm.
+function renderCoverage(data) {
+    const el = document.getElementById('coverageLine');
+    if (!el) return;
+    const sh = data.source_health || {};
+    // v1.4.2: 'partial' (some feeds failed, articles still arrived) is not 'not delivering'.
+    const skip = ['ok', 'not_attempted', 'partial', 'not_configured'];
+    const bad = Object.entries(sh).filter(([k, r]) => r && r.status && skip.indexOf(r.status) === -1);
+    const partial = Object.entries(sh).filter(([k, r]) => r && r.status === 'partial');
+    let txt = '';
+    if (data.sensed === false) txt += '<span class="warn">⚠ ' + escapeHtml(t('cov_not_sensed')) + '</span> ';
+    if (bad.length) {
+        txt += '<span class="warn">' + escapeHtml(t('cov_label')) + ':</span> ' +
+               bad.map(([k, r]) => escapeHtml(k) + ' (' + escapeHtml(r.status.replace(/_/g, ' ')) + ')').join(' · ');
+    } else if (Object.keys(sh).length) {
+        txt += escapeHtml(t('cov_ok'));
+    }
+    if (partial.length) {
+        txt += ' · ' + partial.map(([k, r]) => escapeHtml(k) + ' (some feeds failed, ' +
+               (r.articles || 0) + ' articles delivered)').join(' · ');
+    }
+    el.innerHTML = txt;
+}
+
+function renderActors(data) {
+    const actors = data.actors || {};
+    const layers = {
+        executive:    ['us_executive', 'us_state_dept', 'us_defense'],
+        legislative:  ['us_congress_majority', 'us_congress_opposition'],
+        institutional:['us_judicial', 'us_dhs_ice', 'us_federal_reserve', 'us_states',
+                       'us_civil_mobilization'],
+    };
+    const layerGridIds = {
+        executive: 'actorGridExecutive',
+        legislative: 'actorGridLegislative',
+        institutional: 'actorGridInstitutional',
+    };
+
+    Object.keys(layers).forEach(layer => {
+        const grid = document.getElementById(layerGridIds[layer]);
+        grid.innerHTML = '';
+        layers[layer].forEach(key => {
+            const a = actors[key];
+            if (!a) return;
+            grid.appendChild(buildActorCard(key, a, layer));
+        });
+    });
+}
+
+function buildActorCard(key, a, layer) {
+    const card = document.createElement('div');
+    card.className = 'actor-card';
+    const layerColor = { executive: 'var(--layer-executive)',
+                         legislative: 'var(--layer-legislative)',
+                         institutional: 'var(--layer-institutional)' }[layer];
+    card.style.borderLeftColor = layerColor;
+
+    const iconMap = {
+        us_executive: '🏛️', us_state_dept: '🌐', us_defense: '🪖',
+        us_congress_majority: '🏛️', us_congress_opposition: '🏛️',
+        us_judicial: '⚖️', us_dhs_ice: '🚨', us_federal_reserve: '💵', us_states: '🗺️',
+        us_civil_mobilization: '📣',
+    };
+    const nameMap = {
+        us_executive: 'U.S. Executive Branch',
+        us_state_dept: 'U.S. State Department',
+        us_defense: 'U.S. Department of Defense',
+        us_congress_majority: 'Congress — Majority',
+        us_congress_opposition: 'Congress — Opposition',
+        us_judicial: 'U.S. Judicial Branch',
+        us_dhs_ice: 'DHS / ICE / Immigration Enforcement',
+        us_federal_reserve: 'Federal Reserve',
+        us_states: 'State Governors',
+        us_civil_mobilization: 'Civil-Society Mobilization (two-sided)',
+    };
+    const roleMap = {
+        us_executive: 'White House / Trump / Cabinet',
+        us_state_dept: 'Diplomatic Posture',
+        us_defense: 'Pentagon / Combatant Commands',
+        us_congress_majority: 'Majority leadership, House + Senate (R as of Nov 2026)',
+        us_congress_opposition: 'Minority leadership, House + Senate (D as of Nov 2026)',
+        us_judicial: 'SCOTUS + Federal Courts + DOJ',
+        us_dhs_ice: 'Immigration Enforcement (Civil Unrest Driver)',
+        us_federal_reserve: 'Fed Chair + FOMC',
+        us_states: 'State Pushback / Federalism',
+        us_civil_mobilization: 'Left- and right-leaning groups, counted per side',
+    };
+
+    const tierName = a.tier_name || a.tier || 'Active';
+    const tierClass = tierToClass(tierName);
+    const score = a.actor_score !== undefined ? Math.round(a.actor_score) : '—';
+    const stmtCount = a.statement_count || 0;
+    const tripwires = a.tripwires || 0;
+    const baseline = a.baseline_ratio !== undefined ? a.baseline_ratio.toFixed(1) + 'x' : '—';
+
+    card.innerHTML = `
+        <div class="actor-card-header">
+            <div class="actor-name-block">
+                <span class="actor-icon">${iconMap[key] || '🏛️'}</span>
+                <div>
+                    <div class="actor-name">${escapeHtml(nameMap[key] || key)}</div>
+                    <div class="actor-role">${escapeHtml(roleMap[key] || '')}</div>
+                </div>
+            </div>
+            <div class="actor-score-block">
+                <span class="actor-score">${score}</span>
+                <span class="actor-tier-pill ${tierClass}">${escapeHtml(tierName)}</span>
+            </div>
+        </div>
+        <div class="actor-stats">
+            <div class="actor-stat">📊 <span class="actor-stat-value">${stmtCount}</span> ${t('statements_label')}</div>
+            ${tripwires > 0 ? `<div class="actor-stat actor-stat-tripwire">⚠️ <span class="actor-stat-value">${tripwires}</span> ${t('tripwires_label')}</div>` : ''}
+            <div class="actor-stat">📈 <span class="actor-stat-value">${baseline}</span> ${t('baseline_label')}</div>
+        </div>
+    `;
+
+    if (a.sample_articles && a.sample_articles.length > 0) {
+        const toggle = document.createElement('button');
+        toggle.className = 'actor-articles-toggle';
+        toggle.textContent = '▼ ' + t('articles_view') + ' (' + a.sample_articles.length + ')';
+        const list = document.createElement('div');
+        list.className = 'actor-articles';
+        a.sample_articles.forEach(art => {
+            const item = document.createElement('div');
+            item.className = 'actor-article-item';
+            item.innerHTML = `
+                <a href="${escapeAttr(art.link)}" target="_blank" rel="noopener">${escapeHtml(art.title || 'Untitled')}</a>
+                <div class="actor-article-meta">${escapeHtml(art.source || '')} · ${escapeHtml(formatDate(art.published))}</div>
+            `;
+            list.appendChild(item);
+        });
+        toggle.addEventListener('click', () => {
+            list.classList.toggle('expanded');
+            toggle.textContent = (list.classList.contains('expanded') ? '▲ ' + t('articles_hide') : '▼ ' + t('articles_view')) + ' (' + a.sample_articles.length + ')';
+        });
+        card.appendChild(toggle);
+        card.appendChild(list);
+    }
+    return card;
+}
+
+function renderBalance(data) {
+    // ── Cross-spectrum balance (v1.3 — May 16, 2026) ──
+    // Reads source_counts.reddit_lean_3 (UI-friendly 3-bucket counts) and
+    // source_counts.reddit_breakdown (per-subreddit counts for tooltips).
+    // 5-bucket detail is in source_counts.reddit_lean_5 for future v1.2 expansion.
+    const sc = data.source_counts || {};
+    const lean3 = sc.reddit_lean_3 || {};
+    const breakdown = sc.reddit_breakdown || {};
+
+    const left   = lean3.left || 0;
+    const center = lean3.center || 0;
+    const right  = lean3.right || 0;
+    const apolitical = lean3.apolitical || 0;
+
+    const politicalTotal = left + center + right;
+
+    // Build hover tooltips listing which subreddits feed each bucket.
+    // Mapping is duplicated from backend SUBREDDIT_LEAN_5BUCKET for tooltip
+    // generation only — backend is source of truth for actual counts.
+    const LEAN_3_BUCKET_FRONTEND = {
+        // LEFT bucket (left + center_left)
+        'politics': 'left', 'EzraKleinShow': 'left', 'PivotPodcast': 'left',
+        // CENTER bucket
+        'moderatepolitics': 'center', 'NeutralPolitics': 'center',
+        'NeutralNews': 'center', 'news': 'center', 'worldnews': 'center',
+        'protest': 'center', 'PublicFreakout': 'center',
+        'scotus': 'center', 'law': 'center',
+        // RIGHT bucket (right + far_right)
+        'Conservative': 'right', 'JoeRogan': 'right',
+        'TuckerCarlson': 'right', 'BenShapiro': 'right',
+    };
+    const subsByBucket = { left: [], center: [], right: [] };
+    Object.entries(breakdown).forEach(([sub, count]) => {
+        const bucket = LEAN_3_BUCKET_FRONTEND[sub];
+        if (bucket) subsByBucket[bucket].push(`r/${sub}: ${count}`);
+    });
+    const tooltipLeft   = subsByBucket.left.join(' · ')   || 'No data this scan';
+    const tooltipCenter = subsByBucket.center.join(' · ') || 'No data this scan';
+    const tooltipRight  = subsByBucket.right.join(' · ')  || 'No data this scan';
+
+    // Set counts + percentages + tooltips
+    const leftEl   = document.getElementById('balanceLeftCount');
+    const centerEl = document.getElementById('balanceCenterCount');
+    const rightEl  = document.getElementById('balanceRightCount');
+
+    leftEl.textContent   = politicalTotal > 0 ? left   : '—';
+    centerEl.textContent = politicalTotal > 0 ? center : '—';
+    rightEl.textContent  = politicalTotal > 0 ? right  : '—';
+
+    leftEl.title   = tooltipLeft;
+    centerEl.title = tooltipCenter;
+    rightEl.title  = tooltipRight;
+
+    // Percentage strings under each column
+    if (politicalTotal > 0) {
+        document.getElementById('balanceLeftPct').textContent =
+            `${Math.round((left / politicalTotal) * 100)}% of political voices`;
+        document.getElementById('balanceCenterPct').textContent =
+            `${Math.round((center / politicalTotal) * 100)}% of political voices`;
+        document.getElementById('balanceRightPct').textContent =
+            `${Math.round((right / politicalTotal) * 100)}% of political voices`;
+    } else {
+        document.getElementById('balanceLeftPct').textContent = '—';
+        document.getElementById('balanceCenterPct').textContent = '—';
+        document.getElementById('balanceRightPct').textContent = '—';
+    }
+
+    // Apolitical footnote: append to the existing balance-disclaimer
+    const sourceNote = document.querySelector('.balance-disclaimer');
+    if (sourceNote && apolitical > 0) {
+        const baseText = sourceNote.getAttribute('data-base-text')
+                      || sourceNote.textContent;
+        sourceNote.setAttribute('data-base-text', baseText);
+        sourceNote.textContent = `${baseText} Plus ${apolitical} apolitical signals (weather, military, economics, cyber, OSINT) tracked separately.`;
+    }
+}
+
+function renderTargets(data) {
+    const grid = document.getElementById('targetsGrid');
+    const targets = data.outbound_targets || [];
+    if (targets.length === 0) {
+        grid.innerHTML = '<div style="padding:14px;color:var(--text-muted);grid-column:1/-1;">' + t('no_targets') + '</div>';
+        return;
+    }
+    grid.innerHTML = '';
+    targets.forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'target-card';
+        card.innerHTML = `
+            <span class="target-name">${escapeHtml(String(t.country).replace(/_/g, ' '))}</span>
+            <span class="target-mentions">${t.mention_count || 0}</span>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function renderCrossTheater(data) {
+    const list = document.getElementById('crosstheaterList');
+    const fps = data.cross_theater_fps || {};
+    const allTheaters = [
+        'iran','israel','lebanon','yemen','iraq','syria','oman',
+        'china','taiwan','japan',
+        'russia','belarus','ukraine','greenland',
+        'cuba','venezuela','mexico','panama','haiti','colombia','brazil','peru','chile',
+    ];
+    list.innerHTML = '';
+    allTheaters.forEach(theater => {
+        const has = !!fps[theater];
+        const item = document.createElement('div');
+        item.className = 'crosstheater-item';
+        item.innerHTML = `
+            <span class="crosstheater-item-name">${theater.replace(/_/g, ' ')}</span>
+            <span class="crosstheater-item-status ${has ? '' : 'no-data'}">${has ? '✓ data' : 'no data'}</span>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function renderNews(data) {
+    const actors = data.actors || {};
+    const allArticles = [];
+    const seenLinks = new Set();
+    Object.values(actors).forEach(a => {
+        (a.sample_articles || []).forEach(art => {
+            if (art.link && seenLinks.has(art.link)) return;
+            if (art.link) seenLinks.add(art.link);
+            allArticles.push(art);
+        });
+    });
+
+    const buckets = { all: [], rss: [], gdelt: [], reddit: [], bluesky: [], telegram: [] };
+    allArticles.forEach(art => {
+        buckets.all.push(art);
+        const src = (art.source || '').toLowerCase();
+        if (src.startsWith('rss/')) buckets.rss.push(art);
+        else if (src.startsWith('gdelt/')) buckets.gdelt.push(art);
+        else if (src.startsWith('reddit/')) buckets.reddit.push(art);
+        else if (src.toLowerCase().includes('bluesky')) buckets.bluesky.push(art);
+        else if (src.toLowerCase().includes('telegram')) buckets.telegram.push(art);
+    });
+
+    document.getElementById('newsCountAll').textContent = buckets.all.length;
+    document.getElementById('newsCountRss').textContent = buckets.rss.length;
+    document.getElementById('newsCountGdelt').textContent = buckets.gdelt.length;
+    document.getElementById('newsCountReddit').textContent = buckets.reddit.length;
+    document.getElementById('newsCountBluesky').textContent = buckets.bluesky.length;
+    document.getElementById('newsCountTelegram').textContent = buckets.telegram.length;
+
+    Object.keys(buckets).forEach(b => {
+        const container = document.getElementById('newsTabContent-' + b);
+        container.innerHTML = '';
+        const sorted = [...buckets[b]].sort((a, c) => {
+            const da = new Date(a.published || 0); const dc = new Date(c.published || 0);
+            return dc - da;
+        });
+        sorted.slice(0, 60).forEach(art => {
+            const div = document.createElement('div');
+            div.className = 'news-article';
+            const srcType = detectSourceType(art.source);
+            div.innerHTML = `
+                <div class="news-article-title"><a href="${escapeAttr(art.link)}" target="_blank" rel="noopener">${escapeHtml(art.title || 'Untitled')}</a></div>
+                <div class="news-article-meta">
+                    <span class="news-source-pill ${srcType}">${escapeHtml(srcType)}</span>
+                    ${escapeHtml(art.source || '')} · ${escapeHtml(formatDate(art.published))}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+        if (sorted.length === 0) {
+            container.innerHTML = '<div style="padding:14px;color:var(--text-muted);">No articles in this bucket.</div>';
+        }
+    });
+}
+
+function detectSourceType(src) {
+    const s = (src || '').toLowerCase();
+    if (s.startsWith('rss/')) return 'rss';
+    if (s.startsWith('gdelt/')) return 'gdelt';
+    if (s.startsWith('newsapi/')) return 'newsapi';
+    if (s.startsWith('brave/')) return 'brave';
+    if (s.includes('bluesky')) return 'bluesky';
+    if (s.includes('telegram')) return 'telegram';
+    if (s.startsWith('reddit/')) return 'reddit';
+    return 'rss';
+}
+
+function setNewsTab(tab) {
+    document.querySelectorAll('.news-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.news-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('newsTabContent-' + tab).classList.add('active');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════════
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(str) { return escapeHtml(str); }
+function formatDate(s) {
+    if (!s) return '—';
+    try {
+        const d = new Date(s);
+        if (isNaN(d)) return s;
+        return d.toLocaleString();
+    } catch (e) { return s; }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// JAWBONING CARD (Phase 5c — fetches active Trump signatures from ME)
+// ════════════════════════════════════════════════════════════════════
+// Reads /api/jawboning/active/us on ME backend. Renders one tile per
+// fired signature with target, mechanism, and prose. Graceful fallback
+// if endpoint is unreachable: shows "no active interventions" message.
+
+// Friendly display names for the 11 Trump signatures + Xi entry.
+// Falls back to the raw signature_id if no mapping exists (e.g., for
+// future signatures added to the catalog before this map is updated).
+const JAWBONING_DISPLAY = {
+    'trump_on_oil':            { target: 'Oil',           label: '🛢️ Oil markets / OPEC' },
+    'trump_on_fed':            { target: 'Fed',           label: '🏦 Federal Reserve' },
+    'trump_on_tariffs':        { target: 'Tariffs',       label: '⚖️ Tariff policy' },
+    'trump_on_companies':      { target: 'Companies',     label: '🏢 Specific corporations' },
+    'trump_on_china':          { target: 'China',         label: '🇨🇳 China policy' },
+    'trump_on_iran':           { target: 'Iran',          label: '🇮🇷 Iran policy' },
+    'trump_on_russia_ukraine': { target: 'Russia/Ukraine', label: '🇷🇺🇺🇦 Russia-Ukraine war' },
+    'trump_on_mexico':         { target: 'Mexico',        label: '🇲🇽 Mexico (border + drugs)' },
+    'trump_on_cuba':           { target: 'Cuba',          label: '🇨🇺 Cuba policy' },
+    'trump_on_greenland':      { target: 'Greenland',     label: '🇬🇱 Greenland / Arctic' },
+    'trump_on_saudi':          { target: 'Saudi Arabia',  label: '🇸🇦 Saudi alignment' },
+    'xi_on_rare_earths':       { target: 'Rare Earths',   label: '⚙️ Critical minerals' },
+};
+
+async function fetchJawboningCard() {
+    const grid = document.getElementById('jawboningGrid');
+    if (!grid) return;
+    try {
+        const r = await fetch(JAWBONING_ACTIVE_ENDPOINT, { cache: 'no-store' });
+        if (!r.ok) {
+            grid.innerHTML = '<div class="jawboning-empty">⚠️ Could not reach jawboning service. Try refresh.</div>';
+            return;
+        }
+        const data = await r.json();
+        if (!data || !data.success) {
+            grid.innerHTML = '<div class="jawboning-empty">No data returned from jawboning service.</div>';
+            return;
+        }
+        const active = Array.isArray(data.active) ? data.active : [];
+        if (active.length === 0) {
+            grid.innerHTML = '<div class="jawboning-empty">No active leader interventions in the last 24 hours.</div>';
+            return;
+        }
+        // Render one tile per active signature
+        grid.innerHTML = active.map(entry => {
+            const sigId = entry.signature_id || 'unknown';
+            const display = JAWBONING_DISPLAY[sigId] || { target: sigId, label: sigId };
+            const meta = entry.metadata || {};
+            const conf = (meta.confidence || 'medium').toLowerCase();
+            const mech = (meta.mechanism || '').replace(/_/g, ' ');
+            const writtenAt = entry.written_at ? new Date(entry.written_at).toLocaleString() : '';
+            // Prefer analyst_summary if present in metadata; otherwise generic line.
+            const prose = meta.analyst_summary
+                ? meta.analyst_summary.slice(0, 220) + (meta.analyst_summary.length > 220 ? '…' : '')
+                : 'Public rhetorical pressure detected. Cross-theater amplification expected; downstream trackers should expect amplified scoring on related actor clusters.';
+            return `
+                <div class="jawboning-tile" title="${escapeHtml(sigId)}">
+                    <div class="jawboning-tile-target">
+                        ${escapeHtml(display.label)}
+                        <span class="jawboning-confidence-badge ${conf}">${escapeHtml(conf)}</span>
+                    </div>
+                    <div class="jawboning-tile-mechanism">${escapeHtml(mech || 'pressure signaling')}</div>
+                    <div class="jawboning-tile-prose">${escapeHtml(prose)}</div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.warn('[jawboning] fetch error:', err);
+        grid.innerHTML = '<div class="jawboning-empty">⚠️ Jawboning service unreachable. Backend may be cold-starting.</div>';
+    }
+}
+
+function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// MOBILE DRAWER (gold standard from india-stability.html)
+// ════════════════════════════════════════════════════════════════════
+function openMobileDrawer() {
+    document.getElementById('mobileDrawer')?.classList.add('open');
+    document.getElementById('mobileDrawerBackdrop')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeMobileDrawer() {
+    document.getElementById('mobileDrawer')?.classList.remove('open');
+    document.getElementById('mobileDrawerBackdrop')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileDrawer();
+});
+
+// ════════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════════
+applyI18n();
+fetchData(false);
+fetchJawboningCard();
+
+</script>
+</body>
+</html>
