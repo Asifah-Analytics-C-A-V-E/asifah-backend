@@ -308,18 +308,20 @@ COUNTRY_TOUCH_ALIASES = {
 # are the traps this exists to avoid -- the same class the Telegram relevance
 # gate documents.
 COUNTRY_TOUCH_TERMS = [
-    'afghanistan', 'algeria', 'armenia', 'azerbaijan', 'bahrain', 'belarus',
-    'brazil', 'burkina faso', 'central african republic', 'chad', 'chile',
+    'afghanistan', 'algeria', 'argentina', 'armenia', 'azerbaijan', 'bahrain', 'belarus',
+    'bolivia', 'brazil', 'burkina faso', 'canada', 'central african republic', 'chad', 'chile',
     'china', 'colombia', 'cuba', 'cyprus', 'denmark', 'drc', 'egypt',
     'ethiopia', 'gaza', 'georgia', 'greece', 'greenland', 'haiti', 'hungary',
     'india', 'indonesia', 'iran', 'iraq', 'israel', 'japan', 'jordan',
     'kazakhstan', 'kenya', 'kuwait', 'lebanon', 'libya', 'madagascar', 'mali',
     'mexico', 'moldova', 'morocco', 'mozambique', 'myanmar', 'niger',
-    'nigeria', 'north korea', 'dprk', 'oman', 'pakistan', 'panama', 'peru',
+    'nigeria', 'north korea', 'dprk', 'oman', 'pakistan', 'panama', 'paraguay', 'peru',
     'philippines', 'poland', 'qatar', 'russia', 'rwanda', 'saudi arabia',
     'somalia', 'south africa', 'south korea', 'south sudan', 'sudan', 'syria',
     'taiwan', 'tanzania', 'thailand', 'tunisia', 'turkey', 'uae', 'uganda',
     'ukraine', 'venezuela', 'vietnam', 'yemen', 'united states', 'usa',
+    # v3.21.1 (Nov 4 2026): the WHA build added Argentina, Canada and Paraguay trackers
+    'ecuador', 'uruguay', 'united kingdom',
 ]
 
 # Geographic features that IMPLY a country. Found Jul 27 2026 in testing: the
@@ -355,6 +357,16 @@ GEO_FEATURE_COUNTRIES = {
     'golan':           ['syria', 'israel'],
     'kashmir':         ['india', 'pakistan'],
     'korean peninsula': ['dprk', 'south_korea'],
+    # v3.21.1 (Nov 4 2026) -- WHA build + polar gateways. Disputed features tag
+    # ALL claimants (the Senkaku / Kashmir rule), never one side.
+    'falklands':        ['argentina', 'united_kingdom'],
+    'malvinas':         ['argentina', 'united_kingdom'],
+    'northwest passage': ['canada'],
+    'northern sea route': ['russia'],
+    'strait of magellan': ['chile'],
+    'drake passage':    ['chile', 'argentina'],
+    'tri-border area':  ['paraguay', 'argentina', 'brazil'],
+    'ciudad del este':  ['paraguay'],
 }
 
 _GEO_FEATURE_RE = re.compile(
@@ -937,7 +949,8 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.21.0'   # v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
+GPI_VERSION     = '3.21.1'   # v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+# previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
 LEVEL_CACHE_KEY = 'gpi:level:latest'
@@ -5335,6 +5348,7 @@ _POP_M = {
     'indonesia': 280, 'myanmar': 54, 'thailand': 72, 'australia': 27,
     'us': 340, 'usa': 340, 'united_states': 340, 'canada': 41, 'mexico': 130,
     'colombia': 53, 'venezuela': 28, 'brazil': 212, 'cuba': 11, 'haiti': 11.8,
+    'argentina': 46, 'chile': 19.7, 'peru': 34, 'paraguay': 6.9, 'ecuador': 18, 'bolivia': 12.4,
     'nigeria': 230, 'ethiopia': 130, 'sudan': 50, 'south_sudan': 11,
     'somalia': 19, 'kenya': 56, 'drc': 110, 'mali': 23, 'burkina_faso': 23,
     'niger': 27, 'chad': 19, 'libya': 7, 'algeria': 46, 'morocco': 38,
