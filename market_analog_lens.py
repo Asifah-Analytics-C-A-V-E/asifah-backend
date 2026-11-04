@@ -56,7 +56,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 import statistics
 from datetime import datetime, timezone
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'   # Nov 4 2026: UK 10-year gilt read (gilt_jump) on the FTSE market + uk_gilt_2022 live check
 DOSSIER_BASIS = 'Claude research, Nov 3 2026 -- dates and figures to verify'
 
 # ════════════════════════════════════════════════════════════════════════
@@ -105,6 +105,8 @@ EXTRA_TICKERS = dict(
 
 STRESS = {'drawdown', 'fx_stress', 'fx_shock', 'fx_surge', 'regional_fx_stress',
           'regional_drawdown', 'oil_falling', 'oil_spike', 'peg_edge'}
+# 'gilt_jump' (v1.1) is deliberately NOT in STRESS: it is in no signature, so leaving it out
+# keeps it from diluting the FTSE market's similarity to every other episode.
 FUEL = {'run_up', 'near_high', 'calm', 'recent_run_up', 'equity_holding'}
 
 CONDITION_WORDS = {
@@ -122,6 +124,7 @@ CONDITION_WORDS = {
     'oil_falling': 'oil down 25% or more in six months',
     'oil_spike': 'oil up 40% or more in six months',
     'peg_edge': 'a pegged currency pressed against the weak edge of its band',
+    'gilt_jump': 'UK 10-year gilt yields up 40bp or more in a month (government borrowing costs jumping)',
 }
 
 # ════════════════════════════════════════════════════════════════════════
@@ -370,10 +373,12 @@ DOSSIERS = {
             'global': 'A warning that hidden leverage in "safe" pension strategies can force a central bank to act.',
             'economy': 'The pound and gilts moved; the FTSE 100, full of overseas earners, held up.',
         },
-        'not': 'Asifah does not read gilt yields or pension leverage, the heart of this episode.',
+        'not': ('Asifah now reads the UK 10-year gilt (v1.1, from the Europe backend\'s City pulse) but still cannot see '
+                'pension-fund leverage -- the part that turned a bad budget into a margin call.'),
         'live_checks': [
             ('A currency shock while shares hold', {'fx_shock', 'equity_holding'}),
-            ('Government bond yields jumping', None),
+            ('Government bond yields jumping (UK 10-year gilt, 40bp+ in a month)', {'gilt_jump'}),
+            ('Pension funds facing collateral calls', None),
         ],
     },
     'asia_ruble_1998': {
@@ -629,8 +634,30 @@ def _similarity(active, sig, measurable):
     return (len(shared) / len(union) if union else 0.0), shared
 
 
-def regional_reads(data):
-    """Market-by-market reads + flags. Never raises; missing data = unmeasured."""
+def _apply_gilt(a, q, u, det, external):
+    """v1.1 -- attach the UK gilt read to the FTSE market. Unread or stale
+    (>36h) = unmeasured, never quiet."""
+    g = (external or {}).get('gilt') or {}
+    jump = g.get('gilt_jump')
+    stale = True
+    ts = (external or {}).get('gilt_scanned_at')
+    if ts:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(str(ts).replace('Z', '+00:00'))).total_seconds()
+            stale = age > 36 * 3600
+        except ValueError:
+            stale = True
+    if jump is None or stale:
+        u.add('gilt_jump')
+        return
+    (a if jump else q).add('gilt_jump')
+    det['gilt_10y'] = g.get('gilt_10y')
+    det['gilt_bp_30d'] = g.get('gilt_bp_30d')
+
+
+def regional_reads(data, external=None):
+    """Market-by-market reads + flags. Never raises; missing data = unmeasured.
+    v1.1: `external` may carry {'gilt': uk_city_pulse gilt_read, 'gilt_scanned_at': iso}."""
     out, flags = {}, []
     brent = data.get('brent')
     by_region = {}
@@ -641,6 +668,8 @@ def regional_reads(data):
             fx_raw = data.get('fx_' + key)
             fx_local = _local_ccy(fx_raw, cfg['fx_quote'])
             a, q, u, det = market_conditions(idx, fx_local, brent, cfg.get('peg'), fx_raw)
+            if key == 'ftse':
+                _apply_gilt(a, q, u, det, external)
             if key in FX_ONLY:
                 for n in ('run_up', 'recent_run_up', 'near_high', 'drawdown', 'calm', 'equity_holding'):
                     a.discard(n), q.discard(n)

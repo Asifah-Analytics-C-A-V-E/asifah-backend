@@ -97,7 +97,8 @@ except Exception as _lens_err:               # pragma: no cover
     LENS_AVAILABLE = False
     print(f'[Market BlackSwan] analog lens unavailable ({_lens_err})')
 
-VERSION = '1.5.0'   # Nov 3 2026: market-by-market reads (each market on its own index + currency, matched
+VERSION = '1.5.1'   # Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
+                    # uk_city_pulse via shared Redis) | v1.5.0 Nov 3 2026: market-by-market reads (each market on its own index + currency, matched
                     # against every episode) and the analog lens (chain, interval, effects, live checks)
                     # via market_analog_lens.py | v1.4.0 Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
                     # (Europe/MENA/Africa/LatAm), region tags, proportional F10
@@ -1566,7 +1567,11 @@ def run_scan():
     lens = []
     if LENS_AVAILABLE:
         try:
-            regional = _lens.regional_reads(data)
+            # v1.5.1 -- the gilt read. Written by the Europe backend's
+            # uk_city_pulse.py to shared Redis; None when absent or stale.
+            _uk = _redis_get('stability:uk:city_pulse') or {}
+            regional = _lens.regional_reads(data, external={'gilt': _uk.get('gilt_read'),
+                                                             'gilt_scanned_at': _uk.get('scanned_at')})
             lens = _lens.analog_lens(matches, regional, backtest)
         except Exception as e:
             print(f'[Market BlackSwan] lens error (non-fatal): {e}')

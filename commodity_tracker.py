@@ -2549,6 +2549,32 @@ COUNTRY_COMMODITY_EXPOSURE = {
                          'regime_flags': ['sanctions_evasion_active'],
                          'note': "🥇 DUBAI DIAMOND EXCHANGE (DDE) — the world's third-largest diamond trading hub behind Antwerp + Mumbai/Surat. ~$30-40B annual diamond trade through DMCC. STRATEGIC ROLE POST-G7-SANCTIONS: UAE has become the primary routing alternative for Russian-origin rough diamonds since March 2024 — Russian rough increasingly mixes with African + Indian-cut polished at DMCC for re-export as 'mixed-origin', complicating G7 enforcement. UAE-Israel diamond trade tripled post-2020 Abraham Accords (DMCC-IDE Ramat Gan partnership). Watch: DMCC monthly diamond trade volumes, UAE-Russia diamond customs data, US OFAC + EU sanctions enforcement actions on DMCC intermediaries."},
     },
+    # ============================================================
+    # UNITED KINGDOM (added Nov 4, 2026 -- uk-stability.html)
+    # Not a big producer of anything any more. Britain's commodity
+    # weight is WHERE the world prices and insures commodities: the
+    # London Metal Exchange, the LBMA gold market and the Bank of
+    # England vaults, ICE Brent, and Lloyd's war/marine cover. Role
+    # 'pricing_hub' is new and is described in the prose builder.
+    # ============================================================
+    'uk': {
+        'copper':       {'role': 'pricing_hub', 'weight': 1.0, 'data_as_of': '2026-11',
+                         'note': "The London Metal Exchange sets the world's reference price for copper, aluminium, nickel and zinc, and its warehouse network decides what metal is deliverable. Since April 2024 the LME has refused new Russian-origin metal (UK/US sanctions) -- London's rules, not a mine, decide what counts as clean supply. Watch: LME warehouse stocks and cancelled warrants, any trading suspension, rule changes on Russian or Chinese metal."},
+        'nickel':       {'role': 'pricing_hub', 'weight': 0.8, 'data_as_of': '2026-11',
+                         'note': "The March 2022 nickel squeeze -- prices doubled in a day and the LME cancelled trades -- showed that a disorderly London market can freeze a whole metal worldwide. Indonesia now dominates supply; London still sets the price. Watch: LME nickel volumes migrating to Shanghai, position limits, another suspension."},
+        'zinc':         {'role': 'pricing_hub', 'weight': 0.5, 'data_as_of': '2026-11',
+                         'note': "Priced on the LME. Low LME stocks have produced periodic squeezes. Watch: warehouse stocks and any repeat of tight-market interventions."},
+        'gold':         {'role': 'pricing_hub', 'weight': 1.2, 'data_as_of': '2026-11',
+                         'note': "London is the world's largest gold trading centre (LBMA) and the Bank of England vaults hold several thousand tonnes for central banks. Venezuela's frozen bars in the Bank of England are the clearest case of London's vaults as a foreign-policy tool. Watch: central-bank gold moving OUT of London (a sign of sanctions fear), LBMA rule changes, the Venezuelan gold case."},
+        'silver':       {'role': 'pricing_hub', 'weight': 0.6, 'data_as_of': '2026-11',
+                         'note': "Priced and vaulted through the LBMA in London. Watch: London vault stocks and lease rates -- a squeeze shows up here first."},
+        'oil':          {'role': 'producer_consumer', 'weight': 0.9, 'data_as_of': '2026-11',
+                         'note': "North Sea output is in long decline and Britain now imports more oil than it produces -- but Brent, the benchmark most of the world's crude is priced against, trades in London on ICE, and Lloyd's writes much of the world's tanker war-risk cover. The shadow fleet carrying Russian oil exists because it sails without that cover. Watch: North Sea licensing and windfall-tax politics, Brent's role, Lloyd's war-risk listings."},
+        'natural_gas':  {'role': 'consumer',    'weight': 1.0, 'data_as_of': '2026-11',
+                         'note': "Gas still heats most British homes and sets the electricity price. Supply comes from Norway by pipeline, falling North Sea output and LNG (US and Qatar), with little storage -- so Britain feels a European gas squeeze quickly. The NBP hub in Britain is a European price reference. Watch: Norwegian pipeline outages, LNG cargoes, the price cap, storage levels in winter."},
+        'wheat':        {'role': 'producer',    'weight': 0.4, 'data_as_of': '2026-11',
+                         'note': "A mid-sized wheat producer (about 14 Mt in a normal year) and broadly self-sufficient; a wet harvest turns Britain into an importer. Not a world price-mover. Watch: harvest quality and weather."},
+    },
     'ukraine': {
         'iron_ore':     {'role': 'producer', 'weight': 0.8, 'data_as_of': '2026-06',
                          'note': "Historically a top-5 iron-ore exporter (Kryvyi Rih); output + Black Sea export logistics constrained by the war. A swing European supply variable."},
@@ -4830,7 +4856,7 @@ def _run_full_scan(days=7):
         # wins over sanctions_target wins over mediator (descending strategic
         # weight). Highest individual weight breaks ties.
         commodity_breakdown = {}
-        ROLE_PRIORITY = {'producer': 5, 'component_producer': 4.5, 'consumer': 4, 'transit': 3,
+        ROLE_PRIORITY = {'producer': 5, 'component_producer': 4.5, 'consumer': 4, 'pricing_hub': 3.5, 'transit': 3,
                          'sanctions_target': 2, 'mediator': 1}
         for commodity_id in COUNTRY_COMMODITY_EXPOSURE[cid].keys():
             commodity_sigs = [s for s in sigs if s['commodity'] == commodity_id]
@@ -5142,6 +5168,7 @@ def _build_country_prose(target):
     component_items = []
     consumer_items = []
     transit_items  = []
+    hub_items      = []      # Nov 4 2026: 'pricing_hub' (the UK -- LME, LBMA, ICE Brent, Lloyd's)
     for cid, role_name, role_data in _iter_country_exposures(target):
         rank = role_data.get('rank')
         label = cid.replace('_', ' ')
@@ -5155,9 +5182,11 @@ def _build_country_prose(target):
             consumer_items.append(label)
         elif role_name == 'transit':
             transit_items.append(label)
+        elif role_name == 'pricing_hub':
+            hub_items.append(label)
 
     parts = []
-    target_name = target.replace('_', ' ').title()
+    target_name = _COUNTRY_LABEL_OVERRIDES.get(target, target.replace('_', ' ').title())
 
     # Producer sentence
     if producer_items:
@@ -5183,6 +5212,11 @@ def _build_country_prose(target):
         connector = "It is also" if (producer_items or component_items or consumer_items) else f"{target_name} is"
         parts.append(f"{connector} a critical transit point for {_natural_join(transit_items)}.")
 
+    # Pricing-hub sentence (Nov 4 2026)
+    if hub_items:
+        connector = "It is also" if (producer_items or component_items or consumer_items or transit_items) else f"{target_name} is"
+        parts.append(f"{connector} where the world prices, trades or insures {_natural_join(hub_items)}.")
+
     # Country-specific strategic appendix (the "why this matters" sentence)
     appendix = _country_strategic_appendix(target, profile)
     if appendix:
@@ -5198,6 +5232,12 @@ def _country_strategic_appendix(target, profile):
     Returns empty string if no special context applies.
     """
     appendices = {
+        'uk': (
+            "Britain's commodity power is not in the ground: it is the London Metal Exchange, "
+            "the LBMA gold market and Bank of England vaults, ICE Brent and Lloyd's war-risk "
+            "cover. Rules made in London -- the LME's ban on new Russian metal, Lloyd's listing "
+            "a sea as a war zone -- move supply and shipping worldwide before any government does."
+        ),
         'iran': (
             "Iran's primary commodity leverage is the Strait of Hormuz, through which "
             "approximately 20% of global oil transit passes. Its wheat dependency creates "
@@ -5644,7 +5684,7 @@ def _is_hard_commodity_signal(sig):
 _COMMODITY_BLUF_LEVEL = {'surge': 5, 'high': 4, 'elevated': 3, 'normal': 0}
 _COMMODITY_BLUF_COLOR = {5: '#dc2626', 4: '#f97316', 3: '#f59e0b', 0: '#6b7280'}
 
-_COUNTRY_LABEL_OVERRIDES = {'usa': 'USA', 'uae': 'UAE', 'eu': 'EU', 'uk': 'UK', 'drc': 'DRC'}
+_COUNTRY_LABEL_OVERRIDES = {'usa': 'USA', 'uae': 'UAE', 'eu': 'EU', 'uk': 'UK', 'drc': 'DRC'}   # also read by _build_country_prose (Nov 4 2026)
 def _commodity_country_label(cid):
     c = str(cid).strip().lower()
     return _COUNTRY_LABEL_OVERRIDES.get(c, c.replace('_', ' ').title())
