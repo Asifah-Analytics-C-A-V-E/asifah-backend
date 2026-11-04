@@ -277,7 +277,7 @@ REGIONAL_THEATRES = {
         'label': 'European Theatre',
         'icon': '🌍',
         'order': 2,
-        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary', 'kazakhstan', 'belarus', 'moldova'],
+        'actors': ['nato', 'russia', 'denmark', 'turkey', 'greece', 'ukraine', 'greenland', 'poland', 'cyprus', 'azerbaijan', 'armenia', 'hungary', 'kazakhstan', 'belarus', 'moldova', 'uk'],
         'description': 'EUCOM area — NATO, Russia, Arctic, Black Sea, Ukraine, Poland eastern flank, Greece/Aegean, Cyprus, Caucasus'
     },
     'middle_east': {
@@ -1990,6 +1990,38 @@ MILITARY_ACTORS = {
             'belarus airspace', 'belarus hybrid', 'lukashenko threatens',
         ]
     },
+    # v3.18 (Nov 4 2026): United Kingdom. Europe's uk-card reads this actor
+    # (MILITARY_BOOST_TARGETS); without it the card would read 'normal' on
+    # no evidence. Keywords are deliberately British-specific phrases -- bare
+    # 'uk' would match 'ukraine' and 'raf' would match 'rafah'.
+    'uk': {
+        'name': 'United Kingdom',
+        'flag': '🇬🇧',
+        'tier': 2,
+        'theatre': 'europe',
+        'weight': 0.6,
+        'feeds_into': ['regional_tension'],
+        'keywords': [
+            'royal navy', 'british army', 'royal air force', 'royal marines',
+            'british armed forces', 'uk armed forces', 'uk ministry of defence',
+            'british military', 'british troops', 'british warship', 'hms ',
+            'uk carrier strike group', 'hms prince of wales', 'hms queen elizabeth',
+            'uk defence spending', 'uk defence review', 'strategic defence review',
+            'trident', 'faslane', 'uk nuclear deterrent', 'british submarine',
+            'raf akrotiri', 'british forces cyprus', 'raf typhoon', 'raf lossiemouth',
+            'falklands garrison', 'british forces south atlantic', 'mount pleasant falklands',
+            'hms forth', 'diego garcia', 'british indian ocean territory',
+            'gibraltar naval', 'hms gibraltar', 'british troops estonia',
+            'british troops ukraine', 'uk-led coalition of the willing',
+            'aukus submarine', 'aukus pillar', 'storm shadow',
+            'russian ship english channel', 'russian submarine uk waters',
+            'russian spy ship uk', 'yantar', 'uk undersea cable',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=%22royal+navy%22+OR+%22british+army%22+OR+%22royal+air+force%22+OR+%22uk+defence%22&hl=en-GB&gl=GB&ceid=GB:en',
+        ]
+    },
+
     'moldova': {
         'name': 'Moldova',
         'flag': '🇲🇩',
@@ -5196,7 +5228,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.17.1'   # Nov 3 2026: theatre level = hottest actor (was summed score -> everything surged); Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
+MILITARY_TRACKER_VERSION = '3.18.0'   # Nov 4 2026: UK actor; Arctic + Magellan watched; NWP/NSR/Drake/Cape Horn terms; red_sea_arctic pair. (3.17.1) Nov 3 2026: theatre level = hottest actor (was summed score -> everything surged); Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -5456,10 +5488,14 @@ CHOKEPOINT_LOCATION_MAP = {
     # v3.17: bare 'colon' matched medical reporting; the port is named in full
     'panama_canal':   ['panama canal', 'miraflores locks', 'colon free zone', 'port of colon',
                        'gatun', 'canal de panama'],
-    'magellan':       ['strait of magellan', 'magellan', 'punta arenas', 'tierra del fuego'],
+    # v3.18: the Antarctic gateway's other two doors (polar_gateways.py reads this id)
+    'magellan':       ['strait of magellan', 'magellan', 'punta arenas', 'tierra del fuego',
+                       'drake passage', 'cape horn', 'beagle channel', 'ushuaia port'],
     'baltic':         ['baltic sea', 'kaliningrad', 'gulf of finland', 'gotland'],
     'arctic':         ['arctic', 'svalbard', 'barents sea', 'beaufort sea',
-                       'greenland sea', 'thule', 'pituffik'],
+                       'greenland sea', 'thule', 'pituffik',
+                       # v3.18: the two Arctic sea lanes by name
+                       'northwest passage', 'northern sea route', 'murmansk naval'],
     'bering_strait':  ['bering strait', 'bering sea', 'diomede islands', 'chukchi sea'],
     'black_sea':      ['black sea', 'sevastopol', 'crimea naval', 'odesa naval', 'odessa naval',
                        # v3.16
@@ -5476,7 +5512,10 @@ CHOKEPOINT_LOCATION_MAP = {
 WATCHED_CHOKEPOINTS = ['hormuz', 'bab_el_mandeb', 'black_sea', 'bosporus', 'baltic',
                        'taiwan_strait', 'luzon_strait', 'south_china_sea',
                        # v3.17 (Nov 3 2026): the Western Hemisphere's two watched waters
-                       'panama_canal', 'caribbean']
+                       'panama_canal', 'caribbean',
+                       # v3.18 (Nov 4 2026): the polar gateways. Listed even at
+                       # zero signals so the page says 'open', not nothing.
+                       'arctic', 'magellan']
 
 # Reverse-lookup: location-keyword → chokepoint_id (built once at import time)
 _LOCATION_TO_CHOKEPOINT = {}
@@ -5592,6 +5631,16 @@ CHOKEPOINT_CONVERGENCE_PAIRS = {
         'min_level':    'contested',
         'rationale':    'Russia-Ukraine grain corridor + Turkish straits. '
                         'Joint disruption = NATO Article-V watch.',
+    },
+    # v3.18: the Arctic is the Suez backup. Red Sea contested while Arctic
+    # waters are contested = the reroute argument is no longer theoretical.
+    'red_sea_arctic':      {
+        'chokepoints':  ['bab_el_mandeb', 'arctic'],
+        'min_level':    'contested',
+        'rationale':    'Suez-backup coupling -- Red Sea contested while '
+                        'Arctic waters are contested. The Northern Sea Route '
+                        'pitch stops being a brochure; whoever polices the '
+                        'Arctic lanes gains leverage over Asia-Europe trade.',
     },
     'panama_magellan':     {
         'chokepoints':  ['panama_canal', 'magellan'],
