@@ -43,7 +43,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 
 import re
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'   # Nov 3 2026: plain words for every state, for sentences not labels
 AS_OF = '2026-11-03'
 RESEARCH_BASIS = 'Claude research, Nov 3 2026 -- approximate figures, verify'
 
@@ -86,16 +86,48 @@ COMMODITY_LEVEL_MEANING = {
 }
 
 FRAGILITY_BAND_MEANING = {
-    'normal': ('Few of the conditions that came before past market collapses are present. '
-               'The forest is not unusually dry.'),
-    'elevated': ('Several conditions that came before past market collapses are present at '
-                 'once. Not a warning of a crash; a market with less room to absorb a shock.'),
-    'high': ('Many pre-collapse conditions at once. Historically this is where shocks '
-             'travelled further than their size justified.'),
-    'critical': ('Most pre-collapse conditions at once. The rarest band; in the past it has '
-                 'appeared ahead of the largest drawdowns, and also in years when nothing '
-                 'broke.'),
+    'normal': ('Markets are not unusually exposed: the forest is not especially dry.'),
+    'elevated': ('Markets have less room than usual to absorb a shock. That is not a warning of a crash; '
+                 'it means a war, default or policy mistake would travel further than its size alone justifies.'),
+    'high': ('Markets are clearly exposed. In the past, readings like this were where shocks travelled much '
+             'further than their size justified -- and also years when nothing broke.'),
+    'critical': ('Markets are as exposed as this reading gets. It has appeared ahead of the largest drawdowns '
+                 'in the record, and also in years when nothing broke.'),
 }
+
+
+# Plain words for states, used INSIDE sentences (v1.1.0). A reader should never
+# see an internal label such as "offramp_market_mixed" or "SURGE".
+ACTOR_LEVEL_WORDS = {'normal': 'routine', 'elevated': 'above normal', 'high': 'heavy',
+                     'surge': 'very heavy'}
+COMMODITY_LEVEL_WORDS = {'normal': 'routine', 'monitor': 'slightly busy', 'elevated': 'above normal',
+                         'high': 'heavy', 'surge': 'very heavy'}
+CHOKEPOINT_STATE_SENTENCE = {
+    'monitored': 'is drawing more reporting than usual, but nothing in it describes attacks, seizures or closures',
+    'contested': 'is contested: reporting describes confrontation around shipping, but ships are still getting through',
+    'disrupted': 'is disrupted: reporting describes ships being attacked, seized or turned away',
+}
+REPRICING_STATE_SHORT = {
+    'offramp_corroborated': 'the markets are pricing the peace track as one that will hold',
+    'offramp_contradicted': 'the markets are refusing to price the peace track -- they are moving as if the fighting will go on',
+    'offramp_market_mixed': 'the markets have not made up their minds about the peace track: some gauges lean one way, some the other',
+    'escalation_repricing': 'with no peace track on the table, the markets are pricing a widening war',
+    'calm_repricing': 'the markets are calmer than the diplomacy, pricing less war risk with no formal peace track',
+    'no_read': 'the market gauges did not move together, so there is no verdict this time',
+    'insufficient_data': 'there was not enough live market data to read',
+    'numb': 'a provocation came and the markets did not react at all',
+    'market_alert': 'a provocation came and the markets reacted together -- they treated it as a real change',
+    'partial_flinch': 'a provocation came and some markets flinched, but not all',
+    'unattributed_move': 'the markets moved, but nothing in the reporting explains why',
+    'quiet': 'nothing happened and the markets did not move',
+    'rhetoric_pending': 'there is no reading this time: the rhetoric feed the markets are compared against was not available (missing, not calm)',
+}
+REPRICING_LEAD = {'israel': 'For Israel and the US-Iran peace track',
+                  'europe_ukraine': 'For Europe and a Russia-Ukraine settlement',
+                  'korea': 'For South Korea and North Korean provocations'}
+REGION_PLAIN = {'middle_east': 'the Middle East', 'asia_pacific': 'Asia and the Pacific',
+                'europe': 'Europe', 'africa': 'Africa', 'western_hemisphere': 'the Americas',
+                'global_northcom': 'US forces worldwide'}
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -182,6 +214,12 @@ TERMS = {
         'global': '',
         'economy': ('An analog tells you what the chain of events was last time and how '
                     'long it took. It does not tell you that the chain will run again.'),
+    },
+    'military_reporting': {
+        'name': 'Military activity by region',
+        'plain': ('This reads how much serious reporting there is about each country\'s forces -- '
+                  'deployments, exercises, strikes, ship movements. It measures reporting, not a count of battles.'),
+        'local': '', 'regional': '', 'global': '', 'economy': '',
     },
     'standing_watch': {
         'name': 'Standing watch',
@@ -385,8 +423,8 @@ CHOKEPOINTS = {
     },
     'baltic': {
         'name': 'Baltic Sea approaches',
-        'plain': ('The narrow Danish straits leading into the Baltic, ringed by NATO members '
-                  'and Russia\'s St Petersburg and Kaliningrad.'),
+        'plain': ('The way into the Baltic through the narrow Danish straits, a sea ringed by NATO '
+                  'members and Russia\'s St Petersburg and Kaliningrad.'),
         'local': ('Russia exports oil from its Baltic ports, much of it on ageing tankers '
                   'outside Western insurance (the "shadow fleet").'),
         'regional': ('Undersea cables and pipelines between NATO states have been damaged '
@@ -442,7 +480,7 @@ CHOKEPOINTS = {
     },
     'caribbean': {
         'name': 'Caribbean Basin / Florida Straits',
-        'plain': ('The waters between the US, Cuba, Venezuela, Colombia and Central America, '
+        'plain': ('The stretch of sea between the US, Cuba, Venezuela, Colombia and Central America, '
                   'carrying US Gulf energy exports and the approaches to the Panama Canal.'),
         'local': ('US naval and counter-narcotics operations, Venezuela and Cuba make it the '
                   'most militarised water in the Americas.'),

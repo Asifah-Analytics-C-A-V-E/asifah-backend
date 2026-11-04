@@ -5196,7 +5196,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.17.0'   # Nov 3 2026: Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
+MILITARY_TRACKER_VERSION = '3.17.1'   # Nov 3 2026: theatre level = hottest actor (was summed score -> everything surged); Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -10388,6 +10388,17 @@ def _run_full_scan(days=7):
                 theatre_actors[actor_id] = actor_summaries[actor_id]
                 theatre_total_score += actor_summaries[actor_id]['total_score']
 
+        # v3.17.1 (Nov 3 2026): a theatre's level used to be the ACTOR threshold
+        # applied to the SUM of every actor's score -- so a theatre with 15
+        # actors read 'surge' on an ordinary day (four theatres at surge at
+        # once on Nov 3). A region is now as hot as its hottest actor, raised
+        # one step only when three or more actors sit at that same level.
+        _rank = {'normal': 0, 'elevated': 1, 'high': 2, 'surge': 3}
+        _names = ['normal', 'elevated', 'high', 'surge']
+        _lv = [_rank.get(a.get('alert_level'), 0) for a in theatre_actors.values()]
+        _top = max(_lv) if _lv else 0
+        _n_top = sum(1 for x in _lv if x == _top)
+        _theatre_rank = min(3, _top + 1) if (_top >= 1 and _n_top >= 3) else _top
         theatre_data[theatre_id] = {
             'label': theatre_info['label'],
             'icon': theatre_info['icon'],
@@ -10395,7 +10406,10 @@ def _run_full_scan(days=7):
             'description': theatre_info['description'],
             'actors': theatre_actors,
             'total_score': round(theatre_total_score, 2),
-            'alert_level': determine_alert_level(theatre_total_score)
+            'alert_level': _names[_theatre_rank],
+            'alert_level_basis': ('hottest actor%s' % (' + %d actors at that level' % _n_top
+                                                       if _theatre_rank > _top else '')),
+            'summed_score_level': determine_alert_level(theatre_total_score),   # the old reading, for comparison
         }
 
     scan_time = round(time.time() - scan_start, 1)

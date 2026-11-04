@@ -51,6 +51,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
 import os
+import re
 import json
 import time
 import hashlib
@@ -61,8 +62,8 @@ import requests
 
 import tracker_meanings as M
 
-__version__ = '1.0.0'
-PROMPT_VERSION = 'tracker-v1'          # part of the fingerprint: a prompt upgrade rewrites once
+__version__ = '1.1.0'   # Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
+PROMPT_VERSION = 'tracker-v2'          # part of the fingerprint: a prompt upgrade rewrites once
 
 DESKS = ('military', 'commodities', 'market')
 DESK_NAMES = {'military': 'Military Posture', 'commodities': 'Commodity Pressure',
@@ -263,26 +264,35 @@ def pack_military(cache):
             t['plain'], _altitudes(t), [], facts={'why_this_pair': _txt(cv.get('rationale'), 240)},
             basis='Asifah method definition'))
 
-    # Theatres (elevated+)
-    theatres = []
+    # Regions, grouped (v1.1.0). Four "theatre" rows at surge read as four
+    # alarms; one paragraph naming the hottest actors per region reads as a
+    # picture. The level is taken from the ACTORS (hottest actor), not the
+    # theatre field, which summed every actor's score before tracker v3.17.1.
+    theatres, region_lines, ev = [], [], []
+    top_rank = 0
     for tid, th in _d(cache.get('theatre_groupings')).items():
         th = _d(th)
-        lvl = th.get('alert_level', 'normal')
-        hot = sorted(((a, _d(ad).get('alert_level', 'normal')) for a, ad in _d(th.get('actors')).items()
+        acts = _d(th.get('actors'))
+        hot = sorted(((a, _d(ad).get('alert_level', 'normal')) for a, ad in acts.items()
                       if _TH_RANK.get(_d(ad).get('alert_level'), 0) >= 1),
-                     key=lambda x: -_TH_RANK.get(x[1], 0))
-        theatres.append({'theatre': th.get('label') or tid, 'level': lvl,
-                         'level_words': M.THEATRE_LEVEL_MEANING.get(lvl, ''),
-                         'actors_above_baseline': ['%s (%s)' % (_d(_d(th.get('actors')).get(a)).get('name') or a, l)
-                                                   for a, l in hot[:5]]})
-        if _TH_RANK.get(lvl, 0) >= 1:
-            ev = []
-            for a, _lv in hot[:3]:
-                ev += _titles(_d(_d(th.get('actors')).get(a)).get('top_signals'), 1)
-            items.append(_item('theatre', tid, th.get('label') or tid, lvl,
-                               M.THEATRE_LEVEL_MEANING.get(lvl, ''),
-                               'Region-wide military activity as read from defence reporting.',
-                               {}, ev[:3], basis='Asifah method definition'))
+                     key=lambda x: (-_TH_RANK.get(x[1], 0), -(_d(acts.get(x[0])).get('total_score') or 0)))
+        lvl = hot[0][1] if hot else 'normal'
+        names = ['%s (%s)' % (_d(acts.get(a)).get('name') or a, M.ACTOR_LEVEL_WORDS.get(l, l)) for a, l in hot[:4]]
+        theatres.append({'region': th.get('label') or tid, 'hottest_actor_level': lvl,
+                         'actors_above_baseline': names})
+        if hot:
+            top_rank = max(top_rank, _TH_RANK.get(lvl, 0))
+            region_lines.append({'region': M.REGION_PLAIN.get(tid, th.get('label') or tid),
+                                 'actors': names, 'level': lvl})
+            for a, _lv in hot[:1]:
+                ev += _titles(_d(acts.get(a)).get('top_signals'), 1)
+    if region_lines:
+        region_lines.sort(key=lambda r: -_TH_RANK.get(r['level'], 0))
+        top = ['normal', 'elevated', 'high', 'surge'][top_rank]
+        items.append(_item('regions', 'all', 'Military activity by region', top,
+                           M.ACTOR_LEVEL_WORDS.get(top, top),
+                           M.TERMS['military_reporting']['plain'], {}, ev[:4],
+                           facts={'regions': region_lines}, basis='Asifah method definition'))
 
     # Evacuations
     evac = _l(cache.get('evacuation_alerts'))
@@ -340,33 +350,43 @@ def pack_commodities(cache):
         mean = M.registry_meaning(entry)
         fresh = c.get('fresh', True)
         state = 'firing' if fresh else 'standing_watch'
+        cm, ct = entry.get('commodity') or c.get('commodity'), entry.get('country') or c.get('country')
+        nice = mean['name']
+        if cm and ct and cid == '%s_%s' % (cm, ct):
+            nice = '%s supply to %s' % (M.humanise_id(cm), M.humanise_id(ct))
+        else:
+            nice = nice[:1] + nice[1:].lower()
         items.append(_item(
-            'convergence', cid, mean['name'], state,
+            'convergence', cid, nice, state,
             ('coupled trigger confirmed this cycle' if fresh else
              'structural exposure present, coupled trigger not confirmed (%s)' % (c.get('trigger_state') or 'unconfirmed')),
             mean['plain'], {}, [_txt(c.get('headline'), 200)] if c.get('headline') else [],
             facts=dict(mean['facts'], **({'watch': mean['watch']} if mean['watch'] else {})),
             basis=mean['basis'],
             extra={'commodity_level': c.get('alert_level'), 'regions': mean['regions'],
+                   'commodity_name': M.humanise_id(cm) if cm else None,
+                   'country_name': M.humanise_id(ct) if ct and ct != 'global' else None,
                    'not_implied': mean['not_implied'],
                    'standing_note': (M.TERMS['standing_watch']['plain'] if not fresh else '')}))
 
-    hot = sorted(((k, _d(v)) for k, v in cs.items() if _CM_RANK.get(_d(v).get('alert_level'), 0) >= 2),
+    # Commodities under pressure, grouped (v1.1.0): seven rows of "SURGE /
+    # HIGH" chips is a list, not a read. One item names them in order, with
+    # the loudest headline for the top three.
+    hot = sorted(((k, _d(v)) for k, v in cs.items() if _CM_RANK.get(_d(v).get('alert_level'), 0) >= 3),
                  key=lambda kv: (-_CM_RANK.get(kv[1].get('alert_level'), 0), -(kv[1].get('total_score') or 0)))
+    elevated = [(_d(v).get('name') or k) for k, v in cs.items() if _CM_RANK.get(_d(v).get('alert_level'), 0) == 2]
     t = M.TERMS['commodity_pressure']
-    for k, v in hot[:MAX_ITEMS - len(items)]:
-        prods = [p if isinstance(p, str) else _d(p).get('country') for p in _l(v.get('top_producers'))[:3]]
-        cons = [p if isinstance(p, str) else _d(p).get('country') for p in _l(v.get('top_consumers'))[:3]]
+    if hot:
+        rows = []
+        for k, v in hot[:10]:
+            rows.append({'commodity': v.get('name') or k, 'level': M.COMMODITY_LEVEL_WORDS.get(v.get('alert_level'), v.get('alert_level')),
+                         'loudest_headline': (_titles(v.get('top_signals'), 1) or [''])[0] if len(rows) < 3 else ''})
         items.append(_item(
-            'commodity', k, v.get('name') or k, v.get('alert_level'),
-            M.COMMODITY_LEVEL_MEANING.get(v.get('alert_level'), ''),
-            _txt(v.get('description'), 220) or t['plain'], {'economy': t['economy']},
-            _titles(v.get('top_signals')),
-            facts={'top_producers': [M.humanise_id(p) for p in prods if p],
-                   'top_consumers': [M.humanise_id(p) for p in cons if p],
-                   'chokepoints': [M.humanise_id(x) for x in _l(v.get('chokepoints'))[:3]],
-                   'domestic_price_stress': v.get('domestic_price_stress')},
-            basis='commodity tracker registry'))
+            'commodities', 'pressure', 'Commodities under heavy news pressure', hot[0][1].get('alert_level'),
+            M.COMMODITY_LEVEL_MEANING.get(hot[0][1].get('alert_level'), ''), t['plain'],
+            {'economy': t['economy']}, [r['loudest_headline'] for r in rows if r['loudest_headline']],
+            facts={'commodities': rows, 'also_above_normal': elevated[:8]},
+            basis='commodity tracker'))
 
     countries = sorted(((k, _d(v)) for k, v in _d(cache.get('country_summaries')).items()
                         if _CM_RANK.get(_d(v).get('alert_level'), 0) >= 2),
@@ -465,9 +485,8 @@ def pack_market(sources):
             continue
         state = p.get('state')
         mean = M.repricing_meaning(th, state)
-        gauges = ['%s: %s (%s)' % (i.get('name'), i.get('vote'),
-                                   ('%+.1f%%' % i['change_pct']) if isinstance(i.get('change_pct'), (int, float)) else 'n/a')
-                  for i in _l(p.get('instruments'))]
+        gauges = ['%s %s %.1f%%' % (i.get('name'), 'up' if i['change_pct'] >= 0 else 'down', abs(i['change_pct']))
+                  for i in _l(p.get('instruments')) if isinstance(i.get('change_pct'), (int, float))]
         off = _d(p.get('offramp'))
         rep.append(th)
         items.append(_item(
@@ -594,6 +613,13 @@ FRESHNESS -- THE MOST IMPORTANT RULE
 - Never write "rising", "escalating", "tightening" or "worsening" unless an item is new with a "previous_state" lower than its state.
 - If nothing is new, say so plainly in the headline. That is a finding.
 
+HOW IT MUST READ (Rachel, Nov 3: "full sentences, in a natural voice, telling the reader what they are seeing")
+- Write like a sharp colleague briefing a smart friend over coffee: whole sentences, plain words, a natural rhythm. Never a list of labels.
+- Never show an internal state word as a label or in capitals: "surge", "contested", "standing_watch", "firing", "offramp_market_mixed", "rhetoric_pending", "pattern_match", "theatre". Say what each means ("reporting describes confrontation around ships, but they are still getting through"; "the markets have not made up their minds").
+- Every "what_it_means" opens with the thing itself and what is happening to it today, then why that matters. No sentence fragments, no colons used as bullets.
+- Grouped items ("Military activity by region", "Commodities under heavy news pressure") are one paragraph each: name the leaders, say what the grouping shows, do not list every member.
+- Lead the read with what matters most to someone outside the field: a shipping lane, fuel, food, money, a war.
+
 THE MEANING LAYER (this page's purpose)
 - For EACH item in "items_to_explain", write an entry in "items" with its exact "id". "what_it_means" is 1-2 sentences: what this reading means TODAY, given its state and evidence -- not a dictionary definition. Then one sentence each for "local" (the country, waterway or market itself), "regional" (neighbours and the region), "global" (the wider world and great-power politics) and "economy" (prices, trade, money, borrowing).
 - Build these from the item's "meaning_basis", "facts" and "evidence". The meaning_basis describes the STRUCTURE (what flows through a strait, who depends on it); combine it with the CURRENT state. Example of the move: a contested strait = structure ("a fifth of the world's oil passes here") + state ("reporting describes boardings, but ships are still passing") -> meaning ("the risk is being priced into insurance and freight; supply has not stopped").
@@ -684,6 +710,171 @@ def make_validator(allowed_ids):
 # ════════════════════════════════════════════════════════════════════════
 # EXPLAINERS -- the deterministic, always-on layer
 # ════════════════════════════════════════════════════════════════════════
+def _join(xs):
+    xs = [x for x in xs if x]
+    if len(xs) <= 1:
+        return ''.join(xs)
+    return ', '.join(xs[:-1]) + ' and ' + xs[-1]
+
+
+def _first_sentence(t):
+    t = ' '.join(str(t or '').split())
+    m = re.search(r'(?<=[.!?])\s', t)
+    return t[:m.start()] if m else t
+
+
+def _lc(t):
+    return (t[:1].lower() + t[1:]) if t else t
+
+
+def _bare(name):
+    return str(name or '').split(' (')[0]
+
+
+def item_sentence(it):
+    """2-4 plain sentences for one lit item, from Asifah's own notes. This is
+    the always-on read; the AI's what_it_means replaces it when written."""
+    kind, name, state = it.get('kind'), it.get('name') or '', it.get('state') or ''
+    mb, f, ev = _d(it.get('meaning_basis')), _d(it.get('facts')), _l(it.get('evidence'))
+    try:
+        if kind == 'chokepoint':
+            short = name.split(' /')[0]
+            short = short if short.lower().startswith('the ') else 'The ' + short
+            parts = ['%s %s.' % (short, M.CHOKEPOINT_STATE_SENTENCE.get(state, 'is being watched'))]
+            if ev:
+                parts.append('Recent reporting: \u201c%s.\u201d' % _bare(ev[0]).split(' - ')[0].rstrip('.'))
+            pl = mb.get('plain', '')
+            if pl:
+                parts.append('This is ' + _lc(pl) if pl.split(' ')[0] in ('The', 'A', 'An') or pl.startswith("Egypt") else pl)
+            if state != 'monitored' and mb.get('economy'):
+                parts.append(mb['economy'])
+            return ' '.join(p for p in parts if p)
+        if kind == 'pair':
+            return ('Two linked sea passages are under pressure at the same time: %s. %s %s'
+                    % (name, mb.get('plain', ''), f.get('why_this_pair', ''))).strip()
+        if kind == 'regions':
+            bits = []
+            for r in _l(f.get('regions'))[:5]:
+                acts = [_bare(a) for a in _l(r.get('actors'))[:3]]
+                bits.append('%s in %s (%s)' % (M.ACTOR_LEVEL_WORDS.get(r.get('level'), r.get('level')),
+                                               r.get('region'), _join(acts)))
+            return ('Military reporting is %s. %s' % ('; '.join(bits), mb.get('plain', ''))).strip()
+        if kind == 'neo':
+            return ('Governments are moving people out: %s, involving %s. %s'
+                    % (it.get('level_words'), _join(_l(f.get('actors'))[:4]) or 'several governments',
+                       mb.get('plain', ''))).strip()
+        if kind == 'commodities':
+            rows = _l(f.get('commodities'))
+            named = ['%s (%s)' % (r.get('commodity'), r.get('level')) for r in rows[:7]]
+            out = '%d commodit%s drawing heavy, serious news coverage: %s.' % (
+                len(rows), 'y is' if len(rows) == 1 else 'ies are', _join(named))
+            loud = [r for r in rows if r.get('loudest_headline')]
+            if loud:
+                out += ' The loudest story, on %s: \u201c%s.\u201d' % (
+                    _lc(loud[0]['commodity']), _bare(loud[0]['loudest_headline']).split(' - ')[0].rstrip('.'))
+            out += ' This measures how much reporting there is, not prices; check the price lines before reading it as a shortage.'
+            return out
+        if kind == 'convergence':
+            cm, ct = it.get('commodity_name'), it.get('country_name')
+            if state == 'firing':
+                lead = ('%s is active: %s is under heavy pressure and the trigger in %s it depends on has been '
+                        'confirmed.' % (name, _lc(cm) if cm else 'the commodity', ct) if ct else
+                        '%s is active: the commodity is under heavy pressure and its trigger has been confirmed.' % name)
+            else:
+                lead = ('%s is a standing exposure: it is always there, and it is shown so you know it exists, '
+                        'not because anything new happened.' % name)
+            tail = mb.get('plain', '')
+            facts_txt = [str(v) for k, v in f.items()
+                         if k not in ('watch', 'measurement') and isinstance(v, str) and len(v) < 160][:2]
+            out = ' '.join(x for x in (lead, (tail[:1].upper() + tail[1:]) if tail else '') if x)
+            if facts_txt and len(out) < 300:
+                out += ' Key facts: ' + '; '.join(facts_txt) + '.'
+            return out
+        if kind == 'fragility':
+            cond = [c.get('condition') for c in _l(f.get('conditions_present_now')) if c.get('condition')]
+            n = len(cond)
+            out = ('Market fragility is %s: %d of the ten warning signs seen before past market crashes %s '
+                   'present in US markets now.' % (state, n, 'is' if n == 1 else 'are'))
+            if cond:
+                out += ' Among them: ' + _lc(cond[0].rstrip('.')) + '.'
+            out += ' ' + M.FRAGILITY_BAND_MEANING.get(state, '')
+            return out
+        if kind == 'analog':
+            out = ('Today\'s US market conditions share %s%% of their warning signs with the months before the %s (%s).'
+                   % (f.get('similarity_pct'), name, _month_words(f.get('event_month'))))
+            if f.get('what_the_match_is_not'):
+                out += ' ' + _first_sentence(f['what_the_match_is_not'])
+            if f.get('interval_then'):
+                out += ' Back then: ' + _lc(_first_sentence(f['interval_then']))
+            return out
+        if kind == 'market_read':
+            out = it.get('level_words') or mb.get('plain', '')
+            if f.get('interval_then'):
+                out += ' In that episode: ' + _lc(_first_sentence(f['interval_then']))
+            return out
+        if kind == 'repricing':
+            out = '%s, %s.' % (M.REPRICING_LEAD.get(it['id'].split(':', 1)[1], name),
+                               M.REPRICING_STATE_SHORT.get(state, words_or(state)))
+            g = _l(f.get('gauges_over_about_a_week'))
+            if g:
+                out += ' Over about a week: %s.' % _join(g)
+            return out
+    except Exception:
+        pass
+    return mb.get('plain', '') or name
+
+
+_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+           'September', 'October', 'November', 'December']
+
+
+def _month_words(ym):
+    try:
+        y, m = str(ym).split('-')[:2]
+        return '%s %s' % (_MONTHS[int(m) - 1], y)
+    except Exception:
+        return str(ym or '')
+
+
+def words_or(state):
+    return str(state or '').replace('_', ' ')
+
+
+def fallback_view(facts):
+    """A GPI-shaped read built only from Asifah's notes -- shown until the AI
+    write-up exists (and whenever it cannot be written)."""
+    items = _l((facts or {}).get('items_to_explain'))
+    if not items:
+        return None
+    desk = facts.get('desk')
+    by = {}
+    for it in items:
+        by.setdefault(it['kind'], []).append(it)
+    if desk == 'military':
+        hot = [i for i in by.get('chokepoint', []) if i['state'] in ('contested', 'disrupted')]
+        regs = _l(_d((by.get('regions') or [{}])[0].get('facts')).get('regions'))
+        head = ('%s %s' % (hot[0]['name'], hot[0]['state']) if hot else 'No major shipping lane contested')
+        if regs:
+            head += '; military reporting heaviest in %s' % _join([r['region'] for r in regs[:2]])
+    elif desk == 'commodities':
+        grp = _l(_d((by.get('commodities') or [{}])[0].get('facts')).get('commodities'))
+        firing = [i['name'] for i in by.get('convergence', []) if i['state'] == 'firing']
+        head = ('%d commodities under heavy news pressure, led by %s' % (len(grp), _join([_lc(g['commodity']) for g in grp[:2]]))
+                if grp else 'No commodity under heavy news pressure')
+        if firing:
+            head += '; %s active' % firing[0]
+    else:
+        fr = (by.get('fragility') or [{}])[0]
+        an = (by.get('analog') or [{}])[0]
+        head = 'Market fragility %s' % (fr.get('state') or 'unread')
+        if an:
+            head += '; closest past pattern %s (%s%%)' % (an.get('name'), _d(an.get('facts')).get('similarity_pct'))
+    s1 = _first_sentence(item_sentence(items[0]))
+    s2 = _first_sentence(item_sentence(items[1])) if len(items) > 1 else ''
+    return {'headline': head[:1].upper() + head[1:], 'so_what': ' '.join(x for x in (s1, s2) if x),
+            'read': '', 'watch': [], 'items': {}}
+
+
 def explainers(facts):
     out = []
     for it in _l((facts or {}).get('items_to_explain')):
@@ -696,6 +887,7 @@ def explainers(facts):
             'global': mb.get('global', ''), 'economy': mb.get('economy', ''),
             'facts': it.get('facts') or {}, 'not_implied': it.get('not_implied') or '',
             'evidence': it.get('evidence') or [], 'basis': it.get('basis'),
+            'sentence': item_sentence(it),
             'verified': it.get('verified', True),
         })
     return out
@@ -819,7 +1011,8 @@ def latest(desk):
     else:
         out['available'] = False
         out['last_error'] = rec.get('last_error')
-        out['note'] = 'No plain-language write-up yet; the explainers below are always on.'
+        out['fallback_view'] = fallback_view(facts)
+        out['note'] = 'No AI write-up yet; fallback_view and the explainers are built from Asifah\'s own notes.'
     return out
 
 
