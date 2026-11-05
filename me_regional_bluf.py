@@ -2552,7 +2552,70 @@ def _build_convergence_panel():
         return None
 
 
+# ── v-SWR (Nov 5 2026): SERVE OLD, REFRESH BEHIND ───────────────────────
+# Before: once the cache expired, the NEXT VISITOR paid for the rebuild (page
+# stuck on LOADING; the GPI's 20s fetch could give up and mark the region
+# UNAVAILABLE). Now the last BLUF is kept 48h; a visitor always gets it at once,
+# a stale one triggers ONE background rebuild, and a timer rebuilds every 2h.
+# ?force=true still rebuilds while you wait (never calls Claude).
+import threading as _swr_threading
+import time as _swr_time
+BLUF_KEEP_TTL = 48 * 3600
+BLUF_TIMER_SEC = 2 * 3600
+_swr_lock = _swr_threading.Lock()
+_swr_timer = {'v': False}
+
+
+def _rebuild_in_background():
+    if not _swr_lock.acquire(blocking=False):
+        return
+    def run():
+        try:
+            _build_fresh_impl(force=True)
+        except Exception as e:
+            print('[ME BLUF] background rebuild failed: %s' % str(e)[:120])
+        finally:
+            _swr_lock.release()
+    _swr_threading.Thread(target=run, daemon=True).start()
+
+
+def _start_timer():
+    if _swr_timer['v']:
+        return
+    _swr_timer['v'] = True
+    def loop():
+        _swr_time.sleep(90)
+        while True:
+            _rebuild_in_background()
+            _swr_time.sleep(BLUF_TIMER_SEC)
+    _swr_threading.Thread(target=loop, daemon=True).start()
+    print('[ME BLUF] background rebuild every %dh' % (BLUF_TIMER_SEC // 3600))
+
+
 def build_regional_bluf(force=False):
+    """A visitor never waits for a rebuild (Nov 5 2026)."""
+    if force:
+        with _swr_lock:
+            return _build_fresh_impl(force=True)
+    cached = _redis_get(BLUF_CACHE_KEY)
+    if cached and cached.get('generated_at') and cached.get('success', True) is not False:
+        try:
+            age = (datetime.now(timezone.utc) -
+                   datetime.fromisoformat(cached['generated_at'])).total_seconds()
+        except Exception:
+            age = None
+        due = cached.get('refresh_after_sec') or BLUF_CACHE_TTL
+        cached['from_cache'] = True
+        cached['age_minutes'] = round(age / 60) if age is not None else None
+        if age is None or age >= due:
+            _rebuild_in_background()
+            cached['refreshing'] = True
+        return cached
+    with _swr_lock:
+        return _build_fresh_impl(force=True)
+
+
+def _build_fresh_impl(force=False):
     """
     Build the ME regional BLUF. Reads every tracker cache, synthesizes,
     caches result in Redis. Returns dict.
@@ -2715,7 +2778,8 @@ def build_regional_bluf(force=False):
     }
 
     _bluf_ttl = BLUF_INCOMPLETE_TTL if (trackers_missing or trackers_stale) else BLUF_CACHE_TTL
-    _redis_set(BLUF_CACHE_KEY, result, ttl=_bluf_ttl)
+    result['refresh_after_sec'] = _bluf_ttl
+    _redis_set(BLUF_CACHE_KEY, result, ttl=BLUF_KEEP_TTL)
     # v2.2.0: durable last-known-good so an expired working cache still has an
     # honest copy to serve instantly while a rebuild runs behind the request.
     _redis_set(BLUF_SELF_LASTGOOD_KEY, result, ttl=BLUF_LASTGOOD_TTL)
@@ -2731,6 +2795,7 @@ def build_regional_bluf(force=False):
 def register_me_bluf_routes(app):
     """Register BLUF endpoint on ME Flask app."""
     from flask import jsonify, request as flask_request
+    _start_timer()
 
     @app.route('/api/rhetoric/me/bluf', methods=['GET'])
     def me_regional_bluf():

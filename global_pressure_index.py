@@ -2,6 +2,12 @@
 global_pressure_index.py
 Asifah Analytics — Global Pressure Index Engine
 v3.7.0 — Jul 25 2026 (NARRATIVE DECAY)
+v3.23.0 — Nov 5 2026: DE-ESCALATION IS NOT PRESSURE. The regional BLUFs stamp
+  green-line / diplomatic-track signals with their THEATRE's level (min(threat,4)),
+  so Russia's "BREAKTHROUGH -- Active Peace Framework" arrived as L4 and the
+  diplomatic axis read "L4 talks collapsed". Those signals still surface (they
+  must), tagged direction='de-escalation', but never set an axis level.
+  Hybrid signals carry 'mode' (cyber / sabotage / jamming) through to the page.
 v3.21.0 — Nov 4 2026: axis top_signals carry `meaning`, `not_implied`, `standing` from the
   trackers (Peru/Cuba/Venezuela first) so the voice can explain what an event DOES.
 v3.10.0 add-on — Oct 28 2026: israel_formation_window narrative (caretaker Israel x hot Iran axis)
@@ -466,7 +472,8 @@ def _build_country_rollup(signals, min_signals=2):
             })
             rec['signal_count'] += 1
             try:
-                rec['max_level'] = max(rec['max_level'], int(s.get('level') or 0))
+                if not _is_deescalation(s):      # v3.23.0: talks moving is not a level
+                    rec['max_level'] = max(rec['max_level'], int(s.get('level') or 0))
             except (TypeError, ValueError):
                 pass
             ax = s.get('pressure_type')
@@ -951,7 +958,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.22.0'   # v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+GPI_VERSION     = '3.23.0'   # v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
 # previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -2498,6 +2505,17 @@ def _axis_motion_save():
     st.update(loaded=False, ok=False, data=None, dirty=False, first_run=False)
 
 
+DEESCALATION_CATEGORIES = {'green_line_active', 'diplomatic_track_active', 'diplomatic_offramp',
+                           'green_line', 'offramp', 'de_escalation'}
+
+
+def _is_deescalation(sig):
+    """v3.23.0: an off-ramp / green-line / talks-moving signal. It surfaces, but it is
+    not pressure, so it never sets an axis level."""
+    return (sig.get('direction') == 'de-escalation'
+            or (sig.get('category') or '') in DEESCALATION_CATEGORIES)
+
+
 def _build_pressure_axes_payload(blufs, narratives):
     """
     Build the per-axis aggregation payload that the frontend will consume.
@@ -2536,6 +2554,8 @@ def _build_pressure_axes_payload(blufs, narratives):
         # Per-region max level on this axis (lets frontend show "where")
         region_levels = {}
         for s in axis_signals:
+            if _is_deescalation(s):
+                continue            # v3.23.0: a peace track is not a level of pressure
             region = s.get('region') or s.get('theatre') or 'unknown'
             lvl = _safe_level(s.get('level', 0))
             if lvl > region_levels.get(region, -1):
@@ -2573,6 +2593,9 @@ def _build_pressure_axes_payload(blufs, narratives):
                 'meaning':       (s.get('meaning') or '')[:400],
                 'not_implied':   ((s.get('what_it_means') or {}).get('not_implied') or '')[:200],
                 'standing':      bool(s.get('standing')),
+                'direction':     'de-escalation' if _is_deescalation(s) else 'pressure',
+                'mode':          s.get('mode'),
+                'mode_label':    s.get('mode_label'),
             })
 
         meta = PRESSURE_AXIS_META[axis]
@@ -6189,6 +6212,7 @@ def _build_global_top_signals(blufs, narratives):
     for s in final:
         s.pop('_tier_boost', None)
         s.pop('_sort_key', None)
+        s['direction'] = 'de-escalation' if _is_deescalation(s) else 'pressure'   # v3.23.0
     return final[:TOP_GLOBAL_SIGNALS_COUNT]
 
 
@@ -6758,6 +6782,27 @@ _UNGROUPED_THEATRES = frozenset({
 
 _AXIS_ORDER = ['kinetic', 'economic', 'diplomatic', 'humanitarian', 'governance']
 
+# v3.23.0: names that are not Title Case ("us".title() == "Us")
+_FIXED_NAMES = {'us': 'USA', 'usa': 'USA', 'united_states': 'USA', 'uk': 'UK',
+                'united_kingdom': 'UK', 'uae': 'UAE', 'drc': 'DRC', 'dprk': 'DPRK',
+                'north_korea': 'North Korea', 'south_korea': 'South Korea', 'car': 'CAR',
+                'saudi_arabia': 'Saudi Arabia', 'south_sudan': 'South Sudan',
+                'burkina_faso': 'Burkina Faso', 'south_africa': 'South Africa',
+                'equatorial_guinea': 'Equatorial Guinea'}
+
+
+def _axis_word(ax, sigs):
+    """v3.23.0: a hybrid signal sits on the kinetic axis but must not be CALLED kinetic."""
+    modes = {sg.get('mode') for sg in sigs if sg.get('mode')}
+    if modes and all(sg.get('mode') for sg in sigs):
+        return 'hybrid (%s)' % '/'.join(sorted(modes))
+    return ax
+
+
+def _display_name(theatre):
+    t = str(theatre or '').strip().lower()
+    return _FIXED_NAMES.get(t) or t.replace('_', ' ').title()
+
 def _synthesize_theatre_group(theatre, sigs):
     """One dynamic line reading a country's WHOLE story this scan.
 
@@ -6766,6 +6811,18 @@ def _synthesize_theatre_group(theatre, sigs):
     loudest signal on each, and say what stacking means. Single-axis groups
     get a narrower multiple-signals read.
     """
+    offramps = [sg for sg in sigs if _is_deescalation(sg)]       # v3.23.0
+    name = _display_name(theatre).upper()
+    off_txt = ''
+    o = (offramps[0].get('short_text') or '')[:90].rstrip(' .;') if offramps else ''
+    if offramps:
+        off_txt = (f" Alongside it, an off-ramp is moving ({o}). Pressure and talks in the same week "
+                   f"is the usual shape of a negotiation under fire, not a contradiction.")
+    sigs = [sg for sg in sigs if not _is_deescalation(sg)]
+    if not sigs:
+        return (f"{name}: talks are moving -- {len(offramps)} de-escalation signal"
+                f"{'s' if len(offramps) != 1 else ''} and no pressure signal this scan"
+                + (f" (lead: {o})." if o else "."))
     by_axis = {}
     for sg in sigs:
         ax = (sg.get('pressure_type') or 'kinetic').lower()
@@ -6775,7 +6832,6 @@ def _synthesize_theatre_group(theatre, sigs):
         if a not in axes:
             axes.append(a)
     peak = max((_safe_level(sg.get('level', 0)) for sg in sigs), default=0)
-    name = theatre.upper()
 
     if len(axes) >= 2:
         # the compound read: name each axis with its loudest signal fragment
@@ -6783,17 +6839,21 @@ def _synthesize_theatre_group(theatre, sigs):
         for a in axes:
             loudest = max(by_axis[a], key=lambda sg: _safe_level(sg.get('level', 0)))
             frag = (loudest.get('short_text') or '')[:70].rstrip(' .;')
-            frags.append(f"{a} ({frag})" if frag else a)
+            aw = _axis_word(a, by_axis[a])
+            frags.append(f"{aw} ({frag})" if frag else aw)
         return (f"{name} is running pressure on {len(axes)} axes simultaneously this scan -- "
                 + '; '.join(frags) + ". "
                 f"Multi-axis simultaneity at the country level is the compound read: "
                 f"separate signals on separate channels converging on one theatre is "
-                f"historically a stronger indicator than any single channel at the same level.")
+                f"historically a stronger indicator than any single channel at the same level." + off_txt)
     else:
-        ax = axes[0] if axes else 'kinetic'
+        ax = _axis_word(axes[0], sigs) if axes else 'kinetic'
         n = len(sigs)
+        if n == 1:
+            frag = (sigs[0].get('short_text') or '')[:90].rstrip(' .;')
+            return (f"{name}: one {ax} signal this scan (L{peak}){': ' + frag if frag else ''}." + off_txt)
         return (f"{name}: {n} distinct {ax} signals active in the same window (peak L{peak}). "
-                f"Breadth on a single axis reads as sustained pressure, not an isolated event.")
+                f"Breadth on a single axis reads as sustained pressure, not an isolated event." + off_txt)
 
 def _group_signals_by_theatre(top_signals):
     """Bucket top_signals by theatre. Returns (grouped, passthrough).
@@ -6828,10 +6888,11 @@ def _group_signals_by_theatre(top_signals):
                 axes_present.append(ax)
         axes_sorted = [a for a in _AXIS_ORDER if a in axes_present] + \
                       [a for a in axes_present if a not in _AXIS_ORDER]
-        peak = max((_safe_level(sg.get('level', 0)) for sg in sigs), default=0)
+        peak = max((_safe_level(sg.get('level', 0)) for sg in sigs if not _is_deescalation(sg)),
+                   default=0)
         grouped.append({
             'theatre':      th,
-            'display':      th.title(),
+            'display':      _display_name(th),
             'peak_level':   peak,
             'axes':         axes_sorted,           # the pills
             'signal_count': len(sigs),
