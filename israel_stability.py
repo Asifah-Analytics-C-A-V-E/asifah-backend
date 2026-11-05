@@ -887,7 +887,7 @@ SEVERITY_HIGH = [
 
 RSS_SOURCES = [
     # Times of Israel
-    ('https://www.timesofisrael.com/feed/', 'Times of Israel'),
+    ('https://news.google.com/rss/search?q=site:timesofisrael.com&hl=en&gl=US&ceid=US:en', 'Times of Israel'),
     # Jerusalem Post
     ('https://www.jpost.com/rss/rssfeedsfrontpage.aspx', 'Jerusalem Post'),
     # Haaretz (English)
@@ -919,7 +919,7 @@ RSS_SOURCES = [
     # cmlink/1.628765. One of them is probably dead -- feed_health will say
     # which, and then the dead one gets pulled with a dated comment (standing
     # source rule). Until then, keep both rather than guess.
-    ('https://www.haaretz.com/srv/haaretz-latest-news', 'Haaretz (alt path)'),
+    ('https://news.google.com/rss/search?q=site:haaretz.com&hl=en&gl=US&ceid=US:en', 'Haaretz (alt path)'),
 
     # ── v2.3.0 (Oct 3 2026) PALESTINIAN FINANCIAL ACCESS SOURCING ──
     # The correspondent-banking and clearance decisions are covered in the

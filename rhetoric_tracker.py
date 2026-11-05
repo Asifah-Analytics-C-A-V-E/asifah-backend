@@ -1464,12 +1464,12 @@ def fetch_lebanon_articles(days=3):
         'Lebanon24 (AR)':     'https://news.google.com/rss/search?q=site:lebanon24.com&hl=ar&gl=LB&ceid=LB:ar',
         'NNA Lebanon':        'https://www.nna-leb.gov.lb/en/rss',
         # ── Existing sources ──────────────────────────────────────
-        'Al-Manar (EN)':      'https://english.almanar.com.lb/rss',
-        'Al-Manar (AR)':      'https://almanar.com.lb/rss',
+        'Al-Manar (EN)':      'https://news.google.com/rss/search?q=site:english.almanar.com.lb&hl=en&gl=US&ceid=US:en',
+        'Al-Manar (AR)':      'https://news.google.com/rss/search?q=site:almanar.com.lb&hl=ar&gl=LB&ceid=LB:ar',
         'UN News (Lebanon)':  'https://news.un.org/feed/subscribe/en/news/region/middle-east/feed/rss.xml',
         'MEMRI':              'https://www.memri.org/rss.xml',
         'Iran Wire (EN)':     'https://iranwire.com/en/feed/',
-        'Times of Israel':    'https://www.timesofisrael.com/feed/',
+        'Times of Israel':    'https://news.google.com/rss/search?q=site:timesofisrael.com&hl=en&gl=US&ceid=US:en',
         # i24NEWS direct RSS returns HTML — routed via Google News
         'i24NEWS':            'https://news.google.com/rss/search?q=site:i24news.tv&hl=en&gl=US&ceid=US:en',
         'Jerusalem Post':     'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
@@ -3348,3 +3348,51 @@ def _run_rhetoric_scan_safe():
     finally:
         with _scan_lock:
             _scan_running = False
+
+
+# ── Nov 5 2026 (URL sweep): every fetch here now reports to feed_health, so the
+# /api/census link can see these feeds. Before, they could die silently: a dark
+# feed makes a country look quiet when it is only unread. Never raises.
+# Reports each feed at most once every 2h per process (2 Upstash commands per
+# report): enough to tell healthy from dead, without multiplying Redis traffic.
+try:
+    from feed_health import record_fetch as _fh_record
+    _fh_inner__fetch_rss = _fetch_rss
+    _fh_last__fetch_rss = {}
+
+    def _fetch_rss(*a, **k):
+        _t0 = time.time()
+        try:
+            _url, _label = a[0], a[1]
+        except Exception:
+            _url, _label = None, None
+        if _url and time.time() - _fh_last__fetch_rss.get(_url, 0) < 7200:
+            _url = None                                    # reported recently: skip
+        elif _url:
+            _fh_last__fetch_rss[_url] = time.time()
+        try:
+            _out = _fh_inner__fetch_rss(*a, **k)
+        except Exception as _e:
+            try:
+                if _url:
+                    _fh_record('me', _url, error=_e, label=_label,
+                               duration_ms=(time.time() - _t0) * 1000)
+            except Exception:
+                pass
+            raise
+        try:
+            if _url:
+                _n = len(_out) if isinstance(_out, (list, tuple)) else (
+                    len(_out.get('articles') or []) if isinstance(_out, dict) else (1 if _out else 0))
+                if _n:
+                    _fh_record('me', _url, items=_n, http_status=200, label=_label,
+                               duration_ms=(time.time() - _t0) * 1000)
+                else:
+                    _fh_record('me', _url, error='no items (blocked, moved or empty; '
+                               'this tracker does not keep the reason)', label=_label,
+                               duration_ms=(time.time() - _t0) * 1000)
+        except Exception:
+            pass
+        return _out
+except ImportError:
+    pass

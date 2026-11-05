@@ -2450,7 +2450,7 @@ def _detect_crosstheater_coordination(proxy_activation_level, proxy_detail):
 # ============================================
 RHETORIC_RSS_FEEDS = [
     # Iranian state media (English)
-    ("https://www.presstv.ir/rss.xml", 1.0),
+    ("https://news.google.com/rss/search?q=site:presstv.ir&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://en.mehrnews.com/rss", 1.0),
     ("https://news.google.com/rss/search?q=IRGC+Iran+missile+drone+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Khamenei+statement+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
@@ -2462,7 +2462,7 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=Iran+US+war+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://news.google.com/rss/search?q=Iran+Israel+war+when:7d&hl=en&gl=US&ceid=US:en", 1.0),
     # Iran International (opposition — domestic pressure signals)
-    ("https://www.iranintl.com/en/rss", 0.95),
+    ("https://news.google.com/rss/search?q=site:iranintl.com/en&hl=en&gl=US&ceid=US:en", 0.95),
     # CENTCOM
     ("https://news.google.com/rss/search?q=CENTCOM+Iran+strikes+when:7d&hl=en&gl=US&ceid=US:en", 0.95),
     # Arabic — Iranian state/proxy framing
@@ -2501,7 +2501,7 @@ RHETORIC_RSS_FEEDS = [
     # ============================================
     # Israeli press — breaks China/Russia-Iran cooperation stories first
     ("https://rss.jpost.com/rss/rssfeedsheadlines.aspx", 0.95),
-    ("https://www.timesofisrael.com/feed/", 0.95),
+    ("https://news.google.com/rss/search?q=site:timesofisrael.com&hl=en&gl=US&ceid=US:en", 0.95),
     # ME regional analysis — China/Russia engagement in Gulf & Levant
     ("https://www.al-monitor.com/rss", 0.90),
     ("https://www.middleeasteye.net/rss.xml", 0.85),

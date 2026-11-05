@@ -114,7 +114,7 @@ COMMENTARY_SOURCES = [
      'feed': 'https://news.google.com/rss/search?q=site:understandingwar.org&hl=en&gl=US&ceid=US:en'},   # census: own feed 403
     {'id': 'csis', 'name': 'CSIS',
      'kind': 'institute', 'lean': 'nonpartisan', 'focus': ['global', 'defense', 'asia'],
-     'feed': 'https://www.csis.org/rss.xml'},   # census: healthy
+     'feed': 'https://news.google.com/rss/search?q=site:csis.org&hl=en&gl=US&ceid=US:en'},   # census: healthy
     {'id': 'chatham_house', 'name': 'Chatham House',
      'kind': 'institute', 'lean': 'nonpartisan', 'focus': ['europe', 'global', 'me'],
      'feed': 'https://news.google.com/rss/search?q=site:chathamhouse.org&hl=en&gl=US&ceid=US:en'},   # census: own feed 403

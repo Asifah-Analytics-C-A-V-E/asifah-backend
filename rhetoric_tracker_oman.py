@@ -514,7 +514,7 @@ RHETORIC_RSS_FEEDS = [
     },
     {
         'name': 'Al-Manar (Arabic)',
-        'url':  'https://almanar.com.lb/rss',   # census: /rss/feed/news/ was 404; /rss is healthy elsewhere
+        'url':  'https://news.google.com/rss/search?q=site:almanar.com.lb&hl=ar&gl=LB&ceid=LB:ar',   # census: /rss/feed/news/ was 404; /rss is healthy elsewhere
         'lang': 'ar',
         'weight': 0.80,
     },
@@ -527,7 +527,7 @@ RHETORIC_RSS_FEEDS = [
     # ── Iranian sources — Iranian commentary on Oman channel ──
     {
         'name': 'Iran International (English)',
-        'url':  'https://www.iranintl.com/en/rss.xml',
+        'url':  'https://news.google.com/rss/search?q=site:iranintl.com/en&hl=en&gl=US&ceid=US:en',
         'lang': 'en',
         'weight': 0.85,
     },

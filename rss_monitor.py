@@ -111,8 +111,8 @@ def get_feed_health_report():
 # ========================================
 LEADERSHIP_RSS_FEEDS = {
     'memri': 'https://news.google.com/rss/search?q=site:memri.org&hl=en&gl=US&ceid=US:en',
-    'al_manar_en': 'https://english.almanar.com.lb/rss',
-    'al_manar_ar': 'https://almanar.com.lb/rss',
+    'al_manar_en': 'https://news.google.com/rss/search?q=site:english.almanar.com.lb&hl=en&gl=US&ceid=US:en',
+    'al_manar_ar': 'https://news.google.com/rss/search?q=site:almanar.com.lb&hl=ar&gl=LB&ceid=LB:ar',
     'iran_wire_en': 'https://iranwire.com/en/feed/',
     'iran_wire_fa': 'https://iranwire.com/fa/feed/',
 }

@@ -1363,7 +1363,7 @@ MILITARY_ACTORS = {
         'rss_feeds': [
             'https://news.google.com/rss/search?q=afghanistan+taliban+OR+TTP+OR+isis-k+OR+pakistan+strikes+afghanistan&hl=en&gl=US&ceid=US:en',
             'https://news.google.com/rss/search?q=pakistan+airstrike+afghanistan+OR+pakistan+bombs+afghanistan+OR+haqqani&hl=en&gl=US&ceid=US:en',
-            'https://tolonews.com/rss.xml',
+            'https://news.google.com/rss/search?q=site:tolonews.com&hl=en&gl=US&ceid=US:en',
         ]
     },
 
@@ -5351,7 +5351,7 @@ DEFENSE_RSS_FEEDS = {
     'DVIDS': 'https://www.dvidshub.net/rss/news',
     'Jerusalem Post': 'https://www.jpost.com/rss/rssfeedsmilitary.aspx',
     'Times of Israel': 'https://news.google.com/rss/search?q=site:timesofisrael.com+military&hl=en&gl=US&ceid=US:en',
-    'Ynet News': 'https://www.ynetnews.com/Integration/StoryRss3254.xml',
+    'Ynet News': 'https://news.google.com/rss/search?q=site:ynetnews.com&hl=en&gl=US&ceid=US:en',
     'Israel Hayom': 'https://www.israelhayom.com/feed/',
     'Al Jazeera English': 'https://www.aljazeera.com/xml/rss/all.xml',
     'Al Arabiya English': 'https://english.alarabiya.net/tools/rss',
@@ -5360,7 +5360,7 @@ DEFENSE_RSS_FEEDS = {
     'Moscow Times': 'https://www.themoscowtimes.com/rss/news',
     'Daily Sabah': 'https://www.dailysabah.com/rssFeed/defense',
     'TRT World': 'https://www.trtworld.com/rss',
-    'Kyiv Independent': 'https://kyivindependent.com/feed/',
+    'Kyiv Independent': 'https://news.google.com/rss/search?q=site:kyivindependent.com&hl=en&gl=US&ceid=US:en',
     'Ukrinform': 'https://www.ukrinform.net/rss/block-lastnews',
     'Iran International': 'https://www.iranintl.com/en/feed',
     'Tasnim English': 'https://news.google.com/rss/search?q=site:tasnimnews.com+military&hl=en&gl=US&ceid=US:en',
@@ -11258,3 +11258,51 @@ def register_military_endpoints(app, start_background=True):
 
     periodic_thread = threading.Thread(target=_periodic_scan, daemon=True)
     periodic_thread.start()
+
+
+# ── Nov 5 2026 (URL sweep): every fetch here now reports to feed_health, so the
+# /api/census link can see these feeds. Before, they could die silently: a dark
+# feed makes a country look quiet when it is only unread. Never raises.
+# Reports each feed at most once every 2h per process (2 Upstash commands per
+# report): enough to tell healthy from dead, without multiplying Redis traffic.
+try:
+    from feed_health import record_fetch as _fh_record
+    _fh_inner_fetch_defense_rss = fetch_defense_rss
+    _fh_last_fetch_defense_rss = {}
+
+    def fetch_defense_rss(*a, **k):
+        _t0 = time.time()
+        try:
+            _url, _label = a[1], a[0]
+        except Exception:
+            _url, _label = None, None
+        if _url and time.time() - _fh_last_fetch_defense_rss.get(_url, 0) < 7200:
+            _url = None                                    # reported recently: skip
+        elif _url:
+            _fh_last_fetch_defense_rss[_url] = time.time()
+        try:
+            _out = _fh_inner_fetch_defense_rss(*a, **k)
+        except Exception as _e:
+            try:
+                if _url:
+                    _fh_record('me', _url, error=_e, label=_label,
+                               duration_ms=(time.time() - _t0) * 1000)
+            except Exception:
+                pass
+            raise
+        try:
+            if _url:
+                _n = len(_out) if isinstance(_out, (list, tuple)) else (
+                    len(_out.get('articles') or []) if isinstance(_out, dict) else (1 if _out else 0))
+                if _n:
+                    _fh_record('me', _url, items=_n, http_status=200, label=_label,
+                               duration_ms=(time.time() - _t0) * 1000)
+                else:
+                    _fh_record('me', _url, error='no items (blocked, moved or empty; '
+                               'this tracker does not keep the reason)', label=_label,
+                               duration_ms=(time.time() - _t0) * 1000)
+        except Exception:
+            pass
+        return _out
+except ImportError:
+    pass

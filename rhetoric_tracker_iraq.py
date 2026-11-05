@@ -899,7 +899,7 @@ RHETORIC_RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=CENTCOM+Iraq+strike+2026&hl=en&gl=US&ceid=US:en", 0.95),
     ("https://news.google.com/rss/search?q=Kirkuk+Peshmerga+PMF+2026&hl=en&gl=US&ceid=US:en", 0.9),
     ("https://news.google.com/rss/search?q=KRG+Erbil+security+2026&hl=en&gl=US&ceid=US:en", 0.9),
-    ("https://www.rudaw.net/english/feed", 1.0),
+    ("https://news.google.com/rss/search?q=site:rudaw.net&hl=en&gl=US&ceid=US:en", 1.0),
     ("https://www.kurdistan24.net/en/rss.xml", 0.95),
     ("https://news.google.com/rss/search?q=ISIS+Iraq+attack+Anbar+Diyala+2026&hl=en&gl=US&ceid=US:en", 0.9),
     ("https://news.google.com/rss/search?q=Muqtada+al-Sadr+Iraq+2026&hl=en&gl=US&ceid=US:en", 0.9),
