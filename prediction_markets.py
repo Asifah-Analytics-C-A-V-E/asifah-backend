@@ -58,7 +58,7 @@ except Exception as _e:  # never take the backend down over a bad edit
     print('[Markets] watchlist failed to load: %s' % _e)
     WATCHLIST = []
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'   # Nov 5 2026: change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
 
 POLY_API = 'https://gamma-api.polymarket.com'
 KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2'
@@ -354,11 +354,12 @@ def _change(mk, hist, now_ts):
     series = hist.get(mk['mid']) or []
     c24 = _hist_change(series, now_ts, mk['prob'], 24, 6)
     c7 = _hist_change(series, now_ts, mk['prob'], 24 * 7, 18)
-    src = 'asifah_history'
+    src = 'asifah_history' if (c24 is not None or c7 is not None) else None
     if c24 is None and mk.get('chg_24h_api') is not None:
         c24, src = round(mk['chg_24h_api'], 4), 'exchange'
     if c7 is None and mk.get('chg_7d_api') is not None:
         c7 = round(mk['chg_7d_api'], 4)
+        src = src or 'exchange'
     return c24, c7, src
 
 
@@ -405,9 +406,15 @@ def _select(item, ev, now):
         priced = [m for m in open_mk if _strike(m) is not None]
         if not priced:
             return (open_mk[:1], [])
-        # the strike traders are least sure about (closest to 50/50) says the most
+        # the strike traders are least sure about (closest to 50/50) says the most;
+        # a counted quantity ('unit') leads with its middle estimate instead
         solid = [m for m in priced if not _thin(m, item['source'])] or priced
         head = min(solid, key=lambda m: abs((m['prob'] or 0) - 0.5))
+        if item.get('unit'):
+            md = _threshold_median(item, ev, now) or {}
+            mid_mk = [m for m in priced if md.get('strike') is not None and _strike(m) == md['strike']]
+            if mid_mk:
+                head = mid_mk[0]
         others = sorted([m for m in priced if m is not head], key=lambda m: _strike(m))
         return ([head], others)
     return (open_mk[:1], [])
@@ -536,7 +543,8 @@ def _read_item(item, ev, err, hist, settled_mem, gpi, now):
         seen_way.add(s['resolved_yes'])
         rdt = _parse_dt(s['resolved_at'])
         s2 = dict(s, hours_ago=round((now - rdt).total_seconds() / 3600, 1),
-                  settled_label=('YES' if s['resolved_yes'] else 'NO'))
+                  settled_label=('YES' if s['resolved_yes'] else 'NO'),
+                  settled_on=_short_date(rdt))
         out['settled_recent'].append(s2)
 
     head, detail = _select(item, ev, now)
@@ -553,6 +561,13 @@ def _read_item(item, ev, err, hist, settled_mem, gpi, now):
         out['status'] = 'ok'
         out['headline'] = _market_view(head[0], item, hist, now_ts)
         out['detail'] = [_market_view(m, item, hist, now_ts) for m in detail]
+        if item['selector'] == 'threshold':
+            # one question spread over many strikes: judge the money on the whole ladder
+            total = sum((m['depth'] or 0) for m in ev['markets'] if m['open'])
+            floor = THIN_POLY_LIQUIDITY if item['source'] == 'polymarket' else THIN_KALSHI_OPEN_INTEREST
+            for v in [out['headline']] + out['detail']:
+                v['thin'] = total < floor
+            out['ladder_depth'] = round(total)
         if out['headline']['thin']:
             out['status'] = 'thin'
 

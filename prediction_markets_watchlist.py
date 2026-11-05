@@ -1,5 +1,5 @@
 """
-Asifah Analytics -- Prediction Markets WATCHLIST  (v1.0.0, Nov 5 2026)
+Asifah Analytics -- Prediction Markets WATCHLIST  (v1.0.1, Nov 5 2026)
 
 This is the ONLY file to edit when adding, removing or re-pointing a market.
 The engine (prediction_markets.py) never needs to change for that.
@@ -141,11 +141,11 @@ WATCHLIST = [
     {'id': 'dprk_invades', 'label': 'North Korea invades South Korea before 2027?',
      'source': 'polymarket', 'ref': 'will-north-korea-invade-south-korea-before-2027',
      'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'kinetic',
-     'pages': ['military', 'region:asia'], 'countries': ['dprk', 'south_korea']},
+     'pages': ['military', 'region:asia', 'north_korea', 'south_korea'], 'countries': ['dprk', 'south_korea']},
     {'id': 'india_strikes_pakistan', 'label': 'India strikes Pakistan?',
      'source': 'polymarket', 'ref': 'india-strike-on-pakistan-by',
      'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'kinetic',
-     'pages': ['military', 'region:asia'], 'countries': ['india', 'pakistan']},
+     'pages': ['military', 'region:asia', 'india', 'pakistan'], 'countries': ['india', 'pakistan']},
 
     # ── Western Hemisphere ─────────────────────────────────────────────
     {'id': 'venezuela_leader', 'label': 'Who leads Venezuela at the end of 2026?',
@@ -177,7 +177,7 @@ WATCHLIST = [
     {'id': 'ebola_spread', 'label': 'Which countries see an Ebola case in 2026?',
      'source': 'polymarket', 'ref': 'which-countries-will-have-an-ebola-case-in-2026',
      'selector': 'field', 'yes_means': 'more_pressure', 'axis': 'humanitarian',
-     'pages': ['gpi', 'region:africa'], 'countries': ['drc', 'kenya', 'south_sudan', 'uganda'],
+     'pages': ['gpi', 'region:africa', 'drc', 'south_sudan'], 'countries': ['drc', 'kenya', 'south_sudan', 'uganda'],
      'note': 'Not a single race: each country is its own yes/no. Shows the likeliest.'},
     {'id': 'somali_piracy', 'label': 'Somali pirates seize a vessel?',
      'source': 'polymarket', 'ref': 'somali-pirates-successfully-seize-a-vessel-byptptpt',
@@ -188,7 +188,7 @@ WATCHLIST = [
     {'id': 'us_recession', 'label': 'US recession (official NBER call) next year?',
      'source': 'kalshi', 'ref': 'KXRECSSNBER', 'event_min_days': 120,
      'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'economic',
-     'pages': ['gpi', 'market-watch'], 'countries': ['us']},
+     'pages': ['gpi', 'market-watch', 'us'], 'countries': ['us']},
     {'id': 'sp500_low', 'label': 'How low does the S&P 500 go this year?',
      'source': 'kalshi', 'ref': 'KXINXMINY',
      'selector': 'threshold', 'yes_means': 'more_pressure', 'axis': 'economic',
