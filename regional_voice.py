@@ -76,6 +76,17 @@ v1.1.0 (Oct 30 2026, after the first five live write-ups)
     could spread next. PROMPT_VERSION in the fingerprint so this upgrade
     rewrites each region once.
 
+v1.2.0 (Nov 5 2026) -- traders' odds + the attention layer as labelled context
+  * Each region's writer now also sees (a) prediction markets on that region
+    that flagged something (settled, sharp move, expected, disagrees with
+    Asifah) and (b) attention_layer.py's flags for the region's countries
+    (conversation ahead of the score, score ahead of the conversation, one
+    side of the spectrum doing the talking). Same rules as the GPI voice:
+    attribute, never an event, one sentence at most, never the headline.
+  * Only slow flags enter the fingerprint (settled / consensus / divergence /
+    attention kinds); prices and article counts are call-only. PROMPT_VERSION
+    regional-v3 rewrites each region once (5 calls, about $0.15).
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -91,8 +102,8 @@ import requests
 
 import gpi_voice as _gv
 
-__version__ = '1.1.0'
-PROMPT_VERSION = 'regional-v2'   # part of the fingerprint: a prompt upgrade rewrites once
+__version__ = '1.2.0'
+PROMPT_VERSION = 'regional-v3'   # part of the fingerprint: a prompt upgrade rewrites once
 
 REGIONS = ('me', 'asia', 'europe', 'wha', 'africa')
 REGION_NAMES = {
@@ -177,6 +188,11 @@ HONESTY
 - Never mention the fact sheet, its fields, or Asifah's tracking mechanics ("first seen", "is_new", "72 hours", "the record began", "composite score", "spoke", "wheel", "tripwire", "theatre"). Say what they MEAN instead: "long-running", "not new", "recently reported", "a warning trigger based on keywords", "country".
 - Name things as a reader knows them. Category names become descriptions ("Iran-aligned groups active on several fronts at once", not "proxy activation L5").
 - No disclaimer lines in the prose ("this is not a forecast"). The page carries that label.
+
+TRADERS' ODDS AND WHAT PEOPLE ARE SAYING
+- "traders_odds" (when present) are bets on public prediction markets about this region that moved, settled or disagree with Asifah. "attention_context" (when present) is commentary from across the political spectrum, compared with Asifah's own level. Neither is evidence and neither is Asifah's assessment.
+- Attribute both: "traders on prediction markets price...", "commentators across the spectrum...". A move in odds or a surge in commentary is never an event. When a contract SETTLED, say what its rule counts if a "contract_note" is given.
+- Use at most one sentence for either, only where it adds something -- the useful case is a mismatch with Asifah's reading. Never lead the headline with them. Never forecast from them.
 
 TERMS
 - Spell it "Hizballah", including when correcting a misspelling in the source.
@@ -576,6 +592,7 @@ def fingerprint(facts):
                                      s.get('is_new')) for s in facts.get('signals') or []),
         'n': [(n['hub'], n['partners_lit']) for n in facts.get('network_reads') or []],
         'h': [(h['country'], h['level']) for h in facts.get('outside_rhetoric_trackers') or []],
+        'x': facts.get('context_flags') or [],      # v1.2.0: slow market / attention flags only
     }
     blob = json.dumps(core, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(blob.encode('utf-8')).hexdigest()[:16]
@@ -609,7 +626,50 @@ def _count(key):
 # ════════════════════════════════════════════════════════════════════════
 # REFRESH
 # ════════════════════════════════════════════════════════════════════════
+def _region_markets(region):
+    """Flagged prediction markets on this region (Redis read only)."""
+    try:
+        import prediction_markets as _pm
+        p = _pm.latest() or {}
+    except Exception:
+        return [], []
+    rows, fp = [], []
+    for it in p.get('items') or []:
+        if 'region:%s' % region not in (it.get('pages') or []) or not it.get('flags'):
+            continue
+        h = it.get('headline') or {}
+        rows.append({'question': it.get('label'), 'traders_odds_now': h.get('odds'),
+                     'flags': [f.get('text') for f in it['flags']],
+                     'settled': ['"%s" settled %s' % (s.get('question') or s.get('option'), s.get('settled_label'))
+                                 for s in (it.get('settled_recent') or [])[:1]],
+                     'contract_note': it.get('note')})
+        fp += ['%s:%s' % (it.get('id'), f.get('kind')) for f in it['flags']
+               if f.get('kind') in ('settled', 'consensus', 'divergence')]
+    return rows[:5], fp
+
+
+def _region_context(region):
+    """(call-only extras, slow fingerprint flags) for one region."""
+    extra, fp = {}, []
+    rows, mfp = _region_markets(region)
+    if rows:
+        extra['traders_odds'] = rows
+    fp += mfp
+    try:
+        import attention_layer as _al
+        ac = _al.voice_context(region=region, max_items=4)
+    except Exception:
+        ac = None
+    if ac:
+        extra['attention_context'] = ac['items']
+        fp += ac.get('fingerprint_flags') or []
+    return extra, sorted(set(fp))
+
+
 def _write_region(region, facts, allow_call, reason):
+    extra, ctx_fp = _region_context(region)
+    if ctx_fp:
+        facts = dict(facts, context_flags=ctx_fp)
     fp = fingerprint(facts)
     latest = _gv._rget(LATEST_KEY % region) or {}
     if latest.get('fingerprint') == fp and latest.get('view'):
@@ -633,7 +693,9 @@ def _write_region(region, facts, allow_call, reason):
     _gv._rset(LATEST_KEY % region, latest, VOICE_TTL)
     try:
         t0 = time.time()
-        view, usage = _gv._call_claude(facts, system=SYSTEM_PROMPT, schema=OUTPUT_SCHEMA,
+        call_facts = {k: v for k, v in facts.items() if k != 'context_flags'}
+        call_facts.update(extra)
+        view, usage = _gv._call_claude(call_facts, system=SYSTEM_PROMPT, schema=OUTPUT_SCHEMA,
                                        validate=_validate, max_tokens=REGION_MAX_TOKENS)
         rec = {
             'region': region, 'region_name': REGION_NAMES.get(region, region),

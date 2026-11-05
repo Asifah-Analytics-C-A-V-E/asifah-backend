@@ -58,7 +58,7 @@ except Exception as _e:  # never take the backend down over a bad edit
     print('[Markets] watchlist failed to load: %s' % _e)
     WATCHLIST = []
 
-__version__ = '1.0.1'   # Nov 5 2026: change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
+__version__ = '1.0.2'   # Nov 5 2026: (1.0.2) divergence reads canonical country ids (us->usa, uk->united_kingdom); (1.0.1) change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
 
 POLY_API = 'https://gamma-api.polymarket.com'
 KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2'
@@ -467,10 +467,15 @@ def _our_level(item, gpi):
     """Asifah's own reading for the item's countries (GPI country rollup)."""
     if not gpi or not item.get('countries'):
         return None
-    roll = {r.get('country'): r for r in (gpi.get('country_rollup') or []) if isinstance(r, dict)}
+    try:
+        from country_ids import canonical as _cn
+    except Exception:
+        _cn = lambda x: x                      # noqa: E731
+    roll = {(_cn(r.get('country')) or r.get('country')): r
+            for r in (gpi.get('country_rollup') or []) if isinstance(r, dict)}
     best = None
     for c in item['countries']:
-        r = roll.get(c)
+        r = roll.get(_cn(c) or c)
         if r and r.get('max_level') is not None:
             lv = int(r['max_level'])
             if best is None or lv > best['level']:

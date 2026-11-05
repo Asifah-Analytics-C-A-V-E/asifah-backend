@@ -40,6 +40,18 @@ v2.0.0 (Nov 5 2026)
     country outweighs the other's 3 to 1 (min. 4 pieces).
   * Every feed reports to feed_health (dead feeds announce themselves) and
     to /api/commentary/debug.
+
+v2.1.0 (Nov 5 2026) -- ATTENTION HISTORY
+  * Country ids are canonical (country_ids.canonical): 'usa', 'united_kingdom',
+    'dprk' -- the same ids the GPI and attention_layer.py use. The endpoint
+    accepts page slugs ('us', 'uk', 'north_korea') and canonicalises them.
+  * commentary:history -- per published day, per country, per lean: counts,
+    60 days. Each scan merges what it can see (max per day, so a feed rolling
+    old items off never shrinks a past day).
+  * payload['attention'][country] = this week's pieces vs a usual week
+    (average of the previous 4 weeks), ratio, spike flag (>= 2.5x and >= 6
+    pieces), and baseline_days -- "baseline building" until 14 days exist.
+    Read by attention_layer.py; never scored.
 """
 
 import os
@@ -67,7 +79,7 @@ except ImportError:
 # CONFIG
 # ============================================================
 
-VERSION = '2.0.0'
+VERSION = '2.1.0'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -77,6 +89,11 @@ COMMENTARY_KEY = 'commentary:latest'
 YT_IDS_KEY = 'commentary:yt_ids'
 YT_IDS_TTL = 30 * 24 * 3600
 BALANCE_DAYS = 7
+HISTORY_KEY = 'commentary:history'
+HISTORY_DAYS = 60
+SPIKE_RATIO = 2.5
+SPIKE_MIN = 6
+BASELINE_MIN_DAYS = 14
 LOPSIDED_RATIO = 3.0
 LOPSIDED_MIN = 4
 
@@ -289,9 +306,33 @@ _GLOBAL_RX = {c: re.compile(r'(?<![a-z0-9])(?:' + '|'.join(re.escape(k) for k in
               for c, kws in _GLOBAL_KEYWORDS.items()}
 
 
+try:
+    from country_ids import canonical as _canonical
+except Exception:
+    _canonical = None
+
+
+def canon(c):
+    """One id per country across Asifah ('us' -> 'usa', 'north_korea' -> 'dprk')."""
+    if not c:
+        return c
+    if _canonical:
+        try:
+            return _canonical(c) or c
+        except Exception:
+            return c
+    return {'us': 'usa', 'uk': 'united_kingdom', 'north_korea': 'dprk'}.get(c, c)
+
+
 def global_country_tags(title, description=''):
     text = f"{title} {description}".lower()
-    return [c for c, rx in _GLOBAL_RX.items() if rx.search(text)]
+    out = []
+    for c, rx in _GLOBAL_RX.items():
+        if rx.search(text):
+            cc = canon(c)
+            if cc not in out:
+                out.append(cc)
+    return out
 
 
 LEAN_BUCKET = {'left': 'left', 'center-left': 'left', 'center': 'center',
@@ -730,6 +771,64 @@ def build_balance(items, health, now=None):
     }
 
 
+def update_history(items, history, now=None):
+    """Merge this scan's per-day, per-country, per-lean counts into history."""
+    now = now or datetime.now(timezone.utc)
+    seen = {}
+    for i in items:
+        day = (i.get('published') or '')[:10]
+        if len(day) != 10:
+            continue
+        b = i.get('lean_bucket', 'center')
+        for c in i.get('countries') or []:
+            d = seen.setdefault(day, {}).setdefault(c, {})
+            d[b] = d.get(b, 0) + 1
+    for day, by_c in seen.items():
+        old = history.setdefault(day, {})
+        for c, k in by_c.items():
+            o = old.setdefault(c, {})
+            for b, n in k.items():
+                o[b] = max(o.get(b, 0), n)   # a feed rolling items off never shrinks a past day
+    cutoff = (now - timedelta(days=HISTORY_DAYS)).strftime('%Y-%m-%d')
+    return {d: v for d, v in history.items() if d >= cutoff}
+
+
+def attention_metrics(history, now=None):
+    """This week vs a usual week (previous 4 weeks), per country."""
+    now = now or datetime.now(timezone.utc)
+    days = sorted(history)
+    if not days:
+        return {}
+    first = datetime.fromisoformat(days[0]).replace(tzinfo=timezone.utc)
+    baseline_days = max(0, (now - first).days - 7)
+    def total(day_from, day_to):
+        t = {}
+        for d in days:
+            if day_from <= d < day_to:
+                for c, k in history[d].items():
+                    t[c] = t.get(c, 0) + sum(k.values())
+        return t
+    d = lambda n: (now - timedelta(days=n)).strftime('%Y-%m-%d')
+    tomorrow = (now + timedelta(days=1)).strftime('%Y-%m-%d')
+    this_week = total(d(7), tomorrow)
+    base_span = min(28, baseline_days)
+    base = total(d(7 + base_span), d(7)) if base_span > 0 else {}
+    out = {}
+    for c in set(this_week) | set(base):
+        tw = this_week.get(c, 0)
+        usual = round(base.get(c, 0) / (base_span / 7.0), 1) if base_span >= 7 else None
+        rec = {'this_week': tw, 'usual_week': usual, 'baseline_days': baseline_days}
+        if baseline_days < BASELINE_MIN_DAYS or usual is None:
+            rec['state'] = 'baseline_building'
+        else:
+            ratio = round(tw / max(usual, 1.0), 1)
+            rec['ratio'] = ratio
+            rec['spike'] = bool(tw >= SPIKE_MIN and ratio >= SPIKE_RATIO)
+            rec['state'] = 'spike' if rec['spike'] else ('quiet' if tw < usual / 2 else 'normal')
+        out[c] = rec
+    return out
+
+
 def scan_commentary():
     """Fetch every commentary source, tag, balance, cache."""
     t0 = time.time()
@@ -759,10 +858,15 @@ def scan_commentary():
         for c in i.get('countries') or []:
             if len(by_country.setdefault(c, [])) < 40:
                 by_country[c].append(i)
+    history = update_history(unique, _redis_get(HISTORY_KEY) or {}, now)
+    _redis_set(HISTORY_KEY, history, (HISTORY_DAYS + 5) * 86400)
+    attention = attention_metrics(history, now)
     payload = {
         'version': VERSION,
         'last_updated': now.isoformat(),
         'scan_seconds': round(time.time() - t0, 1),
+        'attention': attention,
+        'history_days': len(history),
         'label': ('Commentary from across the spectrum: newsletters, opinion outlets, '
                   'institutes and YouTube channels. Context only, never scored.'),
         'total_items': len(unique),
@@ -921,6 +1025,8 @@ def register_think_tank_endpoints(app, start_background=True):
                         'total_items': p.get('total_items'),
                         'health': p.get('health'),
                         'lopsided': (p.get('balance') or {}).get('lopsided'),
+                        'history_days': p.get('history_days'),
+                        'spikes': {c: a for c, a in (p.get('attention') or {}).items() if a.get('spike')},
                         'overall': (p.get('balance') or {}).get('overall')})
 
     @app.route('/api/commentary/<country>')
@@ -928,11 +1034,12 @@ def register_think_tank_endpoints(app, start_background=True):
         p = get_commentary()
         if not p:
             return jsonify(_cold())
-        c = (country or '').lower().strip()
+        c = canon((country or '').lower().strip())
         bal = next((t for t in (p.get('balance') or {}).get('by_country', []) if t['country'] == c), None)
         return jsonify({'available': True, 'version': VERSION, 'country': c,
                         'last_updated': p.get('last_updated'), 'label': p.get('label'),
-                        'items': (p.get('by_country') or {}).get(c, []), 'balance': bal})
+                        'items': (p.get('by_country') or {}).get(c, []), 'balance': bal,
+                        'attention': (p.get('attention') or {}).get(c)})
 
     if start_background:
         start_background_refresh()

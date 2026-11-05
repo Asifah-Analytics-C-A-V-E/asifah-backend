@@ -79,6 +79,15 @@ v1.4.0 (Nov 5 2026) -- traders' odds as LABELLED CONTEXT (Rachel)
   enter the fingerprint, so a twitchy price cannot force a rewrite. Reading the
   market context is a Redis read -- no outside calls, no Claude calls.
 
+v1.5.0 (Nov 5 2026) -- the ATTENTION LAYER as labelled context
+  attention_layer.py compares what people are saying (commentary across the
+  political spectrum) and betting (traders' odds) with Asifah's own level,
+  per country. The writer now sees the countries where they disagree:
+  "the conversation is running ahead of the score", "the score is running
+  ahead of the conversation", or one side of the spectrum doing most of the
+  talking. Rules: attribute it, never treat talk as an event, one sentence
+  at most, never a headline on its own. Slow flags only in the fingerprint.
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -92,7 +101,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.4.0'   # Nov 5 2026: traders' odds as labelled context; (1.3.1) the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
+__version__ = '1.5.0'   # Nov 5 2026: (1.5.0) attention layer as labelled context; (1.4.0) traders' odds as labelled context; (1.3.1) the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -178,6 +187,11 @@ TRADERS' ODDS
 - A move in odds is not an event. A contract that SETTLED tells you how the contract's own rules resolved; when it carries a "contract_note", say what the rule counts (for example "a market that settles on any US strike hitting Iran settled NO"), because that can be narrower or broader than the news.
 - Use them for one thing: context on how traders read the same picture -- where they moved, where they are near-certain, or where they disagree with Asifah's reading. That disagreement is worth a sentence; say plainly which way it runs, without deciding who is right.
 - At most one sentence per view, only where relevant, and never as the lead of a headline on their own. Never forecast from them.
+
+WHAT PEOPLE ARE SAYING
+- "attention_context" (when present) lists countries where the attention layer -- commentary from newsletters, opinion outlets and channels across the political spectrum, plus traders' odds -- disagrees with Asifah's own level, or where one side of the spectrum is doing most of the talking.
+- Attribute it: "commentators", "commentary across the spectrum", "right-leaning outlets". It is talk, not evidence. Never present a surge in commentary as an event, and never say who is right.
+- Use at most one sentence for it in all_vectors and only where it adds to the picture: the useful case is a mismatch ("commentary on X has tripled while Asifah's sensors stay quiet" or the reverse). Never lead a headline with it.
 
 TERMS
 - Spell it "Hizballah", including when correcting a misspelling in the source.
@@ -605,6 +619,15 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
         print('[GPI voice] markets context unavailable (non-fatal): %s' % str(e)[:120])
     if markets_ctx and markets_ctx.get('fingerprint_flags'):
         facts['markets_flags'] = markets_ctx['fingerprint_flags']
+    # v1.5.0 -- attention layer (Redis reads only), same split as the markets
+    attn_ctx = None
+    try:
+        import attention_layer as _al
+        attn_ctx = _al.voice_context()
+    except Exception as e:
+        print('[GPI voice] attention context unavailable (non-fatal): %s' % str(e)[:120])
+    if attn_ctx and attn_ctx.get('fingerprint_flags'):
+        facts['attention_flags'] = attn_ctx['fingerprint_flags']
     fp = facts_fingerprint(facts)
     _fp = {'fingerprint': fp}
     latest = _rget(VOICE_KEY) or {}
@@ -648,9 +671,12 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
                 'headline': ((prev_views.get('all_vectors') or {}).get('headline') or ''),
                 'new_since_previous': [k for k in now_keys if k not in prev_keys][:10] if prev_keys else 'unknown',
             }
+        call_facts.pop('markets_flags', None)
+        call_facts.pop('attention_flags', None)
         if markets_ctx and markets_ctx.get('items'):
-            call_facts.pop('markets_flags', None)
             call_facts['markets_context'] = markets_ctx['items']
+        if attn_ctx and attn_ctx.get('items'):
+            call_facts['attention_context'] = attn_ctx['items']
         writeup, usage = _call_claude(call_facts)
         rec = {
             'views': writeup,
@@ -670,6 +696,7 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
             'evidence_keys': now_keys[:80],
             # v1.4.0: how many flagged prediction markets the writer was shown
             'markets_considered': len((markets_ctx or {}).get('items') or []),
+            'attention_considered': len((attn_ctx or {}).get('items') or []),
         }
         if rec['style_flags']:
             print('[GPI voice] style flags (published anyway): %s' % rec['style_flags'][:6])

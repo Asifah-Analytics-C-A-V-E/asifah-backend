@@ -1494,6 +1494,15 @@ try:
 except Exception as e:
     print(f"[ME Backend] ⚠️ Prediction markets registration failed (non-fatal): {e}")
 
+# Attention layer (Nov 5 2026) -- traders' odds + commentary + Asifah's level,
+# side by side per country. Redis reads only, $0. Never scored.
+# Routes: /api/attention/<country>, /api/attention/summary
+try:
+    from attention_layer import register_attention_routes
+    register_attention_routes(app)
+except Exception as e:
+    print(f"[ME Backend] ⚠️ Attention layer registration failed (non-fatal): {e}")
+
 # Economic Absorption Signatures — register after commodity tracker so leader
 # interventions can be cross-referenced. Phase 2 rhetoric trackers will read
 # leader intervention fingerprints and write dynamic signatures back to Redis.
