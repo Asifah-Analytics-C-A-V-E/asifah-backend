@@ -93,6 +93,7 @@ COPYRIGHT 2025-2026 Asifah Analytics. All rights reserved.
 """
 
 import os
+import re
 import json
 import threading
 import time
@@ -184,7 +185,7 @@ GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 # v1.2.0 (Oct 4 2026) -- derived UA, per the Oct 3 platform-wide pass.
 # Was 'Mozilla/5.0 Asifah Analytics OSINT' -- honest in intent but carrying
 # no version, in a spelling used nowhere else on the platform.
-OMAN_TRACKER_VERSION = '1.2.0'
+OMAN_TRACKER_VERSION = '1.3.0'   # Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
 OMAN_USER_AGENT = (f'AsifahAnalytics-ME-Oman/{OMAN_TRACKER_VERSION} '
                    f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -477,8 +478,9 @@ def _apply_cross_theater_boosts(actor_levels, cross_signals):
 RHETORIC_RSS_FEEDS = [
     # ── Western/Regional English ──
     {
+        # Nov 5 2026 census: reuters.com RSS answers 401 -> Google News site: query
         'name': 'Reuters Middle East',
-        'url':  'https://www.reuters.com/world/middle-east/rss',
+        'url':  'https://news.google.com/rss/search?q=site:reuters.com+oman+OR+gulf+OR+iran&hl=en&gl=US&ceid=US:en',
         'lang': 'en',
         'weight': 1.0,
     },
@@ -489,27 +491,30 @@ RHETORIC_RSS_FEEDS = [
         'weight': 0.95,
     },
     {
+        # census: the site feed is malformed XML (unbound prefix) -> Google News
         'name': 'Times of Oman (English)',
-        'url':  'https://timesofoman.com/feed',
+        'url':  'https://news.google.com/rss/search?q=site:timesofoman.com&hl=en&gl=US&ceid=US:en',
         'lang': 'en',
         'weight': 0.95,
     },
     {
+        # census: 403 -> Google News
         'name': 'Muscat Daily (English)',
-        'url':  'https://www.muscatdaily.com/rss',
+        'url':  'https://news.google.com/rss/search?q=site:muscatdaily.com&hl=en&gl=US&ceid=US:en',
         'lang': 'en',
         'weight': 0.90,
     },
     # ── Arabic — axis-perspective on Oman ──
     {
+        # census: 403 -> Google News (Arabic)
         'name': 'Al Mayadeen (Arabic)',
-        'url':  'https://www.almayadeen.net/rss',
+        'url':  'https://news.google.com/rss/search?q=site:almayadeen.net+%D8%B9%D9%85%D8%A7%D9%86&hl=ar&gl=LB&ceid=LB:ar',
         'lang': 'ar',
         'weight': 0.85,
     },
     {
         'name': 'Al-Manar (Arabic)',
-        'url':  'https://almanar.com.lb/rss/feed/news/',
+        'url':  'https://almanar.com.lb/rss',   # census: /rss/feed/news/ was 404; /rss is healthy elsewhere
         'lang': 'ar',
         'weight': 0.80,
     },
@@ -527,14 +532,16 @@ RHETORIC_RSS_FEEDS = [
         'weight': 0.85,
     },
     {
+        # census: host does not resolve from Render -> Google News
         'name': 'Tasnim News (English)',
-        'url':  'https://www.tasnimnews.com/en/rss/feed/0/8/0/breaking',
+        'url':  'https://news.google.com/rss/search?q=site:tasnimnews.com+oman&hl=en&gl=US&ceid=US:en',
         'lang': 'en',
         'weight': 0.75,
     },
     {
+        # census: connection reset -> Google News
         'name': 'Press TV (Iranian state, EN)',
-        'url':  'https://www.presstv.ir/rss.xml',
+        'url':  'https://news.google.com/rss/search?q=site:presstv.ir+oman&hl=en&gl=US&ceid=US:en',
         'lang': 'en',
         'weight': 0.70,
     },
@@ -613,6 +620,30 @@ def _redis_set(key, value, ttl=None):
 # ============================================
 # RSS FETCH
 # ============================================
+def _first_el(item, *tags):
+    for t in tags:
+        el = item.find(t)
+        if el is not None:
+            return el
+    return None
+
+
+_BAD_XML_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+_BARE_AMP = re.compile(r'&(?!#?[A-Za-z0-9]+;)')
+
+
+def _lenient_root(content):
+    """Parse a feed, tolerating the small faults real feeds have: a BOM or
+    blank line before <?xml, control characters, bare '&'."""
+    try:
+        return ET.fromstring(content)
+    except ET.ParseError:
+        text = content.decode('utf-8', 'replace') if isinstance(content, bytes) else content
+        text = _BAD_XML_CHARS.sub('', text.lstrip('\ufeff \r\n\t'))
+        text = _BARE_AMP.sub('&amp;', text)
+        return ET.fromstring(text.encode('utf-8'))
+
+
 def _fetch_rss(url, source_name, weight=0.85, lang='en'):
     """Fetch and parse an RSS feed. Returns list of article dicts.
 
@@ -637,13 +668,16 @@ def _fetch_rss(url, source_name, weight=0.85, lang='en'):
                 _feed_record('me', url, items=0, http_status=r.status_code,
                              label=source_name, duration_ms=_ms())
             return []
-        root = ET.fromstring(r.content)
+        root = _lenient_root(r.content)
         items = root.findall('.//item') or root.findall('.//{http://www.w3.org/2005/Atom}entry')
         for item in items[:30]:
-            title_el = item.find('title') or item.find('{http://www.w3.org/2005/Atom}title')
-            link_el  = item.find('link')  or item.find('{http://www.w3.org/2005/Atom}link')
-            desc_el  = item.find('description') or item.find('{http://www.w3.org/2005/Atom}summary')
-            pub_el   = item.find('pubDate') or item.find('{http://www.w3.org/2005/Atom}published')
+            # v1.3.0 (Nov 5 2026): `a or b` on XML elements is a trap -- an
+            # element with no children is FALSE, so every found RSS <title>
+            # was thrown away and every article dropped. Explicit None checks.
+            title_el = _first_el(item, 'title', '{http://www.w3.org/2005/Atom}title')
+            link_el  = _first_el(item, 'link', '{http://www.w3.org/2005/Atom}link')
+            desc_el  = _first_el(item, 'description', '{http://www.w3.org/2005/Atom}summary')
+            pub_el   = _first_el(item, 'pubDate', '{http://www.w3.org/2005/Atom}published')
             title = title_el.text if title_el is not None else ''
             link = link_el.text if link_el is not None and link_el.text else (
                 link_el.get('href', '') if link_el is not None else ''

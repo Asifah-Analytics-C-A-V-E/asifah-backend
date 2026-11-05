@@ -1503,6 +1503,14 @@ try:
 except Exception as e:
     print(f"[ME Backend] ⚠️ Attention layer registration failed (non-fatal): {e}")
 
+# Source census (Nov 5 2026) -- one link reads every backend's feed health.
+# Route: /api/census (cached 30 min; ?refresh=true at most every 10 min). $0.
+try:
+    from source_census import register_census_routes
+    register_census_routes(app)
+except Exception as e:
+    print(f"[ME Backend] ⚠️ Source census registration failed (non-fatal): {e}")
+
 # Economic Absorption Signatures — register after commodity tracker so leader
 # interventions can be cross-referenced. Phase 2 rhetoric trackers will read
 # leader intervention fingerprints and write dynamic signatures back to Redis.
@@ -7587,8 +7595,10 @@ def fetch_jordan_news_rss():
     articles = []
     
     feeds = {
-        'Jordan Times': 'https://www.jordantimes.com/feed',
-        'Roya News': 'https://en.royanews.tv/feed',
+        # Nov 5 2026 census: jordantimes.com 403 x454, en.royanews.tv/feed 404 x454
+        # -> Google News site: queries (same outlets, a working subset).
+        'Jordan Times': 'https://news.google.com/rss/search?q=site:jordantimes.com&hl=en&gl=US&ceid=US:en',
+        'Roya News': 'https://news.google.com/rss/search?q=site:royanews.tv&hl=en&gl=US&ceid=US:en',
     }
     
     for source_name, feed_url in feeds.items():

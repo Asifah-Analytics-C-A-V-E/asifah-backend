@@ -1,5 +1,5 @@
 """
-Asifah Analytics -- Commentary & Analysis SOURCES  (v1.0.0, Nov 5 2026)
+Asifah Analytics -- Commentary & Analysis SOURCES  (v1.0.1, Nov 5 2026 -- census: ISW + Chatham House via Google News)
 
 The ONLY file to edit to add, drop or re-label a newsletter, institute or
 YouTube channel. Read by think_tank_feeds.py v2.0.0.
@@ -71,7 +71,7 @@ COMMENTARY_SOURCES = [
      'feed': 'https://www.thefp.com/feed'},
     {'id': 'dispatch', 'name': 'The Dispatch',
      'kind': 'newsletter', 'lean': 'center-right', 'focus': ['us', 'global'],
-     'feed': 'https://thedispatch.com/feed/', 'verify': True},
+     'feed': 'https://thedispatch.com/feed/'},   # census: healthy
 
     # ── Outlets (magazines / sites with an opinion line) ───────────────
     {'id': 'responsible_statecraft', 'name': 'Responsible Statecraft (Quincy Institute)',
@@ -99,13 +99,13 @@ COMMENTARY_SOURCES = [
     # ── Institutes (nonpartisan analysis) ──────────────────────────────
     {'id': 'isw', 'name': 'Institute for the Study of War',
      'kind': 'institute', 'lean': 'nonpartisan', 'focus': ['europe', 'me', 'defense'],
-     'feed': 'https://www.understandingwar.org/rss.xml', 'verify': True},
+     'feed': 'https://news.google.com/rss/search?q=site:understandingwar.org&hl=en&gl=US&ceid=US:en'},   # census: own feed 403
     {'id': 'csis', 'name': 'CSIS',
      'kind': 'institute', 'lean': 'nonpartisan', 'focus': ['global', 'defense', 'asia'],
-     'feed': 'https://www.csis.org/rss.xml', 'verify': True},
+     'feed': 'https://www.csis.org/rss.xml'},   # census: healthy
     {'id': 'chatham_house', 'name': 'Chatham House',
      'kind': 'institute', 'lean': 'nonpartisan', 'focus': ['europe', 'global', 'me'],
-     'feed': 'https://www.chathamhouse.org/rss.xml', 'verify': True},
+     'feed': 'https://news.google.com/rss/search?q=site:chathamhouse.org&hl=en&gl=US&ceid=US:en'},   # census: own feed 403
 
     # ── YouTube channels (titles + descriptions; keyless channel feed) ──
     {'id': 'yt_democracy_now', 'name': 'Democracy Now!',

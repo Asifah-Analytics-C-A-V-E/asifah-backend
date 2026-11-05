@@ -2,7 +2,18 @@
 RSS Monitor for Asifah Analytics
 Comprehensive RSS feed monitoring for Middle East intelligence
 
-Version lives in RSS_MONITOR_VERSION below (v3.8.0, November 1, 2026).
+Version lives in RSS_MONITOR_VERSION below (v3.9.0, November 5, 2026).
+
+v3.9.0 (Nov 5 2026) -- SOURCE CENSUS (claude/HANDOVER_2026-11-05_CENSUS_B16.md)
+  The Oct 4 consolidation (v3.7.0) swapped Times of Israel and i24 from their
+  Google News 'site:' queries to the papers' own feeds -- which block Render:
+  Times of Israel 403 x1971, i24 returns an HTML challenge x1971. Both went
+  dark on Oct 4 and stayed dark. Haaretz's feed path 404s and Ynet's has never
+  returned one item in 2275 checks. Israel's first-party RSS was JPost alone.
+  Rule adopted: a first-party feed that blocks a datacenter is replaced by its
+  Google News 'site:' query -- a subset with some lag, but a working subset
+  beats a complete feed that returns nothing. Rudaw (HTML challenge) likewise.
+  baghdad_post dropped: 416 checks, never one item (the site is gone).
 
 v3.8.0 (Nov 1 2026) -- ME audit (claude/ME_APP_AUDIT_2026-11-01.md):
   - Flight cache moved from /tmp to Redis (Upstash REST). /tmp is per instance:
@@ -65,9 +76,26 @@ except ImportError:
 # 2026, while the file itself documents v3.3.0 (April), v3.4.0 (May) and
 # v3.5.0 (September). The flight-cancellations endpoint reported '3.2.0' to
 # callers in four places. Seven months of releases, invisible from outside.
-RSS_MONITOR_VERSION = '3.8.0'
+RSS_MONITOR_VERSION = '3.9.0'
 RSS_USER_AGENT = (f'AsifahAnalytics-ME-RSS/{RSS_MONITOR_VERSION} '
                   f'(OSINT monitoring tool; +https://asifahanalytics.com)')
+
+
+_BAD_XML_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+_BARE_AMP = re.compile(r'&(?!#?[A-Za-z0-9]+;)')
+
+
+def _lenient_root(content):
+    """v3.9.0: parse a feed, tolerating a BOM / blank line before <?xml,
+    control characters and bare '&' -- the faults behind several census
+    'ParseError' feeds. Still raises ET.ParseError on HTML block pages."""
+    try:
+        return ET.fromstring(content)
+    except ET.ParseError:
+        text = content.decode('utf-8', 'replace') if isinstance(content, bytes) else content
+        text = _BAD_XML_CHARS.sub('', text.lstrip('\ufeff \r\n\t'))
+        text = _BARE_AMP.sub('&amp;', text)
+        return ET.fromstring(text.encode('utf-8'))
 
 
 def get_feed_health_report():
@@ -108,12 +136,12 @@ LEADERSHIP_RSS_FEEDS = {
 # genuinely different JPost feeds. Both kept; this is a coverage gain, not a
 # dedupe.
 ISRAELI_RSS_FEEDS = {
-    'ynet': 'https://www.ynetnews.com/Integration/StoryRss3254.xml',
-    'times_of_israel': 'https://www.timesofisrael.com/feed/',
+    'ynet': 'https://news.google.com/rss/search?q=site:ynetnews.com&hl=en&gl=US&ceid=US:en',
+    'times_of_israel': 'https://news.google.com/rss/search?q=site:timesofisrael.com&hl=en&gl=US&ceid=US:en',
     'jpost': 'https://www.jpost.com/rss/rssfeedsheadlines.aspx',
     'jpost_frontpage': 'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
-    'i24news': 'https://www.i24news.tv/en/rss',
-    'haaretz': 'https://www.haaretz.com/srv/haaretz-latest-news',
+    'i24news': 'https://news.google.com/rss/search?q=site:i24news.tv&hl=en&gl=US&ceid=US:en',
+    'haaretz': 'https://news.google.com/rss/search?q=site:haaretz.com&hl=en&gl=US&ceid=US:en',
 }
 
 # Regional Arab News Sources
@@ -124,7 +152,7 @@ REGIONAL_ARAB_RSS_FEEDS = {
 # Iraq-specific feeds — PMF, KRG, ISF, Iran-Iraq nexus
 IRAQ_RSS_FEEDS = {
     # Kurdish / KRG — best English Iraq security coverage
-    'rudaw':            'https://www.rudaw.net/english/feed',
+    'rudaw':            'https://news.google.com/rss/search?q=site:rudaw.net+iraq&hl=en&gl=US&ceid=US:en',
     'kurdistan24':      'https://www.kurdistan24.net/en/rss.xml',
     # Iraqi English OSINT
     'shafaq_news':      'https://news.google.com/rss/search?q=site:shafaq.com+iraq&hl=en&gl=US&ceid=US:en',
@@ -136,8 +164,6 @@ IRAQ_RSS_FEEDS = {
     'centcom_iraq':     'https://news.google.com/rss/search?q=CENTCOM+iraq+OR+%22US+forces+iraq%22&hl=en&gl=US&ceid=US:en',
     # Iran-Iraq nexus
     'iran_iraq_nexus':  'https://news.google.com/rss/search?q=iran+iraq+%22PMF%22+OR+%22Hashd%22+OR+%22Kata%27ib%22&hl=en&gl=US&ceid=US:en',
-    # Sunni / political
-    'baghdad_post':     'https://news.google.com/rss/search?q=site:thebaghdadpost.com&hl=en&gl=US&ceid=US:en',
     # Kirkuk / disputed territories
     'kirkuk_now':       'https://news.google.com/rss/search?q=%22Kirkuk%22+OR+%22disputed+territories%22+iraq&hl=en&gl=US&ceid=US:en',
 }
@@ -219,7 +245,6 @@ FEED_LANGUAGES = {
     'al_manar_ar':   'ar',
     'arab_news':     'ar',
     'iran_wire_fa':  'fa',
-    'haaretz':       'he',
     'ravid_hebrew':  'he',   # hl=iw&gl=IL feed -- was silently tagged English
 }
 
@@ -532,7 +557,7 @@ def fetch_all_rss(feed_dict=None):
                 continue
 
             try:
-                root = ET.fromstring(response.content)
+                root = _lenient_root(response.content)
             except ET.ParseError as e:
                 # When the response isn't valid XML, peek at the first bytes
                 # to identify the cause — HTML page (likely a block/challenge)

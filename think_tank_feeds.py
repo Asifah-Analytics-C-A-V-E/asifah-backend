@@ -52,6 +52,15 @@ v2.1.0 (Nov 5 2026) -- ATTENTION HISTORY
     (average of the previous 4 weeks), ratio, spike flag (>= 2.5x and >= 6
     pieces), and baseline_days -- "baseline building" until 14 days exist.
     Read by attention_layer.py; never scored.
+
+v2.2.0 (Nov 5 2026) -- SOURCE CENSUS
+  * One source = at most 2 pieces per country per week in the balance (and
+    per day in the history). Megyn Kelly posted four clips about Iran in an
+    hour and counted as four voices; a prolific channel could tip a country
+    into "lopsided" on its own.
+  * ISS Africa (XML error) and Africa Center (200 but never an item) now read
+    through Google News 'site:' queries; ISW and Chatham House likewise in
+    commentary_sources.py (both 403 to Render).
 """
 
 import os
@@ -79,7 +88,7 @@ except ImportError:
 # CONFIG
 # ============================================================
 
-VERSION = '2.1.0'
+VERSION = '2.2.0'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -96,6 +105,7 @@ SPIKE_MIN = 6
 BASELINE_MIN_DAYS = 14
 LOPSIDED_RATIO = 3.0
 LOPSIDED_MIN = 4
+PER_SOURCE_CAP = 2      # pieces per source per country per window (v2.2.0)
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
@@ -210,7 +220,7 @@ THINK_TANK_SOURCES = [
         'name': 'ISS Africa',
         'subtitle': 'Institute for Security Studies',
         'site': 'https://issafrica.org',
-        'feed_url': 'https://issafrica.org/feed',   # ⚠️ VERIFY on first deploy (try /rss if 0 articles)
+        'feed_url': 'https://news.google.com/rss/search?q=site:issafrica.org&hl=en&gl=US&ceid=US:en',   # census Nov 5: own feed = XML error
         'countries': AFRICA_COUNTRY_IDS,
         'tag_logic': _africa_country_tags,
         'description': 'Pan-African human-security institute (Pretoria). Migration, Sahel, Horn of Africa, terrorism, governance, coups.',
@@ -220,7 +230,7 @@ THINK_TANK_SOURCES = [
         'name': 'Africa Center',
         'subtitle': 'Africa Center for Strategic Studies (US NDU)',
         'site': 'https://africacenter.org',
-        'feed_url': 'https://africacenter.org/feed/',   # ⚠️ VERIFY on first deploy
+        'feed_url': 'https://news.google.com/rss/search?q=site:africacenter.org&hl=en&gl=US&ceid=US:en',   # census Nov 5: own feed never delivered an item
         'countries': AFRICA_COUNTRY_IDS,
         'tag_logic': _africa_country_tags,
         'description': 'US National Defense University Africa security institute. Strong on Wagner/Africa Corps, Sahel coups, militant Islamist groups.',
@@ -729,9 +739,13 @@ def build_balance(items, health, now=None):
         return {'sources_ok': sum(1 for h in hs if h.get('status') == 'ok'), 'sources_total': len(hs)}
     written = [i for i in recent if i.get('kind') in ('newsletter', 'outlet', 'institute')]
     video = [i for i in recent if i.get('kind') == 'video']
-    by_country = {}
+    by_country, per_src = {}, {}
     for i in recent:
         for c in i.get('countries') or []:
+            k = (c, i.get('source_id') or i.get('source'))
+            per_src[k] = per_src.get(k, 0) + 1
+            if per_src[k] > PER_SOURCE_CAP:
+                continue
             by_country.setdefault(c, []).append(i)
     topics = []
     for c, rows in by_country.items():
@@ -774,13 +788,17 @@ def build_balance(items, health, now=None):
 def update_history(items, history, now=None):
     """Merge this scan's per-day, per-country, per-lean counts into history."""
     now = now or datetime.now(timezone.utc)
-    seen = {}
+    seen, per_src = {}, {}
     for i in items:
         day = (i.get('published') or '')[:10]
         if len(day) != 10:
             continue
         b = i.get('lean_bucket', 'center')
         for c in i.get('countries') or []:
+            k = (day, c, i.get('source_id') or i.get('source'))
+            per_src[k] = per_src.get(k, 0) + 1
+            if per_src[k] > PER_SOURCE_CAP:      # one channel's clip burst is one voice
+                continue
             d = seen.setdefault(day, {}).setdefault(c, {})
             d[b] = d.get(b, 0) + 1
     for day, by_c in seen.items():
