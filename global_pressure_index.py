@@ -156,6 +156,8 @@ import json
 import traceback
 import re
 from datetime import datetime, timezone
+import time
+import threading
 import requests
 
 
@@ -949,7 +951,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.21.1'   # v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+GPI_VERSION     = '3.22.0'   # v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
 # previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -6840,9 +6842,17 @@ def _group_signals_by_theatre(top_signals):
     return grouped, passthrough
 
 
-def build_gpi(force=False):
-    """Build the full GPI synthesis."""
-    if not force:
+GPI_REFRESH_EVERY_SEC = 6 * 3600    # v3.22.0: scheduled rebuild cadence
+
+
+def build_gpi(force=False, refresh=False):
+    """Build the full GPI synthesis.
+
+    v3.22.0: refresh=True rebuilds like an expired cache (organic -- the voice
+    may write) and is used ONLY by the scheduled loop. force=True is the public
+    ?force and still never calls Claude.
+    """
+    if not force and not refresh:
         cached = _redis_get(GPI_CACHE_KEY)
         if cached and cached.get('generated_at'):
             try:
@@ -7045,7 +7055,7 @@ def build_gpi(force=False):
         try:
             import gpi_voice as _gv
             _gv.refresh_async(result, allow_call=not force,
-                              reason='force_rebuild' if force else 'organic')
+                              reason='force_rebuild' if force else ('scheduled' if refresh else 'organic'))
         except ImportError:
             pass
         except Exception as _ve:
@@ -7056,7 +7066,7 @@ def build_gpi(force=False):
         try:
             import regional_voice as _rv
             _rv.refresh_async(blufs, allow_call=not force,
-                              reason='force_rebuild' if force else 'organic')
+                              reason='force_rebuild' if force else ('scheduled' if refresh else 'organic'))
         except ImportError:
             pass
         except Exception as _rve:
@@ -7165,9 +7175,45 @@ def build_gpi_level(force=False):
 # ============================================================
 # ROUTE REGISTRATION
 # ============================================================
+def _start_scheduled_rebuild():
+    """v3.22.0 (Nov 5 2026). The GPI used to rebuild only when a page load
+    found a cache older than 12h -- so overnight, nothing moved, and the
+    plain-language read could sit a day behind the signals. Now the background
+    leader rebuilds every 6h. One instance only (instance_lock); the voice's
+    change-only rule and daily cap still decide whether Claude is called.
+    """
+    try:
+        from instance_lock import my_turn as _my_turn
+    except ImportError:
+        _my_turn = lambda job: True
+
+    def _loop():
+        time.sleep(600)
+        while True:
+            try:
+                if _my_turn('gpi_scheduled_rebuild'):
+                    cached = _redis_get(GPI_CACHE_KEY) or {}
+                    age = None
+                    try:
+                        age = (datetime.now(timezone.utc)
+                               - datetime.fromisoformat(cached['generated_at'])).total_seconds()
+                    except Exception:
+                        pass
+                    if age is None or age >= GPI_REFRESH_EVERY_SEC:
+                        print('[GPI] scheduled rebuild (cache age %s)' % (int(age) if age is not None else 'n/a'))
+                        build_gpi(refresh=True)
+            except Exception as e:
+                print('[GPI] scheduled rebuild error (non-fatal): %s' % str(e)[:160])
+            time.sleep(1800)
+
+    threading.Thread(target=_loop, daemon=True, name='gpi-scheduled-rebuild').start()
+    print('[GPI] scheduled rebuild loop started (every %dh, leader only)' % (GPI_REFRESH_EVERY_SEC // 3600))
+
+
 def register_gpi_routes(app):
     """Register GPI endpoints on the given Flask app."""
     from flask import jsonify, request as flask_request
+    _start_scheduled_rebuild()
 
     @app.route('/api/gpi', methods=['GET'])
     def get_gpi():

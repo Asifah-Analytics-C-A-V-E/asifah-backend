@@ -62,6 +62,12 @@ v1.3.0 (Nov 5 2026) -- "same headline three days running" (Rachel)
   * One automatic retry after a min-gap or a failed call (organic paths only;
     a forced rebuild still never leads to a Claude call). The daily cap holds.
 
+v1.3.1 (Nov 5 2026) -- the writer now sees its PREVIOUS read: the old headline,
+  when it was written, and which evidence items are new since then. The same
+  lead story three days running should say what moved in it (or that nothing
+  did) instead of repeating itself. The fingerprint is still computed from the
+  facts alone, so this adds no extra calls.
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -75,7 +81,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.3.0'   # Nov 5 2026: freshness block + status of every check + one retry; (1.2.0) what_it_means
+__version__ = '1.3.1'   # Nov 5 2026: the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -135,6 +141,11 @@ SELECTION
 - all_vectors leads with the single highest-consequence NEW development, judged by who and how many it affects and whether it crosses borders or systems. It does not lead with whichever axis happens to be marked new.
 - Each "read" covers at most 3 developments. Group or drop the rest. A reader remembers three things.
 - If a "continuing_l5_fronts" entry's driver describes something other than fighting (an alignment shift, a market reading), do not call that country a war or an active conflict. Say what the driver actually is, or leave the country out.
+
+SINCE THE LAST READ
+- "previous_read" (when present) is the headline you wrote last time, when, and "new_since_previous": the evidence items that were not in that read.
+- If your lead story is the same as the previous headline's, the headline must say what is DIFFERENT now (a new country, a new number, a new stage) -- or, if nothing in it moved, lead with the most consequential item in "new_since_previous" instead. Never repeat the previous headline's wording.
+- If "new_since_previous" is empty, say plainly in all_vectors that little has changed since the last read, and keep it short.
 
 HONESTY
 - Use only facts in the fact sheet. Do not add events, numbers, names, history or context from outside it, even if you believe them true.
@@ -345,6 +356,21 @@ def pack(d):
             'itself has earned; commodity news volume is not treated as an economic rupture.'
             % cap['capped'])
     return out
+
+
+def _evidence_keys(facts):
+    """Short text keys for every evidence row and story (v1.3.1)."""
+    keys = []
+    for ax in (facts.get('axes') or {}).values():
+        for r in (ax.get('evidence') or []):
+            t = (r.get('text') or '')[:90]
+            if t and t not in keys:
+                keys.append(t)
+    for st in (facts.get('stories') or []):
+        t = (st.get('headline') or '')[:90]
+        if t and t not in keys:
+            keys.append(t)
+    return keys
 
 
 def facts_fingerprint(facts):
@@ -582,7 +608,18 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
         _rset(VOICE_KEY, latest, VOICE_TTL)
 
         t0 = time.time()
-        writeup, usage = _call_claude(facts)
+        # v1.3.1 -- what changed since the last write-up (call-only; not in the fingerprint)
+        now_keys = _evidence_keys(facts)
+        call_facts = dict(facts)
+        prev_views = latest.get('views') or {}
+        if prev_views:
+            prev_keys = set(latest.get('evidence_keys') or [])
+            call_facts['previous_read'] = {
+                'written_at': latest.get('generated_at'),
+                'headline': ((prev_views.get('all_vectors') or {}).get('headline') or ''),
+                'new_since_previous': [k for k in now_keys if k not in prev_keys][:10] if prev_keys else 'unknown',
+            }
+        writeup, usage = _call_claude(call_facts)
         rec = {
             'views': writeup,
             'fingerprint': fp,
@@ -598,6 +635,7 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
             'calls_today': calls + 1,
             'label': 'Plain-language read, AI-drafted from Asifah signals',
             'style_flags': style_flags(writeup),
+            'evidence_keys': now_keys[:80],
         }
         if rec['style_flags']:
             print('[GPI voice] style flags (published anyway): %s' % rec['style_flags'][:6])
@@ -632,7 +670,7 @@ def latest():
     if not rec.get('views'):
         return {'available': False, 'last_error': rec.get('last_error'),
                 'note': 'No plain-language write-up yet; the page shows the analyst prose.'}
-    out = {k: v for k, v in rec.items() if k != 'last_attempt_epoch'}
+    out = {k: v for k, v in rec.items() if k not in ('last_attempt_epoch', 'evidence_keys')}
     out['available'] = True
     out['freshness'] = _freshness(rec)
     return out
