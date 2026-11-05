@@ -68,6 +68,17 @@ v1.3.1 (Nov 5 2026) -- the writer now sees its PREVIOUS read: the old headline,
   did) instead of repeating itself. The fingerprint is still computed from the
   facts alone, so this adds no extra calls.
 
+v1.4.0 (Nov 5 2026) -- traders' odds as LABELLED CONTEXT (Rachel)
+  The writer now also sees a short "markets_context" list from
+  prediction_markets.py: only markets that FLAGGED something (settled early,
+  jumped, consensus, or disagree with Asifah's own level), each with its odds,
+  its moves and its contract caveat. New rules in the instructions: always
+  attribute them to traders, never treat a move in odds as an event, never let
+  them carry a headline on their own, never forecast from them.
+  Cost guard: only the slow-moving flags (settled / consensus / divergence)
+  enter the fingerprint, so a twitchy price cannot force a rewrite. Reading the
+  market context is a Redis read -- no outside calls, no Claude calls.
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -81,7 +92,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.3.1'   # Nov 5 2026: the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
+__version__ = '1.4.0'   # Nov 5 2026: traders' odds as labelled context; (1.3.1) the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -160,6 +171,13 @@ HONESTY
 - Read figures for WHEN and HOW they were counted. A report or study estimating past deaths (for example, deaths from smoke last month) is a retrospective estimate: say so ("a report estimates...in September"). Never present it as an event happening now, and never lead with it.
 - A continuing front marked "NOT CONFIRMED AS FIGHTING" is not a war. Leave it out of any list of conflicts. If it matters, describe it as what it is (a rhetoric surge, a flagged trigger) in a clause.
 - A keyword alert or a surge in rhetoric is never "active conflict" on its own. Call something active conflict only when the evidence reports actual fighting starting, resuming or continuing (strikes, clashes, ground operations).
+
+TRADERS' ODDS
+- "markets_context" (when present) lists public prediction markets (Polymarket, Kalshi) that flagged something: the traders' odds now, how far they moved, any contract that settled, and Asifah's own level for that country. These are bets by traders, not evidence and not Asifah's assessment.
+- Always attribute: "traders on prediction markets price X at 30%", "betting markets moved sharply toward...". Never write "it is 30% likely" or present the odds as fact.
+- A move in odds is not an event. A contract that SETTLED tells you how the contract's own rules resolved; when it carries a "contract_note", say what the rule counts (for example "a market that settles on any US strike hitting Iran settled NO"), because that can be narrower or broader than the news.
+- Use them for one thing: context on how traders read the same picture -- where they moved, where they are near-certain, or where they disagree with Asifah's reading. That disagreement is worth a sentence; say plainly which way it runs, without deciding who is right.
+- At most one sentence per view, only where relevant, and never as the lead of a headline on their own. Never forecast from them.
 
 TERMS
 - Spell it "Hizballah", including when correcting a misspelling in the source.
@@ -576,6 +594,17 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
         facts = pack(gpi_payload)
     except Exception as e:
         return {'status': 'pack_failed', 'error': str(e)[:160]}
+    # v1.4.0 -- traders' odds (Redis read only). Slow flags go in the facts so a
+    # settled contract or a new divergence can earn a rewrite; the detail is
+    # added to the call only, so a moving price cannot force one.
+    markets_ctx = None
+    try:
+        import prediction_markets as _pm
+        markets_ctx = _pm.voice_context()
+    except Exception as e:
+        print('[GPI voice] markets context unavailable (non-fatal): %s' % str(e)[:120])
+    if markets_ctx and markets_ctx.get('fingerprint_flags'):
+        facts['markets_flags'] = markets_ctx['fingerprint_flags']
     fp = facts_fingerprint(facts)
     _fp = {'fingerprint': fp}
     latest = _rget(VOICE_KEY) or {}
@@ -619,6 +648,9 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
                 'headline': ((prev_views.get('all_vectors') or {}).get('headline') or ''),
                 'new_since_previous': [k for k in now_keys if k not in prev_keys][:10] if prev_keys else 'unknown',
             }
+        if markets_ctx and markets_ctx.get('items'):
+            call_facts.pop('markets_flags', None)
+            call_facts['markets_context'] = markets_ctx['items']
         writeup, usage = _call_claude(call_facts)
         rec = {
             'views': writeup,
@@ -636,6 +668,8 @@ def _refresh(gpi_payload, allow_call=True, reason='organic'):
             'label': 'Plain-language read, AI-drafted from Asifah signals',
             'style_flags': style_flags(writeup),
             'evidence_keys': now_keys[:80],
+            # v1.4.0: how many flagged prediction markets the writer was shown
+            'markets_considered': len((markets_ctx or {}).get('items') or []),
         }
         if rec['style_flags']:
             print('[GPI voice] style flags (published anyway): %s' % rec['style_flags'][:6])

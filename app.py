@@ -1485,6 +1485,15 @@ if GPI_DELTA_AVAILABLE:
     except Exception as e:
         print(f"[ME Backend] ⚠️ GPI delta registration failed: {e}")
 
+# Prediction markets (Nov 5 2026) -- traders' odds from Polymarket + Kalshi,
+# read every 2h, $0, no keys. CONTEXT ONLY: never raises or lowers a level.
+# Routes: /api/markets, /api/markets/page/<key>, /api/markets/debug, /api/markets/discover
+try:
+    from prediction_markets import register_prediction_markets_routes
+    register_prediction_markets_routes(app, start=True)
+except Exception as e:
+    print(f"[ME Backend] ⚠️ Prediction markets registration failed (non-fatal): {e}")
+
 # Economic Absorption Signatures — register after commodity tracker so leader
 # interventions can be cross-referenced. Phase 2 rhetoric trackers will read
 # leader intervention fingerprints and write dynamic signatures back to Redis.
