@@ -1,8 +1,8 @@
 """
-Asifah Analytics -- Commentary & Analysis SOURCES  (v1.0.1, Nov 5 2026 -- census: ISW + Chatham House via Google News)
+Asifah Analytics -- Commentary & Analysis SOURCES  (v1.1.0, Nov 5 2026 -- podcasts added)
 
 The ONLY file to edit to add, drop or re-label a newsletter, institute or
-YouTube channel. Read by think_tank_feeds.py v2.0.0.
+YouTube channel or podcast. Read by think_tank_feeds.py v2.3.0+.
 
 THE COMMENTARY LANE (doctrine)
   These are people with opinions. They are shown, counted and compared --
@@ -16,7 +16,8 @@ HOW TO READ AN ENTRY
   id      short unique name
   name    display name
   kind    'newsletter' (Substack etc.), 'outlet' (magazine / site),
-          'institute' (think tank), 'video' (YouTube channel)
+          'institute' (think tank), 'video' (YouTube channel),
+          'podcast' (episode titles + show notes; never audio)
   lean    'left', 'center-left', 'center', 'center-right', 'right',
           or 'nonpartisan' (institutes that do not take a side).
           Approximate editorial / audience lean, from widely used public
@@ -26,14 +27,25 @@ HOW TO READ AN ENTRY
   feed    the RSS / Atom URL (newsletters, outlets, institutes)
   youtube a channel handle ('@Perun') or a channel id ('UC...') -- videos only.
           Titles come from YouTube's free public channel feed: no key needed.
+  podcast the show's title as Apple Podcasts lists it -- podcasts only. The
+          feed address is looked up once in Apple's free public directory and
+          cached 30 days; /api/commentary/debug shows the show and publisher
+          it matched, so a wrong match is visible.
+  by      (podcasts) a word from the publisher's name that MUST appear in the
+          match, e.g. 'crooked'. Alternatives with |: 'aspi|australian strategic'
+  search  (podcasts, optional) what to type into the directory search, when
+          the title alone is too generic ('Pivot')
   focus   what they mostly cover: 'us', 'global', 'me', 'europe', 'asia',
           'africa', 'wha', 'defense', 'economy', 'china'
   verify  True = the feed address is a best guess; the debug link will say
           within one cycle whether it works. Fix or drop dead ones.
 
-Balance check (count by lean, Nov 5 2026):
-  left 4 · center-left 4 · center 8 · center-right 3 · right 6 · nonpartisan 3
-  (left side 8, right side 9). The balance endpoint reports these counts live,
+Balance check (count by lean, Nov 5 2026, v1.1.0 with 29 podcasts):
+  written + video:  left 4 · center-left 4 · center 8 · center-right 3 · right 6 · nonpartisan 3
+  podcasts:         left 2 · center-left 7 · center 10 · center-right 4 · right 3 · nonpartisan 3
+  The podcast list leans left-of-centre on the US side (it began as a
+  listener's favourites); the six right-of-centre shows are there to keep the
+  card honest. The balance card counts each side, so it will say so. The balance endpoint reports these counts live,
   so a dead feed on one side shows up as a lopsided card, not a silent one.
 """
 
@@ -133,4 +145,71 @@ COMMENTARY_SOURCES = [
     {'id': 'yt_ben_shapiro', 'name': 'Ben Shapiro (Daily Wire)',
      'kind': 'video', 'lean': 'right', 'focus': ['us', 'me'],
      'youtube': '@BenShapiro'},
+    # ── Podcasts (episode titles + show notes, never the audio) ──
+    # US politics and policy
+    {'id': 'pod_save_america', 'name': 'Pod Save America', 'kind': 'podcast', 'lean': 'left',
+     'focus': ['us'], 'podcast': 'Pod Save America', 'by': 'crooked'},
+    {'id': 'pod_save_world', 'name': 'Pod Save the World', 'kind': 'podcast', 'lean': 'left',
+     'focus': ['global', 'us'], 'podcast': 'Pod Save the World', 'by': 'crooked'},
+    {'id': 'pod_today_explained', 'name': 'Today, Explained (Vox)', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['us', 'global'], 'podcast': 'Today, Explained', 'by': 'vox'},
+    {'id': 'pod_raging_moderates', 'name': 'Raging Moderates', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['us'], 'podcast': 'Raging Moderates'},
+    {'id': 'pod_journal', 'name': 'The Journal (WSJ)', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['us', 'economy'], 'podcast': 'The Journal.', 'by': 'wall street journal'},
+    {'id': 'pod_call_me_back', 'name': 'Call Me Back with Dan Senor', 'kind': 'podcast', 'lean': 'center-right',
+     'focus': ['me', 'us'], 'podcast': 'Call Me Back', 'by': 'senor'},
+    {'id': 'pod_honestly', 'name': 'Honestly with Bari Weiss', 'kind': 'podcast', 'lean': 'center-right',
+     'focus': ['us', 'me'], 'podcast': 'Honestly with Bari Weiss'},
+    {'id': 'pod_dispatch', 'name': 'The Dispatch Podcast', 'kind': 'podcast', 'lean': 'center-right',
+     'focus': ['us', 'global'], 'podcast': 'The Dispatch Podcast', 'by': 'dispatch'},
+    {'id': 'pod_commentary', 'name': 'The Commentary Magazine Podcast', 'kind': 'podcast', 'lean': 'right',
+     'focus': ['us', 'me'], 'podcast': 'The Commentary Magazine Podcast'},
+    {'id': 'pod_nr_editors', 'name': 'The Editors (National Review)', 'kind': 'podcast', 'lean': 'right',
+     'focus': ['us'], 'podcast': 'The Editors', 'by': 'national review'},
+    {'id': 'pod_morning_wire', 'name': 'Morning Wire (Daily Wire)', 'kind': 'podcast', 'lean': 'right',
+     'focus': ['us'], 'podcast': 'Morning Wire', 'by': 'daily wire'},
+    {'id': 'pod_intel_brief', 'name': 'The Intel Brief', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['global', 'defense'], 'podcast': 'The Intel Brief', 'verify': True},
+    # Markets, tech and AI
+    {'id': 'pod_prof_g_markets', 'name': 'Prof G Markets', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['economy'], 'podcast': 'Prof G Markets'},
+    {'id': 'pod_prof_g', 'name': 'The Prof G Pod with Scott Galloway', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['economy', 'us'], 'podcast': 'The Prof G Pod with Scott Galloway'},
+    {'id': 'pod_pivot', 'name': 'Pivot (Kara Swisher & Scott Galloway)', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['us', 'economy'], 'podcast': 'Pivot', 'search': 'Pivot Kara Swisher Scott Galloway',
+     'by': 'new york magazine|vox|swisher|galloway', 'verify': True},
+    {'id': 'pod_on_kara', 'name': 'On with Kara Swisher', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['us', 'economy'], 'podcast': 'On with Kara Swisher'},
+    {'id': 'pod_ai_daily', 'name': 'The AI Daily Brief', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['economy', 'china'], 'podcast': 'The AI Daily Brief'},
+    # Europe and the UK
+    {'id': 'pod_economist_intelligence', 'name': 'The Intelligence (The Economist)', 'kind': 'podcast',
+     'lean': 'center', 'focus': ['global', 'europe'], 'podcast': 'The Intelligence from The Economist',
+     'by': 'economist'},
+    {'id': 'pod_telegraph_ukraine', 'name': 'Ukraine: The Latest (The Telegraph)', 'kind': 'podcast',
+     'lean': 'center-right', 'focus': ['europe', 'defense'], 'podcast': 'Ukraine: The Latest',
+     'by': 'telegraph'},
+    {'id': 'pod_rest_is_politics', 'name': 'The Rest Is Politics', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['europe', 'global', 'us'], 'podcast': 'The Rest Is Politics', 'by': 'goalhanger'},
+    {'id': 'pod_eu_confidential', 'name': 'EU Confidential (POLITICO)', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['europe'], 'podcast': 'EU Confidential', 'by': 'politico'},
+    # Middle East
+    {'id': 'pod_hashavua', 'name': 'HaShavua (Haaretz, Hebrew)', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['me'], 'podcast': 'השבוע', 'search': 'השבוע הארץ', 'by': 'הארץ|haaretz', 'verify': True},
+    {'id': 'pod_babel', 'name': 'Babel: Translating the Middle East (CSIS)', 'kind': 'podcast',
+     'lean': 'nonpartisan', 'focus': ['me'], 'podcast': 'Babel: Translating the Middle East', 'by': 'csis'},
+    {'id': 'pod_mei_focus', 'name': 'Middle East Focus (MEI)', 'kind': 'podcast', 'lean': 'nonpartisan',
+     'focus': ['me'], 'podcast': 'Middle East Focus', 'by': 'middle east institute'},
+    {'id': 'pod_the_take', 'name': 'The Take (Al Jazeera)', 'kind': 'podcast', 'lean': 'center-left',
+     'focus': ['me', 'global'], 'podcast': 'The Take', 'by': 'al jazeera'},
+    # Asia-Pacific (Australian and China-watching)
+    {'id': 'pod_aspi_pgm', 'name': 'Policy, Guns and Money (ASPI)', 'kind': 'podcast', 'lean': 'nonpartisan',
+     'focus': ['asia', 'defense'], 'podcast': 'Policy, Guns and Money', 'by': 'aspi|australian strategic'},
+    {'id': 'pod_little_red', 'name': 'The Little Red Podcast', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['china', 'asia'], 'podcast': 'The Little Red Podcast'},
+    {'id': 'pod_sinica', 'name': 'Sinica', 'kind': 'podcast', 'lean': 'center',
+     'focus': ['china', 'asia'], 'podcast': 'Sinica'},
+    {'id': 'pod_bloomberg_asia', 'name': 'Bloomberg Daybreak: Asia Edition', 'kind': 'podcast',
+     'lean': 'center', 'focus': ['asia', 'economy'], 'podcast': 'Bloomberg Daybreak: Asia', 'by': 'bloomberg'},
 ]

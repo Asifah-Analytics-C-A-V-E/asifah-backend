@@ -61,6 +61,16 @@ v2.2.0 (Nov 5 2026) -- SOURCE CENSUS
   * ISS Africa (XML error) and Africa Center (200 but never an item) now read
     through Google News 'site:' queries; ISW and Chatham House likewise in
     commentary_sources.py (both 403 to Render).
+
+v2.3.0 (Nov 5 2026) -- PODCASTS
+  * New kind 'podcast'. A source names the show ('podcast': 'Pod Save America',
+    optional 'by': a word from the publisher). The feed address is looked up
+    ONCE in Apple's public podcast directory (itunes.apple.com/search, no key),
+    matched on the show title (+ publisher when given), and cached 30 days
+    with the matched title and publisher -- /api/commentary/debug shows both,
+    so a wrong match is visible, never silent. 'feed' still overrides.
+  * Balance gets a 'podcasts' leg.
+  * Hebrew keywords in the country tagger (Haaretz's HaShavua is in Hebrew).
 """
 
 import os
@@ -88,7 +98,7 @@ except ImportError:
 # CONFIG
 # ============================================================
 
-VERSION = '2.2.0'
+VERSION = '2.3.0'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -257,11 +267,14 @@ THINK_TANK_SOURCES = [
 # capitals are listed because commentary rarely says "Iran" when it can
 # say "Tehran".
 _GLOBAL_EXTRA = {
-    'iran':        ['iran', 'iranian', 'tehran', 'khamenei', 'irgc', 'pezeshkian', 'araghchi'],
-    'israel':      ['israel', 'israeli', 'netanyahu', 'idf', 'knesset', 'tel aviv'],
-    'gaza':        ['gaza', 'hamas', 'rafah', 'khan younis'],
-    'lebanon':     ['lebanon', 'lebanese', 'beirut', 'hezbollah', 'hizballah', 'hizbullah'],
-    'syria':       ['syria', 'syrian', 'damascus', 'sharaa', 'aleppo', 'idlib'],
+    'iran':        ['iran', 'iranian', 'tehran', 'khamenei', 'irgc', 'pezeshkian', 'araghchi',
+                    'איראן', 'טהרן', 'חמינאי'],
+    'israel':      ['israel', 'israeli', 'netanyahu', 'idf', 'knesset', 'tel aviv',
+                    'ישראל', 'נתניהו', 'צה"ל', 'הכנסת'],
+    'gaza':        ['gaza', 'hamas', 'rafah', 'khan younis', 'עזה', 'חמאס'],
+    'lebanon':     ['lebanon', 'lebanese', 'beirut', 'hezbollah', 'hizballah', 'hizbullah',
+                    'לבנון', 'חיזבאללה', 'ביירות'],
+    'syria':       ['syria', 'syrian', 'damascus', 'sharaa', 'aleppo', 'idlib', 'סוריה'],
     'iraq':        ['iraq', 'iraqi', 'baghdad', 'erbil', 'kurdistan region'],
     'yemen':       ['yemen', 'yemeni', 'houthi', 'houthis', 'sanaa', 'aden'],
     'saudi_arabia': ['saudi', 'riyadh', 'mbs', 'mohammed bin salman'],
@@ -298,7 +311,7 @@ _GLOBAL_EXTRA = {
     'haiti':       ['haiti', 'haitian', 'port-au-prince'],
     'nigeria':     ['nigeria', 'nigerian', 'abuja', 'lagos'],
     'kenya':       ['kenya', 'kenyan', 'nairobi'],
-    'us':          ['trump', 'white house', 'congress', 'senate', 'pentagon',
+    'us':          ['trump', 'white house', 'congress', 'senate', 'pentagon', 'טראמפ',
                     'democrats', 'republicans', 'gop', 'supreme court', 'state department'],
 }
 _GLOBAL_KEYWORDS = {}
@@ -312,8 +325,15 @@ for _c, _kws in list(_AFRICA_KEYWORDS.items()) + list(_GLOBAL_EXTRA.items()):
 # Without Borders, OPEC "the cartel".
 for _c, _bad in (('libya', ['gnu', 'lna']), ('chad', ['chad']), ('sudan', ['rsf'])):
     _GLOBAL_KEYWORDS[_c] = [k for k in _GLOBAL_KEYWORDS[_c] if k not in _bad]
-_GLOBAL_RX = {c: re.compile(r'(?<![a-z0-9])(?:' + '|'.join(re.escape(k) for k in kws) + r')(?![a-z0-9])')
-              for c, kws in _GLOBAL_KEYWORDS.items()}
+# Latin words are word-bounded; Hebrew words may carry a one-letter prefix
+# (ב / ל / ה / ו / מ / ש) glued on, so they are matched with that allowance.
+def _kw_rx(k):
+    if re.search('[\u0590-\u05ff]', k):
+        return r'(?<![\u0590-\u05ff])[בלהומש]?' + re.escape(k) + r'(?![\u0590-\u05ff])'
+    return r'(?<![a-z0-9])' + re.escape(k) + r'(?![a-z0-9])'
+
+
+_GLOBAL_RX = {c: re.compile('|'.join(_kw_rx(k) for k in kws)) for c, kws in _GLOBAL_KEYWORDS.items()}
 
 
 try:
@@ -467,8 +487,16 @@ def _parse_items(content, max_items=20):
                 if l.get('rel', 'alternate') == 'alternate' and l.get('href'):
                     url = l.get('href').strip()
                     break
+        if not url:   # podcasts: many episodes carry no <link>, only the audio file
+            enc = item.find('enclosure')
+            guid = item.find('guid')
+            if enc is not None and enc.get('url'):
+                url = enc.get('url').strip()
+            elif guid is not None and (guid.text or '').strip().startswith('http'):
+                url = guid.text.strip()
         desc_el = _first(item, 'description', f'{ATOM}summary', f'{MEDIA}group/{MEDIA}description',
-                         f'{CONTENT}encoded', f'{ATOM}content')
+                         f'{CONTENT}encoded', f'{ATOM}content',
+                         '{http://www.itunes.com/dtds/podcast-1.0.dtd}summary')
         description = _strip_html(desc_el.text or '') if desc_el is not None else ''
         pub_el = _first(item, 'pubDate', f'{ATOM}published', f'{ATOM}updated',
                         '{http://purl.org/dc/elements/1.1/}date')
@@ -655,6 +683,52 @@ def _resolve_youtube(handle, ids):
         return None, 'handle lookup failed: %s' % str(e)[:80]
 
 
+def _norm_title(t):
+    return re.sub(r'[^0-9a-z\u0590-\u05ff]+', ' ', (t or '').lower()).strip()
+
+
+def _resolve_podcast(src, cache):
+    """Show name -> feed URL via Apple's public directory (once; cached)."""
+    key = 'pod:%s' % src['id']
+    hit = cache.get(key)
+    if isinstance(hit, dict) and hit.get('feed'):
+        return hit, None
+    title = src['podcast']
+    bys = [b.strip() for b in (src.get('by') or '').lower().split('|') if b.strip()]
+    time.sleep(3)     # Apple's directory allows ~20 lookups a minute; cached for 30 days after
+    try:
+        r = requests.get('https://itunes.apple.com/search',
+                         params={'term': src.get('search') or title,
+                                 'entity': 'podcast', 'limit': 15},
+                         headers={'User-Agent': USER_AGENT}, timeout=REQUEST_TIMEOUT)
+        if r.status_code != 200:
+            return None, 'podcast directory HTTP %s' % r.status_code
+        results = r.json().get('results') or []
+    except Exception as e:
+        return None, 'podcast directory lookup failed: %s' % str(e)[:80]
+    want = _norm_title(title)
+    best, best_score = None, 0
+    for res in results:
+        name = _norm_title(res.get('collectionName'))
+        artist = (res.get('artistName') or '').lower()
+        score = 3 if name == want else (2 if want and name and (want in name or name in want) else 0)
+        if not score or not res.get('feedUrl'):
+            continue
+        if bys:  # a publisher hint is a requirement, not a bonus: "Pivot" alone matches many shows
+            hay = artist + ' ' + (res.get('collectionName') or '').lower()
+            if not any(b in hay for b in bys):
+                continue
+            score += 2
+        if score > best_score:
+            best, best_score = res, score
+    if not best:
+        return None, 'no confident match for "%s" in the podcast directory' % title
+    rec = {'feed': best['feedUrl'], 'matched_title': best.get('collectionName'),
+           'matched_publisher': best.get('artistName'), 'score': best_score}
+    cache[key] = rec
+    return rec, None
+
+
 def _fetch_commentary_source(src, yt_ids):
     """One source -> (items, health)."""
     t0 = time.time()
@@ -668,6 +742,15 @@ def _fetch_commentary_source(src, yt_ids):
             return [], health
         feed = 'https://www.youtube.com/feeds/videos.xml?channel_id=%s' % cid
         health['channel_id'] = cid
+    elif src.get('podcast') and not src.get('feed'):
+        rec, err = _resolve_podcast(src, yt_ids)
+        if not rec:
+            health.update(status='dead', error=err)
+            _record('podcast:' + src['podcast'], src['name'], error=err, t0=t0)
+            return [], health
+        feed = rec['feed']
+        health.update(matched_title=rec.get('matched_title'),
+                      matched_publisher=rec.get('matched_publisher'))
     else:
         feed = src.get('feed')
     health['feed'] = feed
@@ -678,7 +761,7 @@ def _fetch_commentary_source(src, yt_ids):
             _record(feed, src['name'], status=r.status_code, t0=t0)
             return [], health
         try:
-            parsed = _parse_items(r.content, 15 if src.get('youtube') else 20)
+            parsed = _parse_items(r.content, 15 if (src.get('youtube') or src.get('podcast')) else 20)
         except ET.ParseError:
             health.update(status='dead', error='not a feed (HTML or block page?)')
             _record(feed, src['name'], status=200, error='XML parse error', t0=t0)
@@ -739,6 +822,7 @@ def build_balance(items, health, now=None):
         return {'sources_ok': sum(1 for h in hs if h.get('status') == 'ok'), 'sources_total': len(hs)}
     written = [i for i in recent if i.get('kind') in ('newsletter', 'outlet', 'institute')]
     video = [i for i in recent if i.get('kind') == 'video']
+    pods = [i for i in recent if i.get('kind') == 'podcast']
     by_country, per_src = {}, {}
     for i in recent:
         for c in i.get('countries') or []:
@@ -775,6 +859,7 @@ def build_balance(items, health, now=None):
             'newsletters_outlets_institutes': dict(legs_of(('newsletter', 'outlet', 'institute')),
                                                    counts=counts(written), state='live'),
             'video': dict(legs_of(('video',)), counts=counts(video), state='live'),
+            'podcasts': dict(legs_of(('podcast',)), counts=counts(pods), state='live'),
             'reddit': {'state': 'unread', 'counts': None,
                        'note': 'Reddit API access is pending; unread, not zero.'},
         },
@@ -867,9 +952,10 @@ def scan_commentary():
         _redis_set(YT_IDS_KEY, yt_ids, YT_IDS_TTL)
     seen, unique = set(), []
     for i in sorted(items, key=lambda x: x.get('published') or '', reverse=True):
-        if i['url'] in seen:
+        k = (i['url'], i['title'])     # some podcasts give every episode the show's page link
+        if k in seen:
             continue
-        seen.add(i['url'])
+        seen.add(k)
         unique.append(i)
     by_country = {}
     for i in unique:
