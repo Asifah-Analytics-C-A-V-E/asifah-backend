@@ -1,62 +1,98 @@
 """
-think_tank_feeds.py — Asifah Analytics v1.0.0
+think_tank_feeds.py — Asifah Analytics v2.0.0
 ==============================================
-Curated regional think-tank analysis feed.
+Curated analysis + commentary feeds (ME backend).
 
-Fetches RSS-based long-form analytical content from think tanks and
-policy institutes covering Lebanon, Syria, and Israel. Tagged by country
-so each stability page can pull the relevant subset.
+TWO LANES, ONE FILE
+  1. THINK TANKS (v1.x, unchanged endpoints): long-form regional analysis,
+     tagged by country, shown on stability pages.
+       /api/think-tank/all, /api/think-tank/<country>
+  2. COMMENTARY (v2.0.0, Nov 5 2026): newsletters (Substack and similar),
+     opinion outlets, institutes and YouTube channels from across the
+     political spectrum. Each carries a LEAN label. Never scored.
+       /api/commentary/all, /api/commentary/<country>,
+       /api/commentary/balance, /api/commentary/debug
+     Sources live in commentary_sources.py -- the only file to edit.
 
-v1.0 sources:
-  - Badil (thebadil.com) — Lebanese policy institute, covers LB/SY/IL
+WHY THIS FILE AND NOT rss_monitor.py (Rachel asked, Nov 5 2026)
+  rss_monitor.py feeds the SCORING pipeline (leadership quotes, threat
+  language). Commentary must never lift a level on its own, so it stays out
+  of that pipe. This file was already the "people who write analysis" reader
+  with display-only endpoints -- the right home for opinions.
 
-v1.1 Africa sources (added June 2026):
-  - ISS Africa (issafrica.org) — Pan-African human security; migration, Sahel, Horn, coups
-  - Africa Center / ACSS (africacenter.org) — US NDU; Wagner/Africa Corps, Sahel coups
-  - International Crisis Group (crisisgroup.org) — global feed, Africa-filtered
-
-  Africa sources share ONE classifier (_africa_country_tags); the endpoint
-  country allow-list is now derived dynamically from each source's 'countries',
-  so new sources/countries slot in without touching the endpoint.
-
-Future sources (file as backlog):
-  - Carnegie Middle East Center
-  - Chatham House MENA / Africa Programme
-  - Clingendael (migration / central-Med)
-  - Al-Monitor analysis section
-
-Pattern matches the standard Asifah backend module:
-  - Upstash Redis REST cache (12hr TTL)
-  - Background refresh thread
-  - register_think_tank_endpoints(app) wiring
-  - /api/think-tank/<country> + /api/think-tank/all endpoints
+v2.0.0 (Nov 5 2026)
+  * BUG FIX -- every RSS article was being dropped. fetch_source() used
+    `item.find('title') or item.find(<atom title>)`. An XML element with no
+    children counts as FALSE in Python, so a found RSS <title> was thrown
+    away and the Atom lookup (None) used instead -> "continue". Since v1.0
+    the think-tank cards have shown nothing from RSS feeds. Now explicit
+    `is None` checks everywhere.
+  * Commentary lane: 28 sources (left 4 / center-left 4 / center 8 /
+    center-right 3 / right 6 / nonpartisan 3), global country tagger with
+    word-boundary matching, US-politics tag, lean buckets.
+  * YouTube WITHOUT a key: each channel's public feed
+    (youtube.com/feeds/videos.xml?channel_id=...) gives the latest 15 video
+    titles + descriptions. A handle ('@Perun') is resolved to its channel id
+    once and cached for 30 days. Comments need the Data API key (later).
+  * Cross-Spectrum Balance: /api/commentary/balance counts the last 7 days
+    by lean -- overall, per leg (newsletters+outlets, video, Reddit = unread)
+    and per country, with a plain sentence when one side's attention on a
+    country outweighs the other's 3 to 1 (min. 4 pieces).
+  * Every feed reports to feed_health (dead feeds announce themselves) and
+    to /api/commentary/debug.
 """
 
 import os
+import re
 import json
 import time
 import requests
 import threading
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
+
+try:
+    from commentary_sources import COMMENTARY_SOURCES
+except Exception as _e:   # never take the backend down over a bad edit
+    print(f'[ThinkTank] commentary_sources failed to load: {_e}')
+    COMMENTARY_SOURCES = []
+
+try:
+    from feed_health import record_fetch as _feed_record
+except ImportError:
+    _feed_record = None
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-VERSION = '1.1.0'
+VERSION = '2.0.0'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
-USER_AGENT = 'Mozilla/5.0 (compatible; AsifahAnalytics-ThinkTank/1.0; +https://www.asifahanalytics.com)'
+USER_AGENT = 'Mozilla/5.0 (compatible; AsifahAnalytics-ThinkTank/2.0; +https://www.asifahanalytics.com)'
+
+COMMENTARY_KEY = 'commentary:latest'
+YT_IDS_KEY = 'commentary:yt_ids'
+YT_IDS_TTL = 30 * 24 * 3600
+BALANCE_DAYS = 7
+LOPSIDED_RATIO = 3.0
+LOPSIDED_MIN = 4
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
 
+ATOM = '{http://www.w3.org/2005/Atom}'
+MEDIA = '{http://search.yahoo.com/mrss/}'
+YT = '{http://www.youtube.com/xml/schemas/2015}'
+CONTENT = '{http://purl.org/rss/1.0/modules/content/}'
+
+_MEM = {}   # fallback store when Redis is not configured (tests)
+
 
 # ============================================================
-# THINK TANK SOURCES
+# THINK TANK SOURCES (v1.x -- unchanged)
 # ============================================================
 # Each source defines:
 #   feed_url   — RSS URL
@@ -187,12 +223,88 @@ THINK_TANK_SOURCES = [
 
 
 # ============================================================
+# GLOBAL COUNTRY TAGGER (v2.0.0 -- commentary lane)
+# ============================================================
+# Word-boundary matched, so 'oman' never fires inside 'woman', 'iran'
+# never inside 'tirana', 'niger' never inside 'nigeria'. Demonyms and
+# capitals are listed because commentary rarely says "Iran" when it can
+# say "Tehran".
+_GLOBAL_EXTRA = {
+    'iran':        ['iran', 'iranian', 'tehran', 'khamenei', 'irgc', 'pezeshkian', 'araghchi'],
+    'israel':      ['israel', 'israeli', 'netanyahu', 'idf', 'knesset', 'tel aviv'],
+    'gaza':        ['gaza', 'hamas', 'rafah', 'khan younis'],
+    'lebanon':     ['lebanon', 'lebanese', 'beirut', 'hezbollah', 'hizballah', 'hizbullah'],
+    'syria':       ['syria', 'syrian', 'damascus', 'sharaa', 'aleppo', 'idlib'],
+    'iraq':        ['iraq', 'iraqi', 'baghdad', 'erbil', 'kurdistan region'],
+    'yemen':       ['yemen', 'yemeni', 'houthi', 'houthis', 'sanaa', 'aden'],
+    'saudi_arabia': ['saudi', 'riyadh', 'mbs', 'mohammed bin salman'],
+    'uae':         ['uae', 'emirati', 'abu dhabi', 'dubai', 'united arab emirates'],
+    'qatar':       ['qatar', 'qatari', 'doha'],
+    'oman':        ['oman', 'omani', 'muscat'],
+    'jordan':      ['jordanian', 'amman', 'king abdullah'],
+    'turkey':      ['turkey', 'turkish', 'türkiye', 'ankara', 'erdogan', 'erdoğan'],
+    'russia':      ['russia', 'russian', 'kremlin', 'moscow', 'putin'],
+    'ukraine':     ['ukraine', 'ukrainian', 'kyiv', 'kiev', 'zelensky', 'zelenskyy', 'donbas'],
+    'belarus':     ['belarus', 'belarusian', 'minsk', 'lukashenko'],
+    'poland':      ['poland', 'polish', 'warsaw'],
+    'hungary':     ['hungary', 'hungarian', 'budapest', 'orban', 'orbán'],
+    'uk':          ['britain', 'british', 'starmer', 'downing street', 'united kingdom'],
+    'greenland':   ['greenland'],
+    'china':       ['china', 'chinese', 'beijing', 'xi jinping', 'ccp', 'pla'],
+    'taiwan':      ['taiwan', 'taiwanese', 'taipei'],
+    'japan':       ['japan', 'japanese', 'tokyo'],
+    'north_korea': ['north korea', 'pyongyang', 'kim jong un', 'dprk'],
+    'south_korea': ['south korea', 'seoul'],
+    'india':       ['india', 'indian', 'new delhi', 'modi'],
+    'pakistan':    ['pakistan', 'pakistani', 'islamabad'],
+    'afghanistan': ['afghanistan', 'afghan', 'kabul', 'taliban'],
+    'philippines': ['philippines', 'philippine', 'manila', 'marcos'],
+    'vietnam':     ['vietnam', 'vietnamese', 'hanoi'],
+    'venezuela':   ['venezuela', 'venezuelan', 'caracas', 'maduro'],
+    'cuba':        ['cuba', 'cuban', 'havana'],
+    'mexico':      ['mexico', 'mexican', 'sheinbaum', 'sinaloa', 'cjng'],
+    'colombia':    ['colombia', 'colombian', 'bogota', 'bogotá', 'gustavo petro'],
+    'argentina':   ['argentina', 'argentine', 'buenos aires', 'milei'],
+    'brazil':      ['brazil', 'brazilian', 'lula'],
+    'canada':      ['canada', 'canadian', 'ottawa', 'carney'],
+    'panama':      ['panama canal', 'panamanian'],
+    'haiti':       ['haiti', 'haitian', 'port-au-prince'],
+    'nigeria':     ['nigeria', 'nigerian', 'abuja', 'lagos'],
+    'kenya':       ['kenya', 'kenyan', 'nairobi'],
+    'us':          ['trump', 'white house', 'congress', 'senate', 'pentagon',
+                    'democrats', 'republicans', 'gop', 'supreme court', 'state department'],
+}
+_GLOBAL_KEYWORDS = {}
+for _c, _kws in list(_AFRICA_KEYWORDS.items()) + list(_GLOBAL_EXTRA.items()):
+    _GLOBAL_KEYWORDS.setdefault(_c, [])
+    for _k in _kws:
+        if _k not in _GLOBAL_KEYWORDS[_c]:
+            _GLOBAL_KEYWORDS[_c].append(_k)
+# Words that collide in general commentary (fine inside the Africa-only
+# think-tank tagger): GNU software, a man named Chad, RSF = Reporters
+# Without Borders, OPEC "the cartel".
+for _c, _bad in (('libya', ['gnu', 'lna']), ('chad', ['chad']), ('sudan', ['rsf'])):
+    _GLOBAL_KEYWORDS[_c] = [k for k in _GLOBAL_KEYWORDS[_c] if k not in _bad]
+_GLOBAL_RX = {c: re.compile(r'(?<![a-z0-9])(?:' + '|'.join(re.escape(k) for k in kws) + r')(?![a-z0-9])')
+              for c, kws in _GLOBAL_KEYWORDS.items()}
+
+
+def global_country_tags(title, description=''):
+    text = f"{title} {description}".lower()
+    return [c for c, rx in _GLOBAL_RX.items() if rx.search(text)]
+
+
+LEAN_BUCKET = {'left': 'left', 'center-left': 'left', 'center': 'center',
+               'center-right': 'right', 'right': 'right', 'nonpartisan': 'nonpartisan'}
+
+
+# ============================================================
 # REDIS HELPERS
 # ============================================================
 
 def _redis_get(key):
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
-        return None
+        return _MEM.get(key)
     try:
         resp = requests.get(
             f'{UPSTASH_REDIS_URL}/get/{key}',
@@ -208,10 +320,11 @@ def _redis_get(key):
 
 
 def _redis_set(key, value, ttl_seconds=None):
-    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
-        return False
     if ttl_seconds is None:
         ttl_seconds = CACHE_TTL_HOURS * 3600
+    if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+        _MEM[key] = json.loads(json.dumps(value, default=str))
+        return True
     try:
         payload = json.dumps(value, default=str)
         resp = requests.post(
@@ -231,21 +344,26 @@ def _redis_set(key, value, ttl_seconds=None):
 
 
 # ============================================================
-# RSS FETCH
+# RSS / ATOM PARSING
 # ============================================================
 
 def _parse_pub_date(raw):
     """Best-effort RFC822 / ISO date parse → ISO 8601 string."""
     if not raw:
         return ''
+    raw = raw.strip()
     try:
         dt = parsedate_to_datetime(raw)
         if dt:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(timezone.utc).isoformat()
     except Exception:
         pass
     try:
         dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc).isoformat()
     except Exception:
         pass
@@ -254,113 +372,129 @@ def _parse_pub_date(raw):
 
 def _strip_html(text):
     """Strip basic HTML tags from RSS description."""
-    import re
     if not text:
         return ''
-    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'&nbsp;|&#160;', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
+
+
+def _first(item, *tags):
+    """First child that EXISTS. Never `a or b` on XML elements: an element
+    with no children is falsy, which silently dropped every RSS article
+    before v2.0.0."""
+    for t in tags:
+        el = item.find(t)
+        if el is not None:
+            return el
+    return None
+
+
+def _parse_items(content, max_items=20):
+    """RSS 2.0 or Atom (incl. YouTube) -> list of {title, url, description, published}."""
+    root = ET.fromstring(content)
+    # a block page can be well-formed XML/XHTML: only rss / feed / RDF count
+    tag = root.tag.split('}')[-1].lower()
+    if tag not in ('rss', 'feed', 'rdf'):
+        raise ET.ParseError('not a feed (root <%s>)' % tag)
+    items = root.findall('.//item')
+    if not items:
+        items = root.findall(f'.//{ATOM}entry')
+    out = []
+    for item in items[:max_items]:
+        title_el = _first(item, 'title', f'{ATOM}title')
+        if title_el is None:
+            continue
+        title = (title_el.text or '').strip()
+        url = ''
+        link_el = item.find('link')
+        if link_el is not None and (link_el.text or '').strip():
+            url = link_el.text.strip()
+        else:
+            for l in item.findall(f'{ATOM}link'):
+                if l.get('rel', 'alternate') == 'alternate' and l.get('href'):
+                    url = l.get('href').strip()
+                    break
+        desc_el = _first(item, 'description', f'{ATOM}summary', f'{MEDIA}group/{MEDIA}description',
+                         f'{CONTENT}encoded', f'{ATOM}content')
+        description = _strip_html(desc_el.text or '') if desc_el is not None else ''
+        pub_el = _first(item, 'pubDate', f'{ATOM}published', f'{ATOM}updated',
+                        '{http://purl.org/dc/elements/1.1/}date')
+        published = _parse_pub_date(pub_el.text if pub_el is not None else '')
+        if title and url:
+            out.append({'title': title, 'url': url, 'description': description,
+                        'published': published})
+    return out
+
+
+def _record(feed_url, label, items=0, status=None, error=None, t0=None):
+    if not _feed_record:
+        return
+    try:
+        _feed_record('me', feed_url, items=items, label=label, http_status=status,
+                     error=error, duration_ms=((time.time() - t0) * 1000) if t0 else None)
+    except Exception:
+        pass
 
 
 def fetch_source(source, max_items=20):
     """Fetch one think tank's RSS feed and return tagged articles."""
     feed_url = source['feed_url']
     name = source['name']
-
+    t0 = time.time()
     try:
         headers = {'User-Agent': USER_AGENT}
         resp = requests.get(feed_url, headers=headers, timeout=REQUEST_TIMEOUT)
         if resp.status_code != 200:
             print(f'[ThinkTank] {name}: HTTP {resp.status_code}')
+            _record(feed_url, name, status=resp.status_code, t0=t0)
             return []
-
-        # Parse XML — RSS 2.0 or Atom
         try:
-            root = ET.fromstring(resp.content)
+            parsed = _parse_items(resp.content, max_items)
         except ET.ParseError as e:
             print(f'[ThinkTank] {name}: XML parse error — {str(e)[:80]}')
+            _record(feed_url, name, status=200, error='XML parse error (HTML or block page?)', t0=t0)
             return []
-
-        # RSS 2.0: //item; Atom: //entry
-        items = root.findall('.//item') or root.findall(
-            './/{http://www.w3.org/2005/Atom}entry'
-        )
-        if not items:
-            print(f'[ThinkTank] {name}: no items found in feed')
-            return []
+        _record(feed_url, name, items=len(parsed), status=200, t0=t0)
 
         articles = []
-        for item in items[:max_items]:
-            # RSS 2.0 fields
-            title_el = item.find('title') or item.find(
-                '{http://www.w3.org/2005/Atom}title'
-            )
-            link_el = item.find('link')
-            if link_el is None or not (link_el.text or '').strip():
-                # Atom: <link href="..."/>
-                link_el = item.find('{http://www.w3.org/2005/Atom}link')
-
-            desc_el = item.find('description') or item.find(
-                '{http://www.w3.org/2005/Atom}summary'
-            )
-            pub_el = item.find('pubDate') or item.find(
-                '{http://www.w3.org/2005/Atom}published'
-            ) or item.find('{http://www.w3.org/2005/Atom}updated')
-
-            if title_el is None:
-                continue
-
-            title = (title_el.text or '').strip()
-            url = ''
-            if link_el is not None:
-                url = (link_el.text or link_el.get('href', '') or '').strip()
-            description = _strip_html(desc_el.text or '') if desc_el is not None else ''
-            published = _parse_pub_date(pub_el.text if pub_el is not None else '')
-
-            if not title or not url:
-                continue
-
-            # Tag by country
-            country_tags = source['tag_logic'](title, description)
+        for it in parsed:
+            country_tags = source['tag_logic'](it['title'], it['description'])
             if not country_tags:
-                # Article doesn't match any tracked country — skip
                 continue
-
             articles.append({
-                'title': title,
-                'url': url,
-                'description': description[:300],  # truncate for payload size
-                'published': published,
+                'title': it['title'],
+                'url': it['url'],
+                'description': it['description'][:300],
+                'published': it['published'],
                 'source': name,
                 'source_id': source['id'],
                 'source_site': source['site'],
                 'countries': country_tags,
             })
-
-        print(f'[ThinkTank] {name}: {len(articles)} country-tagged articles fetched')
+        print(f'[ThinkTank] {name}: {len(articles)} country-tagged articles of {len(parsed)} fetched')
         return articles
-
     except Exception as e:
         print(f'[ThinkTank] {name}: fetch error — {str(e)[:120]}')
+        _record(feed_url, name, error=str(e)[:120], t0=t0)
         return []
 
 
 # ============================================================
-# AGGREGATE & CACHE
+# AGGREGATE & CACHE -- THINK TANKS (unchanged payload shape)
 # ============================================================
 
 def scan_all_think_tanks():
-    """Fetch all sources, deduplicate, cache by country."""
+    """Fetch all think-tank sources, deduplicate, cache by country."""
     print(f'[ThinkTank] Scan start (v{VERSION})...')
     t0 = time.time()
 
     all_articles = []
     for source in THINK_TANK_SOURCES:
-        articles = fetch_source(source)
-        all_articles.extend(articles)
+        all_articles.extend(fetch_source(source))
         time.sleep(1.0)  # be kind to source servers
 
-    # Deduplicate by URL
     seen = set()
     unique = []
     for a in all_articles:
@@ -368,13 +502,8 @@ def scan_all_think_tanks():
             continue
         seen.add(a['url'])
         unique.append(a)
+    unique.sort(key=lambda art: art.get('published') or '', reverse=True)
 
-    # Sort by published date desc (most recent first)
-    def _sort_key(art):
-        return art.get('published') or ''
-    unique.sort(key=_sort_key, reverse=True)
-
-    # Build per-country buckets
     countries_seen = set()
     for a in unique:
         for c in a.get('countries', []):
@@ -397,9 +526,7 @@ def scan_all_think_tanks():
         },
     }
 
-    # Cache full payload
     _redis_set('think_tank:all:latest', payload)
-    # Cache per-country slices for fast lookup
     for country, arts in payload['by_country'].items():
         _redis_set(f'think_tank:{country}:latest', {
             'version': VERSION,
@@ -415,12 +542,10 @@ def scan_all_think_tanks():
 
 
 def get_country_feed(country_id):
-    """Return cached country-specific feed; trigger background scan if empty."""
+    """Return cached country-specific feed."""
     cached = _redis_get(f'think_tank:{country_id}:latest')
     if cached:
         return cached
-
-    # No cache — return empty shell, scan will populate next cycle
     return {
         'version': VERSION,
         'last_updated': None,
@@ -451,6 +576,218 @@ def get_all_feeds():
 
 
 # ============================================================
+# COMMENTARY LANE (v2.0.0)
+# ============================================================
+_YT_ID_RX = re.compile(r'"(?:channelId|externalId)":"(UC[\w-]{22})"')
+_YT_CANON_RX = re.compile(r'youtube\.com/channel/(UC[\w-]{22})')
+
+
+def _resolve_youtube(handle, ids):
+    """'@Perun' -> 'UC...'. Cached in Redis for 30 days."""
+    h = (handle or '').strip()
+    if h.startswith('UC') and len(h) == 24:
+        return h, None
+    if h in ids:
+        return ids[h], None
+    url = 'https://www.youtube.com/%s' % (h if h.startswith('@') else '@' + h)
+    try:
+        r = requests.get(url, headers={'User-Agent': USER_AGENT, 'Accept-Language': 'en-US,en;q=0.9'},
+                         timeout=REQUEST_TIMEOUT, cookies={'CONSENT': 'YES+1'})
+        if r.status_code != 200:
+            return None, 'handle lookup HTTP %s' % r.status_code
+        m = _YT_CANON_RX.search(r.text) or _YT_ID_RX.search(r.text)
+        if not m:
+            return None, 'channel id not found on the handle page'
+        ids[h] = m.group(1)
+        return ids[h], None
+    except Exception as e:
+        return None, 'handle lookup failed: %s' % str(e)[:80]
+
+
+def _fetch_commentary_source(src, yt_ids):
+    """One source -> (items, health)."""
+    t0 = time.time()
+    health = {'id': src['id'], 'name': src['name'], 'kind': src.get('kind'),
+              'lean': src.get('lean'), 'verify': bool(src.get('verify'))}
+    if src.get('youtube'):
+        cid, err = _resolve_youtube(src['youtube'], yt_ids)
+        if not cid:
+            health.update(status='dead', error=err)
+            _record('youtube:' + src['youtube'], src['name'], error=err, t0=t0)
+            return [], health
+        feed = 'https://www.youtube.com/feeds/videos.xml?channel_id=%s' % cid
+        health['channel_id'] = cid
+    else:
+        feed = src.get('feed')
+    health['feed'] = feed
+    try:
+        r = requests.get(feed, headers={'User-Agent': USER_AGENT}, timeout=REQUEST_TIMEOUT)
+        if r.status_code != 200:
+            health.update(status='dead', error='HTTP %s' % r.status_code)
+            _record(feed, src['name'], status=r.status_code, t0=t0)
+            return [], health
+        try:
+            parsed = _parse_items(r.content, 15 if src.get('youtube') else 20)
+        except ET.ParseError:
+            health.update(status='dead', error='not a feed (HTML or block page?)')
+            _record(feed, src['name'], status=200, error='XML parse error', t0=t0)
+            return [], health
+    except Exception as e:
+        health.update(status='dead', error=str(e)[:100])
+        _record(feed, src['name'], error=str(e)[:100], t0=t0)
+        return [], health
+    _record(feed, src['name'], items=len(parsed), status=200, t0=t0)
+    items = []
+    for it in parsed:
+        tags = global_country_tags(it['title'], it['description'][:600])
+        items.append({
+            'title': it['title'], 'url': it['url'],
+            'description': it['description'][:300], 'published': it['published'],
+            'source': src['name'], 'source_id': src['id'], 'kind': src.get('kind'),
+            'lean': src.get('lean'), 'lean_bucket': LEAN_BUCKET.get(src.get('lean'), 'center'),
+            'countries': tags,
+        })
+    newest = max((i['published'] for i in items if i['published']), default=None)
+    health.update(status='ok' if items else 'empty', items=len(items), newest=newest)
+    return items, health
+
+
+def _age_days(iso, now):
+    try:
+        d = datetime.fromisoformat(iso.replace('Z', '+00:00'))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return (now - d).total_seconds() / 86400
+    except Exception:
+        return None
+
+
+def _country_label(c):
+    try:
+        from country_ids import display
+        return display(c) or c.replace('_', ' ').title()
+    except Exception:
+        return {'us': 'the US', 'uk': 'the UK', 'uae': 'the UAE', 'drc': 'DR Congo'}.get(
+            c, c.replace('_', ' ').title())
+
+
+def build_balance(items, health, now=None):
+    """Cross-Spectrum Balance from the last BALANCE_DAYS of commentary."""
+    now = now or datetime.now(timezone.utc)
+    def _fresh(i):
+        a = _age_days(i.get('published') or '', now)
+        return a is not None and a <= BALANCE_DAYS      # (a or 99) would drop age 0.0
+    recent = [i for i in items if _fresh(i)]
+    def counts(rows):
+        c = {'left': 0, 'center': 0, 'right': 0, 'nonpartisan': 0}
+        for r in rows:
+            c[r.get('lean_bucket', 'center')] = c.get(r.get('lean_bucket', 'center'), 0) + 1
+        return c
+    def legs_of(kinds):
+        hs = [h for h in health if h.get('kind') in kinds]
+        return {'sources_ok': sum(1 for h in hs if h.get('status') == 'ok'), 'sources_total': len(hs)}
+    written = [i for i in recent if i.get('kind') in ('newsletter', 'outlet', 'institute')]
+    video = [i for i in recent if i.get('kind') == 'video']
+    by_country = {}
+    for i in recent:
+        for c in i.get('countries') or []:
+            by_country.setdefault(c, []).append(i)
+    topics = []
+    for c, rows in by_country.items():
+        k = counts(rows)
+        l, r = k['left'], k['right']
+        side = None
+        if l + r >= LOPSIDED_MIN:
+            if r >= LOPSIDED_RATIO * max(l, 1) and r > l:
+                side = 'right'
+            elif l >= LOPSIDED_RATIO * max(r, 1) and l > r:
+                side = 'left'
+        rec = {'country': c, 'total': len(rows), 'counts': k, 'lopsided': side}
+        if side:
+            hi, lo = (r, l) if side == 'right' else (l, r)
+            rec['sentence'] = ('%s-leaning commentary on %s outnumbers %s-leaning %d to %d this week. '
+                               'Lopsided attention often runs ahead of policy debate; it is a signal '
+                               'about who is talking, not about what is true.'
+                               % (side.capitalize(), _country_label(c),
+                                  'left' if side == 'right' else 'right', hi, lo))
+        topics.append(rec)
+    topics.sort(key=lambda t: (-(1 if t['lopsided'] else 0), -t['total']))
+    return {
+        'window_days': BALANCE_DAYS,
+        'overall': counts(recent),
+        'total': len(recent),
+        'legs': {
+            'newsletters_outlets_institutes': dict(legs_of(('newsletter', 'outlet', 'institute')),
+                                                   counts=counts(written), state='live'),
+            'video': dict(legs_of(('video',)), counts=counts(video), state='live'),
+            'reddit': {'state': 'unread', 'counts': None,
+                       'note': 'Reddit API access is pending; unread, not zero.'},
+        },
+        'by_country': topics[:25],
+        'lopsided': [t for t in topics if t['lopsided']][:6],
+        'note': ('Counts of pieces published by sources on each side of the spectrum. '
+                 'Commentary is context, never scored.'),
+    }
+
+
+def scan_commentary():
+    """Fetch every commentary source, tag, balance, cache."""
+    t0 = time.time()
+    now = datetime.now(timezone.utc)
+    yt_ids = _redis_get(YT_IDS_KEY) or {}
+    n_ids = len(yt_ids)
+    items, health = [], []
+    for src in COMMENTARY_SOURCES:
+        try:
+            got, h = _fetch_commentary_source(src, yt_ids)
+        except Exception as e:
+            got, h = [], {'id': src.get('id'), 'name': src.get('name'), 'status': 'dead',
+                          'error': 'crashed: %s' % str(e)[:100]}
+        items.extend(got)
+        health.append(h)
+        time.sleep(0.6)
+    if len(yt_ids) != n_ids:
+        _redis_set(YT_IDS_KEY, yt_ids, YT_IDS_TTL)
+    seen, unique = set(), []
+    for i in sorted(items, key=lambda x: x.get('published') or '', reverse=True):
+        if i['url'] in seen:
+            continue
+        seen.add(i['url'])
+        unique.append(i)
+    by_country = {}
+    for i in unique:
+        for c in i.get('countries') or []:
+            if len(by_country.setdefault(c, [])) < 40:
+                by_country[c].append(i)
+    payload = {
+        'version': VERSION,
+        'last_updated': now.isoformat(),
+        'scan_seconds': round(time.time() - t0, 1),
+        'label': ('Commentary from across the spectrum: newsletters, opinion outlets, '
+                  'institutes and YouTube channels. Context only, never scored.'),
+        'total_items': len(unique),
+        'items': unique[:400],
+        'by_country': by_country,
+        'balance': build_balance(unique, health, now),
+        'health': {
+            'sources': len(COMMENTARY_SOURCES),
+            'ok': sum(1 for h in health if h.get('status') == 'ok'),
+            'empty': [h['id'] for h in health if h.get('status') == 'empty'],
+            'dead': [{'id': h['id'], 'why': h.get('error')} for h in health if h.get('status') == 'dead'],
+            'per_source': health,
+        },
+    }
+    _redis_set(COMMENTARY_KEY, payload, 26 * 3600)
+    print(f'[Commentary] {len(unique)} items from {payload["health"]["ok"]}/{len(COMMENTARY_SOURCES)} '
+          f'sources in {payload["scan_seconds"]}s; {len(payload["balance"]["lopsided"])} lopsided topics')
+    return payload
+
+
+def get_commentary():
+    return _redis_get(COMMENTARY_KEY)
+
+
+# ============================================================
 # BACKGROUND REFRESH
 # ============================================================
 
@@ -472,6 +809,10 @@ def _background_refresh_loop():
             scan_all_think_tanks()
         except Exception as e:
             print(f'[ThinkTank] Background scan error: {e}')
+        try:
+            scan_commentary()
+        except Exception as e:
+            print(f'[Commentary] Background scan error: {e}')
         time.sleep(BACKGROUND_REFRESH_HOURS * 3600)
 
 
@@ -483,7 +824,6 @@ def start_background_refresh():
             return
         _refresh_started = True
 
-    # Boot delay — give app a moment to start before first scan
     def _delayed_start():
         time.sleep(60)
         _background_refresh_loop()
@@ -505,17 +845,11 @@ def _all_valid_countries():
     return valid
 
 
-def register_think_tank_endpoints(app, start_background=True):
-    """Register /api/think-tank/* endpoints on the given Flask app.
+_manual = {'last': 0.0}
 
-    Endpoints:
-        GET /api/think-tank/all
-            → full payload, all sources, all countries
-        GET /api/think-tank/<country>
-            → articles tagged for that country only
-        GET /api/think-tank/refresh?key=...
-            → force refresh (admin only)
-    """
+
+def register_think_tank_endpoints(app, start_background=True):
+    """Register /api/think-tank/* and /api/commentary/* endpoints."""
     from flask import jsonify, request
 
     @app.route('/api/think-tank/all', methods=['GET', 'OPTIONS'])
@@ -539,13 +873,11 @@ def register_think_tank_endpoints(app, start_background=True):
 
     @app.route('/api/think-tank/refresh', methods=['POST', 'GET'])
     def think_tank_refresh():
-        # Optional admin guard via env var
         admin_key = os.environ.get('ADMIN_REFRESH_KEY')
         if admin_key:
             provided = request.args.get('key') or request.headers.get('X-Admin-Key')
             if provided != admin_key:
                 return jsonify({'error': 'unauthorized'}), 401
-        # Run synchronously — typically called manually after deploy
         payload = scan_all_think_tanks()
         return jsonify({
             'success': True,
@@ -553,10 +885,60 @@ def register_think_tank_endpoints(app, start_background=True):
             'scan_seconds': payload['scan_seconds'],
         })
 
+    # ── Commentary lane (v2.0.0) ──
+    def _cold():
+        return {'available': False, 'version': VERSION,
+                'note': 'First commentary scan runs about a minute after deploy -- unread, not empty.'}
+
+    @app.route('/api/commentary/all')
+    def commentary_all():
+        p = get_commentary()
+        return jsonify(dict(p, available=True) if p else _cold())
+
+    @app.route('/api/commentary/balance')
+    def commentary_balance():
+        p = get_commentary()
+        if not p:
+            return jsonify(_cold())
+        return jsonify({'available': True, 'version': VERSION, 'last_updated': p.get('last_updated'),
+                        'balance': p.get('balance'),
+                        'sources_ok': p.get('health', {}).get('ok'),
+                        'sources_total': p.get('health', {}).get('sources')})
+
+    @app.route('/api/commentary/debug')
+    def commentary_debug():
+        note = None
+        if request.args.get('refresh', 'false').lower() == 'true':
+            if time.time() - _manual['last'] < 600:
+                note = 'refresh ignored: last manual refresh was under 10 minutes ago'
+            else:
+                _manual['last'] = time.time()
+                scan_commentary()
+                note = 'refreshed'
+        p = get_commentary() or {}
+        return jsonify({'version': VERSION, 'last_updated': p.get('last_updated'),
+                        'refresh': note, 'scan_seconds': p.get('scan_seconds'),
+                        'total_items': p.get('total_items'),
+                        'health': p.get('health'),
+                        'lopsided': (p.get('balance') or {}).get('lopsided'),
+                        'overall': (p.get('balance') or {}).get('overall')})
+
+    @app.route('/api/commentary/<country>')
+    def commentary_country(country):
+        p = get_commentary()
+        if not p:
+            return jsonify(_cold())
+        c = (country or '').lower().strip()
+        bal = next((t for t in (p.get('balance') or {}).get('by_country', []) if t['country'] == c), None)
+        return jsonify({'available': True, 'version': VERSION, 'country': c,
+                        'last_updated': p.get('last_updated'), 'label': p.get('label'),
+                        'items': (p.get('by_country') or {}).get(c, []), 'balance': bal})
+
     if start_background:
         start_background_refresh()
 
-    print(f'[ThinkTank] Endpoints registered (v{VERSION})')
+    print(f'[ThinkTank] Endpoints registered (v{VERSION}): think-tank + commentary '
+          f'({len(COMMENTARY_SOURCES)} commentary sources)')
 
 
 # ============================================================
@@ -569,9 +951,7 @@ if __name__ == '__main__':
     print(json.dumps({
         'total': payload['total_articles'],
         'by_country': {k: len(v) for k, v in payload['by_country'].items()},
-        'first_3': [
-            {'title': a['title'][:80], 'countries': a['countries'],
-             'published': a['published']}
-            for a in payload['all_articles'][:3]
-        ],
     }, indent=2))
+    c = scan_commentary()
+    print(json.dumps({'commentary': c['total_items'], 'health_ok': c['health']['ok'],
+                      'dead': c['health']['dead'], 'overall': c['balance']['overall']}, indent=2))
