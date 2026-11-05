@@ -46,6 +46,22 @@ v1.1.0 (Oct 30 2026)
   * _call_claude() takes the system prompt, schema and validator as
     arguments, so regional_voice.py reuses the same call, budget and logging.
 
+v1.3.0 (Nov 5 2026) -- "same headline three days running" (Rachel)
+  The write-up only changes when the facts change, and every way it can fail
+  to change was SILENT: a reuse, a failed call, the daily cap, the 15-minute
+  gap and a forced rebuild all left the old text up with nothing on the page
+  to say which. Now:
+  * Every check is recorded (gpi:voice:status) -- not just errors.
+  * /api/gpi/voice carries a `freshness` block the page shows under the read:
+      current          facts unchanged since it was written -- and for how long,
+                       so "no new news for 30 hours" is SAID, and flagged for a
+                       feed check when it runs past a day
+      stale            the facts changed but the writer did not run, with the
+                       reason in plain words (failed call, cap, forced rebuild)
+    plus the GPI's own input health (regions live, trackers stale/missing).
+  * One automatic retry after a min-gap or a failed call (organic paths only;
+    a forced rebuild still never leads to a Claude call). The daily cap holds.
+
 COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 """
 
@@ -59,7 +75,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.2.0'   # Nov 4 2026: what_it_means / not_implied / standing reach the writer
+__version__ = '1.3.0'   # Nov 5 2026: freshness block + status of every check + one retry; (1.2.0) what_it_means
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -70,6 +86,10 @@ VOICE_TIMEOUT_SEC = 120
 VOICE_KEY         = 'gpi:voice:latest'
 VOICE_TTL         = 14 * 24 * 3600
 VOICE_CALLS_KEY   = 'gpi:voice:calls:'          # + YYYY-MM-DD
+VOICE_STATUS_KEY  = 'gpi:voice:status'          # v1.3.0: outcome of EVERY check
+GPI_CACHE_KEY     = 'gpi:global:latest'         # read-only here (freshness / retry)
+RETRY_FAILED_SEC  = 30 * 60
+UNCHANGED_WARN_H  = 24                          # facts unchanged this long -> suggest a feed check
 VIEWS             = ('all_vectors', 'kinetic', 'economic', 'diplomatic',
                      'humanitarian', 'governance')
 
@@ -471,16 +491,67 @@ def _today():
     return datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
 
-def refresh(gpi_payload, allow_call=True, reason='organic'):
-    """Make sure the stored write-up matches this GPI payload's facts.
+_retry = {'pending': False}
 
+
+def _record(status, fp=None, gpi_payload=None):
+    """v1.3.0: remember the outcome of every check, so a silent reuse and a
+    silent failure can be told apart from the page."""
+    try:
+        dc = (gpi_payload or {}).get('data_completeness') or {}
+        _rset(VOICE_STATUS_KEY, {
+            'status': status.get('status'), 'error': status.get('error'),
+            'checked_at': datetime.now(timezone.utc).isoformat(),
+            'fingerprint_now': fp,
+            'gpi_generated_at': (gpi_payload or {}).get('generated_at'),
+            'inputs': {'regions_live': dc.get('regions_live'), 'regions_expected': dc.get('regions_expected'),
+                       'trackers_stale': (dc.get('trackers_stale') or [])[:12],
+                       'trackers_missing': (dc.get('trackers_missing') or [])[:12]},
+        }, VOICE_TTL)
+    except Exception as e:
+        print('[GPI voice] status record failed (non-fatal): %s' % str(e)[:100])
+    return status
+
+
+def _schedule_retry(delay):
+    """One delayed retry against the CACHED GPI (organic paths only)."""
+    if _retry['pending']:
+        return
+    _retry['pending'] = True
+
+    def _go():
+        _retry['pending'] = False
+        cached = _rget(GPI_CACHE_KEY)
+        if isinstance(cached, dict):
+            print('[GPI voice] retrying once after %ss' % int(delay))
+            refresh(cached, allow_call=True, reason='retry', _may_retry=False)
+    t = threading.Timer(max(60, delay), _go)
+    t.daemon = True
+    t.start()
+
+
+def refresh(gpi_payload, allow_call=True, reason='organic', _may_retry=True):
+    """Make sure the stored write-up matches this GPI payload's facts.
+    v1.3.0: every outcome is recorded; min-gap / failed calls retry once.
     Returns a status dict. Never raises.
     """
+    st = _refresh(gpi_payload, allow_call, reason)
+    _record(st, st.get('fingerprint'), gpi_payload)
+    if _may_retry and allow_call and reason != 'manual':
+        if st.get('status') == 'min_gap':
+            _schedule_retry(st.get('retry_after_sec', VOICE_MIN_GAP_SEC) + 30)
+        elif st.get('status') == 'call_failed' and 'not set' not in (st.get('error') or ''):
+            _schedule_retry(RETRY_FAILED_SEC)
+    return st
+
+
+def _refresh(gpi_payload, allow_call=True, reason='organic'):
     try:
         facts = pack(gpi_payload)
     except Exception as e:
         return {'status': 'pack_failed', 'error': str(e)[:160]}
     fp = facts_fingerprint(facts)
+    _fp = {'fingerprint': fp}
     latest = _rget(VOICE_KEY) or {}
 
     if latest.get('fingerprint') == fp and latest.get('views'):
@@ -489,11 +560,11 @@ def refresh(gpi_payload, allow_call=True, reason='organic'):
         return {'status': 'facts_changed_call_not_allowed', 'fingerprint': fp,
                 'note': '?force rebuilds never call Claude; the last write-up stays up'}
     if not os.environ.get('ANTHROPIC_API_KEY'):
-        return {'status': 'disabled_no_key'}
+        return dict(_fp, status='disabled_no_key')
 
     with _lock:
         if _running['busy']:
-            return {'status': 'already_running'}
+            return dict(_fp, status='already_running')
         _running['busy'] = True
     try:
         now = time.time()
@@ -501,11 +572,11 @@ def refresh(gpi_payload, allow_call=True, reason='organic'):
         # The gap guards against automatic retries hammering the API. A manual
         # refresh (Rachel's secret link) skips it; the daily cap still applies.
         if reason != 'manual' and now - last < VOICE_MIN_GAP_SEC:
-            return {'status': 'min_gap', 'retry_after_sec': int(VOICE_MIN_GAP_SEC - (now - last))}
+            return dict(_fp, status='min_gap', retry_after_sec=int(VOICE_MIN_GAP_SEC - (now - last)))
         calls_key = VOICE_CALLS_KEY + _today()
         calls = int((_rget(calls_key) or {}).get('n', 0))
         if calls >= VOICE_DAILY_CAP:
-            return {'status': 'daily_cap_reached', 'cap': VOICE_DAILY_CAP}
+            return dict(_fp, status='daily_cap_reached', cap=VOICE_DAILY_CAP)
         _rset(calls_key, {'n': calls + 1}, 2 * 24 * 3600)
         latest['last_attempt_epoch'] = now
         _rset(VOICE_KEY, latest, VOICE_TTL)
@@ -540,7 +611,7 @@ def refresh(gpi_payload, allow_call=True, reason='organic'):
         latest['last_error'] = str(e)[:200]
         latest['last_error_at'] = datetime.now(timezone.utc).isoformat()
         _rset(VOICE_KEY, latest, VOICE_TTL)
-        return {'status': 'call_failed', 'error': str(e)[:200]}
+        return dict(_fp, status='call_failed', error=str(e)[:200])
     finally:
         with _lock:
             _running['busy'] = False
@@ -563,4 +634,59 @@ def latest():
                 'note': 'No plain-language write-up yet; the page shows the analyst prose.'}
     out = {k: v for k, v in rec.items() if k != 'last_attempt_epoch'}
     out['available'] = True
+    out['freshness'] = _freshness(rec)
+    return out
+
+
+_REASON = {
+    'call_failed': 'the writing call failed',
+    'daily_cap_reached': "today's cost cap for the writer was reached",
+    'min_gap': 'the writer ran very recently; a retry is scheduled',
+    'facts_changed_call_not_allowed': 'the last rebuild was a forced one, which never calls the writer (cost rule)',
+    'already_running': 'a rewrite was already in progress',
+    'disabled_no_key': 'the writer is switched off (no API key)',
+    'pack_failed': 'the signal sheet could not be built',
+}
+
+
+def _hours_since(iso):
+    try:
+        return round((datetime.now(timezone.utc) - datetime.fromisoformat(str(iso).replace('Z', '+00:00')))
+                     .total_seconds() / 3600, 1)
+    except Exception:
+        return None
+
+
+def _freshness(rec):
+    """Is the write-up on the page the write-up for the CURRENT facts?"""
+    st = _rget(VOICE_STATUS_KEY) or {}
+    written_h = _hours_since(rec.get('generated_at'))
+    out = {'written_at': rec.get('generated_at'), 'hours_since_written': written_h,
+           'last_check_at': st.get('checked_at'), 'last_check_status': st.get('status'),
+           'gpi_generated_at': st.get('gpi_generated_at'), 'inputs': st.get('inputs')}
+    if not st:
+        out.update(state='unknown', plain='Freshness not recorded yet (first check after this update).')
+        return out
+    same = st.get('fingerprint_now') and st.get('fingerprint_now') == rec.get('fingerprint')
+    inp = st.get('inputs') or {}
+    gaps = []
+    if inp.get('regions_live') is not None and inp.get('regions_expected') and inp['regions_live'] < inp['regions_expected']:
+        gaps.append('%s of %s regions reporting' % (inp['regions_live'], inp['regions_expected']))
+    if inp.get('trackers_stale'):
+        gaps.append('%d stale tracker(s)' % len(inp['trackers_stale']))
+    if same:
+        out['state'] = 'current'
+        msg = 'Up to date: the signals have not changed since this was written'
+        if written_h is not None and written_h >= UNCHANGED_WARN_H:
+            out['state'] = 'unchanged_long'
+            msg = ('No change in the signals for %d hours -- either a quiet stretch or a feed problem; '
+                   'worth a check' % int(written_h))
+        out['plain'] = msg + ('.' if not gaps else ' (inputs: ' + '; '.join(gaps) + ').')
+    else:
+        out['state'] = 'stale'
+        out['plain'] = ('The signals have changed since this was written, but the rewrite did not run: %s. '
+                        'The analyst detail below is current.'
+                        % _REASON.get(st.get('status'), st.get('status') or 'unknown reason'))
+        if st.get('error'):
+            out['error'] = st['error']
     return out
