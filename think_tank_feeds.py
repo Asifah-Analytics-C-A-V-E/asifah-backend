@@ -71,6 +71,14 @@ v2.3.0 (Nov 5 2026) -- PODCASTS
     so a wrong match is visible, never silent. 'feed' still overrides.
   * Balance gets a 'podcasts' leg.
   * Hebrew keywords in the country tagger (Haaretz's HaShavua is in Hebrew).
+
+v2.3.1 (Nov 5 2026) -- the baseline counts from the day WE STARTED WATCHING
+  * Bug: "baseline_days" was measured from the oldest item any feed still
+    carried (~53 days), but a feed only holds its last ~20 items, so weeks
+    before we started were near-empty. "Usual week" came out ~0 and every
+    country read as a spike (US 28x, Iran 35x). Now the baseline starts on
+    the first scan (commentary:history_started) and only counts days from
+    then on; until 14 days have passed every country says baseline_building.
 """
 
 import os
@@ -98,7 +106,7 @@ except ImportError:
 # CONFIG
 # ============================================================
 
-VERSION = '2.3.0'
+VERSION = '2.3.1'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -109,6 +117,7 @@ YT_IDS_KEY = 'commentary:yt_ids'
 YT_IDS_TTL = 30 * 24 * 3600
 BALANCE_DAYS = 7
 HISTORY_KEY = 'commentary:history'
+HISTORY_STARTED_KEY = 'commentary:history_started'
 HISTORY_DAYS = 60
 SPIKE_RATIO = 2.5
 SPIKE_MIN = 6
@@ -896,13 +905,17 @@ def update_history(items, history, now=None):
     return {d: v for d, v in history.items() if d >= cutoff}
 
 
-def attention_metrics(history, now=None):
-    """This week vs a usual week (previous 4 weeks), per country."""
+def attention_metrics(history, now=None, started=None):
+    """This week vs a usual week (previous 4 weeks), per country.
+    started = the day we began watching (v2.3.1); days before it don't count."""
     now = now or datetime.now(timezone.utc)
+    full = history
+    if started:
+        history = {d: v for d, v in history.items() if d >= started[:10]}
     days = sorted(history)
     if not days:
         return {}
-    first = datetime.fromisoformat(days[0]).replace(tzinfo=timezone.utc)
+    first = datetime.fromisoformat(started[:10] if started else days[0]).replace(tzinfo=timezone.utc)
     baseline_days = max(0, (now - first).days - 7)
     def total(day_from, day_to):
         t = {}
@@ -913,7 +926,11 @@ def attention_metrics(history, now=None):
         return t
     d = lambda n: (now - timedelta(days=n)).strftime('%Y-%m-%d')
     tomorrow = (now + timedelta(days=1)).strftime('%Y-%m-%d')
-    this_week = total(d(7), tomorrow)
+    this_week = {}
+    for dd in full:                 # this week counts everything seen, started or not
+        if d(7) <= dd < tomorrow:
+            for c, k in full[dd].items():
+                this_week[c] = this_week.get(c, 0) + sum(k.values())
     base_span = min(28, baseline_days)
     base = total(d(7 + base_span), d(7)) if base_span > 0 else {}
     out = {}
@@ -964,7 +981,11 @@ def scan_commentary():
                 by_country[c].append(i)
     history = update_history(unique, _redis_get(HISTORY_KEY) or {}, now)
     _redis_set(HISTORY_KEY, history, (HISTORY_DAYS + 5) * 86400)
-    attention = attention_metrics(history, now)
+    started = _redis_get(HISTORY_STARTED_KEY)
+    if not started:
+        started = '2026-11-05' if now.strftime('%Y-%m-%d') >= '2026-11-05' else now.strftime('%Y-%m-%d')
+        _redis_set(HISTORY_STARTED_KEY, started, 400 * 86400)
+    attention = attention_metrics(history, now, started=started)
     payload = {
         'version': VERSION,
         'last_updated': now.isoformat(),

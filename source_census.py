@@ -13,6 +13,11 @@ answers three questions:
                           blind at once)
   3. Is it getting better? totals now vs the last census (kept 30 days)
 
+v1.1.0 (Nov 5 2026): a feed nobody has fetched for 36h is RETIRED, not broken.
+  When a URL is swapped (e.g. Times of Israel -> its Google News query), the
+  old address keeps its record in feed_health forever, still saying "failing".
+  Those are listed under 'retired' and left out of the broken count.
+
 COST: $0. Five HTTP reads of our own backends, at most once per 30 minutes
 (cached). No Claude calls. ?refresh=true re-reads (also at most every 10 min).
 """
@@ -25,7 +30,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 BACKENDS = {
     'me':     'https://asifah-backend.onrender.com/health',
@@ -87,6 +92,19 @@ def _read_backend(name, url, out):
         out[name] = {'ok': False, 'error': str(e)[:120], 'seconds': round(time.time() - t0, 1)}
 
 
+RETIRED_AFTER_H = 36
+
+
+def _hours_since(iso):
+    try:
+        d = datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - d).total_seconds() / 3600
+    except Exception:
+        return None
+
+
 def _summarise(name, raw):
     if not raw.get('ok'):
         return {'backend': name, 'state': 'unread',
@@ -97,6 +115,13 @@ def _summarise(name, raw):
     if not feeds:
         return {'backend': name, 'state': fh.get('state') or 'no_feed_report',
                 'why': fh.get('reason')}
+    retired = []
+    for label in list(feeds):
+        h = _hours_since(feeds[label].get('last_check'))
+        if h is not None and h > RETIRED_AFTER_H:
+            retired.append({'feed': label, 'url': feeds[label].get('feed_id'),
+                            'last_checked_hours_ago': round(h)})
+            feeds = {k: v for k, v in feeds.items() if k != label}
     broken = []
     google = 0
     for label, f in feeds.items():
@@ -111,10 +136,11 @@ def _summarise(name, raw):
     rec = {
         'backend': name, 'state': 'assessed', 'feeds': total,
         'summary': fh.get('summary'),
-        'healthy_pct': round(100.0 * (fh.get('summary') or {}).get('healthy', 0) / total) if total else None,
+        'healthy_pct': round(100.0 * (total - len(broken)) / total) if total else None,
         'google_news_share_pct': round(100.0 * google / total) if total else None,
         'broken': broken,
         'duplicate_labels': fh.get('duplicate_labels') or [],
+        'retired': retired,
     }
     reddit = (raw['data'] or {}).get('reddit') or {}
     rl = sum(1 for t in (reddit.get('targets') or {}).values() if t.get('rate_limited'))
@@ -163,7 +189,7 @@ def build():
     backends = [_summarise(n, raws.get(n) or {'ok': False, 'error': 'no answer in 60s'}) for n in BACKENDS]
     assessed = [b for b in backends if b.get('state') == 'assessed']
     total = sum(b['feeds'] for b in assessed)
-    healthy = sum((b.get('summary') or {}).get('healthy', 0) for b in assessed)
+    healthy = sum(b['feeds'] - len(b['broken']) for b in assessed)
     broken = sum(len(b['broken']) for b in assessed)
     google = sum(round(b['feeds'] * (b['google_news_share_pct'] or 0) / 100.0) for b in assessed)
     now = datetime.now(timezone.utc).isoformat()
