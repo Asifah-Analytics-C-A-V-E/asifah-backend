@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 BACKENDS = {
     'me':     'https://asifah-backend.onrender.com/health',
@@ -175,6 +175,16 @@ def _side_checks():
                              'generated_at': c.get('last_updated')}
     except Exception as e:
         out['commentary'] = {'state': 'unread', 'why': str(e)[:80]}
+    try:                                                   # v1.1.1: Wikipedia lane
+        import wikipedia_attention as wa
+        w = wa.latest() or {}
+        h = w.get('health') or {}
+        out['wikipedia'] = {'ok': h.get('ok'), 'of': h.get('articles'),
+                            'failed': [f.get('project', '') + ':' + f.get('title', '') + ' -- ' + f.get('why', '')
+                                       for f in (h.get('failed') or [])][:20],
+                            'generated_at': w.get('generated_at')}
+    except Exception as e:
+        out['wikipedia'] = {'state': 'unread', 'why': str(e)[:80]}
     return out
 
 

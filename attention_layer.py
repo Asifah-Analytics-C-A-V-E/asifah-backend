@@ -7,7 +7,8 @@ WHAT IT IS
   what is HAPPENING, read side by side for one country:
     * traders' odds         (prediction_markets.py  -> pm:latest)
     * commentary            (think_tank_feeds.py    -> commentary:latest)
-    * (later) Wikipedia pageviews, Reddit
+    * public attention      (wikipedia_attention.py -> wiki:latest)   v1.1.0
+    * (later) Reddit
   next to Asifah's own level (GPI country rollup -> gpi:global:latest).
 
   Nothing here is scored. Nothing here raises or lowers a level. Its value
@@ -21,6 +22,12 @@ WHAT IT IS
                      "The score is running ahead of the conversation."
     lopsided         one side of the political spectrum is doing most of
                      the talking about this country this week.
+
+v1.1.0 (Nov 6 2026) -- WIKIPEDIA. The public layer: how many people READ about
+  a country, against their usual. A Wikipedia spike counts toward
+  ahead_of_score like a commentary spike. score_ahead can now also fire when
+  the public is reading LESS than usual (Wikipedia 'quiet') while Asifah reads
+  L4+ -- commentary's own baseline is still being learned until ~Nov 19.
 
 ROUTES
   /api/attention/<country>    the "Beside the score" panel's one call
@@ -37,7 +44,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 UPSTASH_REDIS_URL = os.environ.get('UPSTASH_REDIS_URL')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN')
@@ -109,7 +116,7 @@ def _rget(key):
 
 def _sources():
     return {'markets': _rget('pm:latest'), 'commentary': _rget('commentary:latest'),
-            'gpi': _rget('gpi:global:latest')}
+            'gpi': _rget('gpi:global:latest'), 'wiki': _rget('wiki:latest')}
 
 
 def _our_level(c, gpi):
@@ -157,6 +164,9 @@ def country(c, src=None):
     c = canon(c)
     src = src or _sources()
     m, cm, gpi = src.get('markets'), src.get('commentary'), src.get('gpi')
+    wk = src.get('wiki')
+    wa = ((wk or {}).get('countries') or {}).get(c)
+    wa_pub = {k: v for k, v in (wa or {}).items() if k != 'articles'} if wa else None
     lvl = _our_level(c, gpi)
     mk = _market_items(c, m)
     moves = _market_pressure_moves(mk)
@@ -167,7 +177,9 @@ def country(c, src=None):
     flags = []
 
     spike = bool(att and att.get('spike'))
-    layers_up = (['commentary'] if spike else []) + (['traders'] if moves else [])
+    wiki_spike = bool(wa and wa.get('state') == 'spike')
+    layers_up = (['commentary'] if spike else []) + (['traders'] if moves else []) + \
+                (['public'] if wiki_spike else [])
     if layers_up and lvl is not None and lvl <= QUIET_MAX_LEVEL:
         what = []
         if spike:
@@ -175,16 +187,24 @@ def country(c, src=None):
                         % (name, att.get('ratio') or 0))
         if moves:
             what.append('traders moved toward pressure (%s)' % moves[0]['label'].rstrip('?'))
+        if wiki_spike:
+            what.append('Wikipedia readers are looking up "%s" at %.1f times the usual rate'
+                        % (wa.get('lead_article'), wa.get('ratio') or 0))
         flags.append({'kind': 'ahead_of_score', 'layers': layers_up,
                       'text': '%s, while Asifah reads %s at L%d. The conversation is running ahead of '
                               'the score: worth watching, not yet evidence.'
                               % ('; '.join(what).capitalize(), name, lvl)})
     quiet_talk = bool(att and att.get('state') == 'quiet')
-    if lvl is not None and lvl >= HOT_MIN_LEVEL and quiet_talk and _market_calm(mk):
+    talk_unknown = not att or att.get('state') == 'baseline_building'
+    wiki_quiet = bool(wa and wa.get('state') == 'quiet')
+    if lvl is not None and lvl >= HOT_MIN_LEVEL and _market_calm(mk) and not spike and not wiki_spike \
+            and (quiet_talk or (talk_unknown and wiki_quiet)):
+        who = ('commentators are quieter than usual' if quiet_talk else
+               'fewer people than usual are reading about it on Wikipedia')
         flags.append({'kind': 'score_ahead',
-                      'text': 'Asifah reads serious pressure on %s (L%d) while commentators are quieter '
-                              'than usual and traders have not moved. The score is running ahead of the '
-                              'conversation.' % (name, lvl)})
+                      'text': 'Asifah reads serious pressure on %s (L%d) while %s and traders have not moved. '
+                              'The score is running ahead of the conversation: a crisis the world is not '
+                              'watching.' % (name, lvl, who)})
     if bal and bal.get('lopsided'):
         flags.append({'kind': 'lopsided', 'text': bal.get('sentence')})
 
@@ -192,14 +212,16 @@ def country(c, src=None):
         'version': __version__,
         'country': c, 'country_name': name, 'region': REGION_OF.get(c),
         'asifah_level': lvl,
-        'available': {'markets': bool(m), 'commentary': bool(cm), 'asifah_level': lvl is not None},
+        'available': {'markets': bool(m), 'commentary': bool(cm), 'asifah_level': lvl is not None,
+                      'wiki': bool(wk)},
         'flags': flags,
         'markets': {'items': mk[:4], 'count': len(mk), 'pressure_moves': moves,
                     'generated_at': (m or {}).get('generated_at')},
         'commentary': {'pieces': pieces, 'balance': bal, 'attention': att,
                        'generated_at': (cm or {}).get('last_updated')},
-        'label': 'What people are saying and betting about %s -- context beside the score, never part of it.'
-                 % name,
+        'public': wa_pub,
+        'label': 'What people are saying, betting and reading about %s -- context beside the score, never '
+                 'part of it.' % name,
     }
 
 
@@ -211,6 +233,7 @@ def summary(src=None):
     cm = src.get('commentary') or {}
     cs |= set((cm.get('attention') or {}).keys())
     cs |= {t.get('country') for t in (cm.get('balance') or {}).get('by_country', [])}
+    cs |= set(((src.get('wiki') or {}).get('countries') or {}).keys())
     out = {}
     for c in sorted(x for x in cs if x):
         rec = country(c, src)
@@ -241,6 +264,12 @@ def voice_context(region=None, max_items=6):
 
 def register_attention_routes(app):
     from flask import jsonify
+
+    try:                                   # v1.1.0: the public layer rides along
+        from wikipedia_attention import register_wiki_routes
+        register_wiki_routes(app, start=True)
+    except Exception as e:
+        print('[Attention] Wikipedia layer not started (non-fatal): %s' % str(e)[:100])
 
     @app.route('/api/attention/summary')
     def _att_summary():
