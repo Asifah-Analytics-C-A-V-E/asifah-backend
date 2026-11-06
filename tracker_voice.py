@@ -62,8 +62,8 @@ import requests
 
 import tracker_meanings as M
 
-__version__ = '1.1.0'   # Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
-PROMPT_VERSION = 'tracker-v2'          # part of the fingerprint: a prompt upgrade rewrites once
+__version__ = '1.2.0'   # Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
+PROMPT_VERSION = 'tracker-v3'          # part of the fingerprint: a prompt upgrade rewrites once
 
 DESKS = ('military', 'commodities', 'market')
 DESK_NAMES = {'military': 'Military Posture', 'commodities': 'Commodity Pressure',
@@ -182,6 +182,20 @@ def _title(sig):
     return _txt(sig.get('article_title') or sig.get('title') or sig.get('short_text') or '', 160)
 
 
+# v1.2.0: for a contested / disrupted passage, quote reporting ABOUT the passage
+# being contested -- not "CENTCOM Commander Visits..." that merely mentions it.
+_LANE_WORDS = re.compile(r'attack|strike|struck|seiz|board|hijack|mine|drone|missile|tanker|vessel|ship|'
+                         r'divert|reroute|halt|suspend|clos|block|disrupt|threat|warn|escort|transit|insur',
+                         re.I)
+_SOFT_WORDS = re.compile(r'\bvisit|ceremony|conference|award|change of command|meets with|tour\b', re.I)
+
+
+def _lane_titles(sigs, n=3):
+    ranked = sorted(_l(sigs), key=lambda s: (bool(_SOFT_WORDS.search(_title(s))),
+                                             not bool(_LANE_WORDS.search(_title(s)))))
+    return _titles(ranked, n)
+
+
 def _titles(sigs, n=3):
     out, seen = [], set()
     for s in _l(sigs):
@@ -246,7 +260,8 @@ def pack_military(cache):
         items.append(_item(
             'chokepoint', cp_id, mean['name'], lvl,
             '%s -- %s' % (lvl, M.CHOKEPOINT_LEVEL_MEANING.get(lvl, '')),
-            mean['plain'], _altitudes(mean), _titles(cp.get('top_signals')),
+            mean['plain'], _altitudes(mean),
+            _lane_titles(cp.get('top_signals')) if _CP_RANK.get(lvl, 0) >= 2 else _titles(cp.get('top_signals')),
             basis=mean.get('basis', ''), verified=mean.get('verified', False),
             extra={'reported_phenomena': _crit(_l(cp.get('top_signals')))[:3],
                    'signal_count': cp.get('signal_count', 0)}))
@@ -323,6 +338,13 @@ def pack_military(cache):
         'theatres': theatres,
         'items_to_explain': items[:MAX_ITEMS],
         'chokepoints_open': quiet[:20],
+        # v1.2.0: the lane status, stated flat, so the write-up cannot contradict the tiles
+        'shipping_lanes_status': {
+            'disrupted': [M.chokepoint_meaning(c)['name'] for c, v in cps.items()
+                          if _d(v).get('alert_level') == 'disrupted'],
+            'contested': [M.chokepoint_meaning(c)['name'] for c, v in cps.items()
+                          if _d(v).get('alert_level') == 'contested'],
+        },
         'special_reads': special,
         'analyst_summary': _txt(interp.get('executive_summary'), 600),
     }
@@ -678,8 +700,15 @@ def _clean(t):
     return ' '.join(str(t or '').split())
 
 
-def make_validator(allowed_ids):
+_NONE_RX = {
+    'disrupted': re.compile(r'\b(no|none|not any|zero)\b[^.;]{0,50}\bdisrupt', re.I),
+    'contested': re.compile(r'\b(no|none|not any|zero)\b[^.;]{0,50}\bcontest', re.I),
+}
+
+
+def make_validator(allowed_ids, facts=None):
     allowed = set(allowed_ids)
+    lanes = _d(_d(facts).get('shipping_lanes_status'))
 
     def _validate(obj):
         if not isinstance(obj, dict):
@@ -692,6 +721,12 @@ def make_validator(allowed_ids):
             rec[f] = t
         if len(rec['headline'].split()) > 32:
             raise ValueError('headline too long')
+        # v1.2.0: a write-up that says "none disrupted" while a lane IS disrupted is rejected
+        # (the call is retried, then the deterministic read is used).
+        blob = ' '.join(rec[f] for f in ('headline', 'so_what', 'read'))
+        for state, rx in _NONE_RX.items():
+            if _l(lanes.get(state)) and rx.search(blob):
+                raise ValueError('says no lane is %s while %s is' % (state, _l(lanes.get(state))[0]))
         rec['watch'] = [_clean(w) for w in (obj.get('watch') or []) if _clean(w)][:3]
         items = {}
         for it in obj.get('items') or []:
@@ -934,7 +969,7 @@ def _write(desk, facts, as_of, reason):
     try:
         t0 = time.time()
         view, usage = _gv._call_claude(facts, system=SYSTEM_PROMPT, schema=OUTPUT_SCHEMA,
-                                       validate=make_validator(ids), max_tokens=MAX_TOKENS)
+                                       validate=make_validator(ids, facts), max_tokens=MAX_TOKENS)
         rec = {
             'desk': desk, 'desk_name': DESK_NAMES[desk], 'view': view, 'fingerprint': fp,
             'generated_at': datetime.now(timezone.utc).isoformat(), 'source_as_of': as_of,

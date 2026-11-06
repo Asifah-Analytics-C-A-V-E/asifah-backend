@@ -958,7 +958,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.23.1'   # v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+GPI_VERSION     = '3.23.2'   # v3.23.2 (Nov 6 2026): sustained-gate line never ends 'continues: .'. v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
 # previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -5269,8 +5269,12 @@ def _apply_l5_novelty_gate(level, blufs):
             return '%s (ongoing since before %s)' % (e['display'], e['since'])
         return '%s (day %d)' % (e['display'], e['days'])
     info['label'] = SUSTAINED_LABEL
-    info['summary'] = ('No new L5 front in %d days. Active conflict continues: %s.'
-                       % (L5_NOVELTY_DAYS, ', '.join(_fmt(e) for e in info['sustained'][:6])))
+    _cont = ', '.join(_fmt(e) for e in info['sustained'][:6])
+    # v3.23.2: with no named theatre the line read "Active conflict continues: ."
+    info['summary'] = (('No new L5 front in %d days. Active conflict continues: %s.' % (L5_NOVELTY_DAYS, _cont))
+                       if _cont else
+                       ('No new L5 front in %d days. The L5 readings are standing signals on the axes, '
+                        'not a new conflict front.' % L5_NOVELTY_DAYS))
     info['reason'] = info['summary']
     print(f"[GPI L5 gate] L5 -> L4 SUSTAINED: {info['summary'][:160]}")
     return 4, info

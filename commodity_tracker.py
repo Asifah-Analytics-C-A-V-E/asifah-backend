@@ -5958,10 +5958,28 @@ def _producer_in_theatre(producer, theatre_key):
     return p == th or p in th.split('_') or (('_' in p) and p in th)
 
 
+_COMMODITY_HEADLINE_ALIASES = {
+    'oil': ('crude', 'brent', 'wti', 'oil'), 'natural_gas': ('lng', 'gas'), 'wheat': ('wheat', 'grain'),
+    'corn': ('corn', 'maize', 'grain'), 'rare_earths': ('rare earth', 'rare-earth'),
+    'semiconductors': ('chip', 'semiconductor'), 'uranium': ('uranium', 'enrich'),
+    'potash': ('potash', 'potassium'), 'phosphate': ('phosphate',), 'fertilizer': ('fertili', 'urea'),
+}
+
+
 def _commodity_disruption_evidence(cid, summ, hard_sigs, ctx):
     """List of {'kind', 'text'} disruption findings. Empty = none seen."""
     found = []
+    # Nov 6 2026: the disruption headline must NAME this commodity. "Mosaic
+    # announces closure of Plant City PHOSPHATES facility" was read as a potash
+    # disruption because Mosaic is a potash company. A plant closing that makes
+    # something else is not this commodity's supply.
+    names = {cid.replace('_', ' ').lower(), str(summ.get('name') or '').lower()}
+    names |= set(_COMMODITY_HEADLINE_ALIASES.get(cid, ()))
+    names = {n for n in names if n}
     for sig in hard_sigs[:8]:
+        title_l = (sig.get('article_title') or '').lower()
+        if not any(re.search(r'\b%s' % re.escape(n), title_l) for n in names):
+            continue
         phrase = _headline_disruption(sig.get('article_title'))
         if phrase:
             found.append({'kind': 'headline',
