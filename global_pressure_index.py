@@ -958,7 +958,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.23.2'   # v3.23.2 (Nov 6 2026): sustained-gate line never ends 'continues: .'. v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+GPI_VERSION     = '3.23.3'   # v3.23.3 (Nov 6 2026): L5 is shown only for a NEW front -- the kinetic axis and its motion tag follow the novelty gate (was 'Kinetic L5 NEW' under 'No new L5 front in 14 days'). v3.23.2 (Nov 6 2026): sustained-gate line never ends 'continues: .'. v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
 # previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -2442,7 +2442,7 @@ def _axis_motion(axis, axis_level, axis_signals):
                 'note': '%s -- confirmed world-altering event (L6 hold).' % _lbl,
                 'new': [_lbl]}
     if axis == PRESSURE_KINETIC and axis_level >= 5 and gate.get('available', True) and (
-            gate.get('fresh') or gate.get('sustained')):
+            gate.get('fresh') or gate.get('sustained') or gate.get('applied')):
         fresh = gate.get('fresh') or []
         if fresh:
             return {'motion': 'new', 'label': 'new',
@@ -2564,6 +2564,21 @@ def _build_pressure_axes_payload(blufs, narratives):
         # Overall axis level = max across regions
         axis_level = max(region_levels.values()) if region_levels else 0
 
+        # v3.23.3 (Nov 6 2026) -- Rachel: L5 shows only for truly NEW activity.
+        # The headline already held a sustained war at L4 (novelty gate), but
+        # the Kinetic axis still printed its raw L5 with a 'new' tag right under
+        # "No new L5 front in 14 days". When the gate is applied (no fresh front,
+        # no confirmed L6), the kinetic axis is held at L4 the same way. The raw
+        # reading travels as level_raw so nothing is hidden.
+        kinetic_gated = False
+        level_raw = axis_level
+        _g = _LAST_LEVEL_GATE or {}
+        if (axis == PRESSURE_KINETIC and axis_level == 5 and _g.get('applied')
+                and not _g.get('fresh') and not (_LAST_L6 or {}).get('active')):
+            axis_level = 4
+            kinetic_gated = True
+            region_levels = {r: (4 if lv == 5 else lv) for r, lv in region_levels.items()}
+
         # Top 5 signals on this axis, sorted by level desc then priority desc
         top_axis_signals = sorted(
             axis_signals,
@@ -2600,7 +2615,12 @@ def _build_pressure_axes_payload(blufs, narratives):
 
         meta = PRESSURE_AXIS_META[axis]
         try:
-            _mo = _axis_motion(axis, axis_level, axis_signals)
+            _mo = _axis_motion(axis, level_raw if kinetic_gated else axis_level, axis_signals)
+            if kinetic_gated:
+                _mo = {'motion': 'sustained', 'label': 'sustained',
+                       'note': ('Highest kinetic reading is L5, but no new L5 front in %d days -- '
+                                'held at L4 (sustained conflict). L5 returns only for a new front.'
+                                % L5_NOVELTY_DAYS), 'new': []}
         except Exception as _mo_err:
             _mo = {'motion': 'unread', 'label': 'motion unread',
                    'note': 'Motion read failed: %s' % str(_mo_err)[:80], 'new': []}
@@ -2616,8 +2636,10 @@ def _build_pressure_axes_payload(blufs, narratives):
             'color':         meta['color'],
             'description':   meta['description'],
             'level':         axis_level,
-            'level_label':   _axis_level_label(axis, axis_level),
+            'level_label':   (SUSTAINED_LABEL if kinetic_gated else _axis_level_label(axis, axis_level)),
             'region_levels': region_levels,
+            'level_raw':     level_raw,          # v3.23.3: before the novelty gate
+            'level_gated':   kinetic_gated,
             'signal_count':  len(axis_signals),
             'top_signals':   top_axis_signals_clean,
         }
