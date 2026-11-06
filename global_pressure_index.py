@@ -958,7 +958,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.23.0'   # v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+GPI_VERSION     = '3.23.1'   # v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
 # previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -6024,6 +6024,8 @@ def _build_global_top_signals(blufs, narratives):
                 'short_text':    sig.get('short_text', sig.get('text', ''))[:120],   # v2.3.0: 80→120 (consistency)
                 'long_text':     sig.get('long_text', sig.get('short_text', '')),
                 'pressure_type': _infer_pressure_type(sig),  # lock axis
+                # v3.23.1: carry the hybrid mode + off-ramp flags through to the page
+                **{_k: sig[_k] for _k in ('mode', 'mode_label', 'attribution', 'direction') if sig.get(_k)},
                 # No 'regions' key — single-region signals naturally Tier 2 or 4
             })
 
@@ -6061,6 +6063,8 @@ def _build_global_top_signals(blufs, narratives):
                 'short_text':    (sig.get('short_text') or sig.get('text') or '')[:180],
                 'long_text':     sig.get('long_text', sig.get('short_text', '')),
                 'pressure_type': _infer_pressure_type(sig),
+                # v3.23.1: carry the hybrid mode + off-ramp flags through to the page
+                **{_k: sig[_k] for _k in ('mode', 'mode_label', 'attribution', 'direction') if sig.get(_k)},
                 'pseudo_region_mover': True,
             })
 
@@ -6309,6 +6313,8 @@ def _synthesize_global_bluf(blufs, narratives, global_level):
                 'level':         level,
                 'priority':      int(sig.get('priority', 0) or 0),
                 'pressure_type': _infer_pressure_type(sig),
+                # v3.23.1: carry the hybrid mode + off-ramp flags through to the page
+                **{_k: sig[_k] for _k in ('mode', 'mode_label', 'attribution', 'direction') if sig.get(_k)},
                 'icon':          sig.get('icon') or '',
                 'short_text':    stext,
             })

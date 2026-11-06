@@ -72,6 +72,15 @@ v2.3.0 (Nov 5 2026) -- PODCASTS
   * Balance gets a 'podcasts' leg.
   * Hebrew keywords in the country tagger (Haaretz's HaShavua is in Hebrew).
 
+v2.3.2 (Nov 6 2026) -- podcasts by Apple ID
+  * A source may carry 'itunes_id': the feed is then looked up by ID
+    (itunes.apple.com/lookup), not by title. Four shows never matched by title
+    (publisher spelled differently, '&' vs 'and', too many look-alikes) and
+    Pod Save America matched its 'Breaking News' side feed.
+  * The cache key includes the lookup basis, so changing a source's ID / title
+    / search re-resolves it at once instead of keeping a wrong match 30 days.
+  * Title searches return up to 50 results (was 15).
+
 v2.3.1 (Nov 5 2026) -- the baseline counts from the day WE STARTED WATCHING
   * Bug: "baseline_days" was measured from the oldest item any feed still
     carried (~53 days), but a feed only holds its last ~20 items, so weeks
@@ -106,7 +115,7 @@ except ImportError:
 # CONFIG
 # ============================================================
 
-VERSION = '2.3.1'
+VERSION = '2.3.2'
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -698,17 +707,33 @@ def _norm_title(t):
 
 def _resolve_podcast(src, cache):
     """Show name -> feed URL via Apple's public directory (once; cached)."""
-    key = 'pod:%s' % src['id']
+    basis = src.get('itunes_id') or src.get('search') or src['podcast']
+    key = 'pod:%s:%s' % (src['id'], basis)
     hit = cache.get(key)
     if isinstance(hit, dict) and hit.get('feed'):
         return hit, None
     title = src['podcast']
     bys = [b.strip() for b in (src.get('by') or '').lower().split('|') if b.strip()]
     time.sleep(3)     # Apple's directory allows ~20 lookups a minute; cached for 30 days after
+    if src.get('itunes_id'):                                   # v2.3.2: exact, by ID
+        try:
+            r = requests.get('https://itunes.apple.com/lookup',
+                             params={'id': src['itunes_id'], 'entity': 'podcast'},
+                             headers={'User-Agent': USER_AGENT}, timeout=REQUEST_TIMEOUT)
+            res = [x for x in ((r.json() or {}).get('results') or []) if x.get('feedUrl')] \
+                if r.status_code == 200 else []
+        except Exception as e:
+            return None, 'podcast directory lookup failed: %s' % str(e)[:80]
+        if not res:
+            return None, 'Apple ID %s returned no feed' % src['itunes_id']
+        rec = {'feed': res[0]['feedUrl'], 'matched_title': res[0].get('collectionName'),
+               'matched_publisher': res[0].get('artistName'), 'score': 'apple_id'}
+        cache[key] = rec
+        return rec, None
     try:
         r = requests.get('https://itunes.apple.com/search',
                          params={'term': src.get('search') or title,
-                                 'entity': 'podcast', 'limit': 15},
+                                 'entity': 'podcast', 'limit': 50},
                          headers={'User-Agent': USER_AGENT}, timeout=REQUEST_TIMEOUT)
         if r.status_code != 200:
             return None, 'podcast directory HTTP %s' % r.status_code

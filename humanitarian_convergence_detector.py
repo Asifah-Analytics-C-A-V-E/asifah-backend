@@ -1,6 +1,16 @@
 """
 humanitarian_convergence_detector.py
 Asifah Analytics -- ME Backend Module
+v1.15.0 -- November 6, 2026 (A SPREAD NODE NEEDS THAT DISEASE, IN THAT COUNTRY)
+  Nov 6 2026 the Ebola spread panel said "Sudan: 100,000 cases". The figure came
+  from a CHOLERA article ("150,000 displaced South Sudanese face cholera
+  threat"), the country was mis-read ("South Sudanese" -> Sudan), and the
+  disease came from a different Sudan article that merely mentioned Ebola.
+  Evidence was pooled per COUNTRY; it is now kept per COUNTRY + DISEASE:
+    * a country joins a disease's spread only if an article naming THAT disease
+      AND that country confirms a local case or prints a toll;
+    * the node's cases/deaths come only from articles naming that disease;
+    * 'south sudanese' -> South Sudan.
 v1.14.0 -- October 30, 2026 (NOT "MASS" YET -- three rulings from Rachel)
   * OUTBREAKS EARN THE LEVEL. L5 = 100+ deaths with change this week; L4 = new
     spread into a country (7 days) or 10+ deaths with a leap; L3 = confirmed but
@@ -681,7 +691,7 @@ COUNTRY_PATTERNS = {
     'darfur':           ['darfur', 'darfuri'],
     'el_fasher':        ['el fasher', 'el-fasher', 'al fashir', 'el fasher siege'],
     'khartoum':         ['khartoum'],
-    'south_sudan':      ['south sudan'],
+    'south_sudan':      ['south sudan', 'south sudanese'],
     # DRC + sub-regions (eastern conflict zones)
     # v1.10.0 (Oct 19 2026): wire copy says "Congo" and "DR Congo" far more
     # often than "DRC" -- and "Congo says confirmed Ebola cases rise..." matched
@@ -1320,7 +1330,12 @@ def mark_outbreak_spread(signals, recent_affected=None):
             continue
         if not (s.get('local_cases') or s.get('reported_deaths') or s.get('reported_cases')):
             continue
+        ev_all = s.get('disease_evidence')
         for dz in s.get('diseases') or []:
+            if isinstance(ev_all, dict):                       # v1.15.0
+                ev = ev_all.get(dz) or {}
+                if not (ev.get('confirmed') or ev.get('deaths') or ev.get('cases')):
+                    continue        # this country's coverage only MENTIONS the disease
             by_disease.setdefault(dz, {}).setdefault(_parent_country(s['country']), []).append(s)
 
     out = []
@@ -1328,10 +1343,16 @@ def mark_outbreak_spread(signals, recent_affected=None):
         if len(per_country) < 2:
             continue
 
-        def _mag(c):
+        def _mag(c, _dz=dz):
+            # v1.15.0: figures from articles naming THIS disease only
             sigs = per_country[c]
-            return (max(int(x.get('reported_deaths') or 0) for x in sigs),
-                    max(int(x.get('reported_cases') or 0) for x in sigs),
+            def _f(x, k):
+                ev = (x.get('disease_evidence') or {}).get(_dz)
+                if isinstance(x.get('disease_evidence'), dict):
+                    return int((ev or {}).get(k) or 0)
+                return int(x.get('reported_' + k) or 0)
+            return (max(_f(x, 'deaths') for x in sigs),
+                    max(_f(x, 'cases') for x in sigs),
                     max(int(x.get('severity') or 0) for x in sigs))
         ranked = sorted(per_country, key=_mag, reverse=True)
         epi = ranked[0]
@@ -1813,6 +1834,7 @@ def detect_humanitarian_signals(articles):
     # just the one that set severity): which diseases, and whether any article
     # confirms local cases or only describes preparedness.
     _hx = {}     # country -> {'diseases': set, 'confirmed': bool, 'prep': bool}
+    _hxd = {}    # v1.15.0 (country, disease) -> {'confirmed', 'deaths', 'cases', 'title'}
     _imports = {}            # disease -> set of non-African destinations
     _bundibugyo = False
     _dx = {}                 # v1.12.0 (country, hazard) -> (deaths, displaced, homes)
@@ -1891,6 +1913,17 @@ def detect_humanitarian_signals(articles):
                         'deaths': _d, 'period': _retrospective_period(text),
                         'title': title[:160], 'url': url})
                     _d, _c = 0, 0
+                # v1.15.0 -- evidence per (country, disease): THIS article's
+                # disease, THIS article's confirmation, THIS article's figures.
+                for _z in _dz:
+                    _e = _hxd.setdefault((country, _z), {'confirmed': False, 'deaths': 0, 'cases': 0,
+                                                         'title': ''})
+                    if _LOCAL_CONFIRM_RX.search(text):
+                        _e['confirmed'] = True
+                    if _d > _e['deaths'] or _c > _e['cases']:
+                        _e['title'] = title[:160]
+                    _e['deaths'] = max(_e['deaths'], _d)
+                    _e['cases'] = max(_e['cases'], _c)
                 if _d or _c:
                     t = _toll.setdefault((country, cat_key), {'deaths': 0, 'cases': 0})
                     # Each figure keeps its OWN provenance: the largest death
@@ -2032,6 +2065,8 @@ def detect_humanitarian_signals(articles):
             continue
         h = _hx.get(d['country']) or {}
         d['diseases'] = sorted(h.get('diseases') or [])
+        d['disease_evidence'] = {z: dict(_hxd[(d['country'], z)]) for z in d['diseases']
+                                 if (d['country'], z) in _hxd}          # v1.15.0
         local = bool(h.get('confirmed') or d.get('reported_deaths') or d.get('reported_cases'))
         d['local_cases'] = local
         if not local and h.get('prep'):

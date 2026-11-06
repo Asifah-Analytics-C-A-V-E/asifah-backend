@@ -3388,8 +3388,10 @@ try:
                     _fh_record('me', _url, items=_n, http_status=200, label=_label,
                                duration_ms=(time.time() - _t0) * 1000)
                 else:
-                    _fh_record('me', _url, error='no items (blocked, moved or empty; '
-                               'this tracker does not keep the reason)', label=_label,
+                    # Nov 6 2026: an empty result is "reached, nothing kept" -- many
+                    # trackers drop off-topic or >7-day-old items on purpose. A feed
+                    # that never delivers anything still surfaces as never_worked.
+                    _fh_record('me', _url, items=0, label=_label,
                                duration_ms=(time.time() - _t0) * 1000)
         except Exception:
             pass

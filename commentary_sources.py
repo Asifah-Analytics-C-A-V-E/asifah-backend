@@ -1,5 +1,5 @@
 """
-Asifah Analytics -- Commentary & Analysis SOURCES  (v1.1.0, Nov 5 2026 -- podcasts added)
+Asifah Analytics -- Commentary & Analysis SOURCES  (v1.1.1, Nov 6 2026 -- 5 podcasts pinned by Apple ID / feed)
 
 The ONLY file to edit to add, drop or re-label a newsletter, institute or
 YouTube channel or podcast. Read by think_tank_feeds.py v2.3.0+.
@@ -148,9 +148,9 @@ COMMENTARY_SOURCES = [
     # ── Podcasts (episode titles + show notes, never the audio) ──
     # US politics and policy
     {'id': 'pod_save_america', 'name': 'Pod Save America', 'kind': 'podcast', 'lean': 'left',
-     'focus': ['us'], 'podcast': 'Pod Save America', 'by': 'crooked'},
+     'focus': ['us'], 'podcast': 'Pod Save America', 'by': 'crooked', 'itunes_id': 1192761536},
     {'id': 'pod_save_world', 'name': 'Pod Save the World', 'kind': 'podcast', 'lean': 'left',
-     'focus': ['global', 'us'], 'podcast': 'Pod Save the World', 'by': 'crooked'},
+     'focus': ['global', 'us'], 'podcast': 'Pod Save the World', 'by': 'crooked', 'itunes_id': 1200016351},
     {'id': 'pod_today_explained', 'name': 'Today, Explained (Vox)', 'kind': 'podcast', 'lean': 'center-left',
      'focus': ['us', 'global'], 'podcast': 'Today, Explained', 'by': 'vox'},
     {'id': 'pod_raging_moderates', 'name': 'Raging Moderates', 'kind': 'podcast', 'lean': 'center-left',
@@ -193,19 +193,19 @@ COMMENTARY_SOURCES = [
     {'id': 'pod_rest_is_politics', 'name': 'The Rest Is Politics', 'kind': 'podcast', 'lean': 'center',
      'focus': ['europe', 'global', 'us'], 'podcast': 'The Rest Is Politics', 'by': 'goalhanger'},
     {'id': 'pod_eu_confidential', 'name': 'EU Confidential (POLITICO)', 'kind': 'podcast', 'lean': 'center',
-     'focus': ['europe'], 'podcast': 'EU Confidential', 'by': 'politico'},
+     'focus': ['europe'], 'podcast': 'EU Confidential', 'by': 'politico', 'itunes_id': 1244862657},
     # Middle East
     {'id': 'pod_hashavua', 'name': 'HaShavua (Haaretz, Hebrew)', 'kind': 'podcast', 'lean': 'center-left',
      'focus': ['me'], 'podcast': 'השבוע', 'search': 'השבוע הארץ', 'by': 'הארץ|haaretz', 'verify': True},
     {'id': 'pod_babel', 'name': 'Babel: Translating the Middle East (CSIS)', 'kind': 'podcast',
-     'lean': 'nonpartisan', 'focus': ['me'], 'podcast': 'Babel: Translating the Middle East', 'by': 'csis'},
+     'lean': 'nonpartisan', 'focus': ['me'], 'podcast': 'Babel: Translating the Middle East', 'by': 'csis', 'feed': 'https://feeds.megaphone.fm/CSIS1853412217'},
     {'id': 'pod_mei_focus', 'name': 'Middle East Focus (MEI)', 'kind': 'podcast', 'lean': 'nonpartisan',
      'focus': ['me'], 'podcast': 'Middle East Focus', 'by': 'middle east institute'},
     {'id': 'pod_the_take', 'name': 'The Take (Al Jazeera)', 'kind': 'podcast', 'lean': 'center-left',
      'focus': ['me', 'global'], 'podcast': 'The Take', 'by': 'al jazeera'},
     # Asia-Pacific (Australian and China-watching)
     {'id': 'pod_aspi_pgm', 'name': 'Policy, Guns and Money (ASPI)', 'kind': 'podcast', 'lean': 'nonpartisan',
-     'focus': ['asia', 'defense'], 'podcast': 'Policy, Guns and Money', 'by': 'aspi|australian strategic'},
+     'focus': ['asia', 'defense'], 'podcast': 'Policy, Guns and Money', 'by': 'aspi|australian strategic', 'itunes_id': 1266535694},
     {'id': 'pod_little_red', 'name': 'The Little Red Podcast', 'kind': 'podcast', 'lean': 'center',
      'focus': ['china', 'asia'], 'podcast': 'The Little Red Podcast'},
     {'id': 'pod_sinica', 'name': 'Sinica', 'kind': 'podcast', 'lean': 'center',
