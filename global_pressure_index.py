@@ -257,8 +257,8 @@ GLOBAL_LEVEL_COLORS = {
     2: '#f59e0b',   # amber
     3: '#f97316',   # orange
     4: '#ef4444',   # red
-    5: '#dc2626',   # dark red
-    6: '#991b1b',   # deepest red -- red-line breach beyond active conflict
+    5: '#991b1b',   # crimson (Nov 6 2026: site ladder palette; was #dc2626, too close to L4)
+    6: '#3b0764',   # near-black purple -- red-line breach beyond active conflict (was #991b1b)
 }
 
 # ══════════════════════════════════════════════════════════════════════
