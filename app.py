@@ -13,6 +13,10 @@ v3.9.0 (Nov 6 2026) -- every ME card is scanned in the background again.
   /api/cache-status lists all 18 with age, last attempt and last error, so a
   card that stops refreshing says why instead of quietly showing 0%.
   Cost: NewsAPI/GDELT go through their budgeted gateways (no new spend).
+  ALSO: REDIS_URL was never set on Render, so the card cache lived in /tmp on
+  one instance only (the other instance and every redeploy saw 0%). The card
+  cache now uses Upstash REST (UPSTASH_REDIS_URL/TOKEN) like every other ME
+  module, and /api/dashboard reads all 19 cards with ONE MGET command.
 
 v3.8.0 (Nov 1 2026) -- Flight disruptions move to the shared flight_watch.py (same
   file on all five backends). /flight-cancellations keeps its address and shape;
@@ -504,7 +508,68 @@ if REDIS_URL:
         print("[Cache] Falling back to file-based cache")
         redis_client = None
 else:
-    print("[Cache] ⚠️ No REDIS_URL found in environment — using file fallback")
+    # v3.9.0 (Nov 6 2026): REDIS_URL was never set on Render, so every card
+    # score lived in /tmp on ONE instance. The other instance (and every
+    # redeploy) saw nothing: Iran read 0% on half the page loads, and the
+    # Actor Matrix (threat_matrix_v3 reads threat:<card> from Upstash) never
+    # saw a card score at all. Every other ME module talks to Upstash over
+    # REST with UPSTASH_REDIS_URL / UPSTASH_REDIS_TOKEN -- so the card cache
+    # now does too. No new env var, no new secret.
+    _UP_URL = os.environ.get('UPSTASH_REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_URL')
+    _UP_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN') or os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+
+    class _UpstashRestClient:
+        """The handful of redis-py calls app.py makes, over Upstash REST."""
+        def __init__(self, url, token):
+            self._url = url.rstrip('/')
+            self._h = {'Authorization': f'Bearer {token}'}
+
+        def _cmd(self, *args):
+            import requests as _rq
+            r = _rq.post(self._url, headers=self._h,
+                         json=[str(a) for a in args], timeout=5)
+            data = r.json()
+            if isinstance(data, dict) and data.get('error'):
+                raise RuntimeError(f"Upstash: {data['error']}")
+            return data.get('result') if isinstance(data, dict) else None
+
+        def ping(self):
+            return self._cmd('PING') == 'PONG'
+
+        def get(self, key):
+            return self._cmd('GET', key)
+
+        def mget(self, keys):
+            return self._cmd('MGET', *keys) if keys else []
+
+        def setex(self, key, ttl, value):
+            return self._cmd('SET', key, value, 'EX', int(ttl)) == 'OK'
+
+        def set(self, key, value, nx=False, ex=None):
+            args = ['SET', key, value]
+            if ex:
+                args += ['EX', int(ex)]
+            if nx:
+                args.append('NX')
+            return self._cmd(*args) == 'OK'
+
+        def hset(self, name, key, value):
+            return self._cmd('HSET', name, key, value)
+
+        def hgetall(self, name):
+            flat = self._cmd('HGETALL', name) or []
+            return dict(zip(flat[0::2], flat[1::2]))
+
+    if _UP_URL and _UP_TOKEN:
+        try:
+            redis_client = _UpstashRestClient(_UP_URL, _UP_TOKEN)
+            redis_client.ping()
+            print("[Cache] ✅ Card cache on Upstash REST (shared by both instances)")
+        except Exception as e:
+            print(f"[Cache] ⚠️ Upstash REST failed: {e} -- falling back to file cache")
+            redis_client = None
+    else:
+        print("[Cache] ⚠️ No Redis/Upstash credentials -- using file fallback")
 
 # File-based fallback (for local dev or if Redis is down)
 CACHE_FILE = '/tmp/threat_cache.json'
@@ -8358,6 +8423,7 @@ def cache_status():
         'redis_connected': redis_connected,
         'redis_responsive': redis_ok,
         'redis_url_set': bool(REDIS_URL),
+        'cache_backend': (type(redis_client).__name__ if redis_client is not None else 'file /tmp (this instance only)'),
         'targets': status,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
@@ -8377,8 +8443,23 @@ def api_dashboard():
     ]
 
     bundle = {}
-    for target in targets:
-        cached = get_cached_result(target)
+    # v3.9.0: one MGET (1 Upstash command) instead of 19 GETs per page load.
+    many = None
+    if redis_client is not None and hasattr(redis_client, 'mget'):
+        try:
+            many = redis_client.mget([f'threat:{t}' for t in targets])
+        except Exception as e:
+            print(f"[Dashboard] MGET failed, reading one by one: {e}")
+            many = None
+    for i, target in enumerate(targets):
+        cached = None
+        if many is not None:
+            try:
+                cached = json.loads(many[i]) if many[i] else None
+            except Exception:
+                cached = None
+        else:
+            cached = get_cached_result(target)
         if cached:
             bundle[target] = cached
         else:
