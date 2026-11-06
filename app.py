@@ -2,6 +2,18 @@
 Asifah Analytics Backend (Middle East) -- version lives in ME_BACKEND_VERSION
 February 8, 2026 (v3.0.0)  |  September 21, 2026 (v3.2.0)  |  November 1, 2026 (v3.6.0)
 
+v3.9.0 (Nov 6 2026) -- every ME card is scanned in the background again.
+  The refresh thread only covered 7 of the 18 cards (iran, hezbollah, houthis,
+  syria, jordan, israel, iraq). The other 11 (the Gulf six, Egypt, and the
+  Maghreb four) were scanned ONLY when a visitor clicked Scan OSINT, so after
+  24h their cache expired and the card bar read 0% with "Loading..." forever.
+  Now: the 7 core cards refresh when older than 4h, the other 11 when older
+  than 12h (twice a day), through the same /api/threat/<target> scan a click
+  runs. Every attempt is recorded (Redis hash bgrefresh:status) and
+  /api/cache-status lists all 18 with age, last attempt and last error, so a
+  card that stops refreshing says why instead of quietly showing 0%.
+  Cost: NewsAPI/GDELT go through their budgeted gateways (no new spend).
+
 v3.8.0 (Nov 1 2026) -- Flight disruptions move to the shared flight_watch.py (same
   file on all five backends). /flight-cancellations keeps its address and shape;
   the rss_monitor flight scanner is no longer started. New: /api/flights and
@@ -591,11 +603,54 @@ def is_cache_fresh(cached_data, max_age_hours=6):
         return False
 
 
+# v3.9.0 -- the background refresh covers ALL 18 cards.
+# Core cards refresh when older than 4h; the rest when older than 12h.
+BG_CORE_TARGETS = ['iran', 'hezbollah', 'houthis', 'syria', 'jordan', 'israel', 'iraq']
+BG_SECONDARY_TARGETS = ['saudi_arabia', 'uae', 'qatar', 'kuwait', 'bahrain', 'oman',
+                        'egypt', 'algeria', 'libya', 'morocco', 'tunisia']
+BG_CORE_MAX_AGE_H = 4
+BG_SECONDARY_MAX_AGE_H = 12
+_BG_STATUS_KEY = 'bgrefresh:status'
+
+
+def _bg_record(target, ok, note=''):
+    """Remember the last background attempt per card (one small Redis hash)."""
+    if not redis_client:
+        return
+    try:
+        redis_client.hset(_BG_STATUS_KEY, target, json.dumps({
+            'at': datetime.now(timezone.utc).isoformat(),
+            'ok': bool(ok),
+            'note': str(note)[:200],
+        }))
+    except Exception as e:
+        print(f"[Background Refresh] status write failed for {target}: {e}")
+
+
+def _bg_status_all():
+    if not redis_client:
+        return {}
+    try:
+        raw = redis_client.hgetall(_BG_STATUS_KEY) or {}
+        out = {}
+        for k, v in raw.items():
+            k = k.decode() if isinstance(k, bytes) else k
+            v = v.decode() if isinstance(v, bytes) else v
+            try:
+                out[k] = json.loads(v)
+            except Exception:
+                out[k] = {'raw': v}
+        return out
+    except Exception:
+        return {}
+
+
 def get_all_cache_status():
-    """Get status of all cached targets - useful for debugging"""
-    targets = ['iran', 'hezbollah', 'houthis', 'syria', 'jordan', 'israel', 'iraq']
+    """Every ME card: is it cached, how old, and what the last background try said."""
+    bg = _bg_status_all()
     status = {}
-    for target in targets:
+    for target in BG_CORE_TARGETS + BG_SECONDARY_TARGETS:
+        max_age = BG_CORE_MAX_AGE_H if target in BG_CORE_TARGETS else BG_SECONDARY_MAX_AGE_H
         cached = get_cached_result(target)
         if cached:
             try:
@@ -605,12 +660,14 @@ def get_all_cache_status():
                     'cached': True,
                     'probability': cached.get('probability', 0),
                     'age_hours': round(age_h, 1),
-                    'fresh': age_h < 6
+                    'fresh': age_h < max_age + 1,
                 }
-            except:
+            except Exception:
                 status[target] = {'cached': True, 'age_hours': 'unknown'}
         else:
             status[target] = {'cached': False}
+        status[target]['refresh_every_h'] = max_age
+        status[target]['last_background_try'] = bg.get(target)
     return status
 
 
@@ -629,7 +686,7 @@ def _background_refresh_all_caches():
 
     REFRESH_INTERVAL = 4 * 60 * 60  # 4 hours in seconds
 
-    TARGETS = ['iran', 'hezbollah', 'houthis', 'syria', 'jordan', 'israel', 'iraq']
+    TARGETS = BG_CORE_TARGETS + BG_SECONDARY_TARGETS   # v3.9.0: all 18 cards
 
     # v3.3.0 (Sep 27 2026) -- ONE instance refreshes. Render runs two
     # instances of this backend, each with its own copy of this thread, so
@@ -660,19 +717,30 @@ def _background_refresh_all_caches():
             try:
                 print(f"[Background Refresh] Checking {target}...")
                 cached = get_cached_result(target)
+                max_age = (BG_CORE_MAX_AGE_H if target in BG_CORE_TARGETS
+                           else BG_SECONDARY_MAX_AGE_H)
 
                 # Only refresh if cache is stale or missing
-                if cached and is_cache_fresh(cached, max_age_hours=4):
+                if cached and is_cache_fresh(cached, max_age_hours=max_age):
                     age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(cached['cached_at'])).total_seconds() / 3600
                     print(f"[Background Refresh] {target} still fresh ({age_h:.1f}h old), skipping")
                     continue
 
                 # Run the scan
                 print(f"[Background Refresh] Refreshing {target}...")
-                _refresh_target(target)
+                if target in BG_CORE_TARGETS:
+                    _refresh_target(target)
+                else:
+                    _refresh_via_threat_route(target)
+                after = get_cached_result(target)
+                if after and after.get('cached_at') and (not cached or after.get('cached_at') != cached.get('cached_at')):
+                    _bg_record(target, True, f"probability {after.get('probability', 0)}%")
+                else:
+                    _bg_record(target, False, 'scan ran but nothing new was cached')
 
             except Exception as e:
                 print(f"[Background Refresh] ✗ {target} failed: {e}")
+                _bg_record(target, False, f"{type(e).__name__}: {e}")
                 import traceback
                 traceback.print_exc()
 
@@ -682,6 +750,18 @@ def _background_refresh_all_caches():
         elapsed = _time.time() - start
         print(f"[Background Refresh] Complete in {elapsed:.1f}s. Sleeping {REFRESH_INTERVAL}s until next refresh.\n")
         _time.sleep(REFRESH_INTERVAL)
+
+
+def _refresh_via_threat_route(target):
+    """v3.9.0 -- run the same scan a Scan OSINT click runs for this card
+    (/api/threat/<target>?refresh=true), without a visitor. The route caches
+    its own result. Inside the 15-min public-refresh window it serves cache,
+    which is fine: someone just scanned it."""
+    with app.test_request_context(f'/api/threat/{target}?days=7&refresh=true'):
+        resp = api_threat(target)
+    code = resp[1] if isinstance(resp, tuple) else getattr(resp, 'status_code', 200)
+    if code and int(code) >= 400:
+        raise RuntimeError(f"/api/threat/{target} returned HTTP {code}")
 
 
 def _refresh_target(target):
@@ -1683,7 +1763,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.8.0'
+ME_BACKEND_VERSION = '3.9.0'
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
