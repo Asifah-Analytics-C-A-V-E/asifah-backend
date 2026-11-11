@@ -97,7 +97,7 @@ except Exception as _lens_err:               # pragma: no cover
     LENS_AVAILABLE = False
     print(f'[Market BlackSwan] analog lens unavailable ({_lens_err})')
 
-VERSION = '1.5.2'   # Nov 11 2026: + Paraguay ueno bank failure episode; library reseeds on a version change | v1.5.1 Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
+VERSION = '1.6.0'   # Nov 11 2026 (pm): week-on-week match trend + who-carried-it to the GPI | v1.5.2 Nov 11 2026: + Paraguay ueno bank failure episode; library reseeds on a version change | v1.5.1 Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
                     # uk_city_pulse via shared Redis) | v1.5.0 Nov 3 2026: market-by-market reads (each market on its own index + currency, matched
                     # against every episode) and the analog lens (chain, interval, effects, live checks)
                     # via market_analog_lens.py | v1.4.0 Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
@@ -108,6 +108,7 @@ BACKTEST_KEY = 'blackswan:market:backtest'
 LIBRARY_KEY = 'blackswan:market:library'
 SNAPSHOT_KEY = 'blackswan:market:snapshots'
 GPI_BUNDLE_KEY = 'blackswan:market:gpi'   # compact read for the GPI fragility detector
+MATCH_HISTORY_KEY = 'blackswan:match:history'   # v1.6.0: one point per day, 90 days
 CACHE_TTL_HOURS = 12
 BACKTEST_TTL_HOURS = 168  # 7 days
 
@@ -1527,6 +1528,73 @@ def _build_global_majors(data):
     return out
 
 
+def _safe_trend(matches, active):
+    try:
+        return _match_trend(matches, active)
+    except Exception as e:
+        print(f'[Market BlackSwan] match trend error (non-fatal): {e}')
+        return {'available': False, 'sentence': ''}
+
+
+def _match_trend(matches, active):
+    """v1.6.0 (Nov 11 2026): how the closest match moved this week.
+
+    A match number with no history invites the wrong reading in both
+    directions: 67% looks like an alarm and 50% looks like an all-clear.
+    Stores one point per day and compares today with the newest point at
+    least six days old. One Redis GET + one SET per scan."""
+    from datetime import date as _date
+    top = (matches or [{}])[0]
+    today = datetime.now(timezone.utc).date().isoformat()
+    hist = _redis_get(MATCH_HISTORY_KEY) or []
+    point = {'date': today, 'top_id': top.get('id'), 'top_label': top.get('label'),
+             'top_pct': top.get('similarity_pct'), 'active': sorted(active or [])}
+    hist = [h for h in hist if isinstance(h, dict) and h.get('date') != today] + [point]
+    hist = hist[-90:]
+    _redis_set(MATCH_HISTORY_KEY, hist)
+    series = [[h.get('date'), h.get('top_label'), h.get('top_pct')] for h in hist[-30:]]
+    prev = None
+    for h in reversed(hist[:-1]):
+        try:
+            if (_date.fromisoformat(today) - _date.fromisoformat(h['date'])).days >= 6:
+                prev = h
+                break
+        except Exception:
+            continue
+    if not prev or point['top_pct'] is None or prev.get('top_pct') is None:
+        return {'available': False, 'series': series,
+                'sentence': ('Week-on-week change appears once a week of readings is stored '
+                             '(first reading %s).' % hist[0].get('date'))}
+    nice = lambda f: f.replace('_', ' ')
+    lost = [nice(f) for f in prev.get('active', []) if f not in point['active']]
+    gained = [nice(f) for f in point['active'] if f not in prev.get('active', [])]
+    n, p_ = round(point['top_pct']), round(prev['top_pct'])
+    try:
+        _d = _date.fromisoformat(prev['date'])
+        when = '%s %d' % (_d.strftime('%b'), _d.day)
+    except Exception:
+        when = prev['date']
+    if prev.get('top_id') != point['top_id']:
+        s = ('The closest episode changed: %s (%d%%) on %s, %s (%d%%) today.'
+             % (prev.get('top_label'), p_, when, point['top_label'], n))
+    elif n == p_:
+        s = 'Resemblance to %s held at %d%% this week.' % (point['top_label'], n)
+    else:
+        s = ('Resemblance to %s %s from %d%% (%s) to %d%% today.'
+             % (point['top_label'], 'fell' if n < p_ else 'rose', p_, when, n))
+    if lost:
+        s += ' Stopped matching: %s.' % ', '.join(lost)
+    if gained:
+        s += ' Started matching: %s.' % ', '.join(gained)
+    if n < p_:
+        s += ' A falling match means today looks less like this episode -- not that the risk has passed.'
+    elif n > p_ and n >= 60:
+        s += ' A strong match is a reason to read the episode closely, not a forecast.'
+    return {'available': True, 'now_pct': n, 'prev_pct': p_, 'prev_date': when,
+            'top_label': point['top_label'], 'prev_top_label': prev.get('top_label'),
+            'lost': lost, 'gained': gained, 'sentence': s, 'series': series}
+
+
 def _match_strength(matches):
     """One honest sentence about how well ANY analog fits.
 
@@ -1634,6 +1702,7 @@ def run_scan():
         # resembles present conditions -- which is itself a useful read, and
         # the previous layout implied the opposite.
         'match_strength': _match_strength(matches),
+        'match_trend': _safe_trend(matches, active),
         # v1.5.0 (Nov 3 2026)
         'analog_lens': lens,
         'regional_reads': regional,
@@ -1733,6 +1802,12 @@ def run_scan():
                            'pct_from_24m_high': v.get('pct_from_24m_high')}
                        for k, v in _gm.items() if not k.startswith('_')},
         },
+        # v1.6.0 -- how the match moved this week, and (pilot episodes) who
+        # carried the losses last time. The GPI uses who_carried_it ONLY at a
+        # strong match: a 50% resemblance is context, not a shock wave.
+        'match_trend': (payload.get('match_trend') or {}).get('sentence'),
+        'who_carried_it': next((z.get('who_carried_it') for z in (payload.get('analog_lens') or [])
+                                if z.get('id') == _top.get('id')), None),
         # v1.5.0 -- markets outside the US whose own read matches a pattern
         'regional_flags': [{k: f.get(k) for k in ('name', 'label', 'similarity_pct', 'home_region', 'text')}
                            for f in (payload.get('regional_flags') or [])[:5]],

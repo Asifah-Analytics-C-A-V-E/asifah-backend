@@ -56,7 +56,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 import statistics
 from datetime import datetime, timezone
 
-__version__ = '1.1.1'   # Nov 11 2026: Paraguay guaraní (currency watch) + ueno_paraguay_2026 dossier | v1.1.0 Nov 4 2026: UK 10-year gilt read (gilt_jump) on the FTSE market + uk_gilt_2022 live check
+__version__ = '1.2.0'   # Nov 11 2026 (pm): WHO CARRIED IT -- exposure, not advice (pilot: dot-com, ERM, gilt, ueno) | v1.1.1 Nov 11 2026: Paraguay guaraní (currency watch) + ueno_paraguay_2026 dossier | v1.1.0 Nov 4 2026: UK 10-year gilt read (gilt_jump) on the FTSE market + uk_gilt_2022 live check
 DOSSIER_BASIS = 'Claude research, Nov 3 2026 -- dates and figures to verify'
 
 # ════════════════════════════════════════════════════════════════════════
@@ -169,6 +169,24 @@ DOSSIERS = {
             'regional': 'The ERM crisis rolled on into 1993, when the bands were widened to 15% -- in effect, pegs gave way to floating within Europe.',
             'global': 'It became the template for speculative attacks on fixed currencies, and the case study for why markets test a peg when domestic needs and the peg diverge.',
             'economy': 'The stock market barely flinched -- the FTSE recovered within months. The damage was in the currency, rates and political credibility, not in shares.',
+        },
+        # WHO CARRIED IT (Nov 11 2026 pilot). Exposure, never instruction: past
+        # tense, no "you", no buy/hold/sell. A professional reader draws the
+        # inference; Asifah does not draw it for them.
+        'carried': {
+            'hit': ('The defenders of the peg. The Treasury and the Bank of England spent reserves holding the pound up '
+                    '-- at an estimated cost of about £3.3bn -- and lost anyway, and the government\'s reputation for '
+                    'running the economy did not recover before the next election. Anyone holding pounds against a '
+                    'foreign bill took the currency loss: sterling fell about 15% against the mark and roughly 25% '
+                    'against the dollar within months.'),
+            'held': ('UK shares and the wider economy. Once the peg was gone, interest rates fell from 10% to 6% by '
+                     'January 1993; mortgage holders and exporters got relief, and the FTSE ended 1993 well above its '
+                     'pre-crisis level. The large winners were funds positioned against the peg itself.'),
+            'shape': ('Split. The currency never returned to 2.95 marks -- a permanent move. The economy recovered '
+                      'quickly, helped by cheaper money and the inflation target set up that October.'),
+            'breaks': ('In 1992 the stress sat in a currency peg, not in shares. A match driven by US stock-market '
+                       'conditions is a different animal: the dollar is not pegged. If the history rhymes anywhere, the '
+                       'exposure would sit with whoever defends a peg -- see the live check on pegged currencies below.'),
         },
         'not': ('Asifah\'s US-built conditions cannot see a currency peg. A match to Black Wednesday on those '
                 'conditions means US markets resemble mid-1992, not that a peg is under attack. The market-by-market '
@@ -376,6 +394,19 @@ DOSSIERS = {
             'global': 'A warning that hidden leverage in "safe" pension strategies can force a central bank to act.',
             'economy': 'The pound and gilts moved; the FTSE 100, full of overseas earners, held up.',
         },
+        'carried': {
+            'hit': ('Leveraged pension strategies (LDI) and the people closest to them: funds hit by collateral calls had '
+                    'to sell gilts into a falling market, which pushed yields higher still. Homebuyers and anyone '
+                    'refinancing: lenders pulled mortgage deals overnight and rates jumped. The government: the prime '
+                    'minister fell within four weeks.'),
+            'held': ('The FTSE 100, full of companies earning abroad, held up as the pound fell. Once the Bank of '
+                     'England stepped in and the budget was reversed, gilts and the pound recovered most of the move '
+                     'within weeks.'),
+            'shape': ('A fast V in markets (weeks), helped by a central-bank backstop and a policy reversal. The cost '
+                      'that lasted was higher mortgage rates and a lost reputation for fiscal credibility.'),
+            'breaks': ('The crisis needed hidden leverage in "safe" pension strategies. Asifah can see gilt yields jump; '
+                       'it cannot see whether that leverage exists today, so a gilt move alone does not make it 2022.'),
+        },
         'not': ('Asifah now reads the UK 10-year gilt (v1.1, from the Europe backend\'s City pulse) but still cannot see '
                 'pension-fund leverage -- the part that turned a bad budget into a margin call.'),
         'live_checks': [
@@ -440,6 +471,15 @@ DOSSIERS = {
                        'question Beijing can answer and Taipei may not.'),
             'economy': 'The guaraní and the stablecoin premium carried the panic; Paraguay has no stock index to read.',
         },
+        'carried': {
+            'hit': ('Depositors -- nearly 3 million customers cut off from their money, including public pension and '
+                    'health funds -- and anyone holding guaraníes as the currency slid. The government fell within days.'),
+            'held': ('Money already held in dollars, and money that reached stablecoins early: USDT traded above the '
+                     'official rate, the premium people paid for an exit the banks could not block.'),
+            'shape': ('Too early to say (Nov 2026). The test is whether deposit-guarantee payouts restore trust before a '
+                      'second bank sees withdrawals.'),
+            'breaks': ('A live episode, not history yet: the shape of the recovery is still being written.'),
+        },
         'not': ('Asifah reads the guaraní, not bank balance sheets or the USDT premium. A guaraní shock says people '
                 'are buying dollars; it does not say whether a second bank is failing.'),
         'live_checks': [
@@ -490,6 +530,20 @@ DOSSIERS = {
                     'regional': 'European telecom shares collapsed too.',
                     'global': 'The template for a story stock bubble.',
                     'economy': 'Wealth losses concentrated in tech and among savers who bought late.'},
+        'carried': {
+            'hit': ('Late buyers of the story stocks. The Nasdaq fell about 78% from March 2000 to October 2002; '
+                    'hundreds of internet companies went to zero, and telecom firms that borrowed to build networks '
+                    'went bankrupt. Staff paid in options and savers concentrated in tech took the deepest losses.'),
+            'held': ('Government bonds (the Fed cut rates from 6.5% to 1.75% during 2001), and the "old economy" value '
+                     'shares the bubble had ignored. A few survivors fell hard and came back: Amazon lost over 90% of '
+                     'its value, then went on to new highs years later.'),
+            'shape': ('Slow and uneven. The S&P 500 took about seven years to regain its 2000 peak; the Nasdaq took '
+                      'about fifteen. Recovery was concentrated in the few companies whose business was real -- the '
+                      'dip-and-recovery pattern held for survivors, not for the index or the average stock.'),
+            'breaks': ('The shared features are concentration and a story-stock theme. In 2000 most of the companies '
+                       'had little revenue; today\'s leaders have large profits. Expensive is not the same as empty, '
+                       'which changes who would carry a fall.'),
+        },
         'not': 'Concentration and a story stock theme are the shared features; the trigger was policy and exhaustion.',
         'live_checks': [('A parabolic run near highs', {'run_up', 'near_high'})],
     },
@@ -801,6 +855,7 @@ def analog_lens(matches, reads, backtest=None):
                 'months before this episode.' % lead if lead else ''),
             'effects': dz['effects'],
             'what_the_match_is_not': dz['not'],
+            'who_carried_it': dz.get('carried'),          # v1.2.0 pilot; None for episodes not yet written
             'live_checks': checks,
             'basis': DOSSIER_BASIS, 'verified': False,
         }

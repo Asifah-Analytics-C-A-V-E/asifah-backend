@@ -958,7 +958,7 @@ def _motion_line(full):
 _LAST_RAW_SIGNALS = []
 
 # Cache
-GPI_VERSION     = '3.23.3'   # v3.23.3 (Nov 6 2026): L5 is shown only for a NEW front -- the kinetic axis and its motion tag follow the novelty gate (was 'Kinetic L5 NEW' under 'No new L5 front in 14 days'). v3.23.2 (Nov 6 2026): sustained-gate line never ends 'continues: .'. v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
+GPI_VERSION     = '3.23.4'   # v3.23.4 (Nov 11 2026): market-fragility read carries the week-on-week match change, and -- at a STRONG match only -- who carried the losses last time. v3.23.3 (Nov 6 2026): L5 is shown only for a NEW front -- the kinetic axis and its motion tag follow the novelty gate (was 'Kinetic L5 NEW' under 'No new L5 front in 14 days'). v3.23.2 (Nov 6 2026): sustained-gate line never ends 'continues: .'. v3.23.1 (Nov 6 2026): hybrid 'mode' survives the regional-signal copy (the Cyber pill never showed). v3.23.0 (Nov 5 2026): de-escalation signals (green lines, diplomatic tracks, off-ramps) no longer set an axis level -- a peace BREAKTHROUGH was reading 'L4 talks collapsed'; signals carry direction + hybrid mode. v3.22.0 (Nov 5 2026): scheduled rebuild every 6h (the voice no longer waits for a page visit). v3.21.1 (Nov 4 2026): Argentina / Canada / Paraguay (+ Bolivia, Ecuador, Uruguay, UK) recognised in country tags; Falklands, Northwest Passage, Northern Sea Route, Magellan, Drake, Tri-Border geo features; WHA populations for the mass-casualty bar.
 # previous: v3.21.0 (Nov 4 2026): axis signals carry meaning / not_implied / standing to the writer. v3.20.1 (Nov 2 2026): Philippines joins the SCS axis. v3.12.0 -- payload 'version' reads this (was a literal '3.0.0')
 GPI_CACHE_KEY   = 'gpi:global:latest'
 GPI_CACHE_TTL   = 12 * 3600   # 12h
@@ -3990,7 +3990,15 @@ def _narrative_market_fragility(blufs):
             mech = analog.get('mechanism')
             base = (' The closest historical analog is %s (%s feature overlap)'
                     % (analog['label'], pct))
-            return base + (' -- mechanism: %s.' % mech if mech else '.')
+            base += (' -- mechanism: %s.' % mech if mech else '.')
+            # v3.23.4: exposure, not advice -- and only when the match is strong
+            # enough that the comparison carries weight (a 50% match is context).
+            wc = frag.get('who_carried_it') or {}
+            if ms_level == 'strong' and wc.get('hit'):
+                base += ' Last time, the losses sat with: %s' % wc['hit']
+            if frag.get('match_trend'):
+                base += ' ' + frag['match_trend']
+            return base
         # Thin match: name it, but say plainly that it does not carry weight.
         return (' No close historical analog: the nearest is %s at only %s feature '
                 'overlap, which is context rather than a fit. Present conditions are '
