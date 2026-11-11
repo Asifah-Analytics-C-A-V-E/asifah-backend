@@ -1456,23 +1456,25 @@ def fetch_lebanon_articles(days=3):
         # as Barak Ravid bylines below.
         'Naharnet':           'https://news.google.com/rss/search?q=site:naharnet.com&hl=en&gl=US&ceid=US:en',
         'LBCI (EN)':          'https://news.google.com/rss/search?q=site:lbcgroup.tv&hl=en&gl=US&ceid=US:en',
-        'MTV Lebanon':        'https://www.mtv.com.lb/en/rss',
-        'L\'Orient Today':    'https://today.lorientlejour.com/rss',
-        'The961':             'https://www.the961.com/feed/',
+        # Nov 11 2026: these three direct feeds never delivered an item (feed
+        # health: 50 checks, 0 items). Google News route, same as Naharnet.
+        'MTV Lebanon':        'https://news.google.com/rss/search?q=site:mtv.com.lb&hl=en&gl=US&ceid=US:en',
+        'L\'Orient Today':    'https://news.google.com/rss/search?q=site:today.lorientlejour.com&hl=en&gl=US&ceid=US:en',
+        'The961':             'https://news.google.com/rss/search?q=site:the961.com&hl=en&gl=US&ceid=US:en',
         'An-Nahar (AR)':      'https://www.annahar.com/rss',
         # ── Regional Arabic (NEW) ─────────────────────────────────
         'Lebanon24 (AR)':     'https://news.google.com/rss/search?q=site:lebanon24.com&hl=ar&gl=LB&ceid=LB:ar',
-        'NNA Lebanon':        'https://www.nna-leb.gov.lb/en/rss',
+        'NNA Lebanon':        'https://news.google.com/rss/search?q=site:nna-leb.gov.lb&hl=en&gl=US&ceid=US:en',
         # ── Existing sources ──────────────────────────────────────
         'Al-Manar (EN)':      'https://news.google.com/rss/search?q=site:english.almanar.com.lb&hl=en&gl=US&ceid=US:en',
         'Al-Manar (AR)':      'https://news.google.com/rss/search?q=site:almanar.com.lb&hl=ar&gl=LB&ceid=LB:ar',
         'UN News (Lebanon)':  'https://news.un.org/feed/subscribe/en/news/region/middle-east/feed/rss.xml',
-        'MEMRI':              'https://www.memri.org/rss.xml',
+        'MEMRI':              'https://news.google.com/rss/search?q=site:memri.org&hl=en&gl=US&ceid=US:en',
         'Iran Wire (EN)':     'https://iranwire.com/en/feed/',
         'Times of Israel':    'https://news.google.com/rss/search?q=site:timesofisrael.com&hl=en&gl=US&ceid=US:en',
         # i24NEWS direct RSS returns HTML — routed via Google News
         'i24NEWS':            'https://news.google.com/rss/search?q=site:i24news.tv&hl=en&gl=US&ceid=US:en',
-        'Jerusalem Post':     'https://www.jpost.com/rss/rssfeedsfrontpage.aspx',
+        'Jerusalem Post':     'https://news.google.com/rss/search?q=site:jpost.com&hl=en&gl=US&ceid=US:en',
         'Le Monde (FR)':      'https://www.lemonde.fr/rss/une.xml',
         'France24 (EN)':      'https://www.france24.com/en/rss',
         # ── Barak Ravid — first-mover Lebanon/Hezbollah journalist (v2.1) ──

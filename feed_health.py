@@ -92,7 +92,7 @@ try:
 except ImportError:
     requests = None
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'   # Nov 11 2026: 'retired' -- a feed the code stopped fetching is not a live failure
 
 UPSTASH_URL = (os.environ.get('UPSTASH_REDIS_URL')
                or os.environ.get('UPSTASH_REDIS_REST_URL'))
@@ -102,6 +102,9 @@ REDIS_OK = bool(UPSTASH_URL and UPSTASH_TOKEN and requests is not None)
 
 SILENT_DAYS = float(os.environ.get('FEED_SILENT_DAYS', '3'))
 DEAD_DAYS   = float(os.environ.get('FEED_DEAD_DAYS', '7'))
+# v1.0.2: no check at all for this long = the code no longer fetches the URL
+# (replaced by a Google News route, or removed). Its old failure is history.
+RETIRED_DAYS = float(os.environ.get('FEED_RETIRED_DAYS', '2'))
 RECORD_TTL  = int(os.environ.get('FEED_HEALTH_TTL_SEC', str(45 * 24 * 3600)))
 KEY_PREFIX  = 'feedhealth:'
 
@@ -279,6 +282,15 @@ def classify(rec):
 
     since_items = _age_days(rec.get('last_items_at'))
     since_ok    = _age_days(rec.get('last_ok_at'))
+    since_check = _age_days(rec.get('last_check'))
+
+    # v1.0.2 (Nov 11 2026): the ME report listed 30 'failing' feeds, two-thirds
+    # of them last checked Nov 5 -- URLs the code had already replaced. A
+    # failure nobody is still having is not a finding.
+    if since_check is not None and since_check > RETIRED_DAYS:
+        return ('retired',
+                'Not fetched for %.1f days -- the code no longer calls this URL '
+                '(replaced or removed). Kept for the record, not a live problem.' % since_check)
 
     # ORDER MATTERS. How a feed is failing is more useful than the fact that
     # it has never delivered: 'never_worked' on a host that stopped resolving

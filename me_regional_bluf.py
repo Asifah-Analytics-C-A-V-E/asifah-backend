@@ -4,6 +4,11 @@ Asifah Analytics -- ME Backend Module
 v2.4.1  (Oct 11 2026; v2.4.0 Oct 5 2026)
 
 VERSION HISTORY AT A GLANCE
+  v2.6.3 Nov 11 2026 -- humanitarian country signals are ME countries only.
+                       The global humanitarian cache covers the world, so the
+                       ME BLUF was listing Angola, Comoros, Malawi, Madagascar
+                       (Africa's). Those belong to the Africa BLUF and reach the
+                       GPI through global_humanitarian anyway.
   v2.6.1 Oct 31 2026 -- Iran 'ceasefire_phase' signal mapped to diplomatic +
                        kinetic axes.
   v2.6.2 Nov 1 2026  -- Egypt (rhetoric_tracker_egypt v1.0.0, six fronts) and
@@ -79,7 +84,7 @@ import os
 # The marker itself fires at the BOTTOM of this file, because _CANON_AVAILABLE
 # does not exist yet up here -- printing it at import-time would NameError.
 # ════════════════════════════════════════════════════════════════════
-BLUF_VERSION = '2.6.2'
+BLUF_VERSION = '2.6.3'
 
 UPSTASH_REDIS_URL   = os.environ.get('UPSTASH_REDIS_URL', '')
 UPSTASH_REDIS_TOKEN = os.environ.get('UPSTASH_REDIS_TOKEN', '')
@@ -1327,6 +1332,16 @@ _HUM_MIN_LEVEL = 3
 # and food-security detail; this generic path must not shadow it.
 _HUM_DEDICATED = {'lebanon'}
 
+# v2.6.3 (Nov 11 2026): the countries this BLUF speaks for. The humanitarian
+# convergence cache is GLOBAL; without this the ME card listed Africa's crises.
+# Out-of-region countries are skipped here and logged -- they still reach the
+# GPI through its own global_humanitarian region.
+_HUM_ME_SCOPE = {
+    'algeria', 'bahrain', 'egypt', 'iran', 'iraq', 'israel', 'gaza', 'west_bank', 'palestine',
+    'jordan', 'kuwait', 'lebanon', 'libya', 'morocco', 'oman', 'qatar', 'saudi_arabia',
+    'syria', 'tunisia', 'uae', 'yemen',
+}
+
 _HUM_CACHE_KEY = 'humanitarian_convergence:bluf:latest'
 _hum_absence_logged = False
 
@@ -1451,6 +1466,7 @@ def _build_humanitarian_country_signals():
     # Collapse to ONE reading per country: the most severe signal wins, and we
     # keep a count so the prose can say how many independent reports stacked up.
     by_country = {}
+    _out_of_region = set()
     for s in (payload.get('signals') or []):
         if not isinstance(s, dict):
             continue
@@ -1464,6 +1480,9 @@ def _build_humanitarian_country_signals():
         if not cid:
             continue
         if cid in _HUM_DEDICATED:
+            continue
+        if cid not in _HUM_ME_SCOPE:
+            _out_of_region.add(cid)
             continue
         try:
             level = int(s.get('level') or 0)
@@ -1539,6 +1558,9 @@ def _build_humanitarian_country_signals():
 
     # Why each registry node did or did not fire. See _report_convergence_audit.
     _report_convergence_audit(_conv_audit)
+    if _out_of_region:
+        print('[ME BLUF] humanitarian: %d out-of-region countries left to their own BLUF / the GPI: %s'
+              % (len(_out_of_region), ', '.join(sorted(_out_of_region))))
 
     signals.sort(key=lambda s: s['priority'], reverse=True)
     if signals:

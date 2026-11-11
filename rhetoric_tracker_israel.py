@@ -4175,6 +4175,13 @@ def run_israel_rhetoric_scan(days=3):
     level_cap, level_cap_reason = _israel_ladder_cap(alert_counts, inbound_fp, theatre_summary)
     overall_max = min(overall_raw, level_cap)
     scores['overall_max'] = overall_max
+    # v1.4.1: the ME BLUF reads Israel's level from inbound_max_level, so the
+    # ladder must cap the dashboards too, not just theatre_level (it read L5
+    # on the BLUF while this page said L4).
+    scores['inbound_max_level_raw'] = scores['inbound_max_level']
+    scores['outbound_max_level_raw'] = scores['outbound_max_level']
+    scores['inbound_max_level'] = min(scores['inbound_max_level'], level_cap)
+    scores['outbound_max_level'] = min(scores['outbound_max_level'], level_cap)
     if overall_raw != overall_max:
         print(f"[Israel Rhetoric] ladder: raw L{overall_raw} -> L{overall_max} ({level_cap_reason})")
     theatre_score = scores['theatre_score']
@@ -4225,6 +4232,7 @@ def run_israel_rhetoric_scan(days=3):
         'alert_level': _score_inbound_from_alerts(alert_counts),
         # v1.4.0 Israel ladder
         'theatre_level_raw': overall_raw,
+        'inbound_max_level_raw': scores.get('inbound_max_level_raw'),
         'level_cap': level_cap,
         'level_cap_reason': level_cap_reason,
         # Article-detected inbound
@@ -4247,7 +4255,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.4.0-israel-ladder',
+        'version': '1.4.1-israel-ladder',
     }
 
     # Cache
@@ -4483,7 +4491,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.4.0-israel-ladder',
+            'version': '1.4.1-israel-ladder',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])

@@ -5349,21 +5349,21 @@ DEFENSE_RSS_FEEDS = {
     'CENTCOM': 'https://news.google.com/rss/search?q=site:centcom.mil&hl=en&gl=US&ceid=US:en',
     'NATO News': 'https://news.google.com/rss/search?q=site:nato.int+news&hl=en&gl=US&ceid=US:en',
     'DVIDS': 'https://www.dvidshub.net/rss/news',
-    'Jerusalem Post': 'https://www.jpost.com/rss/rssfeedsmilitary.aspx',
+    'Jerusalem Post': 'https://news.google.com/rss/search?q=site:jpost.com+(IDF+OR+military)&hl=en&gl=US&ceid=US:en',   # Nov 11 2026: direct feed never delivered
     'Times of Israel': 'https://news.google.com/rss/search?q=site:timesofisrael.com+military&hl=en&gl=US&ceid=US:en',
     'Ynet News': 'https://news.google.com/rss/search?q=site:ynetnews.com&hl=en&gl=US&ceid=US:en',
     'Israel Hayom': 'https://www.israelhayom.com/feed/',
     'Al Jazeera English': 'https://www.aljazeera.com/xml/rss/all.xml',
-    'Al Arabiya English': 'https://english.alarabiya.net/tools/rss',
+    'Al Arabiya English': 'https://news.google.com/rss/search?q=site:english.alarabiya.net&hl=en&gl=US&ceid=US:en',   # Nov 11 2026: direct feed never delivered
     'Middle East Eye': 'https://www.middleeasteye.net/rss',
     'TASS Defense': 'https://tass.com/rss/v2.xml',
     'Moscow Times': 'https://www.themoscowtimes.com/rss/news',
     'Daily Sabah': 'https://www.dailysabah.com/rssFeed/defense',
-    'TRT World': 'https://www.trtworld.com/rss',
+    'TRT World': 'https://news.google.com/rss/search?q=site:trtworld.com&hl=en&gl=US&ceid=US:en',   # Nov 11 2026: direct feed never delivered
     'Kyiv Independent': 'https://news.google.com/rss/search?q=site:kyivindependent.com&hl=en&gl=US&ceid=US:en',
     'Ukrinform': 'https://www.ukrinform.net/rss/block-lastnews',
     'Iran International': 'https://www.iranintl.com/en/feed',
-    'Tasnim English': 'https://news.google.com/rss/search?q=site:tasnimnews.com+military&hl=en&gl=US&ceid=US:en',
+    'Tasnim English': 'https://news.google.com/rss/search?q=site:tasnimnews.com&hl=en&gl=US&ceid=US:en',   # Nov 11 2026: '+military' matched nothing
     # v2.3.0 additions — Poland & Arctic
     'Defence24 Poland': 'https://defence24.com/rss',
     'Polish Press Agency': 'https://www.pap.pl/en/rss.xml',
