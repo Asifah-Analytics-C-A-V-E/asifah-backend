@@ -1292,7 +1292,7 @@ def _contested_spokes(wheels):
             continue
         hub = w.get('hub')
         for sp in w.get('spokes') or []:
-            if sp.get('state') != 'lit':
+            if sp.get('state') != 'lit' or sp.get('track') == 'diplomatic':
                 continue
             c = sp.get('country')
             if c in _KNOWN_HUBS:        # hub-on-hub, not a contested third country
@@ -1424,6 +1424,17 @@ def build_convergence_panel(resident_hubs, local_countries=(), extra_spokes=None
         # resident hubs.
         _contested = _contested_spokes(panel['resident_wheels'])
         panel['contested_spokes'] = _contested
+
+        # ── Back channels (v1.6.0) ────────────────────────────────────
+        # Every lit diplomatic-track spoke, hoisted for the GPI's Diplomatic
+        # card. Display only: nothing here moves a level.
+        panel['back_channels'] = sorted([
+            {'hub': w.get('hub'), 'country': sp.get('country'),
+             'display': sp.get('display'), 'level': sp.get('level', 0),
+             'top_signal': sp.get('top_signal', ''), 'age_hours': sp.get('age_hours')}
+            for w in panel['resident_wheels'] for sp in (w.get('spokes') or [])
+            if sp.get('state') == 'lit' and sp.get('track') == 'diplomatic'
+        ], key=lambda c: (-int(c.get('level') or 0), str(c.get('country'))))
         panel['contested_count'] = len(_contested)
         panel['max_contest_hubs'] = max([c['hub_count'] for c in _contested] or [0])
 

@@ -40,7 +40,7 @@ try:
 except ImportError:
     _trickle_register = None
 
-MODULE_VERSION = '2.0.3'   # ONE version string -- every payload/debug field reads this
+MODULE_VERSION = '2.1.0'   # Nov 11 2026: writes spoke:iran:qatar (Doha's Iran channel, diplomatic track) | 2.0.3   # ONE version string -- every payload/debug field reads this
 
 # Optional dependencies — degrade gracefully if missing
 try:
@@ -1133,6 +1133,72 @@ def _write_qatar_fingerprints(actor_levels, vector_scores, tripwires_global):
     print(f"[QAT Rhetoric] Crosstheater slice written -- mediation_active="
           f"{slice_payload['mediation_active']}, tempo={med_lvl}")
 
+# ============================================
+# IRAN SPOKE (v2.1.0 Nov 11 2026)
+# ============================================
+# Doha's seat on the IRAN wheel. Qatar's mediation actors cover Gaza as well as
+# Iran, so the channel is measured ONLY from mediation articles that name Iran.
+# Busy Gaza shuttle diplomacy is not an Iran back channel.
+_IRAN_RX = re.compile(r"\b(iran|iranian|iranians|tehran)\b|إيران|ايران|ایران|طهران|تهران", re.I)
+_QAT_LVL = {'low': 0, 'normal': 1, 'elevated': 2, 'high': 3, 'surge': 4}
+QATAR_SPOKE_TTL_HOURS = 30
+
+
+def _write_iran_spoke(articles_by_actor, actor_levels, tripwires_global):
+    try:
+        seen, outlets = set(), set()
+        for aid in ('qatar_mofa_mediation', 'emir_leadership'):
+            for a in articles_by_actor.get(aid, []) or []:
+                t = '%s %s' % (a.get('title', ''), a.get('description', ''))
+                key = (a.get('title') or '').strip().lower()
+                if not key or key in seen or not _IRAN_RX.search(t):
+                    continue
+                seen.add(key)
+                outlets.add((a.get('source') or 'unknown').strip().lower())
+        n, n_out = len(seen), len(outlets)
+        # 2-outlet rule: L3+ only with two separate outlets
+        channel = 0 if n == 0 else (1 if n == 1 else (2 if n_out < 2 else (4 if n_out >= 4 else 3)))
+        tw_ids = {tw.get('id') for tw in (tripwires_global or []) if isinstance(tw, dict)}
+        collapsed = 'mediation_collapse' in tw_ids
+        if collapsed:
+            channel = 0
+        pressure = _QAT_LVL.get(actor_levels.get('iran_qatar', 'low'), 0)
+        lvl = max(channel, pressure)
+        track = 'diplomatic' if (channel >= 2 and channel >= pressure) else 'pressure'
+
+        if collapsed:
+            top = 'Iran-Qatar: a Doha mediation collapse fired this cycle -- the channel is shut, not quiet.'
+        elif channel >= 3:
+            top = 'Iran-Qatar: the Doha channel on Iran is active (%d items, %d outlets).' % (n, n_out)
+        elif channel >= 1:
+            top = 'Iran-Qatar: Doha is in the Iran file (%d item%s, %d outlet%s) -- not yet confirmed busy.' % (
+                n, '' if n == 1 else 's', n_out, '' if n_out == 1 else 's')
+        else:
+            top = 'No Doha-on-Iran mediation reporting reached the scanners this cycle -- unread, not calm.'
+        if pressure >= 2:
+            top += ' Iran-Qatar bilateral signal (North Field / South Pars) is %s.' % actor_levels.get('iran_qatar')
+
+        prev = _redis_get('spoke:iran:qatar') or {}
+        try:
+            p = int(prev.get('level'))
+            direction = 'expanding' if lvl > p else ('contracting' if lvl < p else 'holding')
+        except (TypeError, ValueError):
+            direction = 'holding'
+        _redis_set('spoke:iran:qatar', {
+            'ts': datetime.now(timezone.utc).isoformat(), 'hub': 'iran', 'country': 'qatar',
+            'level': lvl, 'channel_level': channel, 'pressure_level': pressure, 'track': track,
+            'node_class': 'mediation', 'relationship': 'mediation', 'top_signal': top,
+            'why': 'Doha carries Iran-US letters and hosts the talks -- and shares the world\'s largest gas field with Iran.',
+            'items': n,
+            'trajectory': {'direction': direction, 'level': lvl,
+                           'confidence': 'corroborated' if n_out >= 2 else ('reported' if n else 'no_evidence')},
+            'source': 'rhetoric_tracker_qatar v%s' % MODULE_VERSION,
+        }, ttl_hours=QATAR_SPOKE_TTL_HOURS)
+        print(f"[QAT Rhetoric] spoke:iran:qatar written (L{lvl}, channel={channel}, pressure={pressure}, track={track})")
+    except Exception as e:
+        print(f"[QAT Rhetoric] Iran spoke write error: {str(e)[:120]}")
+
+
 def _compute_qatar_l5_gate(tripwires_global, actor_summaries, vector_scores):
     """
     Per platform L5 Reservation Contract: Qatar L5 "Active Crisis" requires
@@ -1358,6 +1424,7 @@ def scan_qatar_rhetoric(force=False, days=7):
 
     # ── Write Qatar fingerprints for downstream consumers ──
     _write_qatar_fingerprints(actor_levels, vector_scores, tripwires_global)
+    _write_iran_spoke(articles_by_actor, actor_levels, tripwires_global)
 
     # ── Compute composite Qatar pressure score ──
     # v2.0.0 Oct 18 2026 -- DOCTRINE ENFORCED. This file's own header says

@@ -2398,6 +2398,55 @@ def _write_crosstheater_signal(result):
         print(f"[Iran Rhetoric] Cross-theater write error: {e}")
 
 
+def _write_us_iran_spoke(result):
+    """v1.10.0 (Nov 11 2026) -- the US-Iran line, ONE line for both directions.
+
+    Iran sits on the US wheel as a PEER. Its level is the higher of:
+      * the talks: the tracker's diplomatic depth (3 mediator activity,
+        4 active negotiations / direct talks, 5 agreement)
+      * the pressure: US-on-Iran headlines (inbound_pressure['us'], already
+        under the 2-outlet rule)
+    When the talks are at least as loud as the pressure, the line is drawn as
+    a DIPLOMATIC back channel and kept out of convergence counts.
+    """
+    try:
+        talks = int(result.get('ceasefire_level', 0) or 0)
+        ip = (result.get('inbound_pressure') or {}).get('us') or {}
+        pressure = int(ip.get('level', 0) or 0)
+        lvl = max(talks, pressure)
+        track = 'diplomatic' if (talks >= 3 and talks >= pressure) else 'pressure'
+        label = {3: 'talks running through mediators', 4: 'active negotiations',
+                 5: 'an agreement reported'}.get(talks, '')
+        parts = []
+        if label:
+            parts.append(label + ' (L%d)' % talks)
+        if pressure >= 2:
+            parts.append('US pressure on Iran at L%d (%s)' % (pressure, ip.get('reason', '')))
+        if parts:
+            top = 'US-Iran: ' + '; '.join(parts) + '.'
+        elif talks or pressure:
+            top = 'US-Iran: background coverage only this cycle.'
+        else:
+            top = 'No US-Iran talks or pressure reporting reached the scanners this cycle -- unread, not calm.'
+        prev = _redis_get('spoke:us:iran') or {}
+        try:
+            p = int(prev.get('level'))
+            direction = 'expanding' if lvl > p else ('contracting' if lvl < p else 'holding')
+        except (TypeError, ValueError):
+            direction = 'holding'
+        _redis_set('spoke:us:iran', {
+            'ts': datetime.now(timezone.utc).isoformat(), 'hub': 'us', 'country': 'iran',
+            'level': lvl, 'channel_level': talks, 'pressure_level': pressure, 'track': track,
+            'relationship': 'adversary_talks', 'top_signal': top[:180],
+            'trajectory': {'direction': direction, 'level': lvl,
+                           'confidence': 'corroborated' if pressure >= 3 or talks >= 3 else 'reported'},
+            'source': 'rhetoric_tracker_iran',
+        }, ttl=30 * 3600)
+        print(f"[Iran Rhetoric] spoke:us:iran written (L{lvl}, talks={talks}, pressure={pressure}, track={track})")
+    except Exception as e:
+        print(f"[Iran Rhetoric] US-Iran spoke write error: {e}")
+
+
 def _detect_crosstheater_coordination(proxy_activation_level, proxy_detail):
     """
     Iran's cross-theater view — it looks at proxy data as signals
@@ -4093,7 +4142,7 @@ def run_iran_rhetoric_scan(days=3):
         # v1.9.0: Israel / US pressure ON Iran (also written into the two adversary buckets)
         'inbound_pressure': inbound_pressure,
         'scan_time_seconds': scan_time,
-        'version': '1.9.0-iran-command-node',
+        'version': '1.10.0-iran-command-node',
     }
 
     # Save initial cache
@@ -4160,6 +4209,7 @@ def run_iran_rhetoric_scan(days=3):
 
     # Write command node fingerprint THEN detect coordination
     _write_crosstheater_signal(result)
+    _write_us_iran_spoke(result)
     result['crosstheater_coordination'] = _detect_crosstheater_coordination(
         proxy_activation_level, proxy_detail
     )
@@ -4311,7 +4361,7 @@ def register_iran_rhetoric_routes(app):
             'theatre_escalation_color': '#6b7280',
             'actors': {},
             'message': 'First scan in progress — check back in 3-4 minutes',
-            'version': '1.9.0-iran-command-node',
+            'version': '1.10.0-iran-command-node',
         })
 
     @app.route('/api/rhetoric/iran/summary', methods=['GET'])
