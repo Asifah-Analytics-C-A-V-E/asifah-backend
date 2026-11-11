@@ -158,7 +158,7 @@ BASELINE_KEY              = 'rhetoric_baseline:israel'
 BASELINE_RESET_TOKEN  = '2026-10-03-finaccess-split'
 BASELINE_RESET_ACTORS = ['west_bank_civil']
 CROSSTHEATER_KEY          = 'rhetoric:crosstheater:fingerprints'
-ALERTS_CACHE_KEY          = 'rhetoric:israel:alerts_24h'
+ALERTS_CACHE_KEY          = 'rhetoric:israel:alerts_24h:v2'   # Nov 11 2026: new key -- the old cache held counts from the news-channel bug
 
 RHETORIC_CACHE_TTL  = 6 * 3600
 SCAN_INTERVAL_HOURS = 6
