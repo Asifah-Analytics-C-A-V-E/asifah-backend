@@ -195,7 +195,7 @@ GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 # v1.2.0 (Oct 4 2026) -- derived UA, per the Oct 3 platform-wide pass.
 # Was 'Mozilla/5.0 Asifah Analytics OSINT' -- honest in intent but carrying
 # no version, in a spelling used nowhere else on the platform.
-OMAN_TRACKER_VERSION = '1.4.1'   # Nov 11 2026 (b): writes spoke:iran:oman so the Muscat channel lights the Iran wheel | 1.4.0 Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
+OMAN_TRACKER_VERSION = '1.4.2'   # Nov 11 2026 (c): Iran spoke carries track='diplomatic' when the channel, not pressure, is what is lit | 1.4.1: writes spoke:iran:oman so the Muscat channel lights the Iran wheel | 1.4.0 Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
 OMAN_USER_AGENT = (f'AsifahAnalytics-ME-Oman/{OMAN_TRACKER_VERSION} '
                    f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -1238,6 +1238,12 @@ def _write_iran_spoke(result):
         except (TypeError, ValueError):
             direction = 'holding'
         conf = 'corroborated' if lvl >= 3 else ('reported' if n else 'no_evidence')
+        # v1.4.2 -- which track is lit. If the channel is at least as loud as
+        # the pressure, the wheel draws this spoke as DIPLOMATIC (GPI blue) and
+        # keeps it out of Iran's convergence count. If Iran is leaning on Oman
+        # harder than it is talking through it, it is pressure, on the threat
+        # palette, and it counts.
+        track = 'diplomatic' if (channel >= 2 and channel >= pressure) else 'pressure'
 
         _redis_set(key, {
             'ts':           datetime.now(timezone.utc).isoformat(),
@@ -1252,6 +1258,7 @@ def _write_iran_spoke(result):
                             'and Salalah, Duqm and the Musandam side of Hormuz are what Iran can lean on.',
             'items':        n,
             'relationship': 'mediation',
+            'track':        track,
             'trajectory':   {'direction': direction, 'level': lvl, 'confidence': conf},
             'source':       'rhetoric_tracker_oman v%s' % OMAN_TRACKER_VERSION,
         }, ttl=SPOKE_TTL_HOURS * 3600)

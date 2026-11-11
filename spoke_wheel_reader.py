@@ -1,7 +1,14 @@
 """
 spoke_wheel_reader.py
 Asifah Analytics -- SHARED MODULE (deploy byte-identical to ALL backends)
-v1.5.1 -- Nov 4, 2026  (v1.5.0 Oct 11 2026; v1.4.0 Oct 5 2026; v1.0.6 Jul 25 2026)
+v1.6.0 -- Nov 11, 2026  (v1.5.1 Nov 4 2026; v1.5.0 Oct 11 2026; v1.4.0 Oct 5 2026; v1.0.6 Jul 25 2026)
+
+v1.6.0: DIPLOMATIC TRACK. A spoke may declare track='diplomatic' (Oman on the
+Iran wheel when the Muscat channel is what is lit). It stays state='lit' so
+older pages keep rendering it, but it is a back channel being USED, not
+pressure: it is counted in channel_count, NOT lit_count, and never feeds
+convergence, breadth or the 'N spokes lit' headline. The graph draws it in
+the GPI's Diplomatic blue.
 
 v1.5.1: registry only -- Cuba and Peru join the China wheel, Cuba and
 Venezuela join the Iran wheel (their trackers now write spoke:{hub}:{country}).
@@ -92,7 +99,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.5.1'
+__version__ = '1.6.0'
 
 # ============================================================
 # CONFIG
@@ -423,6 +430,8 @@ def _breadth(spokes):
         if sp.get('state') == 'not_reporting':
             continue
         reporting_by[r] = reporting_by.get(r, 0) + 1
+        if sp.get('track') == 'diplomatic':
+            continue          # v1.6.0 -- a busy back channel is not reach
         if sp.get('state') == 'lit':
             # Use _display, not the caller's 'display' -- it carries the
             # acronym table (CAR / DRC / UAE / DPRK), so a breadth roll-up
@@ -1105,9 +1114,18 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
                 'trajectory': _spoke_trajectory(fp, hub),
                 'hub_declared': bool(fp.get('hub_declared')),
                 'top_signal': str(fp.get('top_signal', ''))[:180],
+                # v1.6.0 -- 'diplomatic' = the lit thing is a back channel in
+                # use, not pressure. Only meaningful while lit.
+                'track': ('diplomatic' if st['state'] == 'lit'
+                          and fp.get('track') == 'diplomatic' else ''),
             })
 
-        out['lit_count'] = sum(1 for s in out['spokes'] if s['state'] == 'lit')
+        out['lit_count'] = sum(1 for s in out['spokes']
+                               if s['state'] == 'lit' and s.get('track') != 'diplomatic')
+        _chan = [s['display'] for s in out['spokes']
+                 if s['state'] == 'lit' and s.get('track') == 'diplomatic']
+        out['channel_count'] = len(_chan)
+        out['channel_names'] = _chan
         out['dark_count'] = sum(1 for s in out['spokes'] if s['state'] == 'dark')
         out['unreported_count'] = sum(1 for s in out['spokes'] if s['state'] == 'not_reporting')
         out['converged'] = out['lit_count'] >= converge_at
@@ -1115,7 +1133,8 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
 
         out['breadth'] = _breadth(out['spokes'])
 
-        lit_names = [s['display'] for s in out['spokes'] if s['state'] == 'lit']
+        lit_names = [s['display'] for s in out['spokes']
+                     if s['state'] == 'lit' and s.get('track') != 'diplomatic']
         if out['converged']:
             _b = out['breadth']
             # SPAN outranks DEPTH in the prose: several regions at once is the
@@ -1145,6 +1164,12 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
                                % (_display(hub), lit_names[0]))
         else:
             out['headline'] = ''
+        if _chan:
+            _cs = ('Back channel active on the %s wheel (%s): a diplomatic track in use, '
+                   'not pressure, so it is not counted toward convergence.'
+                   % (_display(hub), ', '.join(_chan)))
+            out['channel_line'] = _cs
+            out['headline'] = (out['headline'] + ' ' + _cs).strip()
         out['dormant_note'] = _dormant_note(out, hub)
     except Exception as e:
         out['readable'] = False
@@ -1155,7 +1180,7 @@ def read_wheel(hub, extra_spokes=None, freshness_hours=DEFAULT_FRESHNESS_HOURS,
 def _dormant_note(wheel, hub):
     """Say which kind of nothing this is."""
     lit, dark, unrep = wheel['lit_count'], wheel['dark_count'], wheel['unreported_count']
-    total = lit + dark + unrep
+    total = lit + dark + unrep + int(wheel.get('channel_count', 0) or 0)
     if lit >= 2:
         return ''
     if unrep and unrep == total:
