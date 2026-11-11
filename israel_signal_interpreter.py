@@ -1,6 +1,10 @@
 """
 israel_signal_interpreter.py
 Asifah Analytics — ME Backend Module
+v1.1.0 - Nov 11 2026: the alert signal is LIVE and sized to the Israel ladder
+  (any incoming fire = L4; L5 only for Iran-scale fire, barrage or sustained
+  unrest -- the tracker's level_cap), names its source and the newest alert's
+  age, and every signal is clamped to the tracker's level_cap. Site palette.
 v1.0.0 - April 4, 2026 v1
 
 Signal interpretation engine for the Israel Rhetoric Tracker.
@@ -1143,6 +1147,11 @@ def build_top_signals(scan_data):
     alerts_rockets  = int(alerts.get('rockets', 0) or 0)
     alerts_ballistic= int(alerts.get('ballistic', 0) or 0)
     alerts_recent_1h= int(alerts.get('recent_1h', 0) or 0)
+    alerts_drones   = int(alerts.get('drones', 0) or 0)
+    alert_level     = int(scan_data.get('alert_level', 0) or 0)
+    alerts_src      = str(alerts.get('source_label') or 'Pikud HaOref')
+    alerts_age      = alerts.get('newest_age_hours')
+    level_cap       = int(scan_data.get('level_cap', 5) or 5)
 
     # Article-detected vectors
     ballistic_lvl   = int(scan_data.get('ballistic_level', 0) or 0)
@@ -1163,8 +1172,8 @@ def build_top_signals(scan_data):
 
     # ── Color helper ─────────────────────────────────────────────────
     def lvl_color(lvl):
-        return {0:'#6b7280', 1:'#16a34a', 2:'#facc15', 3:'#f59e0b',
-                4:'#f97316', 5:'#dc2626'}.get(int(lvl), '#6b7280')
+        return {0:'#6b7280', 1:'#3b82f6', 2:'#f59e0b', 3:'#f97316',
+                4:'#ef4444', 5:'#991b1b', 6:'#3b0764'}.get(int(lvl), '#6b7280')
 
     # ── 1. Red lines BREACHED ────────────────────────────────────────
     for rl in triggered_rls:
@@ -1240,22 +1249,33 @@ def build_top_signals(scan_data):
         })
 
     # ── 3. Kinetic pressure: live alerts (Pikud HaOref + ballistic) ──
-    if alerts_ballistic >= 1:
+    # v1.1.0: sized to the Israel ladder (alert_level), honest about source
+    # and freshness. "3 ballistic alerts" means nothing without "newest 14h ago".
+    _age_txt = ''
+    if isinstance(alerts_age, (int, float)):
+        _age_txt = (' Newest alert under an hour ago.' if alerts_age < 1
+                    else f' Newest alert {alerts_age:.0f}h ago.')
+    if alerts_ballistic >= 1 or (alert_level >= 4 and alerts_total >= 1):
+        _kinds = ', '.join(x for x in (
+            f'{alerts_ballistic} ballistic missile' if alerts_ballistic else '',
+            f'{alerts_rockets} rocket' if alerts_rockets else '',
+            f'{alerts_drones} drone' if alerts_drones else '') if x) or f'{alerts_total}'
         signals.append({
-            'priority':   13,   # ballistic = strategic — even one is huge
+            'priority':   13 if alert_level >= 5 else 12,
             'category':   'kinetic_pressure',
             'theatre':    'israel',
-            'level':      5,
-            'icon':       '☄️',
-            'color':      '#dc2626',
-            'short_text': (f'{ISRAEL_FLAG} ISRAEL: {alerts_ballistic} ballistic '
-                           f'alert(s) in 24h'),
-            'long_text':  (f'{ISRAEL_FLAG} ISRAEL Pikud HaOref: '
-                           f'{alerts_ballistic} ballistic missile alert(s) in '
-                           f'last 24h, {alerts_rockets} rocket alerts. '
-                           f'Recent 1h: {alerts_recent_1h}.'),
+            'level':      max(4, alert_level),
+            'icon':       '☄️' if alerts_ballistic else '🚀',
+            'color':      lvl_color(max(4, alert_level)),
+            'short_text': (f'{ISRAEL_FLAG} ISRAEL: incoming-fire alerts in the last 24h '
+                           f'({_kinds})'),
+            'long_text':  (f'{ISRAEL_FLAG} ISRAEL: {_kinds} alert(s) in the last 24h; '
+                           f'{alerts_recent_1h} in the last hour.{_age_txt} Source: {alerts_src}. '
+                           + ('Iran-scale fire -- the Israel ladder\'s L5.' if alert_level >= 5 else
+                              'Incoming fire is L4 on the Israel ladder; L5 is reserved for Iran-scale '
+                              'fire or sustained unrest.')),
         })
-    elif alerts_rockets >= 20 or alerts_total >= 30:
+    elif False and (alerts_rockets >= 20 or alerts_total >= 30):   # v1.1.0: folded into the branch above
         signals.append({
             'priority':   12,
             'category':   'kinetic_pressure',
@@ -1556,6 +1576,22 @@ def build_top_signals(scan_data):
                            f'{theater_list} in negotiation track. Aggregate '
                            f'modifier: {dipl_modifier} pts.'),
         })
+
+    # ── v1.1.0: the Israel ladder caps every signal ─────────────────
+    # Fingerprints and keyword reads can still say L5; the ladder decides.
+    for _s in signals:
+        try:
+            if int(_s.get('level', 0)) > level_cap:
+                _raw = int(_s['level'])
+                _s['level_raw'] = _raw
+                _s['level'] = level_cap
+                _s['color'] = lvl_color(level_cap)
+                _s['short_text'] = str(_s.get('short_text', '')).replace('L%d' % _raw, 'L%d' % level_cap)
+                _s['long_text'] = (str(_s.get('long_text', '')) +
+                                   ' Held at L%d on the Israel ladder: the raw read says L%d, but L5 is reserved '
+                                   'for Iran-scale fire or sustained unrest.' % (level_cap, _raw))
+        except Exception:
+            pass
 
     # ── Sort and return ─────────────────────────────────────────────
     signals.sort(key=lambda s: s.get('priority', 0), reverse=True)

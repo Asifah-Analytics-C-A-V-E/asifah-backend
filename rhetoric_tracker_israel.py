@@ -1,6 +1,18 @@
 # -*- coding: utf-8 -*-
 """
 Asifah Analytics — Israel Rhetoric & Strike Actor Tracker
+v1.4.0 — Nov 11 2026: LIVE alerts only, and an Israel-specific ladder
+  * The Telegram fallback counted ANY Israel channel message containing
+    "ballistic missile", "shelter" or "התרעה" as a rocket alert -- news
+    channels discussing Iran's missile programme read as incoming fire.
+    Only the alert channels (tzevaadom_en, PikudHaOref) count now, every
+    count carries the newest alert's age, and the source is named honestly.
+  * Oref history times are Israel local time; they were read as UTC.
+  * Israel ladder (Rachel, Nov 11 2026):
+      L3  West Bank / Gaza unrest, Houthi posturing
+      L4  actual Houthi missiles, one-off West Bank or Hamas events
+      L5  Iran firing missiles at Israel, or Intifada-like SUSTAINED unrest
+    The theatre level is capped at L4 unless an L5 condition is met.
 v1.2.0 — October 2026 (first built March 2026)
 
 ANALYTICAL FRAME — Two questions for the analyst:
@@ -79,6 +91,11 @@ import requests
 import xml.etree.ElementTree as ET
 import urllib.parse
 from datetime import datetime, timezone, timedelta
+try:
+    from zoneinfo import ZoneInfo
+    _IL_TZ = ZoneInfo('Asia/Jerusalem')
+except Exception:                       # tzdata missing: fall back to IST (UTC+2)
+    _IL_TZ = timezone(timedelta(hours=2))
 from email.utils import parsedate_to_datetime
 from flask import jsonify, request
 
@@ -1591,7 +1608,9 @@ def _parse_alert_counts_from_oref(data, hours_back=24):
                 try:
                     alert_dt = datetime.fromisoformat(str(val).replace(' ', 'T'))
                     if alert_dt.tzinfo is None:
-                        alert_dt = alert_dt.replace(tzinfo=timezone.utc)
+                        # v1.4.0: Oref writes Israel LOCAL time (was read as UTC,
+                        # which made every alert look 2-3 hours fresher)
+                        alert_dt = alert_dt.replace(tzinfo=_IL_TZ).astimezone(timezone.utc)
                     break
                 except Exception:
                     pass
@@ -1600,6 +1619,8 @@ def _parse_alert_counts_from_oref(data, hours_back=24):
             continue
 
         counts['total'] += 1
+        if not counts.get('newest_at') or alert_dt.isoformat() > counts['newest_at']:
+            counts['newest_at'] = alert_dt.isoformat()
         age_hours = (now - alert_dt).total_seconds() / 3600
         if age_hours <= 1:  counts['recent_1h'] += 1
         if age_hours <= 6:  counts['recent_6h'] += 1
@@ -1635,6 +1656,7 @@ def _parse_alert_counts_from_telegram(telegram_messages, hours_back=24):
         'ballistic': 0, 'other': 0,
         'by_city': {}, 'recent_1h': 0, 'recent_6h': 0,
         'source': 'telegram',
+        'source_label': 'Tzeva Adom alert channels on Telegram (unofficial mirror of Pikud HaOref)',
     }
 
     alert_keywords = [
@@ -1661,7 +1683,19 @@ def _parse_alert_counts_from_telegram(telegram_messages, hours_back=24):
         'באר שבע', 'נתניה', 'קריית שמונה', 'נהריה',
     ]
 
+    # v1.4.0: ONLY the alert channels. News channels (Kan, Channel 14, OSINT
+    # groups) talk ABOUT missiles all day; a story on Iran's ballistic
+    # programme is not an incoming missile.
+    alert_channels = {c.lower() for c in TZEVA_ADOM_CHANNELS} | {'pikudhaoref', 'tzevaadom_en'}
+    not_live = ['drill', 'test alert', 'תרגיל', 'yesterday', 'recap', 'summary of', 'anniversary',
+                'last year', 'a year ago', 'בשנה שעברה', 'סיכום']
+    counts['ignored_non_alert_channels'] = 0
+
     for msg in telegram_messages:
+        chan = str(msg.get('channel') or msg.get('source') or '').replace('Telegram @', '').strip().lower()
+        if chan not in alert_channels:
+            counts['ignored_non_alert_channels'] += 1
+            continue
         pub = msg.get('published', '')
         try:
             pub_dt = datetime.fromisoformat(pub)
@@ -1675,8 +1709,12 @@ def _parse_alert_counts_from_telegram(telegram_messages, hours_back=24):
         text = f"{msg.get('title', '')} {msg.get('body', '')}".lower()
         if not any(kw in text for kw in alert_keywords):
             continue
+        if any(kw in text for kw in not_live):
+            continue
 
         counts['total'] += 1
+        if not counts.get('newest_at') or pub_dt.isoformat() > counts['newest_at']:
+            counts['newest_at'] = pub_dt.isoformat()
         age_hours = (now - pub_dt).total_seconds() / 3600
         if age_hours <= 1: counts['recent_1h'] += 1
         if age_hours <= 6: counts['recent_6h'] += 1
@@ -1738,6 +1776,17 @@ def fetch_pikud_haoref_alerts(telegram_messages=None, hours_back=24):
 
     alert_counts['cached_at'] = datetime.now(timezone.utc).isoformat()
     alert_counts['hours_back'] = hours_back
+    # v1.4.0: say where the numbers came from, and how fresh the newest one is
+    alert_counts.setdefault('source_label', {
+        'gcp_relay': 'Pikud HaOref (official, via relay)', 'relay': 'Pikud HaOref (official, via relay)',
+        'direct': 'Pikud HaOref (official)', 'unavailable': 'no alert source reachable this cycle -- unread, not calm',
+    }.get(alert_counts.get('source'), 'Pikud HaOref (official)'))
+    if alert_counts.get('newest_at'):
+        try:
+            alert_counts['newest_age_hours'] = round(
+                (datetime.now(timezone.utc) - datetime.fromisoformat(alert_counts['newest_at'])).total_seconds() / 3600, 1)
+        except Exception:
+            pass
 
     # Cache alert counts
     _redis_set(ALERTS_CACHE_KEY, alert_counts, ttl=1800)
@@ -1763,16 +1812,16 @@ def _score_inbound_from_alerts(alert_counts):
     drones = alert_counts.get('drones', 0)
     recent_1h = alert_counts.get('recent_1h', 0)
 
-    if ballistic >= 3 or total >= 50 or recent_1h >= 10:
+    # v1.4.0 Israel ladder (Rachel, Nov 11 2026). Incoming fire of any kind is
+    # L4 -- a Houthi missile at Eilat is real, not rhetoric. L5 is reserved for
+    # the scale only Iran (or an all-out northern war) produces.
+    rockets = alert_counts.get('rockets', 0)
+    if ballistic >= 10 or total >= 150:
         return 5
-    elif ballistic >= 1 or total >= 20 or drones >= 5:
+    if ballistic >= 1 or rockets >= 1 or drones >= 1:
         return 4
-    elif total >= 10 or drones >= 2 or recent_1h >= 3:
+    if total >= 1:                      # other alert types (infiltration, hazmat)
         return 3
-    elif total >= 3:
-        return 2
-    elif total >= 1:
-        return 1
     return 0
 
 
@@ -3965,6 +4014,49 @@ def classify_articles(articles):
 # ============================================
 # SCORING — TWO DASHBOARDS
 # ============================================
+def _israel_ladder_cap(alert_counts, inbound_fp, theatre_summary):
+    """v1.4.0 (Nov 11 2026): Israel's own ladder on top of the composite.
+
+    Keyword composites and fingerprints kept Israel at L5 long after the war
+    phase ended. L5 now needs one of:
+      * Iran firing at Israel: 5+ ballistic alerts in 24h while Iran's own
+        tracker reads L4+, or 10+ ballistic alerts on their own
+      * all-out barrage: 150+ alerts in 24h
+      * Intifada-like SUSTAINED unrest: Hamas / West Bank at L4+ now AND in
+        most scans across at least the last 48 hours
+    Otherwise the theatre caps at L4. Returns (cap, reason)."""
+    ballistic = alert_counts.get('ballistic', 0) or 0
+    total = alert_counts.get('total', 0) or 0
+    iran_lv = inbound_fp.get('iran_level', 0) or 0
+    if ballistic >= 10 or (ballistic >= 5 and iran_lv >= 4):
+        return 5, 'Iran-scale ballistic fire: %d ballistic alerts in 24h' % ballistic
+    if total >= 150:
+        return 5, 'barrage-scale alerts: %d in 24h' % total
+    asym = theatre_summary.get('asymmetric_max', 0) or 0
+    if asym >= 4 and UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+        try:
+            raw = requests.get(f"{UPSTASH_REDIS_URL}/lrange/{HISTORY_KEY}/0/40",
+                               headers={"Authorization": f"Bearer {UPSTASH_REDIS_TOKEN}"},
+                               timeout=5).json().get('result', [])
+            now = datetime.now(timezone.utc)
+            pts = []
+            for item in raw:
+                try:
+                    e = json.loads(item)
+                    t = datetime.fromisoformat(str(e.get('ts') or e.get('timestamp') or '').replace('Z', '+00:00'))
+                    if 'asym' in e and (now - t).total_seconds() <= 72 * 3600:
+                        pts.append((t, e['asym']))
+                except Exception:
+                    continue
+            hot = [t for t, a in pts if a >= 4]
+            if pts and len(hot) >= 0.7 * len(pts) and hot and (now - min(hot)).total_seconds() >= 48 * 3600:
+                return 5, 'sustained unrest: Hamas / West Bank at L4+ across 48h+'
+        except Exception as e:
+            print(f"[Israel Rhetoric] ladder history read failed (non-fatal): {e}")
+    return 4, ('capped at L4: no Iran-scale fire, barrage or sustained unrest '
+               '(the Israel ladder reserves L5 for those)')
+
+
 def _calculate_scores(theatre_summary, inbound_from_fingerprints,
                       alert_counts, actor_results):
     """
@@ -4079,7 +4171,12 @@ def run_israel_rhetoric_scan(days=3):
     # Step 5: Compute scores
     scores = _calculate_scores(theatre_summary, inbound_fp, alert_counts, actor_results)
 
-    overall_max = scores['overall_max']
+    overall_raw = scores['overall_max']
+    level_cap, level_cap_reason = _israel_ladder_cap(alert_counts, inbound_fp, theatre_summary)
+    overall_max = min(overall_raw, level_cap)
+    scores['overall_max'] = overall_max
+    if overall_raw != overall_max:
+        print(f"[Israel Rhetoric] ladder: raw L{overall_raw} -> L{overall_max} ({level_cap_reason})")
     theatre_score = scores['theatre_score']
 
     all_specs = theatre_summary.get('all_specificity_scores', [])
@@ -4126,6 +4223,10 @@ def run_israel_rhetoric_scan(days=3):
         # Alert vectors
         'alerts_24h': alert_counts,
         'alert_level': _score_inbound_from_alerts(alert_counts),
+        # v1.4.0 Israel ladder
+        'theatre_level_raw': overall_raw,
+        'level_cap': level_cap,
+        'level_cap_reason': level_cap_reason,
         # Article-detected inbound
         'ballistic_level': theatre_summary['ballistic_max'],
         'northern_front_level': theatre_summary['northern_max'],
@@ -4146,7 +4247,7 @@ def run_israel_rhetoric_scan(days=3):
         'coordination_signals': theatre_summary['coordination_signals'][:5],
         'actors': actor_results,
         'scan_time_seconds': scan_time,
-        'version': '1.3.1-israel-formation',
+        'version': '1.4.0-israel-ladder',
     }
 
     # Cache
@@ -4165,6 +4266,7 @@ def run_israel_rhetoric_scan(days=3):
             'tci': inbound_fp['threat_convergence_index'],
             'alerts_24h': alert_counts.get('total', 0),
             'specificity': theatre_specificity,
+            'asym': theatre_summary.get('asymmetric_max', 0),     # v1.4.0: sustained-unrest check
         })
         if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
             enc = urllib.parse.quote(snapshot, safe='')
@@ -4381,7 +4483,7 @@ def register_israel_rhetoric_routes(app):
             'theatre_escalation_label': 'Scanning...',
             'theatre_escalation_color': '#6b7280',
             'message': 'First scan in progress — reading cross-theater fingerprints + Pikud HaOref...',
-            'version': '1.3.1-israel-formation',
+            'version': '1.4.0-israel-ladder',
         })
 
     @app.route('/api/rhetoric/israel/summary', methods=['GET'])
