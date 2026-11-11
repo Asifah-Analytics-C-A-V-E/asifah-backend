@@ -195,7 +195,7 @@ GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 # v1.2.0 (Oct 4 2026) -- derived UA, per the Oct 3 platform-wide pass.
 # Was 'Mozilla/5.0 Asifah Analytics OSINT' -- honest in intent but carrying
 # no version, in a spelling used nowhere else on the platform.
-OMAN_TRACKER_VERSION = '1.4.0'   # Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
+OMAN_TRACKER_VERSION = '1.4.1'   # Nov 11 2026 (b): writes spoke:iran:oman so the Muscat channel lights the Iran wheel | 1.4.0 Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
 OMAN_USER_AGENT = (f'AsifahAnalytics-ME-Oman/{OMAN_TRACKER_VERSION} '
                    f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -1173,6 +1173,93 @@ def _write_crosstheater_signal(result):
         print(f"[Oman Rhetoric] Cross-theater write error: {e}")
 
 
+SPOKE_TTL_HOURS = 30   # same as the WHA spoke writers; the reader calls >24h stale
+
+
+def _write_iran_spoke(result):
+    """v1.4.1 -- Oman's seat on the IRAN wheel.
+
+    Until now the spoke reader found Oman only in the collective fingerprint,
+    which carries threat_level / influence_level -- names the reader does not
+    read as a level -- so Oman sat on the Iran wheel as DARK L0 every cycle,
+    even with the Muscat channel busy. Wrong number, confidently displayed.
+
+    The Iran-Oman relationship runs on two tracks, and the spoke takes the
+    higher of them:
+      * the channel  -- mediation_activity (Muscat hosting / carrying talks)
+      * the pressure -- Iran rhetoric naming Salalah or Duqm (read from the
+                        Iran tracker's own fingerprint) and pressure in Omani
+                        waters at Hormuz
+    The mediation level is the relationship being USED, not a threat. The
+    node class ('mediation') tells the wheel how to colour that meaning.
+    """
+    try:
+        actors = result.get('actors', {}) or {}
+        cs     = result.get('cross_theater_signals', {}) or {}
+        def _lvl(aid):
+            try:
+                return int(actors.get(aid, {}).get('max_level', 0) or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        channel  = _lvl('mediation_activity')
+        waters   = _lvl('hormuz_omani_waters')
+        pressure = max(3 if cs.get('iran_salalah_targeted') else 0,
+                       2 if cs.get('iran_duqm_logistics_active') else 0,
+                       waters)
+        lvl = max(channel, pressure)
+
+        parts = []
+        if cs.get('iran_salalah_targeted'):
+            parts.append('Iranian rhetoric is naming Salalah port')
+        if cs.get('iran_duqm_logistics_active'):
+            parts.append('Iranian rhetoric is naming the Duqm base')
+        if waters >= 2:
+            parts.append('pressure in Omani waters at Hormuz (L%d)' % waters)
+        if channel >= 3:
+            parts.insert(0, 'the Muscat channel is active (L%d)' % channel)
+        elif channel >= 1:
+            parts.insert(0, 'routine Muscat channel coverage (L%d)' % channel)
+
+        n = sum(int(actors.get(a, {}).get('statement_count', 0) or 0)
+                for a in ('mediation_activity', 'hormuz_omani_waters', 'external_threats_inbound'))
+        if parts:
+            top = 'Iran-Oman: ' + '; '.join(parts) + '.'
+        elif n:
+            top = 'Iran-Oman: routine coverage (%d items), no channel or pressure signal.' % n
+        else:
+            top = 'No Iran-Oman reporting reached the scanners this cycle -- unread, not calm.'
+
+        key  = 'spoke:iran:oman'
+        prev = _redis_get(key) or {}
+        try:
+            p = int(prev.get('level'))
+            direction = 'expanding' if lvl > p else ('contracting' if lvl < p else 'holding')
+        except (TypeError, ValueError):
+            direction = 'holding'
+        conf = 'corroborated' if lvl >= 3 else ('reported' if n else 'no_evidence')
+
+        _redis_set(key, {
+            'ts':           datetime.now(timezone.utc).isoformat(),
+            'hub':          'iran',
+            'country':      'oman',
+            'level':        lvl,
+            'channel_level':  channel,
+            'pressure_level': pressure,
+            'node_class':   'mediation',
+            'top_signal':   top,
+            'why':          'Muscat is the oldest working channel between Tehran and Washington -- '
+                            'and Salalah, Duqm and the Musandam side of Hormuz are what Iran can lean on.',
+            'items':        n,
+            'relationship': 'mediation',
+            'trajectory':   {'direction': direction, 'level': lvl, 'confidence': conf},
+            'source':       'rhetoric_tracker_oman v%s' % OMAN_TRACKER_VERSION,
+        }, ttl=SPOKE_TTL_HOURS * 3600)
+        print(f"[Oman Rhetoric] ✅ spoke:iran:oman written (L{lvl}: channel={channel}, pressure={pressure})")
+    except Exception as e:
+        print(f"[Oman Rhetoric] Iran spoke write error: {e}")
+
+
 # ============================================
 # SOURCE COUNTS
 # ============================================
@@ -1281,6 +1368,7 @@ def run_oman_rhetoric_scan(force=False):
 
         # Cross-theater fingerprint write
         _write_crosstheater_signal(result)
+        _write_iran_spoke(result)
 
         # Cache
         _redis_set(RHETORIC_CACHE_KEY, result, ttl=24 * 3600)
