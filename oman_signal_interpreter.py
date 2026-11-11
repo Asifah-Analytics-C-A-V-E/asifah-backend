@@ -109,6 +109,46 @@ def check_red_lines(result):
             'icon':        '⚠️',
         })
 
+    # ── v1.1 (Nov 11 2026): ports & energy, Hormuz & Omani waters ──
+    ports  = actors.get('ports_energy', {}).get('escalation_level', 0)
+    waters = actors.get('hormuz_omani_waters', {}).get('escalation_level', 0)
+    if ports >= 4:
+        red_lines.append({
+            'name':        'Omani Port or Energy Export Disrupted',
+            'status':      'BREACHED',
+            'description': ('Salalah, Duqm, Sohar, Mina al Fahal or Oman LNG reported closed, halted or attacked by '
+                            '2+ outlets. These ports are the region\'s Hormuz bypass: when they are hit, the fallback '
+                            'route for Gulf trade is hit too, and Oman\'s budget with it.'),
+            'category':    'threat',
+            'icon':        '⚓',
+        })
+    elif ports == 2 or ports == 3:
+        red_lines.append({
+            'name':        'Port / Export Disruption Reported',
+            'status':      'APPROACHING',
+            'description': 'One outlet reports a port or export disruption. Watch for a second before reading it as confirmed.',
+            'category':    'threat',
+            'icon':        '⚓',
+        })
+    if waters >= 4:
+        red_lines.append({
+            'name':        'Shipping Seized or Blocked in Omani Waters',
+            'status':      'BREACHED',
+            'description': ('A seizure, mine, blockade or closure in the Strait\'s lanes off Musandam, confirmed by 2+ '
+                            'outlets. That is a test of Omani sovereignty and of the neutrality that keeps Muscat the '
+                            'channel everyone uses -- watch how Muscat responds, and to whom.'),
+            'category':    'threat',
+            'icon':        '🌊',
+        })
+    elif waters == 2 or waters == 3:
+        red_lines.append({
+            'name':        'Hormuz / Omani-Waters Incident Reported',
+            'status':      'APPROACHING',
+            'description': 'One outlet reports a seizure, boarding or closure in or near Omani waters. Not yet confirmed.',
+            'category':    'threat',
+            'icon':        '🌊',
+        })
+
     # ── Security suppression red line (atypical for Oman) ──
     if security >= 4:
         red_lines.append({

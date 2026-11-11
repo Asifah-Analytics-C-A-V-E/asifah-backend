@@ -1,6 +1,16 @@
 """
 Asifah Analytics -- Oman Rhetoric & Influence Tracker
 ME Backend Module
+v1.4 - Nov 11 2026: PORTS, OIL & LNG + HORMUZ & OMANI WATERS
+  Two new threat-vector actors. Salalah, Duqm and Sohar are the Gulf's
+  Hormuz BYPASS -- when Hormuz or the Red Sea is disrupted, cargo reroutes
+  to them -- so their status matters to the whole region, not just Oman.
+  Mina al Fahal (crude exports) and Oman LNG (Qalhat/Sur) are the budget.
+  The Strait's shipping lanes run through Omani territorial waters off
+  Musandam: a seizure or blockade there tests Omani sovereignty and its
+  neutrality at the same time.
+  Evidence rule applied: a tripwire now needs 2+ separate outlets for L4;
+  one outlet is L2 ("reported, not confirmed"). It used to be L4 on one article.
 v1.0 - April 2026
 
 Oman Rhetoric Tracker -- DUAL-AXIS Stability Anchor Model
@@ -185,7 +195,7 @@ GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 # v1.2.0 (Oct 4 2026) -- derived UA, per the Oct 3 platform-wide pass.
 # Was 'Mozilla/5.0 Asifah Analytics OSINT' -- honest in intent but carrying
 # no version, in a spelling used nowhere else on the platform.
-OMAN_TRACKER_VERSION = '1.3.0'   # Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
+OMAN_TRACKER_VERSION = '1.4.0'   # Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
 OMAN_USER_AGENT = (f'AsifahAnalytics-ME-Oman/{OMAN_TRACKER_VERSION} '
                    f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -327,6 +337,65 @@ ACTORS = {
             'sultan absent', 'undisclosed travel',
             'crown prince elevated', 'crown prince emergency',
             'سلطان مريض', 'السلطان في المستشفى',
+        ],
+    },
+    # ── v1.4 (Nov 11 2026): the commercial and maritime exposure ──
+    'ports_energy': {
+        'name':        'Ports, Oil & LNG',
+        'role':        'Salalah, Duqm, Sohar ports; Mina al Fahal crude exports; Oman LNG',
+        'icon':        '⚓',
+        'flag':        '🇴🇲',
+        'color':       '#b45309',
+        'feeds_into':  'threat',
+        'description': (
+            'Oman\'s ports sit OUTSIDE the Strait of Hormuz (Salalah and Duqm on the Arabian Sea, Sohar on '
+            'the Gulf of Oman), which makes them the region\'s bypass when Hormuz or the Red Sea is '
+            'disrupted -- and a target for anyone who wants that bypass closed too. Mina al Fahal near '
+            'Muscat carries the crude exports and Oman LNG at Qalhat the gas: together, most of the '
+            'state budget. Watch for: port suspensions, attacks on terminals, export halts, insurers '
+            'pulling cover, and cargo rerouting INTO Omani ports (a sign the wider region is stressed).'
+        ),
+        'keywords': [
+            'port of salalah', 'salalah port', 'salalah terminal', 'port of duqm', 'duqm port',
+            'duqm refinery', 'ras markaz', 'sohar port', 'port of sohar', 'sohar freezone',
+            'mina al fahal', 'oman lng', 'qalhat', 'oman crude exports', 'oman oil exports',
+            'omani crude', 'rerouted to salalah', 'diverted to salalah', 'rerouted to oman',
+            'ميناء صلالة', 'ميناء الدقم', 'ميناء صحار', 'ميناء الفحل', 'الغاز الطبيعي المسال العماني',
+        ],
+        'tripwires': [
+            'salalah port closed', 'salalah port suspended', 'port of salalah suspends',
+            'duqm port closed', 'sohar port closed', 'port of sohar suspends',
+            'mina al fahal halted', 'oman crude exports halted', 'oman oil exports suspended',
+            'oman lng force majeure', 'oman lng halted', 'attack on salalah port',
+            'drone strike salalah', 'drone strike duqm', 'drone strike sohar',
+            'إغلاق ميناء صلالة', 'تعليق العمل في ميناء',
+        ],
+    },
+    'hormuz_omani_waters': {
+        'name':        'Hormuz & Omani Waters',
+        'role':        'Musandam, the Strait\'s shipping lanes, the Gulf of Oman',
+        'icon':        '🌊',
+        'flag':        '🇴🇲',
+        'color':       '#0e7490',
+        'feeds_into':  'threat',
+        'description': (
+            'The Strait of Hormuz\'s inbound and outbound shipping lanes run through Omani territorial '
+            'waters off Musandam (Khasab). A tanker seized, a mine laid or a blockade declared there is '
+            'a test of Omani sovereignty AND of the neutrality that makes Muscat the channel everyone '
+            'uses. Watch for: seizures or boardings in or near Omani waters, mines, GPS jamming, a '
+            'declared closure, and Omani coast-guard or navy statements.'
+        ),
+        'keywords': [
+            'musandam', 'khasab', 'omani waters', 'omani territorial waters', 'gulf of oman',
+            'strait of hormuz oman', 'oman hormuz', 'royal navy of oman', 'oman navy',
+            'مسندم', 'خصب', 'المياه الإقليمية العمانية', 'خليج عمان', 'مضيق هرمز',
+        ],
+        'tripwires': [
+            'seized in omani waters', 'seized off oman', 'seized near musandam', 'boarded off oman',
+            'tanker seized gulf of oman', 'hormuz blockade', 'blockade of hormuz', 'hormuz closed',
+            'closure of the strait of hormuz', 'mines in the strait of hormuz', 'mine strait of hormuz',
+            'gps jamming hormuz', 'gps jamming gulf of oman',
+            'احتجاز ناقلة', 'إغلاق مضيق هرمز',
         ],
     },
     # ── INFLUENCE VECTOR (0-5) — diplomatic activity ──
@@ -552,6 +621,19 @@ RHETORIC_RSS_FEEDS = [
         'lang': 'en',
         'weight': 0.85,
     },
+    # ── v1.1 (Nov 11 2026): ports, energy and Omani waters ──
+    {
+        'name': 'Google News — Oman ports & energy',
+        'url':  'https://news.google.com/rss/search?q=(Salalah+OR+Sohar+OR+Duqm+OR+%22Mina+al+Fahal%22+OR+%22Oman+LNG%22)+(port+OR+shipping+OR+terminal+OR+exports)&hl=en&gl=US&ceid=US:en',
+        'lang': 'en',
+        'weight': 0.85,
+    },
+    {
+        'name': 'Google News — Hormuz & Omani waters',
+        'url':  'https://news.google.com/rss/search?q=(%22Strait+of+Hormuz%22+OR+Musandam+OR+%22Gulf+of+Oman%22)+(Oman+OR+Omani)&hl=en&gl=US&ceid=US:en',
+        'lang': 'en',
+        'weight': 0.85,
+    },
     # ── Google News Oman-specific (Arabic aggregator) ──
     {
         'name': 'Google News — Oman (AR)',
@@ -566,7 +648,7 @@ RHETORIC_RSS_FEEDS = [
 # GDELT QUERIES — multi-language
 # ============================================
 GDELT_QUERIES = {
-    'eng': '(oman OR muscat OR salalah OR duqm OR "sultan haitham") AND (mediation OR threat OR succession OR strike OR diplomacy)',
+    'eng': '(oman OR muscat OR salalah OR duqm OR sohar OR musandam OR "sultan haitham") AND (mediation OR threat OR succession OR strike OR diplomacy OR port OR tanker OR blockade)',
     'ara': '(عمان OR مسقط OR صلالة OR الدقم OR "السلطان هيثم") AND (وساطة OR تهديد OR استهداف OR محادثات)',
     'fas': '(عمان OR مسقط OR صلاله OR الدقم OR "سلطان هیثم") AND (میانجیگری OR گفتگو OR تهدید)',
     'heb': '(עומאן OR מוסקט OR "סולטן הית\'אם") AND (תיווך OR איום OR שיחות)',
@@ -958,9 +1040,20 @@ def _classify_articles(articles):
         for actor_id in ACTORS.keys()
     }
 
+    # v1.1: tripwire corroboration -- (actor, phrase) -> set of outlet names
+    tw_outlets = {}
+
+    def _outlet(a):
+        src = a.get('source')
+        if isinstance(src, dict):
+            src = src.get('name')
+        return str(src or a.get('domain') or 'unknown').strip().lower()
+
     for article in articles:
         for actor_id, actor_def in ACTORS.items():
             level, phrase = _score_article_for_actor(article, actor_id, actor_def)
+            if level >= 4:
+                tw_outlets.setdefault((actor_id, phrase), set()).add(_outlet(article))
             if level > 0:
                 weight = article.get('source_weight_override', 0.85)
                 level = min(5, int(round(level * weight + 0.4)))
@@ -975,6 +1068,19 @@ def _classify_articles(articles):
                     art_copy['escalation_level'] = level
                     art_copy['trigger_phrase']   = phrase
                     actor_results[actor_id]['top_articles'].append(art_copy)
+
+    # v1.1 EVIDENCE RULE: L3+ needs 2+ separate outlets. A tripwire one outlet
+    # reports is L2 ("reported, not confirmed") until a second carries it.
+    for actor_id, r in actor_results.items():
+        if r['max_level'] < 3:
+            continue
+        confirmed = [ph for (aid, ph), outs in tw_outlets.items() if aid == actor_id and len(outs) >= 2]
+        if not confirmed:
+            r['max_level'] = 2
+            r['evidence'] = 'single_source'
+        else:
+            r['evidence'] = 'corroborated'
+            r['confirmed_tripwires'] = confirmed[:5]
     return actor_results
 
 
@@ -1051,6 +1157,10 @@ def _write_crosstheater_signal(result):
             'salalah_under_threat':     actors.get('external_threats_inbound', {}).get('max_level', 0) >= 3,
             'succession_watch_active':  actors.get('succession_watch', {}).get('max_level', 0) >= 2,
             'sultan_health_concern':    actors.get('succession_watch', {}).get('max_level', 0) >= 3,
+            # v1.4: the bypass and the strait -- other trackers (Yemen, Iran, the
+            # GPI chokepoint read) can see when Oman's own waters or ports are hit
+            'ports_disrupted':          actors.get('ports_energy', {}).get('max_level', 0) >= 4,
+            'omani_waters_pressure':    actors.get('hormuz_omani_waters', {}).get('max_level', 0),
             'banner_mode':              result.get('banner_mode', 'QUIET'),
             'actor_levels': {
                 aid: actors.get(aid, {}).get('max_level', 0) for aid in ACTORS.keys()
