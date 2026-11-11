@@ -115,7 +115,7 @@ except ImportError:
 # CONFIG
 # ============================================================
 
-VERSION = '2.3.2'
+VERSION = '2.3.3'   # Nov 8 2026: feeds are streamed and parsed item by item, capped at 4 MB (podcast feeds were parsed whole)
 CACHE_TTL_HOURS = 6           # Refresh every 6 hours
 BACKGROUND_REFRESH_HOURS = 6
 REQUEST_TIMEOUT = (5, 15)
@@ -480,6 +480,62 @@ def _first(item, *tags):
     return None
 
 
+# v2.3.3 (Nov 8 2026) -- MEMORY. Podcast feeds carry every episode ever made
+# (Pod Save America: thousands, many MB of show notes). The whole file was
+# downloaded and built into one XML tree -- 10x its size in RAM -- 29 times
+# per refresh, and the ME backend began running out of memory daily from the
+# day podcasts were added (Nov 5). Now the feed is STREAMED and parsed item by
+# item; we stop after the items we need (newest come first) and never read
+# more than MAX_FEED_BYTES. Same items out, a sliver of the memory.
+MAX_FEED_BYTES = 4 * 1024 * 1024
+_ITEM_TAGS = ('item', ATOM + 'entry')
+
+
+def _stream_items(resp, max_items=20):
+    """Pull-parse a streamed response; returns the same list _parse_items does."""
+    parser = ET.XMLPullParser(events=('start', 'end'))
+    out, seen_root, read = [], False, 0
+    try:
+        for chunk in resp.iter_content(chunk_size=65536):
+            if not chunk:
+                continue
+            read += len(chunk)
+            parser.feed(chunk)
+            for ev, el in parser.read_events():
+                if ev == 'start' and not seen_root:
+                    seen_root = True
+                    tag = el.tag.split('}')[-1].lower()
+                    if tag not in ('rss', 'feed', 'rdf'):
+                        raise ET.ParseError('not a feed (root <%s>)' % tag)
+                elif ev == 'end' and el.tag in _ITEM_TAGS:
+                    d = _item_dict(el)
+                    el.clear()
+                    if d:
+                        out.append(d)
+                    if len(out) >= max_items:
+                        return out
+            if read >= MAX_FEED_BYTES:
+                break
+    finally:
+        try:
+            resp.close()
+        except Exception:
+            pass
+    if not seen_root:
+        raise ET.ParseError('empty or unreadable feed')
+    return out
+
+
+def _get_items(url, max_items, headers):
+    """GET + stream-parse. Returns (status_code, items). Raises ET.ParseError
+    for a non-feed, like _parse_items did."""
+    resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT, stream=True)
+    if resp.status_code != 200:
+        resp.close()
+        return resp.status_code, []
+    return 200, _stream_items(resp, max_items)
+
+
 def _parse_items(content, max_items=20):
     """RSS 2.0 or Atom (incl. YouTube) -> list of {title, url, description, published}."""
     root = ET.fromstring(content)
@@ -492,9 +548,18 @@ def _parse_items(content, max_items=20):
         items = root.findall(f'.//{ATOM}entry')
     out = []
     for item in items[:max_items]:
+        d = _item_dict(item)
+        if d:
+            out.append(d)
+    return out
+
+
+def _item_dict(item):
+    """One <item>/<entry> -> {title, url, description, published} or None."""
+    if True:
         title_el = _first(item, 'title', f'{ATOM}title')
         if title_el is None:
-            continue
+            return None
         title = (title_el.text or '').strip()
         url = ''
         link_el = item.find('link')
@@ -520,9 +585,9 @@ def _parse_items(content, max_items=20):
                         '{http://purl.org/dc/elements/1.1/}date')
         published = _parse_pub_date(pub_el.text if pub_el is not None else '')
         if title and url:
-            out.append({'title': title, 'url': url, 'description': description,
-                        'published': published})
-    return out
+            return {'title': title, 'url': url, 'description': description,
+                    'published': published}
+        return None
 
 
 def _record(feed_url, label, items=0, status=None, error=None, t0=None):
@@ -542,16 +607,15 @@ def fetch_source(source, max_items=20):
     t0 = time.time()
     try:
         headers = {'User-Agent': USER_AGENT}
-        resp = requests.get(feed_url, headers=headers, timeout=REQUEST_TIMEOUT)
-        if resp.status_code != 200:
-            print(f'[ThinkTank] {name}: HTTP {resp.status_code}')
-            _record(feed_url, name, status=resp.status_code, t0=t0)
-            return []
         try:
-            parsed = _parse_items(resp.content, max_items)
+            code, parsed = _get_items(feed_url, max_items, headers)
         except ET.ParseError as e:
             print(f'[ThinkTank] {name}: XML parse error — {str(e)[:80]}')
             _record(feed_url, name, status=200, error='XML parse error (HTML or block page?)', t0=t0)
+            return []
+        if code != 200:
+            print(f'[ThinkTank] {name}: HTTP {code}')
+            _record(feed_url, name, status=code, t0=t0)
             return []
         _record(feed_url, name, items=len(parsed), status=200, t0=t0)
 
@@ -789,13 +853,13 @@ def _fetch_commentary_source(src, yt_ids):
         feed = src.get('feed')
     health['feed'] = feed
     try:
-        r = requests.get(feed, headers={'User-Agent': USER_AGENT}, timeout=REQUEST_TIMEOUT)
-        if r.status_code != 200:
-            health.update(status='dead', error='HTTP %s' % r.status_code)
-            _record(feed, src['name'], status=r.status_code, t0=t0)
-            return [], health
         try:
-            parsed = _parse_items(r.content, 15 if (src.get('youtube') or src.get('podcast')) else 20)
+            code, parsed = _get_items(feed, 15 if (src.get('youtube') or src.get('podcast')) else 20,
+                                      {'User-Agent': USER_AGENT})
+            if code != 200:
+                health.update(status='dead', error='HTTP %s' % code)
+                _record(feed, src['name'], status=code, t0=t0)
+                return [], health
         except ET.ParseError:
             health.update(status='dead', error='not a feed (HTML or block page?)')
             _record(feed, src['name'], status=200, error='XML parse error', t0=t0)

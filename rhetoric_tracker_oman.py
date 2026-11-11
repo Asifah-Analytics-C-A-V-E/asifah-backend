@@ -1224,6 +1224,9 @@ def start_background_refresh():
 # ============================================
 # FLASK ENDPOINTS
 # ============================================
+_OMAN_SCAN_GATE = threading.Lock()   # Nov 8 2026: one on-demand scan at a time
+
+
 def register_oman_rhetoric_routes(app):
     """Register /api/rhetoric/oman endpoints on the Flask app."""
 
@@ -1237,10 +1240,28 @@ def register_oman_rhetoric_routes(app):
                 cached['from_cache'] = True
                 return jsonify(cached)
 
+        # Nov 8 2026: ONE scan at a time. With an empty cache, every visitor
+        # (and every ?force) used to start its own full scan -- a pile of
+        # parallel scans is one suspect for the daily out-of-memory restart.
+        if not _OMAN_SCAN_GATE.acquire(blocking=False):
+            cached = _redis_get(RHETORIC_CACHE_KEY)
+            if cached:
+                cached['from_cache'] = True
+                cached['scan_in_progress'] = True
+                return jsonify(cached)
+            return jsonify({'success': False, 'awaiting_scan': True,
+                            'message': 'A scan is already running -- try again in a few minutes.'}), 202
+
+        def _gated_scan():
+            try:
+                return run_oman_rhetoric_scan(True)
+            finally:
+                _OMAN_SCAN_GATE.release()
+
         # Non-blocking scan with 25s timeout — return cached if scan takes longer
         from concurrent.futures import ThreadPoolExecutor
         executor = ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(run_oman_rhetoric_scan, True)
+        future = executor.submit(_gated_scan)
         executor.shutdown(wait=False)
 
         try:

@@ -1656,6 +1656,14 @@ try:
 except Exception as e:
     print(f"[ME Backend] ⚠️ Source census registration failed (non-fatal): {e}")
 
+# Memory probe (Nov 8 2026) -- the backend ran out of memory ~once a day.
+# Records each worker's size + thread names every 15 min: /api/memory. $0.
+try:
+    from memory_probe import register_memory_probe
+    register_memory_probe(app, backend='asifah-backend')
+except Exception as e:
+    print(f"[ME Backend] ⚠️ Memory probe registration failed (non-fatal): {e}")
+
 # Economic Absorption Signatures — register after commodity tracker so leader
 # interventions can be cross-referenced. Phase 2 rhetoric trackers will read
 # leader intervention fingerprints and write dynamic signatures back to Redis.
@@ -1828,7 +1836,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.9.0'
+ME_BACKEND_VERSION = '3.9.1'   # Nov 8 2026: memory probe (/api/memory)
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
