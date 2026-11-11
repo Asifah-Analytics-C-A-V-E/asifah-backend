@@ -56,7 +56,7 @@ COPYRIGHT (c) 2025-2026 Asifah Analytics. All rights reserved.
 import statistics
 from datetime import datetime, timezone
 
-__version__ = '1.1.0'   # Nov 4 2026: UK 10-year gilt read (gilt_jump) on the FTSE market + uk_gilt_2022 live check
+__version__ = '1.1.1'   # Nov 11 2026: Paraguay guaraní (currency watch) + ueno_paraguay_2026 dossier | v1.1.0 Nov 4 2026: UK 10-year gilt read (gilt_jump) on the FTSE market + uk_gilt_2022 live check
 DOSSIER_BASIS = 'Claude research, Nov 3 2026 -- dates and figures to verify'
 
 # ════════════════════════════════════════════════════════════════════════
@@ -95,6 +95,8 @@ FX_ONLY = {
     'zar': {'name': 'South Africa (rand)', 'region': 'africa', 'fx': 'ZAR=X', 'fx_name': 'rand', 'fx_quote': 'local_per_usd'},
     'egp': {'name': 'Egypt (pound)', 'region': 'me', 'fx': 'EGP=X', 'fx_name': 'Egyptian pound', 'fx_quote': 'local_per_usd'},
     'cny': {'name': 'China (yuan)', 'region': 'apac', 'fx': 'CNY=X', 'fx_name': 'yuan', 'fx_quote': 'local_per_usd'},
+    # Nov 11 2026: the ueno bank failure -- the guaraní is the visible gauge of Paraguay's bank panic
+    'pyg': {'name': 'Paraguay (guaraní)', 'region': 'wha', 'fx': 'PYG=X', 'fx_name': 'guaraní', 'fx_quote': 'local_per_usd'},
 }
 REGION_NAMES = {'us': 'United States', 'apac': 'Asia & the Pacific', 'europe': 'Europe', 'me': 'Middle East',
                 'wha': 'Western Hemisphere', 'africa': 'Africa'}
@@ -146,6 +148,7 @@ SIGNATURES = {
     'mexico_1994':       {'fx_stress', 'fx_shock', 'drawdown'},
     'nenegate_2015':     {'fx_shock', 'drawdown'},
     'oil_shock_1973':    {'oil_spike', 'drawdown'},
+    'ueno_paraguay_2026': {'fx_shock', 'fx_stress'},
 }
 BUBBLE_TYPES = {'nikkei_1989', 'dotcom_2000', 'everything_2021', 'plaza_1985'}
 
@@ -419,6 +422,31 @@ DOSSIERS = {
         },
         'not': 'A currency shock alone does not say what caused it; the rhetoric layer is where the cause shows.',
         'live_checks': [('A sudden one-month currency drop', {'fx_shock'})],
+    },
+    'ueno_paraguay_2026': {
+        'label': 'Paraguay: ueno bank failure', 'region': 'wha',
+        'chain': [
+            ('23-30 Oct 2026', 'Searches for bitcoin climb in Paraguay as worries about the digital lender ueno bank spread.'),
+            ('2 Nov 2026', 'The central bank opens resolution of ueno after its solvency falls below half the legal minimum; nearly 3 million customers lose access to their money.'),
+            ('Oct 30-Nov 5 2026', 'The guaraní slides from about 5,900 to 6,500 per dollar; USDT trades above the official rate.'),
+            ('5 Nov 2026', 'President Peña offers his resignation and is removed; Vice President Pedro Alliana takes over to Aug 2028.'),
+            ('6 Nov 2026', 'Taipei says the tie with Paraguay is unaffected; deposit-guarantee payments begin with small accounts.'),
+        ],
+        'interval_then': 'Days: about three days from the bank\'s resolution to the president\'s fall.',
+        'effects': {
+            'local': 'Depositors cut off, including public pension and health funds; a president removed.',
+            'regional': 'Little market spillover so far; the watch is whether other Paraguayan banks see withdrawals.',
+            'global': ('Taiwan\'s last South American ally now has a new government that may need a lender -- the '
+                       'question Beijing can answer and Taipei may not.'),
+            'economy': 'The guaraní and the stablecoin premium carried the panic; Paraguay has no stock index to read.',
+        },
+        'not': ('Asifah reads the guaraní, not bank balance sheets or the USDT premium. A guaraní shock says people '
+                'are buying dollars; it does not say whether a second bank is failing.'),
+        'live_checks': [
+            ('A sharp one-month currency drop with sustained pressure', {'fx_shock', 'fx_stress'}),
+            ('A run on other banks or withdrawal limits', None),
+            ('Stablecoins trading above the official rate', None),
+        ],
     },
     'oil_shock_1973': {
         'label': 'OPEC oil embargo', 'region': 'me',

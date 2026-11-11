@@ -97,7 +97,7 @@ except Exception as _lens_err:               # pragma: no cover
     LENS_AVAILABLE = False
     print(f'[Market BlackSwan] analog lens unavailable ({_lens_err})')
 
-VERSION = '1.5.1'   # Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
+VERSION = '1.5.2'   # Nov 11 2026: + Paraguay ueno bank failure episode; library reseeds on a version change | v1.5.1 Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
                     # uk_city_pulse via shared Redis) | v1.5.0 Nov 3 2026: market-by-market reads (each market on its own index + currency, matched
                     # against every episode) and the analog lens (chain, interval, effects, live checks)
                     # via market_analog_lens.py | v1.4.0 Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
@@ -991,6 +991,27 @@ EPISODES = [
               'this detector reads PRICES, and hidden leverage has no price '
               'until it is unwinding. Absence of a market warning is not '
               'absence of risk.')},
+    # Nov 11 2026 -- the first episode where a STABLECOIN was the exit.
+    {'id': 'ueno_paraguay_2026', 'region': 'wha',
+     'source_url': 'https://www.scmp.com/news/world/americas/article/3373458/paraguays-president-pena-resigns-under-mounting-pressure-bank-collapse',
+     'label': 'Paraguay: ueno bank failure', 'anchor': '2026-10', 'event_month': '2026-11',
+     'type': 'stress_event', 'drawdown': 'guaraní about -10% vs USD in a week; ~3M depositors cut off; president removed',
+     'data_spine': 'partial',
+     'mechanism': ('a fast-growing digital bank fails a solvency test -> central-bank '
+                   'resolution cuts depositors off (public pension and health funds '
+                   'inside) -> currency slides as people buy dollars -> stablecoins '
+                   'trade at a premium as the exit the banks cannot block -> the '
+                   'head of state falls within days'),
+     'note': ('Paraguay\'s central bank opened resolution of ueno bank on Nov 2 2026 '
+              '(solvency below half the legal minimum); nearly 3 million customers and '
+              'about US$850M of public-sector deposits were caught. The guaraní went '
+              'from ~5,900 to ~6,500 per dollar (Oct 30 -> Nov 5) and USDT traded above '
+              'the official rate. President Peña offered his resignation Nov 5 and was '
+              'removed. Two things make it worth carrying: a bank failure toppled a '
+              'government in under a week, and crypto was the release valve -- the '
+              'premium on USDT is a price on distrust that no bank statement shows. '
+              'Small market, big mechanism; Paraguay is also Taiwan\'s last South '
+              'American ally, so who lends it the money matters beyond markets.')},
 ]
 
 CONTROL_MONTHS = ['1995-06', '2004-06', '2013-06', '2016-06']
@@ -1555,7 +1576,9 @@ def run_scan():
 
     lib_payload = _redis_get(LIBRARY_KEY)
     library = (lib_payload or {}).get('episodes')
-    if not library:
+    # v1.5.2: a new episode in the code must reach the library without waiting
+    # for the 7-day backtest refresh -- reseed when the stored version is older
+    if not library or (lib_payload or {}).get('version') != VERSION:
         library = seed_episode_library(data)
     matches = similarity_matches(active, library)
     backtest = _redis_get(BACKTEST_KEY)
