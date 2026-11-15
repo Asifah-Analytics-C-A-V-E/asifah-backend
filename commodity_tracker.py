@@ -987,6 +987,29 @@ COMMODITY_TYPES = {
         'top_producers':  ['ukraine', 'russia', 'argentina'],
         'top_consumers':  ['india', 'eu', 'china', 'turkey', 'egypt'],
     },
+    # Nov 15 2026 -- PALM OIL. The world's most-used vegetable oil and the
+    # pivot where three tracked threads meet: Black Sea (sunflower oil
+    # substitution), crude (Indonesia's B50 biodiesel mandate turns food into
+    # fuel) and El Nino (drought cuts yields 6-24 months later). No free public
+    # spot price (Bursa Malaysia FCPO is not on Yahoo) -> potash mode: news +
+    # policy signals, price UNREAD. Claude research, data_as_of 2026-11 (verify).
+    'palm_oil': {
+        'name': 'Palm Oil',
+        'icon': '🌴',
+        'tier': 2,
+        'category': 'agricultural',
+        'has_spot_price': False,
+        'yahoo_ticker': None,
+        'yahoo_proxies': [],
+        'unit': 'MYR/MT (Bursa FCPO)',
+        'description': "The world's most-used vegetable oil (~a third of global supply) and the everyday cooking oil for poorer households across South and Southeast Asia, Africa and the Middle East. Indonesia (~55-60%) and Malaysia (~25%) grow most of it. Vegetable oils trade as one complex: when Black Sea sunflower oil is disrupted, buyers switch to palm. Indonesia's B50 biodiesel mandate (July 2026) keeps more palm at home as fuel, tying cooking-oil prices to crude. El Nino drought cuts yields with a 6-24 month lag. Export bans are the policy tripwire (Indonesia banned exports for ~3 weeks in 2022). India is the largest importer. data_as_of 2026-11 (Claude research, verify).",
+        'chokepoints': [
+            'strait of malacca', 'bab el-mandeb', 'red sea', 'suez canal',
+            'dumai', 'belawan', 'port klang', 'pasir gudang',
+        ],
+        'top_producers':  ['indonesia', 'malaysia', 'thailand', 'colombia', 'nigeria'],
+        'top_consumers':  ['india', 'china', 'indonesia', 'eu', 'pakistan'],
+    },
     # Oct 29 2026 -- ZINC (Peter's flag, via a Commodities Institute episode).
     # No public spot price on Yahoo (LME zinc is not carried), so it runs in
     # potash mode: news + policy signals, price UNREAD -- which also means the
@@ -1586,6 +1609,14 @@ COMMODITY_KEYWORDS = {
         'sunflower oil prices', 'black sea sunflower', 'ukraine sunflower',
         'russia sunflower oil', 'argentina sunflower', 'edible oil imports',
         'vegetable oil', 'sunflower oil india', 'sunoil', 'sunflowerseed oil',
+    ],
+    'palm_oil': [
+        'palm oil', 'crude palm oil', 'cpo prices', 'palm oil prices', 'palm oil exports',
+        'palm oil export ban', 'palm oil levy', 'palm oil futures', 'bursa malaysia derivatives',
+        'fcpo', 'palm olein', 'cooking oil prices', 'minyak goreng', 'b40 biodiesel', 'b50 biodiesel',
+        'biodiesel mandate indonesia', 'gapki', 'mpob', 'malaysian palm oil board',
+        'palm oil stocks', 'palm oil plantation', 'oil palm', 'eudr palm', 'edible oil prices',
+        'vegetable oil prices',
     ],
 }
 # ========================================
@@ -2737,6 +2768,97 @@ for _zc, _ze in _ZINC_EXPOSURE.items():
     COUNTRY_COMMODITY_EXPOSURE.setdefault(_zc, {})['zinc'] = _ze
 
 # ============================================================================
+# Nov 15 2026 -- EXPOSURE MATRIX REFRESH (Rachel-approved change list A-F)
+# ============================================================================
+# Claude research, data_as_of 2026-11 -- weights and shares to VERIFY. Kept as
+# one block so the whole refresh can be read (and reverted) in one place.
+_V = '2026-11'
+
+def _set(country, commodity, entry):
+    COUNTRY_COMMODITY_EXPOSURE.setdefault(country, {})[commodity] = entry
+
+def _add_role(country, commodity, new_role, entry):
+    """Turn a single-role entry into a multi-role one (keeps the old role)."""
+    cur = COUNTRY_COMMODITY_EXPOSURE.setdefault(country, {}).get(commodity)
+    if isinstance(cur, dict) and 'role' in cur:
+        old = dict(cur); old_role = old.pop('role')
+        COUNTRY_COMMODITY_EXPOSURE[country][commodity] = {old_role: old, new_role: entry}
+    elif isinstance(cur, dict):
+        cur[new_role] = entry
+    else:
+        COUNTRY_COMMODITY_EXPOSURE[country][commodity] = {'role': new_role, **entry}
+
+# ── B. PALM OIL ──
+_set('indonesia', 'palm_oil', {'role': 'producer', 'weight': 1.5, 'rank': 1, 'data_as_of': _V,
+     'note': "World #1 palm oil producer (~55-60% of supply) and #1 exporter. B50 biodiesel mandate (July 2026) diverts more output into domestic diesel -- food burned as fuel, which ties cooking-oil prices to crude. Export-ban precedent: April-May 2022 (~3 weeks) to cap domestic cooking-oil prices. Watch: export levy / DMO changes, B50 compliance, GAPKI stocks, El Nino rainfall in Sumatra and Kalimantan."})
+_set('malaysia', 'palm_oil', {'role': 'producer', 'weight': 1.4, 'rank': 2, 'data_as_of': _V,
+     'note': "World #2 producer (~25%); Bursa Malaysia crude palm oil futures (FCPO) are the global benchmark. Chronic plantation labour shortages (migrant workers) cap output. Watch: MPOB monthly stocks, export tax bands, El Nino dryness in Sabah and Sarawak."})
+_set('thailand', 'palm_oil', {'role': 'producer', 'weight': 0.7, 'rank': 3, 'data_as_of': _V,
+     'note': "World #3 producer, mostly for domestic food and B7-B10 biodiesel; Thai export curbs appear when domestic bottled-oil prices spike."})
+_set('colombia', 'palm_oil', {'role': 'producer', 'weight': 0.6, 'rank': 4, 'data_as_of': _V,
+     'note': "World #4 producer and the largest in the Americas (Fedepalma); a growing exporter to Europe and Mexico."})
+_set('nigeria', 'palm_oil', {
+     'producer': {'weight': 0.6, 'rank': 5, 'note': "A top-5 producer by volume, largely smallholder, with low yields."},
+     'consumer': {'weight': 0.8, 'note': "Still a net importer: palm oil is the staple cooking oil, so import prices feed straight into household food costs."},
+     'data_as_of': _V})
+_set('india', 'palm_oil', {'role': 'consumer', 'weight': 1.5, 'rank': 1, 'data_as_of': _V,
+     'note': "World #1 vegetable-oil importer; palm is the cheapest edible oil for poorer households. Import-duty changes on crude palm oil are India's main lever and move world prices. Watch: SEA India import data, duty cuts/hikes, substitution to soy and sunflower oil."})
+_set('china', 'palm_oil', {'role': 'consumer', 'weight': 1.1, 'data_as_of': _V,
+     'note': "Top-3 importer (food service, processed food, oleochemicals); buys opportunistically against soybean oil."})
+_set('eu', 'palm_oil', {'role': 'consumer', 'weight': 1.0, 'data_as_of': _V,
+     'note': "Major importer for food and oleochemicals; biodiesel use is being phased down. The EU Deforestation Regulation (EUDR) adds a traceability gate on imports -- a policy lever over Indonesian and Malaysian growers."})
+_set('egypt', 'palm_oil', {'role': 'consumer', 'weight': 0.7, 'data_as_of': _V,
+     'note': "Imports nearly all its edible oil; subsidised cooking oil on ration cards means price spikes land on the budget and the bread-and-oil basket."})
+
+# ── C. HONDURAS (new row, WHA) ──
+_set('honduras', 'coffee', {'role': 'producer', 'weight': 1.0, 'data_as_of': _V,
+     'note': "Honduras's #1 export by far (~$2.1B Jan-Sep 2025, BCH) and Central America's largest coffee producer, mostly smallholder (IHCAFE). Coffee-rust and drought years hit rural incomes and are a migration push factor. Watch: IHCAFE harvest estimates, arabica prices, US tariff treatment."})
+_set('honduras', 'palm_oil', {'role': 'producer', 'weight': 0.6, 'data_as_of': _V,
+     'note': "Second agricultural earner (~$360M Jan-Sep 2025, BCH), concentrated in the Bajo Aguan valley -- a decades-long land conflict between cooperatives and large growers with recurring violence. Price swings feed directly into that conflict."})
+_set('honduras', 'oil', {'role': 'consumer', 'weight': 0.9, 'data_as_of': _V,
+     'note': "Imports all of its fuel, and a large share of its electricity runs on imported bunker fuel and diesel; fuel subsidies and power-sector debt make crude spikes a fiscal and political problem."})
+
+# ── A. Afghanistan: 'importer' -> 'consumer' (same meaning, renders in colour) ──
+for _c in ('oil', 'wheat'):
+    _e = COUNTRY_COMMODITY_EXPOSURE.get('afghanistan', {}).get(_c)
+    if isinstance(_e, dict) and _e.get('role') == 'importer':
+        _e['role'] = 'consumer'
+
+# ── D. Transit and role gaps ──
+_add_role('turkey', 'wheat', 'transit', {'weight': 1.0, 'data_as_of': _V,
+     'note': "The Bosphorus and Dardanelles carry Black Sea grain to the world; Turkey also brokered the 2022-23 Black Sea Grain Initiative. A Straits disruption is a world wheat disruption."})
+_set('turkey', 'corn', {'role': 'transit', 'weight': 0.9, 'data_as_of': _V,
+     'note': "Ukrainian and Russian corn exports pass the Turkish Straits."})
+_set('turkey', 'sunflower_oil', {'role': 'transit', 'weight': 0.9, 'data_as_of': _V,
+     'note': "Ukrainian and Russian sunflower oil -- the majority of world exports -- leaves through the Turkish Straits; Turkey is also a top importer and re-exporter."})
+_add_role('egypt', 'wheat', 'transit', {'weight': 0.8, 'data_as_of': _V,
+     'note': "The Suez Canal carries Black Sea and European grain to Asia and East Africa; a Red Sea closure reroutes it around Africa, adding weeks and freight cost to every importer east of Suez."})
+_add_role('egypt', 'natural_gas', 'consumer', {'weight': 1.1, 'data_as_of': _V,
+     'note': "A net gas importer since 2024: Zohr decline plus summer power demand mean Egypt now buys LNG cargoes and relies on Israeli pipeline gas -- a supply line exposed to regional war."})
+_add_role('malaysia', 'oil', 'transit', {'weight': 1.0, 'data_as_of': _V,
+     'note': "The Strait of Malacca carries roughly a quarter of seaborne oil, most of it Gulf crude bound for China, Japan and Korea."})
+
+# ── E. New rows: the transit countries we did not have ──
+_set('romania', 'wheat', {
+     'producer': {'weight': 0.8, 'note': "One of the EU's largest wheat exporters."},
+     'transit':  {'weight': 1.1, 'note': "Constanta is the main outlet for Ukrainian grain via the Danube when Odesa is under attack; Danube port strikes put drones on NATO's border."},
+     'data_as_of': _V})
+_set('romania', 'corn', {'role': 'transit', 'weight': 1.0, 'data_as_of': _V,
+     'note': "Constanta and the Danube ports carry large volumes of Ukrainian corn."})
+_set('romania', 'sunflower_oil', {'role': 'transit', 'weight': 0.8, 'data_as_of': _V,
+     'note': "Ukrainian sunflower oil also exits through Romanian Danube and Black Sea ports."})
+_set('yemen', 'wheat', {'role': 'consumer', 'weight': 1.5, 'data_as_of': _V,
+     'note': "Imports ~90% of its wheat, with millions already food-insecure: a Red Sea disruption, a Hodeidah port strike or a rial collapse lands straight on bread. The Houthis' own Red Sea campaign is a risk to the food supply of the population they control."})
+_set('yemen', 'oil', {'role': 'transit', 'weight': 1.0, 'data_as_of': _V,
+     'note': "Bab el-Mandeb sits off Yemen's coast; Houthi attacks on shipping since late 2023 rerouted much Suez traffic around Africa. Watch: military chokepoint reading for Bab el-Mandeb, insurance war-risk premiums."})
+_set('singapore', 'oil', {
+     'transit':     {'weight': 1.2, 'note': "Gateway to the Strait of Malacca and the world's largest bunkering port."},
+     'pricing_hub': {'weight': 1.0, 'note': "Asia's oil benchmark (Platts Singapore) is assessed here, so Asian fuel prices are set in Singapore."},
+     'data_as_of': _V})
+_set('zambia', 'copper', {'role': 'producer', 'weight': 1.2, 'data_as_of': _V,
+     'note': "Africa's #2 copper producer (Copperbelt) and the inland end of the Lobito corridor tagged on Angola; heavy Chinese ownership and debt-restructuring politics. Watch: mine output, power cuts from drought at Kariba, Lobito rail progress."})
+
+# ============================================================================
 # LEADER COMMODITY INTERVENTIONS — v1.0
 # ============================================================================
 # Detects verbal interventions ("jawboning") by senior officials about
@@ -2974,6 +3096,8 @@ COMMODITY_RSS_FEEDS = {
     'AgriCensus': 'https://news.google.com/rss/search?q=wheat+exports+OR+corn+exports+OR+soybean+exports&hl=en&gl=US&ceid=US:en',
     'Rice (USDA/Reuters)': 'https://news.google.com/rss/search?q=rice+export+OR+rice+prices+OR+basmati+OR+india+rice+ban&hl=en&gl=US&ceid=US:en',
     'Coffee (ICE/Reuters)': 'https://news.google.com/rss/search?q=coffee+prices+OR+arabica+OR+robusta+OR+brazil+coffee+OR+vietnam+coffee&hl=en&gl=US&ceid=US:en',
+    # Nov 15 2026 -- palm oil (Indonesia / Malaysia / India import duty / B50)
+    'Palm Oil (Reuters/Bursa)': 'https://news.google.com/rss/search?q=%22palm+oil%22+price+OR+export+OR+Indonesia+OR+Malaysia+OR+MPOB+OR+biodiesel&hl=en&gl=US&ceid=US:en',
     # Food security / FAO (Stage 1a — June 2026)
     # FAO is the canonical food-commodity authority. These feed BOTH the commodity
     # news layer AND the cascade detector's article scan (fertilizer->food chain).
@@ -5749,10 +5873,27 @@ _PRICE_MOVE_THRESHOLDS = {
 # Add here as more corridors are sensed -- an id with no Redis record reads
 # as 'unknown' and never counts as disruption.
 _COMMODITY_CORRIDORS = {
-    'wheat':         ['black_sea_grain_corridor'],
-    'corn':          ['black_sea_grain_corridor'],
-    'sunflower_oil': ['black_sea_grain_corridor'],
+    'wheat':         ['black_sea_grain_corridor', 'chokepoint:bab_el_mandeb', 'chokepoint:suez'],
+    'corn':          ['black_sea_grain_corridor', 'chokepoint:bab_el_mandeb', 'chokepoint:suez'],
+    'sunflower_oil': ['black_sea_grain_corridor', 'chokepoint:bab_el_mandeb', 'chokepoint:suez'],
+    # Nov 15 2026 -- the Red Sea is a FOOD route, not only an oil route: Black
+    # Sea and European grain to East Africa, Yemen and Asia, Asian rice and
+    # palm oil to Europe and the Middle East all pass Bab el-Mandeb + Suez.
+    'rice':          ['chokepoint:bab_el_mandeb', 'chokepoint:suez'],
+    'palm_oil':      ['chokepoint:malacca', 'chokepoint:bab_el_mandeb', 'chokepoint:suez'],
 }
+# 'chokepoint:<id>' entries read the military tracker's chokepoint fingerprint
+# (military:chokepoint:<id>, bands open / monitored / contested / disrupted).
+# Only DISRUPTED counts as physical impairment; contested is a warning, never
+# a disruption -- reporting about a strait is not a closed strait.
+_CHOKEPOINT_LABEL = {'bab_el_mandeb': 'Bab el-Mandeb', 'suez': 'the Suez Canal', 'malacca': 'the Strait of Malacca'}
+
+
+def _corridor_label(cor):
+    if cor.startswith('chokepoint:'):
+        cid = cor.split(':', 1)[1]
+        return _CHOKEPOINT_LABEL.get(cid, cid.replace('_', ' '))
+    return cor.replace('_', ' ')
 
 _DIRECT_DISRUPTION = ('headline', 'corridor')
 _LAST_WEB_REPORT = None   # last commodity-web report, served by /api/commodity-web
@@ -5942,6 +6083,12 @@ def _load_disruption_context():
 
     wanted = sorted({c for ids in _COMMODITY_CORRIDORS.values() for c in ids})
     for cor in wanted:
+        if cor.startswith('chokepoint:'):
+            rec = _ctx_redis_get('military:%s' % cor)
+            band = str((rec or {}).get('alert_level') or '').lower() if isinstance(rec, dict) else ''
+            ctx['corridors'][cor] = ({'disrupted': 'impaired', 'contested': 'contested',
+                                      'monitored': 'open', 'open': 'open'}.get(band, 'unknown'))
+            continue
         rec = _ctx_redis_get(f'corridor:{cor}:latest')
         if isinstance(rec, dict) and rec.get('live_state'):
             ctx['corridors'][cor] = str(rec['live_state']).lower()
@@ -6003,7 +6150,7 @@ def _commodity_disruption_evidence(cid, summ, hard_sigs, ctx):
         st = ctx['corridors'].get(cor, 'unknown')
         if st in ('impaired', 'blocked'):
             found.append({'kind': 'corridor',
-                          'text': f"{cor.replace('_', ' ')} reads {st.upper()}"})
+                          'text': f"{_corridor_label(cor)} reads {'DISRUPTED' if cor.startswith('chokepoint:') else st.upper()}"})
     return found
 
 

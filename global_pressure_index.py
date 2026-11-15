@@ -4236,7 +4236,7 @@ EXO_CHANNEL_COMMODITIES = {
     'brazil':    ['soybeans', 'iron_ore', 'coffee', 'sugar'],
     'drc':       ['cobalt', 'copper', 'tantalum'],
     'chile':     ['copper', 'lithium'],
-    'indonesia': ['nickel', 'coal'],
+    'indonesia': ['nickel', 'coal', 'palm_oil'],   # Nov 15 2026: palm oil now instrumented
 }
 # Measures that touch TRADE, not just people. Contact tracing, quarantine wards
 # and travel advisories are public-health actions; they are not evidence that
