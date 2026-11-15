@@ -62,8 +62,8 @@ import requests
 
 import tracker_meanings as M
 
-__version__ = '1.4.0'   # Nov 15 2026 (b): price moves say what they are USED FOR and what a rise or fall CAN mean; headlines must name the commodity; CHIP SUPPLY CHAIN watch (silicon + chips + rare earths + Taiwan Strait + the Market Watch semiconductor line) as one convergence item. 1.3.0: Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
-PROMPT_VERSION = 'tracker-v5'          # part of the fingerprint: a prompt upgrade rewrites once
+__version__ = '1.5.0'   # Nov 15 2026 (c): chokepoint SHIP COUNTS (IMF PortWatch) are facts on the military desk -- measured traffic outranks reporting; standing vs step change. 1.4.0 Nov 15 2026 (b): price moves say what they are USED FOR and what a rise or fall CAN mean; headlines must name the commodity; CHIP SUPPLY CHAIN watch (silicon + chips + rare earths + Taiwan Strait + the Market Watch semiconductor line) as one convergence item. 1.3.0: Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
+PROMPT_VERSION = 'tracker-v6'          # part of the fingerprint: a prompt upgrade rewrites once
 
 DESKS = ('military', 'commodities', 'market')
 DESK_NAMES = {'military': 'Military Posture', 'commodities': 'Commodity Pressure',
@@ -264,8 +264,14 @@ def pack_military(cache):
             mean['plain'], _altitudes(mean),
             _lane_titles(cp.get('top_signals')) if _CP_RANK.get(lvl, 0) >= 2 else _titles(cp.get('top_signals')),
             basis=mean.get('basis', ''), verified=mean.get('verified', False),
-            extra={'reported_phenomena': _crit(_l(cp.get('top_signals')))[:3],
-                   'signal_count': cp.get('signal_count', 0)}))
+            extra=dict({'reported_phenomena': _crit(_l(cp.get('top_signals')))[:3],
+                        'signal_count': cp.get('signal_count', 0)},
+                       **({'ship_counts': cp.get('ship_traffic'),
+                           'level_set_by': ('ship counts' if cp.get('level_basis') == 'ship_counts'
+                                            else 'reporting'),
+                           'standing_condition': bool(cp.get('standing')),
+                           'ship_count_step_change': cp.get('step_change')}
+                          if cp.get('ship_traffic') else {}))))
 
     # Coupled chokepoints
     for label, cv in _d(cache.get('chokepoint_convergences')).items():
@@ -874,6 +880,12 @@ THE MEANING LAYER (this page's purpose)
 - Scale the altitudes to the evidence. If an item is merely monitored, say the wider effects are potential, not present. If an altitude has nothing in the fact sheet to support it, write a short honest line ("No regional effect is reported yet.") rather than inventing one.
 - You may explain HOW a mechanism works in general terms (why rerouting raises freight costs, why a weaker currency raises import prices). You may NOT add current events, numbers, names or dates that are not in the fact sheet.
 - "not_implied" on an item lists what the reading must not be taken to mean. Respect it.
+
+SHIP COUNTS (military desk)
+- A chokepoint item with "ship_counts" carries measured traffic: ships actually crossing against the pre-war normal. That is the strongest evidence on the sheet, stronger than how much is being written. Lead with it for that passage: how many ships a day, against what normal, and the share of normal.
+- If "standing_condition" is true, call it a standing condition and say since when ("near-halted since March"). It is serious and it is not new: never write that it is escalating, and do not make it the headline unless nothing else is new.
+- If "ship_count_step_change" is "drop", that IS news: traffic fell sharply this week. If it is "rise", traffic recovered sharply: a possible reopening, which is news too.
+- Say the counts run about a week behind and miss ships with transponders off.
 
 PRICE MOVES (commodities desk)
 - A "price_move" item is a commodity whose price line moved 15% or more in 30 days. It is news even when the reporting is quiet and even when it is not new: a big move LEADS the headline and the So What unless a supply disruption outranks it. Never write "nothing new" while a price_move item is present; if it is long-running, say how long the move has held.

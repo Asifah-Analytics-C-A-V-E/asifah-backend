@@ -493,10 +493,20 @@ def build_chokepoint_prose(scan_result):
                 f"watch-state for the corridor."
             )
 
+        # Nov 15 2026: when SHIP COUNTS set the level (chokepoint_transits),
+        # say so. "Detected this scan" is wrong for a strait that has been
+        # near-halted for months -- that is a standing condition.
+        if cp_data.get('level_basis') == 'ship_counts' and cp_data.get('ship_traffic'):
+            prose = (f"{display} {level.upper()} on ship counts, not reporting -- "
+                     + cp_data['ship_traffic'])
+        elif cp_data.get('ship_traffic') and level != 'open':
+            prose += ' Ship counts: ' + cp_data['ship_traffic']
+
         output[cp_id] = {
             'level':   level,
             'prose':   prose,
             'display': display,
+            'standing': bool(cp_data.get('standing')),
         }
 
     return output

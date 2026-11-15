@@ -5228,7 +5228,7 @@ ALERT_THRESHOLDS = {
 # to backstop is circular reasoning. A floor is renewed by a human.
 # ========================================
 
-MILITARY_TRACKER_VERSION = '3.18.0'   # Nov 4 2026: UK actor; Arctic + Magellan watched; NWP/NSR/Drake/Cape Horn terms; red_sea_arctic pair. (3.17.1) Nov 3 2026: theatre level = hottest actor (was summed score -> everything surged); Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
+MILITARY_TRACKER_VERSION = '3.19.0'   # Nov 15 2026: chokepoint SHIP COUNTS (IMF PortWatch vs the 2025 pre-war average) set a floor under the reporting read; standing vs step change. (3.18.0) Nov 4 2026: UK actor; Arctic + Magellan watched; NWP/NSR/Drake/Cape Horn terms; red_sea_arctic pair. (3.17.1) Nov 3 2026: theatre level = hottest actor (was summed score -> everything surged); Argentina, Paraguay, Canada, Chile, Peru actors; Panama Canal + Caribbean watched
 
 # Feature flags published in the scan result. These exist so "did my deploy
 # land" is one field to read instead of an archaeology exercise on downstream
@@ -5662,6 +5662,21 @@ CHOKEPOINT_CONVERGENCE_PAIRS = {
                         'failover when Malacca contested.',
     },
 }
+
+
+def _apply_transit_floors(postures):
+    """v3.19.0 (Nov 15 2026). Reporting measures attention, not ships: a strait
+    nearly shut for months becomes routine news and drifts down to Contested.
+    chokepoint_transits.py reads IMF PortWatch ship counts against the 2025
+    (pre-war) average and RAISES the level to a floor -- never lowers it --
+    marking it standing (long-running) unless the latest week is a step change.
+    PortWatch unread = no floor (unread, not calm). Never raises."""
+    try:
+        import chokepoint_transits as _ct
+        _ct.apply_floors(postures, CHOKEPOINT_THRESHOLDS, watched=WATCHED_CHOKEPOINTS)
+    except Exception as e:
+        print(f"[Military] transit floors skipped: {str(e)[:120]}")
+    return postures
 
 
 def determine_chokepoint_alert(score):
@@ -6481,11 +6496,11 @@ def _write_military_fingerprints(scan_result, all_signals):
         # ── 4. Chokepoint fingerprints ──
         chokepoint_data = _extract_chokepoint_signals(all_signals)
         chokepoint_levels = {}   # used for convergence detection in step 7
+        _fp_postures = {}
         for cp_id, cp_info in chokepoint_data.items():
             score = cp_info['weighted_score']
             cp_alert = determine_chokepoint_alert(score)    # chokepoint-specific bands
-            chokepoint_levels[cp_id] = cp_alert
-            payload = {
+            _fp_postures[cp_id] = {
                 'chokepoint':            cp_id,
                 'alert_level':           cp_alert,
                 'alert_label':           CHOKEPOINT_THRESHOLDS[cp_alert]['label'],
@@ -6495,6 +6510,11 @@ def _write_military_fingerprints(scan_result, all_signals):
                 'score':                 round(score, 2),
                 'top_signals':           cp_info['top_signals'],
             }
+        # v3.19.0: ship counts set a floor (a near-halted strait reads
+        # Disrupted however routine the reporting has become).
+        _apply_transit_floors(_fp_postures)
+        for cp_id, payload in _fp_postures.items():
+            chokepoint_levels[cp_id] = payload.get('alert_level', 'open')
             if _redis_fp_set(f"military:chokepoint:{cp_id}", payload):
                 written['chokepoint'] += 1
 
@@ -10581,6 +10601,10 @@ def _run_full_scan(days=7):
                 'top_signals': [], 'watched': True,
                 'note': 'Watched chokepoint: no signals matched this scan.',
             }
+
+    # v3.19.0 (Nov 15 2026): SHIP COUNTS set a floor under the reporting read.
+    _apply_transit_floors(chokepoint_postures)
+    chokepoint_levels = {k: v.get('alert_level', 'open') for k, v in chokepoint_postures.items()}
 
     # Compute chokepoint convergences (mirror writer logic)
     chokepoint_convergences = {}
