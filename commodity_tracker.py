@@ -2767,6 +2767,20 @@ _ZINC_EXPOSURE = {
 for _zc, _ze in _ZINC_EXPOSURE.items():
     COUNTRY_COMMODITY_EXPOSURE.setdefault(_zc, {})['zinc'] = _ze
 
+# Nov 15 2026 -- PRICE PROXIES, named. These commodities have no public spot
+# price on Yahoo, so their price line is a company's shares or a fund. A 22.7%
+# "silicon" fall was Ferroglobe's shares after a weak quarter (Spanish energy
+# costs, five plant closures) while US/EU silicon metal indices ROSE. The page
+# and the plain-language read must say which line is a proxy.
+PRICE_PROXY = {
+    'silicon':        "Ferroglobe's shares, a silicon-metal producer",
+    'rare_earths':    "MP Materials' shares, a rare-earth miner",
+    'semiconductors': "TSMC's shares, the largest chipmaker",
+    'lithium':        'a lithium-miner fund',
+    'cobalt':         'a battery-metals fund',
+    'uranium':        'a uranium-miner fund',
+}
+
 # ============================================================================
 # Nov 15 2026 -- EXPOSURE MATRIX REFRESH (Rachel-approved change list A-F)
 # ============================================================================
@@ -6463,6 +6477,7 @@ def register_commodity_endpoints(app, start_background=True):
                         'category':       c.get('category'),
                         'has_spot_price': c.get('has_spot_price'),
                         'unit':           c.get('unit'),
+                        'price_proxy':    PRICE_PROXY.get(cid),   # Nov 15 2026
                     } for cid, c in COMMODITY_TYPES.items()
                 },
                 'last_updated':  datetime.now(timezone.utc).isoformat(),

@@ -62,8 +62,8 @@ import requests
 
 import tracker_meanings as M
 
-__version__ = '1.2.0'   # Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
-PROMPT_VERSION = 'tracker-v3'          # part of the fingerprint: a prompt upgrade rewrites once
+__version__ = '1.3.0'   # Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
+PROMPT_VERSION = 'tracker-v4'          # part of the fingerprint: a prompt upgrade rewrites once
 
 DESKS = ('military', 'commodities', 'market')
 DESK_NAMES = {'military': 'Military Posture', 'commodities': 'Commodity Pressure',
@@ -87,7 +87,7 @@ MEMORY_TTL = 60 * 24 * 3600
 
 SOURCE_KEYS = {
     'military': ['military_tracker_cache'],
-    'commodities': ['commodity_tracker_cache'],
+    'commodities': ['commodity_tracker_cache', 'commodity_sparkline_bundle'],
     'market': ['blackswan:market:latest', 'repricing:israel:latest',
                'repricing:europe_ukraine:latest', 'repricing:korea:latest'],
 }
@@ -351,12 +351,79 @@ def pack_military(cache):
     return facts, cache.get('cached_at') or cache.get('last_updated')
 
 
-def pack_commodities(cache):
+BIG_MOVE_PCT = float(os.environ.get('TRACKER_VOICE_BIG_MOVE_PCT', '15'))
+
+
+def _price_moves(cs, sparks):
+    """v1.3.0 -- commodities whose 30-day price move is BIG_MOVE_PCT or more.
+
+    Rachel, Nov 15: "Silicon moved 22.7% in 30 days and the read says nothing
+    new and talks about Lebanon's wheat." A large price move is news whether or
+    not the reporting is loud, so it becomes an item -- and it carries what the
+    commodity is used for, who makes and buys it, and the headlines, so the
+    writer can say WHY (or that the reporting does not explain it)."""
+    root = _d(sparks)
+    root = _d(root.get('sparklines')) if isinstance(root.get('sparklines'), dict) else root
+    if not root:
+        return []
+    try:
+        import commodity_tracker as _ct
+        types = getattr(_ct, 'COMMODITY_TYPES', {}) or {}
+        proxies = getattr(_ct, 'PRICE_PROXY', {}) or {}
+    except Exception:
+        types, proxies = {}, {}
+    rows = []
+    for cid, sp in root.items():
+        sp = _d(sp)
+        try:
+            chg = float(sp.get('change_pct_30d'))
+        except (TypeError, ValueError):
+            continue
+        if abs(chg) < BIG_MOVE_PCT:
+            continue
+        t = _d(types.get(cid))
+        summ = _d(cs.get(cid))
+        desc = str(t.get('description') or '')
+        rows.append({
+            'id': cid,
+            'commodity': t.get('name') or M.humanise_id(cid),
+            'change_30d_pct': round(chg, 1),
+            'change_1d_pct': sp.get('change_pct_1d'),
+            'direction': 'up' if chg > 0 else 'down',
+            'reporting_level': M.COMMODITY_LEVEL_WORDS.get(summ.get('alert_level'), summ.get('alert_level') or 'routine'),
+            'price_proxy': proxies.get(cid) or '',
+            'what_it_is': _txt(desc.split('. ')[0], 220),
+            'top_producers': [M.humanise_id(x) for x in _l(t.get('top_producers'))[:4]],
+            'top_consumers': [M.humanise_id(x) for x in _l(t.get('top_consumers'))[:4]],
+            'headlines': _titles(summ.get('top_signals'), 2),
+        })
+    rows.sort(key=lambda r: -abs(r['change_30d_pct']))
+    return rows[:6]
+
+
+def pack_commodities(cache, sparks=None):
     cache = _d(cache)
     cs = _d(cache.get('commodity_summaries'))
     if not cs:
         return None, 'commodity cache empty or unread'
     items = []
+    # v1.3.0 -- big price moves FIRST: they lead the read
+    for r in _price_moves(cs, sparks):
+        band = 'big' if abs(r['change_30d_pct']) < 25 else 'very_big'
+        state = '%s_%s' % (band, r['direction'])      # fingerprint moves on band/direction, not every tick
+        plain = ('%s %s %.1f%% in 30 days%s.' % (
+            r['commodity'], 'rose' if r['direction'] == 'up' else 'fell', abs(r['change_30d_pct']),
+            (' -- measured through %s, not the commodity itself' % r['price_proxy']) if r['price_proxy'] else ''))
+        items.append(_item(
+            'price_move', r['id'], '%s price move' % r['commodity'], state,
+            '%s %.0f%% in 30 days' % ('up' if r['direction'] == 'up' else 'down', abs(r['change_30d_pct'])),
+            plain, {}, r['headlines'],
+            facts={k: v for k, v in r.items() if k != 'id' and v not in ('', [], None)},
+            basis='commodity price line (30-day change)',
+            extra={'not_implied': ['a shortage or a glut on its own',
+                                   'a forecast of where the price goes next']
+                                  + (['a move in the commodity itself -- the line is a company share or fund']
+                                     if r['price_proxy'] else [])}))
     try:
         import convergence_registry as _cr
         reg = {e.get('id'): e for e in getattr(_cr, 'CONVERGENCE_REGISTRY', []) if isinstance(e, dict)}
@@ -553,7 +620,8 @@ def pack(desk, sources=None):
     if desk == 'military':
         return pack_military(sources.get('military_tracker_cache'))
     if desk == 'commodities':
-        return pack_commodities(sources.get('commodity_tracker_cache'))
+        return pack_commodities(sources.get('commodity_tracker_cache'),
+                                sources.get('commodity_sparkline_bundle'))
     return pack_market(sources)
 
 
@@ -648,6 +716,12 @@ THE MEANING LAYER (this page's purpose)
 - Scale the altitudes to the evidence. If an item is merely monitored, say the wider effects are potential, not present. If an altitude has nothing in the fact sheet to support it, write a short honest line ("No regional effect is reported yet.") rather than inventing one.
 - You may explain HOW a mechanism works in general terms (why rerouting raises freight costs, why a weaker currency raises import prices). You may NOT add current events, numbers, names or dates that are not in the fact sheet.
 - "not_implied" on an item lists what the reading must not be taken to mean. Respect it.
+
+PRICE MOVES (commodities desk)
+- A "price_move" item is a commodity whose price line moved 15% or more in 30 days. It is news even when the reporting is quiet and even when it is not new: a big move LEADS the headline and the So What unless a supply disruption outranks it. Never write "nothing new" while a price_move item is present; if it is long-running, say how long the move has held.
+- Say what moved and by how much, then WHY: if its headlines explain the move, say so; if they do not, say the reporting does not explain it (that gap is itself a finding).
+- Then who feels it: the industries that use it ("what_it_is") and the producers and buyers named.
+- If "price_proxy" is set, the line is a company's shares or a fund, not the commodity price. Say so plainly in the first sentence about it, and that the move may be about that company (results, costs) rather than the commodity. Do not call it a commodity price move.
 
 PATTERN RECOGNITION (market desk)
 - When an analog item is supplied, say how closely today matches (the share of conditions in common), WHICH conditions match ("shared_conditions") and which do not ("present_now_not_then", "present_then_not_now"), what the chain of events was then ("mechanism_then", "chain"), how long it took then ("interval_then"), and what the effects were ("effects"). Say plainly this describes what happened THEN, not what will happen now.
@@ -798,6 +872,18 @@ def item_sentence(it):
             return ('Governments are moving people out: %s, involving %s. %s'
                     % (it.get('level_words'), _join(_l(f.get('actors'))[:4]) or 'several governments',
                        mb.get('plain', ''))).strip()
+        if kind == 'price_move':
+            out = '%s %s %.1f%% over 30 days' % (f.get('commodity') or name, 'rose' if f.get('direction') == 'up' else 'fell',
+                                                abs(f.get('change_30d_pct') or 0))
+            if f.get('price_proxy'):
+                out += ', but that line is %s, not the commodity price, so the move may be about the company or fund' % f['price_proxy']
+            out += '. '
+            hl = _l(f.get('headlines'))
+            out += ('Reporting points to: \u201c%s.\u201d ' % _bare(hl[0]).split(' - ')[0].rstrip('.')) if hl else \
+                   'The reporting this scan does not explain the move, which is itself worth noting. '
+            if f.get('what_it_is'):
+                out += 'What it is: %s.' % str(f['what_it_is']).rstrip('.')
+            return out.strip()
         if kind == 'commodities':
             rows = _l(f.get('commodities'))
             named = ['%s (%s)' % (r.get('commodity'), r.get('level')) for r in rows[:7]]
@@ -891,6 +977,15 @@ def fallback_view(facts):
         head = ('%s %s' % (hot[0]['name'], hot[0]['state']) if hot else 'No major shipping lane contested')
         if regs:
             head += '; military reporting heaviest in %s' % _join([r['region'] for r in regs[:2]])
+    elif desk == 'commodities' and by.get('price_move'):
+        mv = by['price_move'][0]
+        f = _d(mv.get('facts'))
+        head = '%s %s %.0f%% in 30 days%s' % (
+            f.get('commodity') or mv['name'], 'rose' if f.get('direction') == 'up' else 'fell',
+            abs(f.get('change_30d_pct') or 0), ' (measured through %s)' % f['price_proxy'] if f.get('price_proxy') else '')
+        others = [_d(i.get('facts')).get('commodity') for i in by['price_move'][1:3]]
+        if others:
+            head += '; also big moves in %s' % _join([_lc(o) for o in others if o])
     elif desk == 'commodities':
         grp = _l(_d((by.get('commodities') or [{}])[0].get('facts')).get('commodities'))
         firing = [i['name'] for i in by.get('convergence', []) if i['state'] == 'firing']
@@ -1022,12 +1117,11 @@ def refresh(desk, allow_call=True, reason='organic'):
 
 
 def refresh_from_stored(desk):
-    """Rachel's manual link: rewrite one desk from its last stored facts."""
-    facts = _rget(FACTS_KEY % desk)
-    if not isinstance(facts, dict):
-        r = refresh(desk, allow_call=True, reason='manual')
-        return r
-    return _write(desk, facts, facts.get('source_as_of'), 'manual')
+    """Rachel's manual link: re-pack the desk from its CURRENT caches (Redis
+    reads only, no scan), then write. v1.3.0: it used to rewrite from the last
+    stored facts, so a manual refresh could never see anything new -- e.g. a
+    price move that arrived after the last 3-hourly pack. Caps still apply."""
+    return refresh(desk, allow_call=True, reason='manual')
 
 
 def latest(desk):

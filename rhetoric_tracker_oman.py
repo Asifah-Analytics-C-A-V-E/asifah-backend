@@ -195,7 +195,7 @@ GDELT_BASE_URL      = 'https://api.gdeltproject.org/api/v2/doc/doc'
 # v1.2.0 (Oct 4 2026) -- derived UA, per the Oct 3 platform-wide pass.
 # Was 'Mozilla/5.0 Asifah Analytics OSINT' -- honest in intent but carrying
 # no version, in a spelling used nowhere else on the platform.
-OMAN_TRACKER_VERSION = '1.4.2'   # Nov 11 2026 (c): Iran spoke carries track='diplomatic' when the channel, not pressure, is what is lit | 1.4.1: writes spoke:iran:oman so the Muscat channel lights the Iran wheel | 1.4.0 Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
+OMAN_TRACKER_VERSION = '1.5.0'   # Nov 15 2026: maritime context gate (no sea turtles), incident tripwires off Khasab, sharpest articles first, Hormuz chokepoint floor from the military tracker | 1.4.2: Nov 11 2026 (c): Iran spoke carries track='diplomatic' when the channel, not pressure, is what is lit | 1.4.1: writes spoke:iran:oman so the Muscat channel lights the Iran wheel | 1.4.0 Nov 11 2026: ports & energy + Hormuz & Omani waters actors; 2-outlet rule | v1.3.0 Nov 5 2026 (census): RSS parser fixed -- it had dropped every RSS article since launch; blocked feeds routed via Google News
 OMAN_USER_AGENT = (f'AsifahAnalytics-ME-Oman/{OMAN_TRACKER_VERSION} '
                    f'(OSINT monitoring tool; +https://asifahanalytics.com)')
 
@@ -396,6 +396,22 @@ ACTORS = {
             'closure of the strait of hormuz', 'mines in the strait of hormuz', 'mine strait of hormuz',
             'gps jamming hormuz', 'gps jamming gulf of oman',
             'احتجاز ناقلة', 'إغلاق مضيق هرمز',
+            # v1.5.0 -- incidents, not only declarations. They count ONLY when
+            # an Omani-waters place name is in the same article (keyword gate
+            # above), so 'tanker struck' alone never lights this actor.
+            'tanker struck', 'tanker attacked', 'tanker hit', 'ship attacked', 'vessel attacked',
+            'vessel struck', 'struck by a projectile', 'unidentified projectile', 'hit a mine',
+            'struck a mine', 'mine strike', 'crew evacuated', 'tanker on fire', 'tanker ablaze',
+            'tanker sank', 'vessel sank',
+        ],
+        # v1.5.0 -- a place name is not a story. 'Gulf of Oman' and 'Khasab'
+        # also appear in sea-turtle, tourism and weather pieces; the article
+        # must ALSO be about ships, security or the strait to count.
+        'context_required': [
+            'tanker', 'ship', 'vessel', 'shipping', 'navy', 'naval', 'coast guard', 'mine', 'seiz',
+            'board', 'attack', 'strike', 'struck', 'drone', 'missile', 'projectile', 'blockade',
+            'transit', 'ukmto', 'jmic', 'jamming', 'irgc', 'escort', 'convoy', 'strait', 'hormuz',
+            'ناقلة', 'سفينة', 'هجوم', 'ألغام',
         ],
     },
     # ── INFLUENCE VECTOR (0-5) — diplomatic activity ──
@@ -476,7 +492,16 @@ def _read_cross_theater_signals():
         'yemen_dhofar_pressure':       0,
         'pakistan_balochistan_unrest': 0,
         'zanzibar_unrest':             0,  # placeholder for future Africa
+        'hormuz_chokepoint':           '',   # v1.5.0: the military tracker's band
     }
+    # v1.5.0 -- the Strait's shipping lanes run through Omani waters off
+    # Musandam. When the military tracker reads Hormuz CONTESTED or DISRUPTED,
+    # that is pressure in Omani waters whether or not a story names Khasab.
+    try:
+        _cp = _redis_get('military:chokepoint:hormuz') or {}
+        signals['hormuz_chokepoint'] = str(_cp.get('alert_level') or '').lower()
+    except Exception:
+        pass
     try:
         fingerprints = _redis_get(CROSSTHEATER_KEY) or {}
     except Exception as e:
@@ -529,6 +554,16 @@ def _apply_cross_theater_boosts(actor_levels, cross_signals):
             actor_levels.get('external_threats_inbound', 0),
             ext_boost
         ))
+
+    # v1.5.0 -- Hormuz floor for Omani waters (a floor, never a ceiling-raiser
+    # past L3: the chokepoint band is reporting density, and L4+ still needs
+    # a corroborated incident in Omani waters themselves).
+    _band = cross_signals.get('hormuz_chokepoint', '')
+    _floor = {'disrupted': 3, 'contested': 2}.get(_band, 0)
+    if _floor and actor_levels.get('hormuz_omani_waters', 0) < _floor:
+        actor_levels['hormuz_omani_waters'] = _floor
+        boosts.append("The military tracker reads the Strait of Hormuz %s, and its shipping lanes run through Omani waters off Musandam (hormuz_omani_waters held at L%d)."
+                      % (_band.lower(), _floor))
 
     # Mediation — boosted when Iran tracker confirms Oman channel is active
     if cross_signals['iran_oman_diplomatic_active']:
@@ -1019,6 +1054,9 @@ def _score_article_for_actor(article, actor_key, actor_def):
     desc  = (article.get('description') or '').lower()
     text  = f"{title} {desc}"
 
+    ctx = actor_def.get('context_required')
+    if ctx and not any(c in text for c in ctx):
+        return 0, None          # v1.5.0: the place matched, the subject did not
     for kw in actor_def.get('keywords', []):
         if kw.lower() in text:
             for tw in actor_def.get('tripwires', []):
@@ -1063,11 +1101,15 @@ def _classify_articles(articles):
                 )
                 if phrase and phrase not in actor_results[actor_id]['trigger_phrases']:
                     actor_results[actor_id]['trigger_phrases'].append(phrase)
-                if len(actor_results[actor_id]['top_articles']) < 5:
-                    art_copy = dict(article)
-                    art_copy['escalation_level'] = level
-                    art_copy['trigger_phrase']   = phrase
-                    actor_results[actor_id]['top_articles'].append(art_copy)
+                art_copy = dict(article)
+                art_copy['escalation_level'] = level
+                art_copy['trigger_phrase']   = phrase
+                actor_results[actor_id]['top_articles'].append(art_copy)
+
+    # v1.5.0: keep the SHARPEST five, not the first five in feed order -- a
+    # level-1 mention must never sit above a tripwire hit.
+    for r in actor_results.values():
+        r['top_articles'] = sorted(r['top_articles'], key=lambda a: -int(a.get('escalation_level') or 0))[:5]
 
     # v1.1 EVIDENCE RULE: L3+ needs 2+ separate outlets. A tripwire one outlet
     # reports is L2 ("reported, not confirmed") until a second carries it.
@@ -1324,6 +1366,11 @@ def run_oman_rhetoric_scan(force=False):
                 'top_articles':      ar['top_articles'],
                 'escalation_phrase': (ar['trigger_phrases'][0] if ar['trigger_phrases'] else None),
                 'silence_alert':     ar['statement_count'] == 0,
+                'evidence':          ar.get('evidence'),
+                # v1.5.0 -- which cross-theater read moved this actor, in words
+                'crosstheater_boost': next((b for b in (composite.get('cross_theater_boosts') or [])
+                                            if aid in b or {'external_threats_inbound': 'external_threats',
+                                                            'mediation_activity': 'mediation'}.get(aid, '#') in b), None),
             }
 
         result = {
