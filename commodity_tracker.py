@@ -60,6 +60,12 @@ CHANGELOG:
            added (potash mode: no spot price). Rice had no GDELT query --
            three added. A proxy-ticker sparkline (often a miner's equity) no
            longer counts as the commodity's own price move.
+  v1.9.x - Nov 15 2026 (b) HORMUZ CORRIDORS + STANDING GATE (emitter v2.1.0).
+           Oil, LNG, nitrogen and sulfur depend on chokepoint:hormuz (floored on
+           ship counts by the military tracker). A standing closure earns L4;
+           L5 needs a change in posture (price rising, fresh traffic drop, new
+           front at the strait, war-risk insurance jump). A falling price next
+           to a standing closure no longer reads as a 'supply rupture'.
   v1.7.0 - Oct 29 2026 Evidence-earned economic level (GPI emitter v2.0.0).
            News pressure now only ADMITS a commodity to the GPI economic
            axis; the level is earned: news only L3, + confirmed price move
@@ -5895,12 +5901,21 @@ _COMMODITY_CORRIDORS = {
     # palm oil to Europe and the Middle East all pass Bab el-Mandeb + Suez.
     'rice':          ['chokepoint:bab_el_mandeb', 'chokepoint:suez'],
     'palm_oil':      ['chokepoint:malacca', 'chokepoint:bab_el_mandeb', 'chokepoint:suez'],
+    # Nov 15 2026 (b) -- HORMUZ. Gulf crude, Qatari LNG, Gulf urea/ammonia and
+    # Gulf sulfur leave through the Strait. (Potash does not: its exporters are
+    # Canada, Russia and Belarus; Jordan and Israel ship via Aqaba / the Med.)
+    # The military tracker now floors Hormuz on SHIP COUNTS, so this reads
+    # DISRUPTED -- but as a STANDING condition. See _STANDING_GATE below.
+    'oil':           ['chokepoint:hormuz', 'chokepoint:bab_el_mandeb'],
+    'natural_gas':   ['chokepoint:hormuz'],
+    'nitrogen':      ['chokepoint:hormuz'],
+    'sulfur':        ['chokepoint:hormuz'],
 }
 # 'chokepoint:<id>' entries read the military tracker's chokepoint fingerprint
 # (military:chokepoint:<id>, bands open / monitored / contested / disrupted).
 # Only DISRUPTED counts as physical impairment; contested is a warning, never
 # a disruption -- reporting about a strait is not a closed strait.
-_CHOKEPOINT_LABEL = {'bab_el_mandeb': 'Bab el-Mandeb', 'suez': 'the Suez Canal', 'malacca': 'the Strait of Malacca'}
+_CHOKEPOINT_LABEL = {'hormuz': 'the Strait of Hormuz', 'bab_el_mandeb': 'Bab el-Mandeb', 'suez': 'the Suez Canal', 'malacca': 'the Strait of Malacca'}
 
 
 def _corridor_label(cor):
@@ -6102,6 +6117,8 @@ def _load_disruption_context():
             band = str((rec or {}).get('alert_level') or '').lower() if isinstance(rec, dict) else ''
             ctx['corridors'][cor] = ({'disrupted': 'impaired', 'contested': 'contested',
                                       'monitored': 'open', 'open': 'open'}.get(band, 'unknown'))
+            if isinstance(rec, dict):
+                ctx.setdefault('corridor_meta', {})[cor] = _chokepoint_posture(cor.split(':', 1)[1], rec, ctx)
             continue
         rec = _ctx_redis_get(f'corridor:{cor}:latest')
         if isinstance(rec, dict) and rec.get('live_state'):
@@ -6109,6 +6126,47 @@ def _load_disruption_context():
         else:
             ctx['corridors'][cor] = 'unknown'
     return ctx
+
+
+# ── STANDING GATE (Nov 15 2026, Rachel) ──────────────────────────────────
+# A corridor that has been disrupted for months (Hormuz since March) is real
+# physical impairment, so it earns L4 on its own. It does NOT earn L5 -- "supply
+# rupture" -- by sitting there. L5 needs a CHANGE IN POSTURE, any one of:
+#   * the price RISING past its threshold (the market confirming a shortfall;
+#     a falling price next to a standing closure is not a rupture);
+#   * a fresh drop in ship traffic (chokepoint_transits step change);
+#   * a NEW kinetic front in the strait's theatre (gpi:l5_onsets, 14 days);
+#   * reporting of a war-risk insurance jump or cover pulled for the strait
+#     (Lloyd's / Joint War Committee). Read from reporting -- Asifah has no
+#     premium feed, and the text says so.
+_CP_THEATRE_WORDS = {
+    'hormuz':        ('iran', 'hormuz', 'gulf', 'oman', 'uae', 'persian'),
+    'bab_el_mandeb': ('yemen', 'houthi', 'red_sea', 'bab'),
+    'suez':          ('egypt', 'suez', 'sinai', 'red_sea'),
+    'malacca':       ('malacca', 'singapore', 'malaysia', 'indonesia'),
+}
+_INSURANCE_RX = re.compile(r"\b(war[- ]risk|insur|underwrit|lloyd'?s|joint war committee|jwc|premiums?)", re.I)
+_INSURANCE_UP_RX = re.compile(r"\b(ris(?:e|es|ing)|rais|jump|soar|surg|doubl|tripl|hike|spike|climb|cancel|withdr[ae]w|suspend|pull(?:s|ed)?|halt|list(?:s|ed)?)", re.I)
+
+
+def _chokepoint_posture(cp, rec, ctx):
+    """Standing / posture-change facts for one chokepoint fingerprint."""
+    tr = rec.get('transits') if isinstance(rec.get('transits'), dict) else {}
+    out = {'standing': bool(rec.get('standing')), 'since': tr.get('standing_since'),
+           'ratio_pct': tr.get('ratio_pct'), 'changes': []}
+    if rec.get('step_change') == 'drop':
+        out['changes'].append('ship traffic fell sharply this week')
+    words = _CP_THEATRE_WORDS.get(cp, (cp,))
+    for th, age in (ctx.get('new_fronts') or {}).items():
+        if any(w in th for w in words):
+            out['changes'].append('a new active-conflict front at %s (day %s)' % (th.replace('_', ' '), age))
+            break
+    for sig in (rec.get('top_signals') or [])[:8]:
+        t = (sig.get('article_title') or sig.get('title') or '') if isinstance(sig, dict) else ''
+        if t and _INSURANCE_RX.search(t) and _INSURANCE_UP_RX.search(t):
+            out['changes'].append('reporting of a war-risk insurance jump: ' + t.strip()[:100])
+            break
+    return out
 
 
 def _producer_in_theatre(producer, theatre_key):
@@ -6163,8 +6221,14 @@ def _commodity_disruption_evidence(cid, summ, hard_sigs, ctx):
     for cor in _COMMODITY_CORRIDORS.get(cid, []):
         st = ctx['corridors'].get(cor, 'unknown')
         if st in ('impaired', 'blocked'):
-            found.append({'kind': 'corridor',
-                          'text': f"{_corridor_label(cor)} reads {'DISRUPTED' if cor.startswith('chokepoint:') else st.upper()}"})
+            meta = (ctx.get('corridor_meta') or {}).get(cor) or {}
+            txt = f"{_corridor_label(cor)} reads {'DISRUPTED' if cor.startswith('chokepoint:') else st.upper()}"
+            if meta.get('ratio_pct') is not None:
+                txt += f" (ships at about {meta['ratio_pct']}% of pre-war normal"
+                txt += (f", standing since {meta['since']})" if meta.get('since') and meta.get('standing') else ')')
+            found.append({'kind': 'corridor', 'text': txt,
+                          'standing': bool(meta.get('standing')) and not meta.get('changes'),
+                          'posture_change': meta.get('changes') or []})
     return found
 
 
@@ -6207,13 +6271,28 @@ def build_commodity_economic_bluf(bundle=None):
         exposure_only = [d for d in found if d not in disruption]
         has_disr = bool(disruption)
         level = 3 + int(has_price) + int(has_disr)
+        # STANDING GATE (see _chokepoint_posture): a long-running corridor
+        # closure holds at L4 unless something about it has CHANGED.
+        standing_only = has_disr and all(d['kind'] == 'corridor' and d.get('standing') for d in disruption)
+        gate_note = ''
+        if level >= 5 and standing_only and not rising:
+            level = 4
+            gate_note = ("Held at L4: the corridor closure is a standing condition, and a falling price "
+                         "is not a supply rupture. L5 needs a change in posture: prices rising on the "
+                         "shortage, a fresh drop in ship traffic, a new front at the strait, or a war-risk "
+                         "insurance jump.")
+        posture_changes = [c for d in disruption for c in (d.get('posture_change') or [])]
 
-        if has_price and has_disr:
+        if has_price and has_disr and level >= 5:
             basis, basis_label = 'price_and_disruption', 'supply rupture'
+        elif has_price and has_disr:
+            basis, basis_label = 'standing_disruption', 'standing disruption'
         elif has_price:
             basis, basis_label = 'price_confirmed', 'price-confirmed pressure'
         elif has_disr:
-            basis, basis_label = 'physical_disruption', 'physical disruption'
+            basis, basis_label = (('standing_disruption', 'standing disruption')
+                                  if standing_only and not posture_changes
+                                  else ('physical_disruption', 'physical disruption'))
         else:
             basis, basis_label = 'news_only', 'news pressure'
 
@@ -6240,6 +6319,12 @@ def build_commodity_economic_bluf(bundle=None):
                if price.get('state') == 'unread' else '') + ".")
         if has_disr:
             long_parts.append("Disruption: " + '; '.join(d['text'] for d in disruption[:3]) + ".")
+            if posture_changes:
+                long_parts.append("Change in posture: " + '; '.join(posture_changes[:2]) + ".")
+            elif standing_only:
+                long_parts.append("This is a standing condition, long-running rather than new.")
+            if gate_note:
+                long_parts.append(gate_note)
         else:
             long_parts.append("No physical disruption seen (no export ban, shut-in, closure, "
                               "new war front or confirmed disaster in a top producer"
@@ -6282,6 +6367,9 @@ def build_commodity_economic_bluf(bundle=None):
             'price_evidence':    price,
             'disruption_evidence': disruption,
             'exposure_noted':    exposure_only,
+            'standing':          bool(standing_only and not posture_changes),
+            'posture_changes':   posture_changes,
+            'gate':              'held_at_l4_standing' if gate_note else None,
         })
 
     # ── Commodity webs (Oct 29 2026) ──────────────────────────────────
@@ -6326,7 +6414,7 @@ def build_commodity_economic_bluf(bundle=None):
                           '(news only = L3, one kind of evidence = L4, both = L5).'),
         'meta': {
             'commodities_surfaced': [s['commodity'] for s in signals],
-            'emitter_version':      'commodity_economic_bluf v2.0.0',
+            'emitter_version':      'commodity_economic_bluf v2.1.0',   # Nov 15 2026: Hormuz corridors + STANDING GATE
             'gate':                 'high/surge + specific-phrase relevance admits; '
                                     'price + disruption evidence earns the level',
             'context_unread':       (ctx or {}).get('unread', []),
