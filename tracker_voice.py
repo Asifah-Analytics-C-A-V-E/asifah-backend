@@ -62,8 +62,8 @@ import requests
 
 import tracker_meanings as M
 
-__version__ = '1.3.0'   # Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
-PROMPT_VERSION = 'tracker-v4'          # part of the fingerprint: a prompt upgrade rewrites once
+__version__ = '1.4.0'   # Nov 15 2026 (b): price moves say what they are USED FOR and what a rise or fall CAN mean; headlines must name the commodity; CHIP SUPPLY CHAIN watch (silicon + chips + rare earths + Taiwan Strait + the Market Watch semiconductor line) as one convergence item. 1.3.0: Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
+PROMPT_VERSION = 'tracker-v5'          # part of the fingerprint: a prompt upgrade rewrites once
 
 DESKS = ('military', 'commodities', 'market')
 DESK_NAMES = {'military': 'Military Posture', 'commodities': 'Commodity Pressure',
@@ -87,7 +87,8 @@ MEMORY_TTL = 60 * 24 * 3600
 
 SOURCE_KEYS = {
     'military': ['military_tracker_cache'],
-    'commodities': ['commodity_tracker_cache', 'commodity_sparkline_bundle'],
+    'commodities': ['commodity_tracker_cache', 'commodity_sparkline_bundle',
+                    'military:chokepoint:taiwan_strait', 'blackswan:market:latest'],
     'market': ['blackswan:market:latest', 'repricing:israel:latest',
                'repricing:europe_ukraine:latest', 'repricing:korea:latest'],
 }
@@ -353,6 +354,149 @@ def pack_military(cache):
 
 BIG_MOVE_PCT = float(os.environ.get('TRACKER_VOICE_BIG_MOVE_PCT', '15'))
 
+# v1.4.0 -- WHY A MOVE MATTERS. Rachel, Nov 15: "call out that silicon is
+# used in chip manufacturing and a price drop could indicate X, Y or Z." For
+# each commodity: what it goes into, and what a rise or a fall CAN mean --
+# offered as possibilities to weigh, never as a forecast -- and where else on
+# Asifah to look. Reference text, Claude-drafted, to verify.
+MOVE_MEANING = {
+    'silicon': {'used_in': 'computer chips and solar panels (as polysilicon), and the alloys that make steel and aluminium',
+                'fall': ['weaker demand from steelmakers, solar or chip fabs', 'Chinese oversupply pushing prices down',
+                         'a company-specific story when the line is a producer’s shares (costs, results, closures)'],
+                'rise': ['trade barriers or tariffs on Chinese silicon', 'power-price shocks closing smelters',
+                         'a chip or solar build-out pulling demand forward'],
+                'watch_with': ['Chips line on this page', 'Market Watch semiconductor reading', 'Taiwan Strait on the Military page']},
+    'semiconductors': {'used_in': 'everything electronic, from phones and cars to AI data centres and weapons',
+                       'fall': ['cooling AI or data-centre spending', 'export controls or tariffs biting',
+                                'Taiwan risk being priced in'],
+                       'rise': ['AI capital spending still accelerating', 'a supply squeeze on advanced chips'],
+                       'watch_with': ['Market Watch semiconductor reading', 'Taiwan Strait on the Military page']},
+    'rare_earths': {'used_in': 'the magnets in electric motors, wind turbines, missiles and hard drives',
+                    'fall': ['easing Chinese export controls', 'weak electric-vehicle demand'],
+                    'rise': ['tighter Chinese export controls', 'defence and EV stockpiling'],
+                    'watch_with': ['China page', 'Chips line on this page']},
+    'nickel': {'used_in': 'stainless steel and electric-vehicle batteries',
+               'fall': ['Indonesian oversupply', 'slower EV and stainless demand, especially in China'],
+               'rise': ['Indonesian export or ore-quota curbs', 'sanctions on Russian metal'],
+               'watch_with': ['Indonesia and the Philippines in Who is exposed']},
+    'lithium': {'used_in': 'electric-vehicle and grid batteries',
+                'fall': ['battery oversupply and slower EV sales', 'Chinese price cutting'],
+                'rise': ['mine closures or export curbs (Chile, Zimbabwe, China)', 'an EV demand rebound'],
+                'watch_with': ['Chile and Argentina in Who is exposed']},
+    'cobalt': {'used_in': 'batteries, jet engines and superalloys',
+               'fall': ['DRC oversupply', 'battery makers switching chemistries'],
+               'rise': ['DRC export quotas or bans', 'conflict in the eastern DRC'],
+               'watch_with': ['DR Congo in Who is exposed']},
+    'copper': {'used_in': 'power grids, wiring, electric vehicles and construction',
+               'fall': ['a slowdown in China’s building and manufacturing', 'a stronger dollar'],
+               'rise': ['mine disruptions (Chile, Peru, DRC)', 'grid and data-centre build-outs'],
+               'watch_with': ['Chile, Peru and DR Congo in Who is exposed']},
+    'oil': {'used_in': 'transport fuel, plastics, fertiliser and power in import-dependent countries',
+            'fall': ['weaker global demand or a risk-off market', 'OPEC+ adding supply', 'a de-escalation in the Gulf'],
+            'rise': ['supply disruption (Hormuz, Red Sea, sanctions)', 'OPEC+ cuts'],
+            'watch_with': ['Hormuz on the Military page', 'Market Watch']},
+    'natural_gas': {'used_in': 'power, heating and nitrogen fertiliser',
+                    'fall': ['mild weather and full storage', 'new LNG supply'],
+                    'rise': ['LNG disruption (Qatar via Hormuz)', 'cold weather and low storage'],
+                    'watch_with': ['Hormuz on the Military page', 'Fertiliser lines on this page']},
+    'wheat': {'used_in': 'bread: the staple most tied to unrest in import-dependent countries',
+              'fall': ['big harvests or Black Sea exports flowing', 'weaker import demand'],
+              'rise': ['Black Sea or Red Sea disruption', 'drought or export bans'],
+              'watch_with': ['Egypt, Lebanon and Yemen in Who is exposed', 'Bab el-Mandeb on the Military page']},
+    'corn': {'used_in': 'animal feed, ethanol and food',
+             'fall': ['a big US or Brazil crop', 'lower ethanol demand'],
+             'rise': ['drought, Black Sea disruption', 'biofuel mandates'], 'watch_with': ['Food prices section']},
+    'rice': {'used_in': 'the staple for over half the world',
+             'fall': ['India easing export curbs', 'large Asian harvests'],
+             'rise': ['export bans (India, Vietnam)', 'El Niño drought in Asia'],
+             'watch_with': ['India and the Philippines in Who is exposed']},
+    'sugar': {'used_in': 'food, drinks and Brazilian ethanol',
+              'fall': ['a big Brazil or India crop', 'cheaper oil making ethanol less attractive'],
+              'rise': ['drought', 'Indian export curbs'], 'watch_with': ['Brazil and India in Who is exposed']},
+    'silver': {'used_in': 'solar panels and electronics, and as a store of value',
+               'fall': ['weaker solar and industrial demand', 'a stronger dollar or higher real rates'],
+               'rise': ['safe-haven buying', 'a solar build-out'], 'watch_with': ['Gold line on this page']},
+    'gold': {'used_in': 'central-bank reserves and private savings: a fear and sanctions gauge',
+             'fall': ['easing fear or a stronger dollar', 'central banks slowing purchases'],
+             'rise': ['geopolitical fear', 'central banks diversifying away from the dollar'],
+             'watch_with': ['GPI', 'Market Watch']},
+    'uranium': {'used_in': 'nuclear power',
+                'fall': ['reactor delays', 'utilities well stocked'],
+                'rise': ['Kazakh or Niger supply problems', 'sanctions on Russian enrichment'],
+                'watch_with': ['Niger and Kazakhstan in Who is exposed']},
+    'coffee': {'used_in': 'a cash crop that millions of smallholders depend on',
+               'fall': ['big Brazil or Vietnam harvests'], 'rise': ['frost or drought in Brazil', 'tariffs'],
+               'watch_with': ['Brazil, Vietnam, Colombia and Honduras in Who is exposed']},
+    'soybeans': {'used_in': 'animal feed and cooking oil',
+                 'fall': ['a big Brazil crop or Chinese buying slowing'], 'rise': ['US-China trade friction easing or drought'],
+                 'watch_with': ['Palm and sunflower oil lines on this page']},
+    'pgm': {'used_in': 'car catalytic converters, hydrogen and jewellery',
+            'fall': ['weak car sales and the shift to EVs'], 'rise': ['South African mining or power problems', 'sanctions on Russian palladium'],
+            'watch_with': ['South Africa and Russia in Who is exposed']},
+}
+
+# names a headline must contain to count as ABOUT this commodity (v1.4.0:
+# "Stocks slide on Nvidia troubles" is not a silicon story; "Brent hits $96"
+# is not a nickel story)
+_MOVE_NAMES = {'silicon': ('silicon', 'ferroglobe', 'polysilicon', 'ferrosilicon'),
+               'semiconductors': ('chip', 'semiconductor', 'tsmc', 'nvidia', 'foundry'),
+               'rare_earths': ('rare earth', 'rare-earth', 'mp materials', 'magnet'),
+               'oil': ('oil', 'crude', 'brent', 'wti', 'opec'), 'natural_gas': ('gas', 'lng'),
+               'pgm': ('platinum', 'palladium', 'pgm'), 'cobalt': ('cobalt',), 'lithium': ('lithium',)}
+
+
+def _about(cid, name, title):
+    t = str(title or '').lower()
+    names = _MOVE_NAMES.get(cid) or (cid.replace('_', ' '), str(name or '').lower())
+    return any(n and n in t for n in names)
+
+
+def _chip_chain(cs, root, sources):
+    """v1.4.0 -- the CHIP SUPPLY CHAIN watch: one convergence item across
+    pages. Links: silicon line, chips line + reporting, rare earths line, the
+    Taiwan Strait (military tracker) and the Market Watch semiconductor reading
+    (SMH vs S&P 500, 24-month z-score). Firing at 2+ stressed links; otherwise
+    it is a standing watch that is shown, not headlined."""
+    sources = _d(sources)
+    links = []
+    def move(cid, label):
+        sp = _d(root.get(cid))
+        try:
+            c = float(sp.get('change_pct_30d'))
+        except (TypeError, ValueError):
+            links.append({'link': label, 'state': 'unread'}); return
+        links.append({'link': label, 'change_30d_pct': round(c, 1), 'stressed': abs(c) >= 10})
+    move('silicon', 'Silicon line (Ferroglobe shares)')
+    move('semiconductors', 'Chips line (TSMC shares)')
+    move('rare_earths', 'Rare earths line (MP Materials shares)')
+    chips = _d(cs.get('semiconductors'))
+    lvl = chips.get('alert_level')
+    links.append({'link': 'Chip reporting', 'state': M.COMMODITY_LEVEL_WORDS.get(lvl, lvl or 'unread'),
+                  'stressed': _CM_RANK.get(lvl, 0) >= 3})
+    ts = _d(sources.get('military:chokepoint:taiwan_strait'))
+    band = str(ts.get('alert_level') or '').lower()
+    links.append({'link': 'Taiwan Strait (Military page)', 'state': band or 'unread',
+                  'stressed': band in ('contested', 'disrupted')})
+    ai = _d(_d(sources.get('blackswan:market:latest')).get('ai_thematic_read'))
+    z = ai.get('z')
+    links.append({'link': 'Market Watch semiconductor reading (chips vs the S&P 500, 24 months)',
+                  'state': ('z %.1f' % z) if isinstance(z, (int, float)) else 'unread',
+                  'stressed': isinstance(z, (int, float)) and abs(z) >= 2})
+    hot = [l['link'] for l in links if l.get('stressed')]
+    state = 'firing' if len(hot) >= 2 else 'standing_watch'
+    plain = ('The chip supply chain runs from quartz and silicon metal, through polysilicon and wafers, to the '
+             'chips made mostly in Taiwan, with rare-earth magnets alongside. Asifah reads its links together: '
+             'one link moving can be noise; two or more moving at once is a pattern worth a reader’s attention.')
+    return _item('chain_watch', 'chips', 'Chip supply chain watch', state,
+                 '%d of %d links stressed' % (len(hot), len(links)), plain, {}, [],
+                 facts={'links': links, 'stressed_links': hot,
+                        'watch_with': ['Commodities: silicon, chips and rare earths lines',
+                                       'Market Watch: the semiconductor reading',
+                                       'Military: the Taiwan Strait']},
+                 basis='commodity price lines + military chokepoint + market fragility',
+                 extra={'not_implied': ['a chip shortage', 'a forecast for chip stocks'],
+                        'standing_note': '' if state == 'firing' else M.TERMS['standing_watch']['plain']})
+
 
 def _price_moves(cs, sparks):
     """v1.3.0 -- commodities whose 30-day price move is BIG_MOVE_PCT or more.
@@ -395,13 +539,18 @@ def _price_moves(cs, sparks):
             'what_it_is': _txt(desc.split('. ')[0], 220),
             'top_producers': [M.humanise_id(x) for x in _l(t.get('top_producers'))[:4]],
             'top_consumers': [M.humanise_id(x) for x in _l(t.get('top_consumers'))[:4]],
-            'headlines': _titles(summ.get('top_signals'), 2),
+            'headlines': [h for h in _titles(summ.get('top_signals'), 6)
+                          if _about(cid, t.get('name'), h)][:2],
+            'used_in': _d(MOVE_MEANING.get(cid)).get('used_in', ''),
+            'a_rise_can_mean' if chg > 0 else 'a_fall_can_mean':
+                _l(_d(MOVE_MEANING.get(cid)).get('rise' if chg > 0 else 'fall')),
+            'watch_with': _l(_d(MOVE_MEANING.get(cid)).get('watch_with')),
         })
     rows.sort(key=lambda r: -abs(r['change_30d_pct']))
     return rows[:6]
 
 
-def pack_commodities(cache, sparks=None):
+def pack_commodities(cache, sparks=None, sources=None):
     cache = _d(cache)
     cs = _d(cache.get('commodity_summaries'))
     if not cs:
@@ -424,6 +573,13 @@ def pack_commodities(cache, sparks=None):
                                    'a forecast of where the price goes next']
                                   + (['a move in the commodity itself -- the line is a company share or fund']
                                      if r['price_proxy'] else [])}))
+    # v1.4.0 -- chip supply chain watch (always listed; leads only when firing)
+    try:
+        _root = _d(sparks)
+        _root = _d(_root.get('sparklines')) if isinstance(_root.get('sparklines'), dict) else _root
+        items.append(_chip_chain(cs, _root, sources))
+    except Exception as _e:
+        print('[Tracker voice] chip chain skipped: %s' % _e)
     try:
         import convergence_registry as _cr
         reg = {e.get('id'): e for e in getattr(_cr, 'CONVERGENCE_REGISTRY', []) if isinstance(e, dict)}
@@ -469,7 +625,9 @@ def pack_commodities(cache, sparks=None):
         rows = []
         for k, v in hot[:10]:
             rows.append({'commodity': v.get('name') or k, 'level': M.COMMODITY_LEVEL_WORDS.get(v.get('alert_level'), v.get('alert_level')),
-                         'loudest_headline': (_titles(v.get('top_signals'), 1) or [''])[0] if len(rows) < 3 else ''})
+                         # v1.4.0: only a headline that is ABOUT this commodity
+                         'loudest_headline': ([h for h in _titles(v.get('top_signals'), 6) if _about(k, v.get('name'), h)] or [''])[0]
+                                             if len(rows) < 3 else ''})
         items.append(_item(
             'commodities', 'pressure', 'Commodities under heavy news pressure', hot[0][1].get('alert_level'),
             M.COMMODITY_LEVEL_MEANING.get(hot[0][1].get('alert_level'), ''), t['plain'],
@@ -621,7 +779,7 @@ def pack(desk, sources=None):
         return pack_military(sources.get('military_tracker_cache'))
     if desk == 'commodities':
         return pack_commodities(sources.get('commodity_tracker_cache'),
-                                sources.get('commodity_sparkline_bundle'))
+                                sources.get('commodity_sparkline_bundle'), sources)
     return pack_market(sources)
 
 
@@ -721,6 +879,9 @@ PRICE MOVES (commodities desk)
 - A "price_move" item is a commodity whose price line moved 15% or more in 30 days. It is news even when the reporting is quiet and even when it is not new: a big move LEADS the headline and the So What unless a supply disruption outranks it. Never write "nothing new" while a price_move item is present; if it is long-running, say how long the move has held.
 - Say what moved and by how much, then WHY: if its headlines explain the move, say so; if they do not, say the reporting does not explain it (that gap is itself a finding).
 - Then who feels it: the industries that use it ("what_it_is") and the producers and buyers named.
+- Make the "why it matters" unmissable: name what the commodity is USED IN ("used_in"), then what a move in this direction CAN mean ("a_fall_can_mean" / "a_rise_can_mean") -- as possibilities to weigh, never a forecast, and say which the headlines support, if any. End with where else to look ("watch_with").
+- Only quote a headline that is about the commodity. If none is supplied, say the reporting does not explain the move.
+- A "chain_watch" item reads several linked places together (the chip supply chain: silicon, chips, rare earths, the Taiwan Strait and the Market Watch semiconductor reading). When it is firing, it belongs in the So What: name the links that are moving and why their moving TOGETHER matters. When it is a standing watch, mention it only to say which link moved, if one did.
 - If "price_proxy" is set, the line is a company's shares or a fund, not the commodity price. Say so plainly in the first sentence about it, and that the move may be about that company (results, costs) rather than the commodity. Do not call it a commodity price move.
 
 PATTERN RECOGNITION (market desk)
@@ -881,9 +1042,30 @@ def item_sentence(it):
             hl = _l(f.get('headlines'))
             out += ('Reporting points to: \u201c%s.\u201d ' % _bare(hl[0]).split(' - ')[0].rstrip('.')) if hl else \
                    'The reporting this scan does not explain the move, which is itself worth noting. '
-            if f.get('what_it_is'):
-                out += 'What it is: %s.' % str(f['what_it_is']).rstrip('.')
+            if f.get('used_in'):
+                out += 'It goes into %s. ' % f['used_in']
+            means = _l(f.get('a_fall_can_mean') or f.get('a_rise_can_mean'))
+            if means:
+                out += 'A %s like this can mean %s. ' % ('rise' if f.get('direction') == 'up' else 'fall', _join(means[:3]))
+            elif f.get('what_it_is'):
+                out += 'What it is: %s. ' % str(f['what_it_is']).rstrip('.')
+            ww = _l(f.get('watch_with'))
+            if ww:
+                out += 'Watch with: %s.' % _join(ww[:3])
             return out.strip()
+        if kind == 'chain_watch':
+            links = _l(f.get('links'))
+            bits = []
+            for l in links:
+                if 'change_30d_pct' in l:
+                    bits.append('%s %+.1f%%' % (l['link'], l['change_30d_pct']))
+                else:
+                    bits.append('%s: %s' % (l['link'], l.get('state')))
+            hot = _l(f.get('stressed_links'))
+            lead = ('%d links of the chip supply chain are moving at once: %s. ' % (len(hot), _join(hot))
+                    if state == 'firing' else
+                    'Standing watch on the chip supply chain; %s. ' % ('one link is moving: ' + hot[0] if hot else 'no link is moving hard'))
+            return (lead + 'Today: ' + '; '.join(bits) + '. ' + mb.get('plain', '')).strip()
         if kind == 'commodities':
             rows = _l(f.get('commodities'))
             named = ['%s (%s)' % (r.get('commodity'), r.get('level')) for r in rows[:7]]
