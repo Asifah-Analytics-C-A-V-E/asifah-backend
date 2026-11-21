@@ -1,5 +1,13 @@
 """
-Asifah Analytics -- Prediction Markets WATCHLIST  (v1.0.1, Nov 5 2026)
+Asifah Analytics -- Prediction Markets WATCHLIST  (v1.1.0, Nov 21 2026)
+
+v1.1.0 (Nov 21 2026): 55 markets (was 37). us_iran_ceasefire re-pointed (the
+"continues through" ladder ran out after the ceasefire broke); Iran blockade,
+Kharg, airspace, Hormuz deal, US-Iran talks, Iran leadership; Turkey (Greece
+clash, F-35, early election); Israel strikes on Lebanon (daily, rolls monthly);
+Russia strikes an EU state; the Nov 13 FAA outage (cyber); NVIDIA after Huang.
+Test applied to every add (Rachel, Nov 21): "the big things that could have a
+real butterfly effect on geopolitics".
 
 This is the ONLY file to edit when adding, removing or re-pointing a market.
 The engine (prediction_markets.py) never needs to change for that.
@@ -36,6 +44,16 @@ OPTIONAL
   status_quo      True for "continues through <date>" ladders: there a YES only
                   means nothing happened, so only an early NO counts as news.
   unit            threshold items: what the number counts ("transit calls").
+  ref_template    Polymarket events that open a new slug each month: '{month}'
+                  and '{year}' are filled in (this month first, then next).
+  retire_after    'YYYY-MM-DD': stop reading the item after this date (one-off
+                  questions such as the FAA outage), so it drops off quietly.
+  osint           'none' when no Asifah tracker reads the question (cyber):
+                  the page then says so instead of comparing with a level.
+  osint_note      the sentence shown in that case.
+
+SELECTORS added in v1.1.0
+  'today'    a daily ladder ("strike on Nov 22?"): shows the next open day only.
 
 Rule (Rachel, Nov 5 2026): markets sit BESIDE the score. They never raise or
 lower an Asifah level. Their one job in the scoring layer is the divergence flag.
@@ -43,12 +61,12 @@ lower an Asifah level. Their one job in the scoring layer is the divergence flag
 
 WATCHLIST = [
     # ── Middle East ────────────────────────────────────────────────────
-    {'id': 'us_iran_ceasefire', 'label': 'Does the US-Iran ceasefire hold?',
-     'source': 'polymarket', 'ref': 'us-iran-ceasefire-continues-throughptptpt',
+    {'id': 'us_iran_ceasefire', 'label': 'Does a two-week pause in US strikes on Iran take hold?',
+     'source': 'polymarket', 'ref': 'us-x-iran-effective-ceasefire-begins-by-2-week-pause-20261108',
      'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'kinetic',
      'pages': ['gpi', 'military', 'region:me', 'iran'], 'countries': ['iran', 'us'],
-     'status_quo': True,
-     'note': 'Settles NO on any US air or missile strike that hits Iran, even a limited one.'},
+     'note': 'Settles YES only after 14 straight days with no US air or missile strike hitting Iran '
+             '(re-pointed Nov 21: the "ceasefire continues" contract ran out when the ceasefire broke).'},
     {'id': 'israel_iran_ceasefire', 'label': 'Does the Israel-Iran ceasefire hold?',
      'source': 'polymarket', 'ref': 'israel-x-iran-ceasefire-continues-throughptptpt-20260716224448963',
      'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'kinetic',
@@ -106,6 +124,51 @@ WATCHLIST = [
      'pages': ['military', 'region:me', 'region:europe', 'turkey', 'israel'],
      'countries': ['israel', 'turkey']},
 
+    {'id': 'iran_blockade_end', 'label': 'US announces an end to the naval blockade of Iran?',
+     'source': 'polymarket', 'ref': 'us-announces-end-of-iranian-blockade-byptptpt-20260713152715080',
+     'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'economic',
+     'pages': ['gpi', 'commodities', 'market-watch', 'region:me', 'iran'], 'countries': ['iran'],
+     'note': 'Needs an official US announcement of a general end or suspension; partial exemptions do not count.'},
+    {'id': 'kharg_island', 'label': 'Kharg Island (Iran\'s main oil terminal) leaves Iranian control?',
+     'source': 'polymarket', 'ref': 'kharg-island-no-longer-under-iranian-control-by-march-31',
+     'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'kinetic',
+     'pages': ['military', 'commodities', 'region:me', 'iran'], 'countries': ['iran']},
+    {'id': 'iran_airspace', 'label': 'Iran closes its airspace completely?',
+     'source': 'polymarket', 'ref': 'iran-full-airspace-closure-byptptpt-20260625195253028',
+     'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'kinetic',
+     'pages': ['military', 'region:me', 'iran'], 'countries': ['iran']},
+    {'id': 'us_iran_hormuz_deal', 'label': 'US-Iran agreement on the Strait of Hormuz?',
+     'source': 'polymarket', 'ref': 'us-iran-hormuz-agreement-byptptpt-20260803235957575',
+     'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'diplomatic',
+     'pages': ['gpi', 'commodities', 'region:me', 'iran'], 'countries': ['iran']},
+    {'id': 'us_iran_meeting', 'label': 'Next senior US-Iran diplomatic meeting?',
+     'source': 'polymarket', 'ref': 'next-us-iran-senior-diplomatic-meeting-byptptpt',
+     'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'diplomatic',
+     'pages': ['region:me', 'iran'], 'countries': ['iran']},
+    {'id': 'iran_leadership_change', 'label': 'Change at the top of Iran\'s leadership?',
+     'source': 'polymarket', 'ref': 'iran-leadership-change-by',
+     'selector': 'ladder', 'yes_means': 'neutral', 'axis': 'governance',
+     'pages': ['region:me', 'iran'], 'countries': ['iran']},
+    {'id': 'israel_strikes_lebanon_today', 'label': 'Israeli air or missile strike on Lebanon (next day)?',
+     'source': 'polymarket', 'ref': 'israel-military-action-against-lebanon-on-november-2026',
+     'ref_template': 'israel-military-action-against-lebanon-on-{month}-{year}',
+     'selector': 'today', 'yes_means': 'more_pressure', 'axis': 'kinetic',
+     'pages': ['military', 'region:me', 'lebanon', 'israel'], 'countries': ['lebanon', 'israel'],
+     'note': 'One contract per day (Jerusalem time). Counts air or missile strikes that hit Lebanon; '
+             'artillery, drones intercepted and ground fire do not count.'},
+    {'id': 'greece_turkey_clash', 'label': 'Greece-Turkey military engagement?',
+     'source': 'polymarket', 'ref': 'greece-x-turkey-military-engagement-by-june-30',
+     'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'kinetic',
+     'pages': ['military', 'region:europe', 'turkey', 'greece'], 'countries': ['turkey', 'greece']},
+    {'id': 'turkey_f35', 'label': 'Turkey rejoins the F-35 programme?',
+     'source': 'polymarket', 'ref': 'turkey-rejoins-f-35-program-byptptpt-20260708215709215',
+     'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'diplomatic',
+     'pages': ['region:europe', 'turkey'], 'countries': ['turkey']},
+    {'id': 'turkey_early_election', 'label': 'Turkey calls an early presidential election in 2026?',
+     'source': 'polymarket', 'ref': 'will-turkey-schedule-early-presidential-elections-in-2026',
+     'selector': 'single', 'yes_means': 'neutral', 'axis': 'governance',
+     'pages': ['region:europe', 'turkey'], 'countries': ['turkey']},
+
     # ── Europe ─────────────────────────────────────────────────────────
     {'id': 'russia_ukraine_ceasefire', 'label': 'Russia-Ukraine ceasefire agreement?',
      'source': 'polymarket', 'ref': 'russia-x-ukraine-ceasefire-agreement-by',
@@ -116,6 +179,11 @@ WATCHLIST = [
      'source': 'polymarket', 'ref': 'nato-x-russia-military-clash-in-2025',
      'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'kinetic',
      'pages': ['gpi', 'military', 'region:europe', 'russia', 'uk'], 'countries': ['russia']},
+    {'id': 'russia_strikes_eu', 'label': 'Russian air or missile strike on an EU member state?',
+     'source': 'polymarket', 'ref': 'russia-military-action-against-eu-country-byptptpt',
+     'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'kinetic',
+     'pages': ['gpi', 'military', 'region:europe', 'russia'], 'countries': ['russia'],
+     'note': 'Strikes that hit EU territory only; intercepted munitions, drones shot down and cyber do not count.'},
     {'id': 'putin_out', 'label': 'Putin out as president?',
      'source': 'polymarket', 'ref': 'putin-out-before-2027',
      'selector': 'ladder', 'yes_means': 'neutral', 'axis': 'governance',
@@ -209,4 +277,51 @@ WATCHLIST = [
      'source': 'polymarket', 'ref': 'crude-oil-all-time-high-by',
      'selector': 'ladder', 'yes_means': 'more_pressure', 'axis': 'economic',
      'pages': ['gpi', 'commodities', 'market-watch'], 'countries': []},
+
+    # ── Cyber & infrastructure (Nov 21 2026) ───────────────────────────
+    # No Asifah tracker reads cyber yet, so these carry osint='none': the page
+    # says "no tracker" instead of comparing with a country level.
+    {'id': 'faa_hack', 'label': 'US officially attributes the Nov 13 FAA outage to a hack?',
+     'source': 'polymarket', 'ref': 'faa-outage-attributed-to-hack',
+     'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'governance',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'osint': 'none',
+     'osint_note': 'Asifah has no cyber tracker yet, so there is nothing of ours to set beside this. Unread, not calm.',
+     'note': 'Needs an official US government attribution (or charges) by Nov 30. "Suspected" or "consistent with" does not count.'},
+    {'id': 'faa_foreign', 'label': 'US officially attributes the FAA outage to a foreign actor?',
+     'source': 'polymarket', 'ref': 'faa-outage-attributed-to-a-foreign-actor',
+     'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'governance',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'osint': 'none',
+     'osint_note': 'Asifah has no cyber tracker yet, so there is nothing of ours to set beside this. Unread, not calm.',
+     'note': 'Any foreign state, its forces or intelligence services, or a group based abroad. Official attribution by Nov 30 only.'},
+    {'id': 'faa_iran', 'label': 'US officially attributes the FAA outage to Iran?',
+     'source': 'polymarket', 'ref': 'faa-outage-attributed-to-iran',
+     'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'governance',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'osint': 'none',
+     'osint_note': 'Asifah reads Iran on the war, not on cyber: no tracker of ours measures this. Unread, not calm.',
+     'note': 'Must name the Iranian state, IRGC or intelligence services. Blaming a proxy (e.g. Hizballah) alone does not count.'},
+    {'id': 'faa_cause', 'label': 'What do officials say caused the FAA ground stop?',
+     'source': 'polymarket', 'ref': 'what-technical-failure-caused-the-faas-nationwide-ground-stop',
+     'selector': 'field', 'yes_means': 'neutral', 'axis': 'governance',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'osint': 'none',
+     'note': 'Not a single race: several causes can settle YES. Shows the likeliest.'},
+
+    # ── NVIDIA after Huang (Nov 21 2026) ───────────────────────────────
+    {'id': 'nvidia_huang_return', 'label': 'Jensen Huang returns to a formal role at NVIDIA?',
+     'source': 'polymarket', 'ref': 'jensen-huang-rejoins-nvidia-byptptpt',
+     'selector': 'ladder', 'yes_means': 'less_pressure', 'axis': 'economic',
+     'pages': ['market-watch'], 'countries': [],
+     'note': 'NVIDIA announced his resignation as CEO and director on Nov 12 2026. Honorary or informal roles do not count.'},
+    {'id': 'nvidia_next_ceo', 'label': 'Who is named NVIDIA\'s next CEO?',
+     'source': 'polymarket', 'ref': 'next-ceo-of-nvidia',
+     'selector': 'field', 'yes_means': 'neutral', 'axis': 'economic',
+     'pages': ['market-watch'], 'countries': [],
+     'note': 'Interim CEOs do not count. "Jensen Huang (No Change)" means no successor is named by end-2028.'},
+    {'id': 'largest_company', 'label': 'World\'s largest company at the end of December?',
+     'source': 'polymarket', 'ref': 'largest-company-end-of-december-2026',
+     'selector': 'field', 'yes_means': 'neutral', 'axis': 'economic',
+     'pages': ['market-watch'], 'countries': []},
 ]

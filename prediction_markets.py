@@ -16,6 +16,26 @@ WHAT IT DOES
     divergence  -- the odds and Asifah's own reading disagree (markets moving
                    toward pressure while we read quiet, or the reverse).
 
+v1.1.0 (Nov 21 2026) -- "WHERE OUR SIGNALS AGREE OR CONTRADICT THE TRADERS"
+  Rachel: the markets were most useful "when the API was able to discuss where
+  the signals from the news or telegram or other OSINT aligned or contradicted
+  the predictions markets". That used to live only in the GPI voice (a Claude
+  call). Every item now carries `vs_osint`: one deterministic sentence, built
+  here with no Claude call, comparing the traders' odds (and their 7-day move)
+  with Asifah's own GPI level for that country (and OUR 7-day move, banked in
+  pm:history under 'osint:<id>'). Verdicts:
+    aligned      both point the same way
+    contradicts  traders moved / sit one way while our signals read the other
+    ceiling      we read a hot theatre, traders still price THIS step as unlikely
+                 (not a contradiction: it shows where traders put the ceiling)
+    tension      traders expect a de-escalation our signals have not shown yet
+    mixed        traders split, nothing to compare cleanly
+    other_axis   our level for that country comes from different kinds of signal
+    unread       we have no current level for the country -- unread, not calm
+    no_tracker   no Asifah tracker covers the question at all (cyber)
+  It is display only. It is NOT a flag, so it never changes the GPI voice's
+  fingerprint and can never trigger a paid rewrite on its own.
+
 DOCTRINE (Rachel, Nov 5 2026)
   Markets sit BESIDE the score. Nothing here raises or lowers an Asifah level.
   Every number is labelled as traders' odds. Thin markets are shown but never
@@ -58,7 +78,7 @@ except Exception as _e:  # never take the backend down over a bad edit
     print('[Markets] watchlist failed to load: %s' % _e)
     WATCHLIST = []
 
-__version__ = '1.0.2'   # Nov 5 2026: (1.0.2) divergence reads canonical country ids (us->usa, uk->united_kingdom); (1.0.1) change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
+__version__ = '1.1.0'   # Nov 21 2026: (1.1.0) "vs Asifah" read on every item (aligned / contradicts / ceiling / unread), our own level history, daily 'today' selector, monthly ref_template roll, retire_after, osint='none'; Nov 5 2026: (1.0.2) divergence reads canonical country ids (us->usa, uk->united_kingdom); (1.0.1) change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
 
 POLY_API = 'https://gamma-api.polymarket.com'
 KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2'
@@ -283,17 +303,50 @@ def _thin(mk, source):
 # ════════════════════════════════════════════════════════════════════════
 # FETCHERS
 # ════════════════════════════════════════════════════════════════════════
+_MONTHS = ('january', 'february', 'march', 'april', 'may', 'june', 'july',
+           'august', 'september', 'october', 'november', 'december')
+
+
+def _template_slugs(item):
+    """This month's slug, then next month's (v1.1.0: events that roll monthly)."""
+    t = item.get('ref_template')
+    if not t:
+        return [item['ref']]
+    now = _now()
+    out = []
+    for add in (0, 1):
+        m, y = now.month + add, now.year
+        if m > 12:
+            m, y = 1, y + 1
+        out.append(t.replace('{month}', _MONTHS[m - 1]).replace('{year}', str(y)))
+    if item.get('ref') and item['ref'] not in out:
+        out.append(item['ref'])
+    return out
+
+
 def _fetch_poly(item):
-    data, err = _get_json('%s/events' % POLY_API, {'slug': item['ref']})
-    if err:
+    data, err, slug = None, None, item['ref']
+    for i, cand in enumerate(_template_slugs(item)):
+        if i:
+            time.sleep(POLY_SPACING_SEC)
+        d, e = _get_json('%s/events' % POLY_API, {'slug': cand})
+        if e:
+            err = e
+            continue
+        if d and not (len(d) == 1 and d[0].get('closed')):
+            data, err, slug = d, None, cand
+            break
+        if d and data is None:
+            data, slug = d, cand          # closed, but better than nothing
+    if err and not data:
         return None, err
     if not data:
         return None, 'slug not found on Polymarket (event removed or renamed)'
     ev = data[0]
     mk = [_norm_poly(m, ev) for m in (ev.get('markets') or [])]
     mk = [m for m in mk if not m['placeholder']]
-    return {'title': ev.get('title'), 'url': 'https://polymarket.com/event/%s' % item['ref'],
-            'markets': mk, 'event_end': _parse_dt(ev.get('endDate')),
+    return {'title': ev.get('title'), 'url': 'https://polymarket.com/event/%s' % slug,
+            'slug': slug, 'markets': mk, 'event_end': _parse_dt(ev.get('endDate')),
             'event_closed': bool(ev.get('closed'))}, None
 
 
@@ -382,6 +435,10 @@ def _select(item, ev, now):
     open_mk = [m for m in mks if m['open'] and m['prob'] is not None
                and (m['end'] is None or m['end'] > now)]
     sel = item['selector']
+    if sel == 'today':
+        # a daily ladder: only the next day still open says anything
+        nxt = sorted([m for m in open_mk if m['end']], key=lambda m: m['end'])
+        return (nxt[:1], [])
     if sel == 'single':
         pool = open_mk or [m for m in mks if m['resolved']]
         return (pool[:1], [])
@@ -479,7 +536,7 @@ def _our_level(item, gpi):
         if r and r.get('max_level') is not None:
             lv = int(r['max_level'])
             if best is None or lv > best['level']:
-                best = {'level': lv, 'country': c}
+                best = {'level': lv, 'country': c, 'axes': list(r.get('axes') or [])}
     return best
 
 
@@ -516,6 +573,8 @@ def _read_item(item, ev, err, hist, settled_mem, gpi, now):
 
     # 1. settled markets (inside this event) -- remembered for a week
     for m in ev['markets']:
+        if item['selector'] == 'today':
+            break                  # a day settling is the calendar, not news
         if not m['resolved'] or m['resolved_at'] is None:
             continue
         age_h = (now - m['resolved_at']).total_seconds() / 3600
@@ -588,7 +647,154 @@ def _read_item(item, ev, err, hist, settled_mem, gpi, now):
     out['our_level'] = _our_level(item, gpi)
     _flag(out, item)
     out['read'] = _sentence(out, item)
+    try:
+        out['vs_osint'] = _vs_osint(out, item, hist, now_ts)
+    except Exception as e:                       # display only: never break the item
+        out['vs_osint'] = None
+        print('[Markets] vs_osint failed for %s: %s' % (item.get('id'), str(e)[:120]))
     return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# v1.1.0: WHERE ASIFAH'S SIGNALS AND THE TRADERS AGREE OR DISAGREE
+# Deterministic. No Claude call. Display only: never a flag, never a level.
+# ════════════════════════════════════════════════════════════════════════
+VS_MOVE_7D = 0.05          # traders "moved" this week
+VS_EXPECTED = 0.60         # traders treat the pressure side as likely
+VS_DISCOUNTED = 0.15       # traders treat the pressure side as unlikely
+# which of our signal kinds can speak to a market's kind of question
+_AXIS_OK = {
+    'kinetic': {'kinetic'},
+    'diplomatic': {'diplomatic', 'kinetic'},     # ceasefires and deals answer the fighting
+    'economic': {'economic'},
+    'governance': {'governance'},
+    'humanitarian': {'humanitarian'},
+}
+OSINT_HIST_PREFIX = 'osint:'
+
+
+def _our_change_7d(hist, item_id, level, now_ts):
+    """Our own GPI level now minus a week ago (None until a week is banked)."""
+    series = hist.get(OSINT_HIST_PREFIX + item_id) or []
+    d = _hist_change(series, now_ts, level, 24 * 7, 18)
+    return int(round(d)) if d is not None else None
+
+
+_NAMES = {'us': 'the US', 'usa': 'the US', 'uk': 'the UK', 'united_kingdom': 'the UK',
+          'dprk': 'North Korea', 'north_korea': 'North Korea', 'drc': 'DR Congo', 'uae': 'the UAE'}
+
+
+def _cname(c):
+    return _NAMES.get(c) or c.replace('_', ' ').title()
+
+
+def _vs_osint(out, item, hist, now_ts):
+    if item.get('osint') == 'none':
+        return {'verdict': 'no_tracker',
+                'line': item.get('osint_note') or
+                'No Asifah tracker reads this question yet, so these odds stand alone. Unread, not calm.'}
+    ym = item.get('yes_means')
+    if ym not in ('more_pressure', 'less_pressure'):
+        return None                              # elections, rates: no pressure side to compare
+    if item.get('selector') in ('threshold', 'field'):
+        return None                              # one strike / one runner is not the question's answer
+    if not item.get('countries'):
+        return None                              # a market question with no country of ours (oil)
+    h = out.get('headline')
+    if not h or h.get('p_pressure') is None or h.get('prob') is None:
+        return None
+    ol = out.get('our_level')
+    if not ol:
+        names = ', '.join(_cname(c) for c in item['countries'])
+        return {'verdict': 'unread',
+                'line': 'Asifah has no current reading for %s, so there is nothing of ours to set '
+                        'beside these odds. Unread, not calm.' % names}
+    c = _cname(ol['country'])
+    lv = ol['level']
+    ok_axes = _AXIS_OK.get(item.get('axis'), {item.get('axis')})
+    if ol.get('axes') and not (set(ol['axes']) & ok_axes):
+        return {'verdict': 'other_axis',
+                'line': 'Asifah reads %s at L%d, but from %s signals, not %s ones, so there is no '
+                        'like-for-like comparison here.' % (c, lv, '/'.join(ol['axes']), item.get('axis'))}
+
+    p = h['p_pressure']                          # 0..1 on the PRESSURE side
+    yes = _pct(h['prob'])
+    d = h.get('change_7d')
+    mv = _toward(item, d) if (d is not None and abs(d) >= VS_MOVE_7D) else None
+    ours = _our_change_7d(hist, item['id'], lv, now_ts)
+    our_dir = None if ours is None else ('up' if ours >= 1 else 'down' if ours <= -1 else 'flat')
+    hot, quiet = lv >= 4, lv <= 2
+    if ours:
+        trend = ' (%s from L%d a week ago)' % ('up' if ours > 0 else 'down', lv - ours)
+    elif ours == 0:
+        trend = ' (unchanged on the week)'
+    else:
+        trend = ''
+    we = '%s at L%d%s' % (c, lv, trend)
+    relief = ym == 'less_pressure'
+
+    if mv:
+        pts = '%d points' % round(abs(d) * 100)
+        way = 'toward pressure' if mv == 'toward pressure' else 'away from pressure'
+        if mv == 'toward pressure':
+            if hot or our_dir == 'up':
+                v, line = 'aligned', ('Traders moved %s %s this week (YES now %s) and Asifah\'s signals agree: '
+                                      'we read %s.' % (pts, way, yes, we))
+            elif quiet:
+                v, line = 'contradicts', ('Traders moved %s %s this week (YES now %s) while Asifah\'s signals '
+                                          'read %s. Either traders are pricing something our sources have not '
+                                          'caught, or they are reacting to noise.' % (pts, way, yes, we))
+            else:
+                v, line = 'mixed', ('Traders moved %s %s this week (YES now %s); Asifah reads %s, elevated '
+                                    'but not climbing.' % (pts, way, yes, we))
+        else:
+            if hot and our_dir != 'down':
+                v, line = 'contradicts', ('Traders moved %s %s this week (YES now %s), but Asifah\'s signals '
+                                          'still read %s. Traders may be pricing a turn our sources do not show '
+                                          'yet, or looking past real risk.' % (pts, way, yes, we))
+            elif quiet or our_dir == 'down':
+                v, line = 'aligned', ('Traders moved %s %s this week (YES now %s) and Asifah\'s signals agree: '
+                                      'we read %s.' % (pts, way, yes, we))
+            else:
+                v, line = 'mixed', ('Traders moved %s %s this week (YES now %s); Asifah reads %s.'
+                                    % (pts, way, yes, we))
+    elif p >= VS_EXPECTED:                       # traders expect the pressure side
+        if lv >= 3:
+            v = 'aligned'
+            line = (('Traders and Asifah agree no relief is near: traders give YES only %s, and we read %s.'
+                     % (yes, we)) if relief else
+                    ('Traders and Asifah agree the pressure is real: traders put YES at %s, and we read %s.'
+                     % (yes, we)))
+        else:
+            v = 'contradicts'
+            line = (('Traders give relief only %s, yet Asifah\'s signals read %s: traders see more trouble '
+                     'than our sources do.' % (yes, we)) if relief else
+                    ('Traders put YES at %s, yet Asifah\'s signals read %s. Worth a second look at what '
+                     'traders are seeing.' % (yes, we)))
+    elif p <= VS_DISCOUNTED:                     # traders discount the pressure side
+        if relief and hot:
+            v, line = 'tension', ('Traders price the de-escalation as likely (YES at %s) while Asifah\'s '
+                                  'signals still read %s. Traders are betting on a turn our sources have not '
+                                  'shown yet.' % (yes, we))
+        elif relief:
+            v, line = 'aligned', ('Both read calm: traders put the de-escalation at %s and Asifah reads %s.'
+                                  % (yes, we))
+        elif hot:
+            v, line = 'ceiling', ('Asifah reads %s, yet traders give this particular step only %s. Not a '
+                                  'contradiction: a hot theatre can still make this outcome unlikely. It shows '
+                                  'where traders put the ceiling.' % (we, yes))
+        elif lv == 3:
+            v, line = 'aligned', ('Consistent: Asifah reads %s (elevated, not acute) and traders give this '
+                                  'step only %s.' % (we, yes))
+        else:
+            v, line = 'aligned', ('Both read calm: traders put YES at %s and Asifah reads %s.' % (yes, we))
+    else:
+        v, line = 'mixed', ('Traders are split (YES at %s); Asifah reads %s. No clean agreement or '
+                            'contradiction.' % (yes, we))
+    if h.get('thin'):
+        line += ' Thin market: weak evidence either way.'
+    return {'verdict': v, 'line': line, 'our_level': lv, 'our_country': ol['country'],
+            'our_change_7d': ours, 'weak': bool(h.get('thin'))}
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -654,6 +860,8 @@ def _sentence(out, item):
                 lead = 'Traders\' middle estimate: %s%s' % (md['label'].lower(), unit)
             else:
                 lead = 'Traders price "%s%s" at %s' % (h['option'], unit, h['odds'])
+        elif item['selector'] == 'today' and h['option']:
+            lead = 'Traders\' odds of yes on %s: %s' % (h['option'], h['odds'])
         elif item['selector'] == 'ladder' and h['option']:
             opt = h['option']
             if item.get('status_quo'):
@@ -693,7 +901,9 @@ def build(reason='scheduled'):
         gpi = _rget('gpi:global:latest')
         items, errors = [], {'polymarket': 0, 'kalshi': 0}
         counts = {'polymarket': 0, 'kalshi': 0}
-        for item in WATCHLIST:
+        today = now.strftime('%Y-%m-%d')
+        active = [w for w in WATCHLIST if not (w.get('retire_after') and today > w['retire_after'])]
+        for item in active:
             try:
                 if item['source'] == 'kalshi':
                     ev, err = _fetch_kalshi(item)
@@ -716,6 +926,10 @@ def build(reason='scheduled'):
             for v in ([rec.get('headline')] + list(rec.get('detail') or [])):
                 if v and v.get('prob') is not None:
                     hist.setdefault(v['market_id'], []).append([round(now_ts), round(v['prob'], 3)])
+            # v1.1.0: bank OUR level too, so "up from L3 a week ago" is ours to say
+            ol = rec.get('our_level')
+            if ol and ol.get('level') is not None:
+                hist.setdefault(OSINT_HIST_PREFIX + item['id'], []).append([round(now_ts), int(ol['level'])])
 
         # prune history and settled memory
         cutoff = now_ts - HISTORY_DAYS * 86400
@@ -737,6 +951,10 @@ def build(reason='scheduled'):
                          'read': i.get('read')} for i in flagged],
             'health': {
                 'watchlist_size': len(WATCHLIST),
+                'retired': len(WATCHLIST) - len(active),
+                'vs_osint': {k: sum(1 for i in items if (i.get('vs_osint') or {}).get('verdict') == k)
+                             for k in ('aligned', 'contradicts', 'ceiling', 'tension', 'mixed',
+                                       'other_axis', 'unread', 'no_tracker')},
                 'fetched': counts, 'fetch_errors': errors,
                 'ok': sum(1 for i in items if i.get('status') in ('ok', 'thin', 'settled')),
                 'thin': sum(1 for i in items if i.get('status') == 'thin'),
@@ -799,6 +1017,7 @@ def voice_context(max_items=8):
                         for s in (it.get('settled_recent') or [])[:2]],
             'contract_note': it.get('note'),
             'asifah_level_for_country': (it.get('our_level') or {}).get('level'),
+            'asifah_vs_traders': (it.get('vs_osint') or {}).get('line'),
         })
         for f in it['flags']:
             if f['kind'] in ('settled', 'consensus', 'divergence'):
@@ -930,6 +1149,7 @@ def register_prediction_markets_routes(app, start=True):
                  'depth': (i.get('headline') or {}).get('depth'),
                  'change_source': (i.get('headline') or {}).get('change_source'),
                  'flags': [f['kind'] for f in i.get('flags') or []],
+                 'vs_osint': (i.get('vs_osint') or {}).get('verdict'),
                  'read': i.get('read')} for i in p.get('items') or []]
         hist = _rget(HISTORY_KEY) or {}
         return jsonify({'version': __version__, 'generated_at': p.get('generated_at'),

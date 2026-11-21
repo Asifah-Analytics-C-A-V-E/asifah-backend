@@ -101,7 +101,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.5.0'   # Nov 5 2026: (1.5.0) attention layer as labelled context; (1.4.0) traders' odds as labelled context; (1.3.1) the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
+__version__ = '1.5.1'   # Nov 21 2026: (1.5.1) markets rows carry asifah_vs_traders; Nov 5 2026: (1.5.0) attention layer as labelled context; (1.4.0) traders' odds as labelled context; (1.3.1) the writer sees its previous read (no same-headline days); (1.3.0) freshness block + status of every check + one retry; (1.2.0) what_it_means
 
 VOICE_MODEL       = os.environ.get('VOICE_MODEL', 'claude-sonnet-5-5')
 VOICE_DAILY_CAP   = int(os.environ.get('VOICE_DAILY_CAP', '6'))
@@ -184,6 +184,7 @@ HONESTY
 TRADERS' ODDS
 - "markets_context" (when present) lists public prediction markets (Polymarket, Kalshi) that flagged something: the traders' odds now, how far they moved, any contract that settled, and Asifah's own level for that country. These are bets by traders, not evidence and not Asifah's assessment.
 - Always attribute: "traders on prediction markets price X at 30%", "betting markets moved sharply toward...". Never write "it is 30% likely" or present the odds as fact.
+- Each market row may carry "asifah_vs_traders": Asifah's own comparison of the traders' odds with our signal level for that country (agree, contradict, or "ceiling" -- a hot theatre where traders still price this particular step as unlikely). When one row says our signals and the traders disagree, that disagreement is usually the most useful sentence you can write about markets: say it plainly, attributed, and do not decide who is right.
 - A move in odds is not an event. A contract that SETTLED tells you how the contract's own rules resolved; when it carries a "contract_note", say what the rule counts (for example "a market that settles on any US strike hitting Iran settled NO"), because that can be narrower or broader than the news.
 - Use them for one thing: context on how traders read the same picture -- where they moved, where they are near-certain, or where they disagree with Asifah's reading. That disagreement is worth a sentence; say plainly which way it runs, without deciding who is right.
 - At most one sentence per view, only where relevant, and never as the lead of a headline on their own. Never forecast from them.
