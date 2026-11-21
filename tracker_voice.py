@@ -62,7 +62,7 @@ import requests
 
 import tracker_meanings as M
 
-__version__ = '1.5.1'   # Nov 21 2026: proxy lines (share prices) never called a commodity PRICE in the headline or So What either. 1.5.0 Nov 15 2026 (c): chokepoint SHIP COUNTS (IMF PortWatch) are facts on the military desk -- measured traffic outranks reporting; standing vs step change. 1.4.0 Nov 15 2026 (b): price moves say what they are USED FOR and what a rise or fall CAN mean; headlines must name the commodity; CHIP SUPPLY CHAIN watch (silicon + chips + rare earths + Taiwan Strait + the Market Watch semiconductor line) as one convergence item. 1.3.0: Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
+__version__ = '1.6.0'   # Nov 21 2026 (b): the market desk leads with THE WEEK (market_week.py: five sessions of cross-asset prices read for which fears they fit). 1.5.1 Nov 21 2026: proxy lines (share prices) never called a commodity PRICE in the headline or So What either. 1.5.0 Nov 15 2026 (c): chokepoint SHIP COUNTS (IMF PortWatch) are facts on the military desk -- measured traffic outranks reporting; standing vs step change. 1.4.0 Nov 15 2026 (b): price moves say what they are USED FOR and what a rise or fall CAN mean; headlines must name the commodity; CHIP SUPPLY CHAIN watch (silicon + chips + rare earths + Taiwan Strait + the Market Watch semiconductor line) as one convergence item. 1.3.0: Nov 15 2026: PRICE MOVES lead the commodities read -- a commodity that moved 15%+ in 30 days is an item with why/who-feels-it facts, and a stock or fund proxy is named as one. 1.2.0: Nov 6 2026: lane status is a hard fact (no 'none disrupted' next to a Disrupted tile); chokepoint evidence picks headlines about the passage. 1.1.0 Nov 3 2026: prose first -- grouped items, sentences not labels, deterministic fallback read
 PROMPT_VERSION = 'tracker-v7'          # part of the fingerprint: a prompt upgrade rewrites once
 
 DESKS = ('military', 'commodities', 'market')
@@ -89,7 +89,7 @@ SOURCE_KEYS = {
     'military': ['military_tracker_cache'],
     'commodities': ['commodity_tracker_cache', 'commodity_sparkline_bundle',
                     'military:chokepoint:taiwan_strait', 'blackswan:market:latest'],
-    'market': ['blackswan:market:latest', 'repricing:israel:latest',
+    'market': ['market:week:latest', 'blackswan:market:latest', 'repricing:israel:latest',
                'repricing:europe_ukraine:latest', 'repricing:korea:latest'],
 }
 
@@ -658,6 +658,35 @@ def pack_commodities(cache, sparks=None, sources=None):
 def pack_market(sources):
     bs = _d(sources.get('blackswan:market:latest'))
     items = []
+    # v1.6.0 (Nov 21 2026): THE WEEK -- five sessions of cross-asset prices, read for
+    # which fears they fit (market_week.py). It leads: the fragility read is monthly
+    # and cannot see a week like Nov 16-20. State = band + fear ids, so the writer
+    # is called again only when the SET of fears changes, never on a price tick.
+    wk = _d(sources.get('market:week:latest'))
+    if wk.get('band') and wk.get('band') != 'unread':
+        fears = _l(wk.get('fears'))
+        items.append(_item(
+            'week', 'tape', 'The week in markets',
+            '%s:%s' % (wk.get('band'), '+'.join(_l(wk.get('fear_ids'))) or 'none'),
+            wk.get('band_words'),
+            ('What the last five trading sessions of prices -- stocks, chips, bonds, the dollar, gold, '
+             'oil, crypto, junk bonds and world markets -- say investors are afraid of. A reading of '
+             'prices, not of reporting, and never advice.'),
+            {'global': ' '.join(_txt(f.get('global'), 220) for f in fears[:2]),
+             'economy': _txt(wk.get('summary'), 300)},
+            [],
+            facts={'headline_numbers': wk.get('headline'),
+                   'window': wk.get('window'),
+                   'fears_the_prices_fit': [{'fear': f.get('name'), 'what_it_reflects': f.get('reflects'),
+                                             'evidence': f.get('evidence'), 'wider_world': f.get('global'),
+                                             'strength_1_to_3': f.get('strength')} for f in fears[:6]],
+                   'not_yet_happening': [n.get('text') for n in _l(wk.get('not_yet'))],
+                   'context_not_scored': [c.get('text') for c in _l(wk.get('context'))],
+                   'world_markets_week_pct': ['%s %+.1f%%' % (w.get('name'), w.get('r5'))
+                                              for w in _l(wk.get('world'))[:8] if w.get('r5') is not None],
+                   'rule': ('Exposure, not instruction: explain what the prices reflect and where it can '
+                            'travel. Never advise buying, selling, holding or checking anyone\'s savings.')},
+            basis='market_week (daily closes, five sessions)'))
     if bs.get('band'):
         t = M.TERMS['fragility']
         band = bs.get('band')
@@ -755,9 +784,11 @@ def pack_market(sources):
         return None, 'no market detector payloads readable'
     facts = {
         'desk': 'market',
-        'desk_note': ('Two different reads: FRAGILITY (how exposed markets are to any shock, measured '
-                      'monthly) and CONFLICT REPRICING (whether money agrees with diplomacy in specific '
-                      'war zones, measured over about a week).'),
+        'desk_note': ('Three different reads: THE WEEK (what five trading sessions of prices say investors '
+                      'fear right now -- lead with it when its level is stressed or acute), FRAGILITY (how '
+                      'exposed markets are to any shock, measured monthly: the dry forest, not the lightning) '
+                      'and CONFLICT REPRICING (whether money agrees with diplomacy in specific war zones, '
+                      'measured over about a week).'),
         'items_to_explain': items[:MAX_ITEMS],
         'match_strength': _txt(_d(bs.get('match_strength')).get('text'), 260),
         'global_majors_near_highs': _l(_d(_d(bs.get('global_majors')).get('_sync')).get('near_high')),

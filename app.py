@@ -1639,6 +1639,15 @@ try:
 except Exception as e:
     print(f"[ME Backend] ⚠️ Prediction markets registration failed (non-fatal): {e}")
 
+# The week in markets (Nov 21 2026) -- five sessions of cross-asset prices read for
+# which fears they fit (AI unwind, forced selling, growth scare...). $0, no keys,
+# no Claude. Never scored. Routes: /api/market-week, /api/market-week/debug
+try:
+    from market_week import register_market_week_routes
+    register_market_week_routes(app, start=True)
+except Exception as e:
+    print(f"[ME Backend] ⚠️ Market week registration failed (non-fatal): {e}")
+
 # Attention layer (Nov 5 2026) -- traders' odds + commentary + Asifah's level,
 # side by side per country. Redis reads only, $0. Never scored.
 # Routes: /api/attention/<country>, /api/attention/summary
@@ -1836,7 +1845,7 @@ GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 # Reddit User Agent
 # v3.2.0 (Sep 21 2026) — honest UA. The spoofed Chrome string that lived here
 # was the only disguise on the platform and the only UA Reddit refused.
-ME_BACKEND_VERSION = '3.9.1'   # Nov 8 2026: memory probe (/api/memory)
+ME_BACKEND_VERSION = '3.9.2'   # Nov 21 2026: market_week (/api/market-week); Nov 8 2026: memory probe (/api/memory)
 
 # v3.3.0 -- cross-instance job ownership (Render runs 2 instances of this
 # backend; background threads must not run twice). Optional import so the
