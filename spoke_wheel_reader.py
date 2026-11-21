@@ -99,7 +99,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.6.1'
+__version__ = '1.6.2'   # Nov 21 2026: lebanon on the Turkey wheel (expansion_vector)
 
 # ============================================================
 # CONFIG
@@ -146,6 +146,7 @@ HUB_REGISTRY = {
             'syria': 'expeditionary_client', 'libya': 'expeditionary_client',
             'somalia': 'expeditionary_client', 'kazakhstan': 'turkic_affinity',
             'niger': 'arms_client',            # v1.6.1 -- drones, arms on credit, uranium interest
+            'lebanon': 'expansion_vector',     # v1.6.2 -- the Lebanon-vector ladder (Bilal Erdogan tour Nov 12-14 2026, post-UNIFIL offer)
         },
     },
     'iran': {
