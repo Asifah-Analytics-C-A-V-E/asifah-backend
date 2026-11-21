@@ -99,7 +99,7 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.6.0'
+__version__ = '1.6.1'
 
 # ============================================================
 # CONFIG
@@ -145,6 +145,7 @@ HUB_REGISTRY = {
             'greece': 'adversary', 'armenia': 'normalisation_track',
             'syria': 'expeditionary_client', 'libya': 'expeditionary_client',
             'somalia': 'expeditionary_client', 'kazakhstan': 'turkic_affinity',
+            'niger': 'arms_client',            # v1.6.1 -- drones, arms on credit, uranium interest
         },
     },
     'iran': {
@@ -160,6 +161,7 @@ HUB_REGISTRY = {
             'azerbaijan': 'friction', 'saudi_arabia': 'friction',
             'bahrain': 'friction', 'pakistan': 'friction', 'armenia': 'friction',
             'russia': 'peer', 'china': 'peer',
+            'niger': 'reported_interest',      # v1.6.1 -- uranium interest, RUMOUR TIER (unconfirmed)
         },
     },
     # China runs the LARGEST wheel on the platform -- BRI corridors reach three
@@ -184,6 +186,7 @@ HUB_REGISTRY = {
             'venezuela': 'resource_client', 'sudan': 'resource_client',
             'cuba': 'strategic_foothold',      # v1.5.1 -- reported listening posts
             'drc': 'resource_client', 'zimbabwe': 'resource_client',
+            'niger': 'resource_client',        # v1.6.1 -- CNPC oil + the Benin pipeline (45-day ultimatum Oct 2026)
             'solomon_islands': 'pacific_client', 'kiribati': 'pacific_client',
         },
     },
@@ -246,6 +249,7 @@ HUB_REGISTRY = {
             'poland': 'guarantor_ally', 'baltics': 'guarantor_ally',
             'ukraine': 'security_assistance', 'israel': 'guarantor_ally',
             'taiwan': 'security_assistance',
+            'niger': 're_engaging',            # v1.6.1 -- DFC $414M Dasa uranium + equipment, after the 2024 exit
             # Peers -- wheel-to-wheel, excluded from rim force-render
             'russia': 'peer', 'china': 'peer', 'iran': 'peer', 'dprk': 'peer',
         },
