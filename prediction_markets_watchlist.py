@@ -46,6 +46,8 @@ OPTIONAL
   unit            threshold items: what the number counts ("transit calls").
   ref_template    Polymarket events that open a new slug each month: '{month}'
                   and '{year}' are filled in (this month first, then next).
+  fades_after     'YYYY-MM-DD': after this date the item shows faded as old news
+                  (sorted last; a strip of only faded items collapses).
   retire_after    'YYYY-MM-DD': stop reading the item after this date (one-off
                   questions such as the FAA outage), so it drops off quietly.
   osint           'none' when no Asifah tracker reads the question (cyber):
@@ -284,28 +286,28 @@ WATCHLIST = [
     {'id': 'faa_hack', 'label': 'US officially attributes the Nov 13 FAA outage to a hack?',
      'source': 'polymarket', 'ref': 'faa-outage-attributed-to-hack',
      'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'governance',
-     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'fades_after': '2026-11-30', 'retire_after': '2026-12-08',
      'osint': 'none',
      'osint_note': 'Asifah has no cyber tracker yet, so there is nothing of ours to set beside this. Unread, not calm.',
      'note': 'Needs an official US government attribution (or charges) by Nov 30. "Suspected" or "consistent with" does not count.'},
     {'id': 'faa_foreign', 'label': 'US officially attributes the FAA outage to a foreign actor?',
      'source': 'polymarket', 'ref': 'faa-outage-attributed-to-a-foreign-actor',
      'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'governance',
-     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'fades_after': '2026-11-30', 'retire_after': '2026-12-08',
      'osint': 'none',
      'osint_note': 'Asifah has no cyber tracker yet, so there is nothing of ours to set beside this. Unread, not calm.',
      'note': 'Any foreign state, its forces or intelligence services, or a group based abroad. Official attribution by Nov 30 only.'},
     {'id': 'faa_iran', 'label': 'US officially attributes the FAA outage to Iran?',
      'source': 'polymarket', 'ref': 'faa-outage-attributed-to-iran',
      'selector': 'single', 'yes_means': 'more_pressure', 'axis': 'governance',
-     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'fades_after': '2026-11-30', 'retire_after': '2026-12-08',
      'osint': 'none',
      'osint_note': 'Asifah reads Iran on the war, not on cyber: no tracker of ours measures this. Unread, not calm.',
      'note': 'Must name the Iranian state, IRGC or intelligence services. Blaming a proxy (e.g. Hizballah) alone does not count.'},
     {'id': 'faa_cause', 'label': 'What do officials say caused the FAA ground stop?',
      'source': 'polymarket', 'ref': 'what-technical-failure-caused-the-faas-nationwide-ground-stop',
      'selector': 'field', 'yes_means': 'neutral', 'axis': 'governance',
-     'pages': ['market-watch', 'cyber'], 'countries': [], 'retire_after': '2026-12-08',
+     'pages': ['market-watch', 'cyber'], 'countries': [], 'fades_after': '2026-11-30', 'retire_after': '2026-12-08',
      'osint': 'none',
      'note': 'Not a single race: several causes can settle YES. Shows the likeliest.'},
 

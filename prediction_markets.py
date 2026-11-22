@@ -78,7 +78,7 @@ except Exception as _e:  # never take the backend down over a bad edit
     print('[Markets] watchlist failed to load: %s' % _e)
     WATCHLIST = []
 
-__version__ = '1.1.0'   # Nov 21 2026: (1.1.0) "vs Asifah" read on every item (aligned / contradicts / ceiling / unread), our own level history, daily 'today' selector, monthly ref_template roll, retire_after, osint='none'; Nov 5 2026: (1.0.2) divergence reads canonical country ids (us->usa, uk->united_kingdom); (1.0.1) change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
+__version__ = '1.1.1'   # Nov 22 2026: (1.1.1) 'fades_after' -- past-deadline questions fade, then drop at retire_after; a 60-85% lean is no longer called 'split'. Nov 21 2026: (1.1.0) "vs Asifah" read on every item (aligned / contradicts / ceiling / unread), our own level history, daily 'today' selector, monthly ref_template roll, retire_after, osint='none'; Nov 5 2026: (1.0.2) divergence reads canonical country ids (us->usa, uk->united_kingdom); (1.0.1) change_source only when there is a change; threshold items with a unit lead with the middle estimate; settled dates for the page
 
 POLY_API = 'https://gamma-api.polymarket.com'
 KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2'
@@ -788,9 +788,20 @@ def _vs_osint(out, item, hist, now_ts):
                                   'step only %s.' % (we, yes))
         else:
             v, line = 'aligned', ('Both read calm: traders put YES at %s and Asifah reads %s.' % (yes, we))
-    else:
+    elif p < 0.40 and hot and relief:
+        # v1.1.1: YES 60-85% on a relief question while we read L4+ is a lean, not a split
+        v, line = 'tension', ('Traders lean toward the calmer outcome (YES at %s) while Asifah\'s signals '
+                              'read %s. A milder gap than a contradiction, but worth watching: traders see '
+                              'more calm ahead than our sources show.' % (yes, we))
+    elif p < 0.40 and hot:
+        v, line = 'ceiling', ('Traders lean against this step (YES at %s) while Asifah reads %s: a soft '
+                              'ceiling -- escalation, but not necessarily this far.' % (yes, we))
+    elif p <= 0.60:
         v, line = 'mixed', ('Traders are split (YES at %s); Asifah reads %s. No clean agreement or '
                             'contradiction.' % (yes, we))
+    else:
+        v, line = 'mixed', ('Traders put YES at %s; Asifah reads %s. No clean agreement or contradiction.'
+                            % (yes, we))
     if h.get('thin'):
         line += ' Thin market: weak evidence either way.'
     return {'verdict': v, 'line': line, 'our_level': lv, 'our_country': ol['country'],
@@ -921,6 +932,12 @@ def build(reason='scheduled'):
             except Exception as e:
                 rec = {'id': item.get('id'), 'label': item.get('label'), 'status': 'unavailable',
                        'error': 'read crashed: %s' % str(e)[:120], 'flags': [], 'pages': item.get('pages')}
+            # v1.1.1: a one-off question whose deadline has passed fades (old news)
+            # until retire_after removes it. Display only: odds still read.
+            if item.get('fades_after') and today > item['fades_after']:
+                rec['stale'] = True
+                rec['stale_note'] = ('Deadline passed (%s): old news, waiting for the contract to settle.'
+                                     % item['fades_after'])
             items.append(rec)
             # record history for every market we displayed
             for v in ([rec.get('headline')] + list(rec.get('detail') or [])):

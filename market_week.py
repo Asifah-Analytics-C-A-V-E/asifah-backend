@@ -61,7 +61,7 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'   # Nov 22 2026: every instrument measured over the S&P's dates (bitcoin trades weekends); backup tickers (Israel, Saudi); credit explained in plain words with live 'signs it is changing'
 
 REDIS_KEY = 'market:week:latest'
 REDIS_TTL = 30 * 3600
@@ -112,8 +112,10 @@ WORLD = {
     'dax':    ('^GDAXI',    'Germany',     'europe'),
     'ftse':   ('^FTSE',     'UK',          'europe'),
     'cac':    ('^FCHI',     'France',      'europe'),
-    'ta35':   ('^TA35.TA',  'Israel',      'me'),
-    'tasi':   ('^TASI.SR',  'Saudi Arabia', 'me'),
+    # v1.1.0: Yahoo 404s '^TA35.TA' and returns no bars for '^TASI.SR' from Render;
+    # a list = try in order. EIS / KSA are the US-listed country funds (in dollars).
+    'ta35':   (['TA35.TA', '^TA35.TA', 'EIS'], 'Israel',  'me'),
+    'tasi':   (['^TASI.SR', 'KSA'],           'Saudi Arabia', 'me'),
     'bvsp':   ('^BVSP',     'Brazil',      'wha'),
     'mxx':    ('^MXX',      'Mexico',      'wha'),
     'eem':    ('EEM',       'Emerging markets fund', 'em'),
@@ -212,12 +214,43 @@ def _yield_pct(v):
     return v / 10.0 if v is not None and v > 20 else v
 
 
-def _summarise(series, kind):
+def _fetch_any(tickers):
+    """Try each ticker in turn (v1.1.0). Returns (series, ticker_used, error)."""
+    err = None
+    for tk in (tickers if isinstance(tickers, (list, tuple)) else [tickers]):
+        s, err = _fetch_daily(tk)
+        if s:
+            return s, tk, None
+        time.sleep(SPACING_SEC)
+    return None, None, err
+
+
+def _at_or_before(series, d):
+    best = None
+    for i, (dd, _) in enumerate(series):
+        if dd <= d:
+            best = i
+    return best
+
+
+def _summarise(series, kind, ref=None):
+    """ref = (base_date, as_of) of the S&P 500 (v1.1.0): every instrument is
+    measured over the SAME dates, so bitcoin's weekend trading or a holiday in
+    Tokyo does not quietly give it a different week."""
     if not series:
         return None
-    last_d, last = series[-1]
-    prev = series[-2][1] if len(series) >= 2 else None
-    base = series[-(SESSIONS + 1)] if len(series) >= SESSIONS + 1 else None
+    if ref:
+        i_last = _at_or_before(series, ref[1])
+        i_base = _at_or_before(series, ref[0])
+        if i_last is None:
+            return None
+        last_d, last = series[i_last]
+        prev = series[i_last - 1][1] if i_last >= 1 else None
+        base = series[i_base] if (i_base is not None and i_base < i_last) else None
+    else:
+        last_d, last = series[-1]
+        prev = series[-2][1] if len(series) >= 2 else None
+        base = series[-(SESSIONS + 1)] if len(series) >= SESSIONS + 1 else None
     rec = {'last': round(last, 4), 'as_of': last_d,
            'base_date': base[0] if base else None}
     if kind == 'yield':
@@ -234,24 +267,31 @@ def _summarise(series, kind):
 
 def _fetch_all():
     tape, world, missing = {}, {}, []
+    raw = {}
     for k, (tk, name, kind) in TAPE.items():
-        s, err = _fetch_daily(tk)
+        raw[k] = _fetch_any(tk)
         time.sleep(SPACING_SEC)
-        rec = _summarise(s, kind)
+    ref_s = (raw.get('spx') or (None,))[0] or (raw.get('spy') or (None,))[0]
+    ref = None
+    if ref_s and len(ref_s) >= SESSIONS + 1:
+        ref = (ref_s[-(SESSIONS + 1)][0], ref_s[-1][0])
+    for k, (tk, name, kind) in TAPE.items():
+        s, used, err = raw[k]
+        rec = _summarise(s, kind, ref)
         if rec:
-            rec.update(name=name, ticker=tk, kind=kind)
+            rec.update(name=name, ticker=used, kind=kind)
             tape[k] = rec
         else:
-            missing.append({'key': k, 'ticker': tk, 'why': err})
+            missing.append({'key': k, 'ticker': tk, 'why': err or 'no bar inside the S&P window'})
     for k, (tk, name, region) in WORLD.items():
-        s, err = _fetch_daily(tk)
+        s, used, err = _fetch_any(tk)
         time.sleep(SPACING_SEC)
-        rec = _summarise(s, 'pct')
+        rec = _summarise(s, 'pct', ref)
         if rec:
-            rec.update(name=name, ticker=tk, region=region)
+            rec.update(name=name, ticker=used, region=region)
             world[k] = rec
         else:
-            missing.append({'key': k, 'ticker': tk, 'why': err})
+            missing.append({'key': k, 'ticker': tk, 'why': err or 'no bar inside the S&P window'})
     return tape, world, missing
 
 
@@ -284,6 +324,32 @@ def _pm_item(pm, iid):
         if it.get('id') == iid:
             return it
     return None
+
+
+CREDIT_EXPLAIN = (
+    'Credit is the market where companies, banks and households BORROW. Stocks fall when investors lose '
+    'hope about future profits: painful for savings, but the economy keeps running. The danger is when '
+    'LENDERS get scared: companies cannot roll over their debts, hiring and investment stop, and defaults '
+    'follow. That is how a market scare becomes a recession -- 2008 was a credit crisis; the 2022 tech '
+    'slump mostly was not. "Not cracking yet" means lenders are still lending on normal terms: the scare '
+    'is about what things are worth, not about whether they can be paid for.')
+
+
+def _credit_watch(tape, eq):
+    """The signs that would mean credit IS cracking, each with today's reading.
+    Prices we measure, plus the news signs we cannot measure (said out loud)."""
+    hyg, ief, xlf = _v(tape, 'hyg'), _v(tape, 'ief'), _v(tape, 'xlf')
+    out = []
+    if hyg is not None:
+        out.append({'sign': 'Junk bonds themselves fall 1.5% or more in a week',
+                    'now': 'junk bonds %s' % _pc(hyg), 'tripped': hyg <= HY_DROP})
+    if xlf is not None and eq is not None:
+        out.append({'sign': 'Bank and finance shares fall 2+ points harder than the market',
+                    'now': 'banks %s vs S&P %s' % (_pc(xlf), _pc(eq)), 'tripped': (xlf - eq) <= -2.0})
+    out.append({'sign': 'In the news: company bond sales pulled, private-credit funds limiting withdrawals, '
+                        'a lender or bank needing rescue',
+                'now': 'not measured here -- watch the reporting', 'tripped': None})
+    return out
 
 
 ORDER = ['ai_unwind', 'war_supply', 'panic', 'forced_selling', 'credit_stress', 'growth_scare',
@@ -403,6 +469,7 @@ def read_week(tape, world, pm=None, transits=None):
 
     # 7. Credit -- fires, or is reported as the dog that did not bark
     hyg, ief = _v(tape, 'hyg'), _v(tape, 'ief')
+    credit_watch = _credit_watch(tape, eq)
     if hyg is not None and ief is not None:
         cg = round(hyg - ief, 2)
         # both: a Treasury rally alone (flight to safety) widens the gap without any lender pulling back
@@ -418,7 +485,8 @@ def read_week(tape, world, pm=None, transits=None):
             not_yet.append({'id': 'credit_stress', 'name': 'Not (yet) a credit scare',
                             'text': 'Junk bonds %s while Treasuries %s: so far this is a repricing of hopes, not '
                                     'a crisis of funding. This is the line to watch -- if lenders start '
-                                    'pulling back, the story changes.' % (_pc(hyg), _pc(ief))})
+                                    'pulling back, the story changes.' % (_pc(hyg), _pc(ief)),
+                            'explain': CREDIT_EXPLAIN, 'watch': credit_watch})
 
     # 8. War-supply shock -- or its absence
     if down and oil is not None and oil >= OIL_SHOCK:
@@ -530,6 +598,7 @@ def read_week(tape, world, pm=None, transits=None):
         summary += ' Credit is cracking too, which is what turns a market scare into an economic one.'
     title = '%s this week (%s)' % (moves, span)
     return {'band': band, 'band_words': words, 'headline': headline, 'title': title, 'summary': summary,
+            'credit_watch': credit_watch,
             'window': span, 'equities_r5': eq, 'fears': top, 'not_yet': not_yet,
             'context': context, 'world': wb,
             'fear_ids': sorted(ids)}
