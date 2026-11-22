@@ -97,7 +97,7 @@ except Exception as _lens_err:               # pragma: no cover
     LENS_AVAILABLE = False
     print(f'[Market BlackSwan] analog lens unavailable ({_lens_err})')
 
-VERSION = '1.6.0'   # Nov 11 2026 (pm): week-on-week match trend + who-carried-it to the GPI | v1.5.2 Nov 11 2026: + Paraguay ueno bank failure episode; library reseeds on a version change | v1.5.1 Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
+VERSION = '1.6.1'   # Nov 22 2026: PROVISIONAL episode 'ai_unwind_2026' (the week of Nov 16-20) -- carried, but excluded from matching and backtests until reviewed (Dec 5) | v1.6.0 Nov 11 2026 (pm): week-on-week match trend + who-carried-it to the GPI | v1.5.2 Nov 11 2026: + Paraguay ueno bank failure episode; library reseeds on a version change | v1.5.1 Nov 4 2026: the UK 10-year gilt reaches the lens (read from the Europe backend's
                     # uk_city_pulse via shared Redis) | v1.5.0 Nov 3 2026: market-by-market reads (each market on its own index + currency, matched
                     # against every episode) and the analog lens (chain, interval, effects, live checks)
                     # via market_analog_lens.py | v1.4.0 Oct 5 2026: +4 majors (HSI/KOSPI/BVSP/TA35), +8 episodes
@@ -1013,6 +1013,30 @@ EPISODES = [
               'premium on USDT is a price on distrust that no bank statement shows. '
               'Small market, big mechanism; Paraguay is also Taiwan\'s last South '
               'American ally, so who lends it the money matters beyond markets.')},
+
+    # Nov 22 2026 -- PROVISIONAL. Rachel: "my spidy sense is we will look back at
+    # this as something to add to our library for future comparisons."
+    # 'provisional': True keeps it OUT of similarity matching (the current month
+    # would otherwise match itself at ~100%) and out of the lead-time backtest
+    # (the event is still unfolding). At review (calendar: Dec 5 2026): confirm
+    # the label, the drawdown, whether CREDIT held or cracked, then drop the flag.
+    {'id': 'ai_unwind_2026', 'region': 'wha', 'provisional': True,
+     'source_url': 'https://theglassdesk.substack.com/p/weekly-market-review-nov-20-2026',
+     'label': 'AI-leader unwind (PROVISIONAL)', 'anchor': '2026-10', 'event_month': '2026-11',
+     'type': 'correction',
+     'drawdown': 'week of Nov 16-20: Nasdaq -10%, S&P -8.6% (-11.6% from the Oct record), NVIDIA -23%, VIX 35.9',
+     'data_spine': 'full',
+     'mechanism': ('the market\'s most concentrated leader loses its founder-CEO (Nov 12) and then faces '
+                   'a reported SEC accounting inquiry (Nov 20) -> chip stocks fall twice as hard as the '
+                   'market -> near-term fear inverts the VIX curve -> forced selling takes gold, silver and '
+                   'crypto down WITH stocks -> bonds rally and oil falls (slowdown priced) while the Fed is '
+                   'still expected to hike -> credit (so far) holds'),
+     'note': ('PROVISIONAL until reviewed. Weekly fear fingerprint from market_week.py: ai_unwind, panic, '
+              'forced_selling, growth_scare, no_fed_put, dollar_squeeze, global_contagion; credit NOT '
+              'cracking (junk bonds -0.8%, banks held up better than the index). Context: outages '
+              '(FAA, banks, cloud) officially not a cyberattack; oil fell while Hormuz traffic read '
+              'near-halted. The question for the review: did credit hold (a repricing of hopes) or '
+              'crack (a funding crisis)? That decides whether this is filed beside 2018/2022 or 2008.')},
 ]
 
 CONTROL_MONTHS = ['1995-06', '2004-06', '2013-06', '2016-06']
@@ -1050,6 +1074,8 @@ def seed_episode_library(data):
 def similarity_matches(current_active, library, top_n=3):
     scored = []
     for ep in library:
+        if ep.get('provisional'):
+            continue                     # v1.6.1: unreviewed / still unfolding -- never a match
         j = _jaccard(current_active, ep.get('active_features', []))
         scored.append({'id': ep['id'], 'label': ep['label'],
                        'region': ep.get('region', 'wha'),   # v1.4.0
@@ -1121,6 +1147,8 @@ def run_backtest(data, start='1992-01'):
     episode_reads = []
     spine_start = timeline[0]['month'] if timeline else None
     for ep in EPISODES:
+        if ep.get('provisional'):
+            continue                     # v1.6.1: no lead-time read for an event still unfolding
         ev = ep['event_month']
         prior = [t for t in timeline if t['month'] < ev]
         if not prior:

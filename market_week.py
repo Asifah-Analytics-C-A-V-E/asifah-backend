@@ -61,9 +61,29 @@ from datetime import datetime, timezone
 
 import requests
 
-__version__ = '1.1.0'   # Nov 22 2026: every instrument measured over the S&P's dates (bitcoin trades weekends); backup tickers (Israel, Saudi); credit explained in plain words with live 'signs it is changing'
+__version__ = '1.2.0'   # Nov 22 2026 (b): ARCHIVE -- every day's fear pattern is banked (market:week:archive) + a week library (provisional: Nov 16-20 2026); 'echoes' = closest past weeks once the record has any. (1.1.0) Nov 22 2026: every instrument measured over the S&P's dates (bitcoin trades weekends); backup tickers (Israel, Saudi); credit explained in plain words with live 'signs it is changing'
 
 REDIS_KEY = 'market:week:latest'
+ARCHIVE_KEY = 'market:week:archive'      # v1.2.0: {as_of: compact fingerprint}
+ARCHIVE_MAX = 520                         # ~2 years of trading days
+ARCHIVE_TTL = 3 * 365 * 86400
+ECHO_MIN = 0.5                            # Jaccard on fear sets
+ECHO_GAP_DAYS = 14                        # never compare a week with itself
+
+# v1.2.0 -- THE WEEK LIBRARY (scaffolding, Nov 22 2026). Hand-entered weeks
+# whose fear pattern is worth comparing against. 'provisional' entries are shown
+# as context but never offered as an echo until reviewed (calendar: Dec 5 2026).
+# At review: add older reference weeks (Mar 2020, Aug 2015, Aug 2024 yen-carry
+# unwind, Oct 2008...) by RE-COMPUTING their fear sets from Yahoo history with
+# read_week(), never by typing fear ids from memory.
+WEEK_LIBRARY = [
+    {'id': 'ai_unwind_2026', 'as_of': '2026-11-20', 'window': 'Nov 13 to Nov 20 2026',
+     'label': 'AI-leader unwind (Huang exit, SEC inquiry report)', 'provisional': True,
+     'fear_ids': ['ai_unwind', 'dollar_squeeze', 'forced_selling', 'global_contagion',
+                  'growth_scare', 'no_fed_put', 'panic'],
+     'credit': 'held (junk bonds -0.8%, banks better than the index)',
+     'equities_r5': -8.61},
+]
 REDIS_TTL = 30 * 3600
 REFRESH_EVERY_SEC = 6 * 3600
 MANUAL_REFRESH_MIN_GAP = 600
@@ -630,6 +650,7 @@ def build(reason='scheduled'):
                        'missing': missing, 'seconds': round(time.time() - t0, 1)},
         })
         if tape.get('spx') or tape.get('spy'):
+            payload['echoes'] = _archive_and_echo(payload)
             _rset(REDIS_KEY, payload, REDIS_TTL)
         _state['served'], _state['served_at'] = payload, time.time()
         print('[Market week] built: %s, %d fears, %d/%d instruments in %.0fs'
@@ -638,6 +659,65 @@ def build(reason='scheduled'):
         return payload
     finally:
         _lock.release()
+
+
+def _jac(a, b):
+    a, b = set(a or []), set(b or [])
+    return len(a & b) / len(a | b) if (a or b) else 0.0
+
+
+def _archive_and_echo(payload):
+    """Bank today's fingerprint (one GET + at most one SET per build) and
+    return the closest past weeks. Empty until the record has history: an
+    empty list means 'no record yet', never 'nothing like this has happened'."""
+    as_of = (payload.get('tape', {}).get('spx') or payload.get('tape', {}).get('spy') or {}).get('as_of')
+    arch = _rget(ARCHIVE_KEY) or {}
+    if not isinstance(arch, dict):
+        arch = {}
+    fp = {'window': payload.get('window'), 'band': payload.get('band'),
+          'fear_ids': payload.get('fear_ids') or [], 'equities_r5': payload.get('equities_r5'),
+          'credit_tripped': 'credit_stress' in (payload.get('fear_ids') or [])}
+    if as_of and arch.get(as_of) != fp:
+        arch[as_of] = fp
+        if len(arch) > ARCHIVE_MAX:
+            for k in sorted(arch)[:len(arch) - ARCHIVE_MAX]:
+                arch.pop(k, None)
+        _rset(ARCHIVE_KEY, arch, ARCHIVE_TTL)
+    cur = payload.get('fear_ids') or []
+    if not cur or not as_of:
+        return []
+    try:
+        cut = datetime.strptime(as_of, '%Y-%m-%d').toordinal() - ECHO_GAP_DAYS
+    except Exception:
+        return []
+    cands = []
+    for d, f in arch.items():
+        try:
+            if datetime.strptime(d, '%Y-%m-%d').toordinal() > cut:
+                continue
+        except Exception:
+            continue
+        cands.append({'as_of': d, 'label': 'Week to %s' % _nice(d), 'window': f.get('window'),
+                      'fear_ids': f.get('fear_ids'), 'equities_r5': f.get('equities_r5'),
+                      'source': 'archive', 'j': _jac(cur, f.get('fear_ids'))})
+    for w in WEEK_LIBRARY:
+        if w.get('provisional') or w['as_of'] == as_of:
+            continue
+        cands.append(dict(w, source='library', j=_jac(cur, w.get('fear_ids'))))
+    cands = [c for c in cands if c['j'] >= ECHO_MIN]
+    cands.sort(key=lambda c: -c['j'])
+    # one per stretch: keep the best day of each run of near-identical days
+    out = []
+    for c in cands:
+        if any(abs(datetime.strptime(c['as_of'], '%Y-%m-%d').toordinal() -
+                   datetime.strptime(o['as_of'], '%Y-%m-%d').toordinal()) < 7 for o in out):
+            continue
+        c['similarity_pct'] = round(c.pop('j') * 100)
+        c['shared'] = sorted(set(cur) & set(c.get('fear_ids') or []))
+        out.append(c)
+        if len(out) >= 2:
+            break
+    return out
 
 
 def latest():
