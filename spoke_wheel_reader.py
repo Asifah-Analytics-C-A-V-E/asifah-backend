@@ -99,7 +99,8 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.6.2'   # Nov 21 2026: lebanon on the Turkey wheel (expansion_vector)
+__version__ = '1.6.3'   # Nov 22 2026: RWANDA hub (mini wheel); car on the UAE, China and US wheels
+# v1.6.2 Nov 21 2026: lebanon on the Turkey wheel (expansion_vector)
 
 # ============================================================
 # CONFIG
@@ -188,6 +189,7 @@ HUB_REGISTRY = {
             'cuba': 'strategic_foothold',      # v1.5.1 -- reported listening posts
             'drc': 'resource_client', 'zimbabwe': 'resource_client',
             'niger': 'resource_client',        # v1.6.1 -- CNPC oil + the Benin pipeline (45-day ultimatum Oct 2026)
+            'car': 'resource_client',          # v1.6.3 -- Chinese-run gold sites in the west
             'solomon_islands': 'pacific_client', 'kiribati': 'pacific_client',
         },
     },
@@ -251,6 +253,7 @@ HUB_REGISTRY = {
             'ukraine': 'security_assistance', 'israel': 'guarantor_ally',
             'taiwan': 'security_assistance',
             'niger': 're_engaging',            # v1.6.1 -- DFC $414M Dasa uranium + equipment, after the 2024 exit
+            'car': 're_engaging',              # v1.6.3 -- Africom assessments (Feb 2026), Treasury designations on Wagner-linked firms
             # Peers -- wheel-to-wheel, excluded from rim force-render
             'russia': 'peer', 'china': 'peer', 'iran': 'peer', 'dprk': 'peer',
         },
@@ -282,11 +285,31 @@ HUB_REGISTRY = {
             'mali':         'resource_client',
             'somalia':      'port_concession',
             'libya':        'proxy_backing',
+            'car':          'resource_client',   # v1.6.3 -- the declared-gold export destination
             # Near abroad
             'yemen':        'proxy_backing',
             'saudi_arabia': 'rival_gulf',
             # Peers -- wheel-to-wheel, excluded from rim force-render
             'israel': 'peer', 'iran': 'peer', 'us': 'peer',
+        },
+    },
+    # v1.6.3 Nov 22 2026 -- RWANDA, the platform's first MINI WHEEL.
+    # Rwanda projects with a small, disciplined army that other governments
+    # hire or invite: RDF troops guard Touadera alongside (and under) MINUSCA
+    # in CAR, and deployed to Cabo Delgado for Mozambique. The DRC node is a
+    # different relationship entirely: UN experts say Kigali backs M23
+    # (Kigali denies it), so the class is 'proxy_backing' -- the CONTESTED
+    # claim, attributed on every page that renders it, never asserted.
+    #
+    # SCAFFOLD: only CAR writes a Rwanda spoke today. DRC and Mozambique
+    # render NOT REPORTING until their trackers exist -- roadmap, said aloud.
+    'rwanda': {
+        'title': 'RWANDA WHEEL',
+        'icon': '\U0001F1F7\U0001F1FC',
+        'node_classes': {
+            'car':        'security_partner',
+            'mozambique': 'security_partner',
+            'drc':        'proxy_backing',
         },
     },
 }
@@ -327,7 +350,7 @@ COUNTRY_TO_REGION = {
     'somalia': 'africa', 'somaliland': 'africa', 'drc': 'africa',
     'ethiopia': 'africa', 'kenya': 'africa', 'nigeria': 'africa',
     'zimbabwe': 'africa', 'chad': 'africa', 'mozambique': 'africa',
-    'madagascar': 'africa', 'guinea': 'africa', 'djibouti': 'africa',
+    'madagascar': 'africa', 'rwanda': 'africa', 'uganda': 'africa', 'guinea': 'africa', 'djibouti': 'africa',
     'equatorial_guinea': 'africa', 'south_africa': 'africa',
     # North Africa sits in AFRICA for breadth even though these trackers are
     # primary on the ME backend (backend-single-source is a HOSTING decision;
@@ -516,7 +539,7 @@ _NESTED_HUB_CONTAINERS = ('inbound', 'outbound', 'hub_touches', 'external',
 # so it stops being counted as a contested THIRD country there. Correct -- a hub
 # touching a hub is not a node being fought over -- but it is a visible change.
 _KNOWN_HUBS = ('russia', 'turkey', 'iran', 'china', 'israel', 'dprk', 'us',
-               'uae')
+               'uae', 'rwanda')   # v1.6.3 rwanda
 
 
 def _hub_tokens(key):
@@ -540,6 +563,7 @@ _HUB_AFFINITY_HINTS = {
     # generic token rule already catches uae_spoke / uae_axis / uae_plug.
     'uae':    ('uae_spoke', 'uae_axis', 'uae_plug', 'dmcc', 'gulf_gold',
                'emirati', 'adnoc', 'dp_world', 'edge_rafael'),
+    'rwanda': ('rwanda_spoke', 'rwanda_axis', 'kagame', 'kigali'),
 }
 
 
