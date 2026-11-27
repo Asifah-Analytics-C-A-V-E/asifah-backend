@@ -2911,6 +2911,36 @@ _set('rwanda', 'oil', {'role': 'consumer', 'weight': 0.6, 'data_as_of': _V,
               "target. Watch: corridor disruptions in Kenya and Tanzania, the franc (about 1,477 to the dollar, "
               "Nov 2026).")})
 
+# Nov 27 2026 -- MOZAMBIQUE refresh (the Jul 2026 notes still said Total "sat
+# under force majeure"; force majeure was lifted 7 Nov 2025 and the project
+# fully restarted 29 Jan 2026). Overrides the base-dict entries above.
+_set('mozambique', 'natural_gas', {'role': 'producer', 'weight': 1.3, 'data_as_of': _V,
+     'regime_flags': ['conflict_supply_coupling'],
+     'note': ("Rovuma Basin (~100+ tcf) -- the platform's textbook conflict-commodity coupling. THREE PROJECTS: "
+              "Eni's Coral Sul FLNG has exported since Q4 2022 (offshore = insurgent-proof) and Coral Norte "
+              "(3.55 Mtpa, FID Oct 2025) began drilling in Nov 2026 for first LNG in 2028. TotalEnergies' $20B "
+              "Mozambique LNG (13.1 Mtpa, onshore at Afungi) lifted force majeure 7 Nov 2025 and fully restarted "
+              "29 Jan 2026, first LNG targeted 2029 -- behind 6,300+ Rwandan troops; UK Export Finance and the "
+              "Dutch withdrew about $1.15B in Dec 2025 (Total replaced the cover; US EXIM stayed). ExxonMobil's "
+              "Rovuma LNG (18.6 Mtpa, ~$26-30B; revised plan approved by cabinet Nov 2026) targets FID by end-2026 "
+              "and start-up around 2031. LNG is the state's projected fiscal exit (public debt 91.4% of GDP, no IMF "
+              "programme), so insurgent reach toward Afungi is a sovereign-credit variable. Watch: Rovuma FID, "
+              "attacks moving south and west outside the guarded coast, who funds the Rwandan force, Coral Norte "
+              "start-up.")})
+_set('mozambique', 'graphite', {'role': 'producer', 'weight': 1.2, 'rank': 2, 'data_as_of': _V,
+     'regime_flags': ['conflict_supply_coupling'],
+     'note': ("🥈 World's #2 natural graphite producer, anchored by Balama (Syrah Resources) -- the largest natural "
+              "graphite mine on Earth and the West's main ex-China anode bet (Syrah's Vidalia, Louisiana plant; "
+              "nearly $250M in US DFC and DOE loans; Tesla offtake). Halted under force majeure in Dec 2024 by "
+              "post-election unrest, restarted in 2025 with shipments via Pemba resumed. Chronically interruptible "
+              "(protests, the insurgency's spread toward Montepuez in 2026), and every stoppage tightens an anode "
+              "chain China already gates with export permits. Watch: Balama uptime, Pemba logistics, unrest in "
+              "southern Cabo Delgado.")})
+_set('mozambique', 'oil', {'role': 'consumer', 'weight': 0.5, 'data_as_of': _V,
+     'note': ("A gas producer that imports its refined fuel: a rising barrel lands on a state with public debt above "
+              "90% of GDP and no IMF programme (talks continue; decision expected Dec 2026). Fuel and freight shocks "
+              "also hit the Beira and Nacala corridors that serve landlocked Malawi, Zambia and Zimbabwe.")})
+
 # ============================================================================
 # LEADER COMMODITY INTERVENTIONS — v1.0
 # ============================================================================

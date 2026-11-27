@@ -115,6 +115,16 @@ COUNTRY_TO_REGION = {
     # ── Africa ──────────────────────────────────────────
     'drc':           'africa',
     'rwanda':        'africa',      # Nov 27 2026
+    'mozambique':    'africa',      # Nov 27 2026 (was falling through to 'global')
+    'angola':       'africa',      # Nov 27 2026: was falling through to 'global'
+    'botswana':     'africa',      # Nov 27 2026: was falling through to 'global'
+    'burkina_faso': 'africa',      # Nov 27 2026: was falling through to 'global'
+    'car':          'africa',      # Nov 27 2026: was falling through to 'global'
+    'guinea':       'africa',      # Nov 27 2026: was falling through to 'global'
+    'madagascar':   'africa',      # Nov 27 2026: was falling through to 'global'
+    'mali':         'africa',      # Nov 27 2026: was falling through to 'global'
+    'niger':        'africa',      # Nov 27 2026: was falling through to 'global'
+    'zambia':       'africa',      # Nov 27 2026: was falling through to 'global'
     'south_africa':  'africa',
     'morocco':       'africa',
     'sudan':         'africa',
