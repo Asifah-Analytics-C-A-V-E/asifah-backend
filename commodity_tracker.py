@@ -1681,6 +1681,12 @@ COMMODITY_KEYWORDS = {
 #             'regime_flags': ['sub_consumer_floor'],  # ← new optional field
 #             'note': "..."}
 #
+#   'contested_origin'     — (Nov 27 2026) Exports whose ORIGIN is disputed: UN
+#                            experts or NGOs say part of the volume is mined in a
+#                            neighbouring conflict zone and relabelled; the exporter
+#                            denies it. Rwanda's coltan and gold (DRC origin alleged).
+#                            Always written as an attributed claim, never a finding.
+#
 # Consumers of regime_flags (planned):
 #   - CAVE phase 2 — constraint-regime portfolio biases
 #   - Butterfly reader — cross-theater regime amplification
@@ -2877,6 +2883,33 @@ _set('singapore', 'oil', {
      'data_as_of': _V})
 _set('zambia', 'copper', {'role': 'producer', 'weight': 1.2, 'data_as_of': _V,
      'note': "Africa's #2 copper producer (Copperbelt) and the inland end of the Lobito corridor tagged on Angola; heavy Chinese ownership and debt-restructuring politics. Watch: mine output, power cuts from drought at Kariba, Lobito rail progress."})
+
+# ── F. RWANDA (Nov 27 2026) -- the Rwanda hub build starts here ──
+# Rwanda is a small producer with an outsized export line: its 3T minerals
+# (tin, tantalum, tungsten) and gold are where the DRC war, US sanctions and
+# Chinese demand meet. The DRC-origin question is ATTRIBUTED, never asserted.
+_set('rwanda', 'tantalum', {'role': 'producer', 'weight': 1.1, 'data_as_of': _V,
+     'regime_flags': ['contested_origin'],
+     'note': ("One of the world's largest coltan (tantalum) exporters by volume. Minerals earned about $1.75B in 2024 "
+              "and 3T (tin, tantalum, tungsten) shipments rose 46% in 2025; the Nyakabingo mine's tungsten has been "
+              "reported at up to 20% of US primary tungsten concentrate use. UN experts, Global Witness and Amnesty "
+              "(Sep 2026) report Congolese coltan -- including from M23-held Rubaya -- passing through Rwandan "
+              "exporters; Kigali denies it and points to traceability schemes. Rwandan ores have had tariff-free "
+              "access to China since 1 May 2026. Watch: UN Group of Experts reports, who holds Rubaya, US/EU "
+              "due-diligence or sanctions actions, traceability-scheme suspensions.")})
+_set('rwanda', 'gold', {'role': 'transit', 'weight': 0.8, 'data_as_of': _V,
+     'regime_flags': ['contested_origin'],
+     'note': ("Kigali hosts gold refining and exports gold to the UAE. UN experts allege eastern Congolese gold "
+              "transits Rwanda (as it does Uganda and Burundi) toward UAE refiners; Kigali denies it. Watch: UN "
+              "Group of Experts findings, UAE import data, any refinery sanctions.")})
+_set('rwanda', 'coffee', {'role': 'producer', 'weight': 0.5, 'data_as_of': _V,
+     'note': ("Coffee (with tea) is Rwanda's main farm export; Chinese tariff-free access from 1 May 2026 widened "
+              "the market. Watch: harvest, export prices, the AGOA exclusion from January 2027 (US market).")})
+_set('rwanda', 'oil', {'role': 'consumer', 'weight': 0.6, 'data_as_of': _V,
+     'note': ("Landlocked: every litre comes up the Northern (Mombasa) or Central (Dar es Salaam) corridors. A fuel "
+              "price shock lands on inflation, already 15.7% in August 2026 (IMF), above the central bank's 5% "
+              "target. Watch: corridor disruptions in Kenya and Tanzania, the franc (about 1,477 to the dollar, "
+              "Nov 2026).")})
 
 # ============================================================================
 # LEADER COMMODITY INTERVENTIONS — v1.0

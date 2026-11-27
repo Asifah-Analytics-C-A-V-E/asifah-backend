@@ -110,7 +110,7 @@ REGIONAL_BASELINE_TEMPLATES = {
         'context_actors': ['nigeria', 'somalia', 'sudan', 'south_sudan', 'libya', 'mali',
                            'djibouti', 'drc', 'wagner_africa', 'niger',
                            'burkina_faso', 'ethiopia', 'kenya',
-                           'central_african_republic', 'chad', 'mozambique',
+                           'central_african_republic', 'chad', 'mozambique', 'rwanda',
                            'madagascar', 'equatorial_guinea', 'guinea'],
     },
 }
@@ -215,6 +215,7 @@ COUNTRY_DISPLAY = {
     'central_african_republic': 'the Central African Republic',
     'chad':                     'Chad',
     'mozambique':               'Mozambique',
+    'rwanda':                   'Rwanda',
     'madagascar':               'Madagascar',
     'equatorial_guinea':        'Equatorial Guinea',
     'guinea':                   'Guinea',

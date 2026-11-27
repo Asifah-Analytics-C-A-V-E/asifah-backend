@@ -299,7 +299,7 @@ REGIONAL_THEATRES = {
         'order': 4,
         'actors': ['nigeria', 'somalia', 'mali', 'niger', 'burkina_faso', 'drc',
                    'sudan', 'south_sudan', 'libya', 'ethiopia', 'kenya', 'djibouti',
-                   'central_african_republic', 'chad', 'mozambique', 'madagascar',
+                   'central_african_republic', 'chad', 'mozambique', 'rwanda', 'madagascar',
                    'equatorial_guinea', 'guinea', 'wagner_africa'],
         'description': 'AFRICOM area — Sahel junta belt, Horn of Africa, Lake Chad Basin, Great Lakes (DRC/Rwanda), Sudan civil war, Wagner/Africa Corps footprint'
     },
@@ -3787,6 +3787,43 @@ MILITARY_ACTORS = {
         'rss_feeds': [
             'https://news.google.com/rss/search?q=cabo+delgado+OR+mozambique+insurgency&hl=en&gl=US&ceid=US:en',
             'https://news.google.com/rss/search?q=mozambique+lng+security+OR+iscap+mozambique&hl=en&gl=US&ceid=US:en',
+        ]
+    },
+
+    # Nov 27 2026 -- RWANDA, a hub in its own right (Spoke & Wheel): a small,
+    # disciplined army that deploys abroad by invitation (CAR, Mozambique,
+    # South Sudan under the UN) and -- UN experts and the US say -- in eastern
+    # DRC alongside M23 (Kigali denies it, citing "defensive measures" against
+    # the FDLR). The US sanctioned the RDF and senior officials (Mar 2026) and
+    # the Ministry of Defence (Oct 2026). Keywords trace to 2026 headlines.
+    'rwanda': {
+        'name': 'Rwanda',
+        'flag': '🇷🇼',
+        'tier': 2,
+        'theatre': 'africa',
+        'weight': 0.6,
+        'feeds_into': ['regional_stability'],
+        'keywords': [
+            # National forces
+            'rwanda defence force', 'rwanda defense force', 'rwandan army', 'rwandan military',
+            'rwanda military', 'rwandan troops', 'rwandan forces', 'rdf troops', 'rdf soldiers',
+            'kagame military', 'nyakarundi', 'rwanda ministry of defence',
+            # Eastern DRC (attributed: UN experts / US say; Kigali denies)
+            'rwandan troops in congo', 'rwandan troops drc', 'rwanda defensive measures',
+            'rwanda m23 support', 'rwanda fdlr', 'rdf congo', 'rwanda drc border troops',
+            # Deployments by invitation
+            'rwanda troops mozambique', 'rwanda cabo delgado', 'rwandan troops cabo delgado',
+            'rwanda troops car', 'rwandan troops central african republic', 'rdf bangui',
+            'rwandan peacekeepers', 'rwanda unmiss', 'rwanda minusca',
+            # Sanctions and pressure
+            'rdf sanctions', 'sanctions rwandan army', 'sanctions rwandan defence ministry',
+            'rwanda agoa exclusion',
+            # Burundi rivalry
+            'rwanda burundi border', 'rwanda burundi tension', 'burundi accuses rwanda',
+        ],
+        'rss_feeds': [
+            'https://news.google.com/rss/search?q=%22Rwanda+Defence+Force%22+OR+%22Rwandan+troops%22+OR+%22Rwandan+army%22&hl=en&gl=US&ceid=US:en',
+            'https://news.google.com/rss/search?q=Rwanda+(Mozambique+OR+%22Cabo+Delgado%22+OR+sanctions)+military&hl=en&gl=US&ceid=US:en',
         ]
     },
 

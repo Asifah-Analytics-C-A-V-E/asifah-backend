@@ -114,6 +114,7 @@ REGION_SORT_ORDER = ['africa', 'asia', 'europe', 'me', 'wha', 'global']
 COUNTRY_TO_REGION = {
     # ── Africa ──────────────────────────────────────────
     'drc':           'africa',
+    'rwanda':        'africa',      # Nov 27 2026
     'south_africa':  'africa',
     'morocco':       'africa',
     'sudan':         'africa',

@@ -52,7 +52,7 @@ from commodity_tracker import (
     _country_commodity_exposures,
 )
 
-__version__ = '1.0.1'   # Nov 3 2026: WHA ISO3 fill
+__version__ = '1.0.2'   # Nov 27 2026: Rwanda ISO3. 1.0.1 Nov 3 2026: WHA ISO3 fill
 
 # ------------------------------------------------------------
 # Config
@@ -92,7 +92,7 @@ SLUG_TO_ISO3 = {
     'mexico': 'MEX', 'morocco': 'MAR', 'mozambique': 'MOZ',
     'netherlands': 'NLD', 'niger': 'NER', 'nigeria': 'NGA',
     'norway': 'NOR', 'panama': 'PAN', 'peru': 'PER', 'philippines': 'PHL',
-    'qatar': 'QAT', 'russia': 'RUS', 'saudi_arabia': 'SAU', 'south_africa': 'ZAF',
+    'qatar': 'QAT', 'russia': 'RUS', 'rwanda': 'RWA', 'saudi_arabia': 'SAU', 'south_africa': 'ZAF',
     'sudan': 'SDN',
     'south_korea': 'KOR', 'taiwan': 'TWN', 'thailand': 'THA', 'turkey': 'TUR',
     'turkmenistan': 'TKM', 'uae': 'ARE', 'ukraine': 'UKR', 'usa': 'USA',
