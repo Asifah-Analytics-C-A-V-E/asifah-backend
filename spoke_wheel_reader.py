@@ -99,7 +99,8 @@ import json
 import requests
 from datetime import datetime, timezone
 
-__version__ = '1.6.3'   # Nov 22 2026: RWANDA hub (mini wheel); car on the UAE, China and US wheels
+__version__ = '1.6.4'   # Nov 27 2026: UGANDA hub (small wheel); drc on the US and UAE wheels
+# v1.6.3 Nov 22 2026: RWANDA hub (mini wheel); car on the UAE, China and US wheels
 # v1.6.2 Nov 21 2026: lebanon on the Turkey wheel (expansion_vector)
 
 # ============================================================
@@ -254,6 +255,7 @@ HUB_REGISTRY = {
             'taiwan': 'security_assistance',
             'niger': 're_engaging',            # v1.6.1 -- DFC $414M Dasa uranium + equipment, after the 2024 exit
             'car': 're_engaging',              # v1.6.3 -- Africom assessments (Feb 2026), Treasury designations on Wagner-linked firms
+            'drc': 'minerals_partner',         # v1.6.4 -- Washington Accords broker + minerals-for-security partnership (4 Dec 2025)
             # Peers -- wheel-to-wheel, excluded from rim force-render
             'russia': 'peer', 'china': 'peer', 'iran': 'peer', 'dprk': 'peer',
         },
@@ -286,6 +288,7 @@ HUB_REGISTRY = {
             'somalia':      'port_concession',
             'libya':        'proxy_backing',
             'car':          'resource_client',   # v1.6.3 -- the declared-gold export destination
+            'drc':          'resource_client',   # v1.6.4 -- eastern Congo gold, reported to reach UAE refiners via neighbours
             # Near abroad
             'yemen':        'proxy_backing',
             'saudi_arabia': 'rival_gulf',
@@ -310,6 +313,20 @@ HUB_REGISTRY = {
             'car':        'security_partner',
             'mozambique': 'security_partner',
             'drc':        'proxy_backing',
+        },
+    },
+    # v1.6.4 Nov 27 2026 -- UGANDA, a small wheel (Rachel: "some are smaller
+    # spokes/cogs/hubs ... and that's fine"). Kampala projects force into its
+    # neighbours by invitation: the UPDF fights the ADF alongside the Congolese
+    # army in Ituri and North Kivu (Operation Shujaa, since 2021) and has
+    # deployed in South Sudan. Also the reported transit for eastern Congo's
+    # gold. SCAFFOLD: only the DRC writes a Uganda spoke today.
+    'uganda': {
+        'title': 'UGANDA WHEEL',
+        'icon': '\U0001F1FA\U0001F1EC',
+        'node_classes': {
+            'drc':         'security_partner',
+            'south_sudan': 'security_partner',
         },
     },
 }
@@ -539,7 +556,7 @@ _NESTED_HUB_CONTAINERS = ('inbound', 'outbound', 'hub_touches', 'external',
 # so it stops being counted as a contested THIRD country there. Correct -- a hub
 # touching a hub is not a node being fought over -- but it is a visible change.
 _KNOWN_HUBS = ('russia', 'turkey', 'iran', 'china', 'israel', 'dprk', 'us',
-               'uae', 'rwanda')   # v1.6.3 rwanda
+               'uae', 'rwanda', 'uganda')   # v1.6.3 rwanda, v1.6.4 uganda
 
 
 def _hub_tokens(key):
@@ -564,6 +581,7 @@ _HUB_AFFINITY_HINTS = {
     'uae':    ('uae_spoke', 'uae_axis', 'uae_plug', 'dmcc', 'gulf_gold',
                'emirati', 'adnoc', 'dp_world', 'edge_rafael'),
     'rwanda': ('rwanda_spoke', 'rwanda_axis', 'kagame', 'kigali'),
+    'uganda': ('uganda_spoke', 'uganda_axis', 'updf', 'museveni', 'muhoozi'),
 }
 
 
